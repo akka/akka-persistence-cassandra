@@ -19,7 +19,23 @@ class CassandraStatements(keyspace: String, table: String) {
 
   val insertMessage = s"""
       INSERT INTO ${tableName} (processor_id, sequence_nr, marker, message)
-      VALUES (?, ?, ?, ?)
+      VALUES (?, ?, 'A', ?)
+    """
+
+  val confirmMessage = s"""
+      INSERT INTO ${tableName} (processor_id, sequence_nr, marker)
+      VALUES (?, ?, ?)
+    """
+
+  val deleteMessageLogical = s"""
+      INSERT INTO ${tableName} (processor_id, sequence_nr, marker)
+      VALUES (?, ?, 'B')
+    """
+
+  val deleteMessagePermanent = s"""
+      DELETE FROM ${tableName} WHERE
+        processor_id = ? AND
+        sequence_nr = ?
     """
 
   val selectMessages = s"""
