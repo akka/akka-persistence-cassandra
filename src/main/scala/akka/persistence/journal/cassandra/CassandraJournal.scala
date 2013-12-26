@@ -12,6 +12,7 @@ import akka.persistence.PersistentRepr
 import akka.serialization.SerializationExtension
 
 import com.datastax.driver.core._
+import com.datastax.driver.core.utils.Bytes
 
 class CassandraJournal extends AsyncWriteJournal with CassandraReplay {
   val config = context.system.settings.config.getConfig("cassandra-journal")
@@ -62,9 +63,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraReplay {
     ByteBuffer.wrap(serialization.serialize(p).get)
 
   def persistentFromByteBuffer(b: ByteBuffer): PersistentRepr = {
-    val bytes = Array.ofDim[Byte](b.remaining())
-    b.get(bytes)
-    serialization.deserialize(bytes, classOf[PersistentRepr]).get
+    serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
   }
 
   private def confirmMarker(channelId: String) =
