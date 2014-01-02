@@ -13,3 +13,5 @@ libraryDependencies += "com.typesafe.akka" %% "akka-persistence-experimental" % 
 libraryDependencies += "com.typesafe.akka" %% "akka-testkit" % "2.3-M2" % "test"
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.0" % "test"
+
+libraryDependencies += "commons-io" % "commons-io" % "2.4" % "test"

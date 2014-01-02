@@ -1,47 +1,67 @@
 package akka.persistence.journal.cassandra
 
-class CassandraStatements(keyspace: String, table: String) {
-  private val tableName = s"${keyspace}.${table}"
+trait CassandraStatements {
+  def keyspace: String
+  def table: String
+  def maxResultSize: Int
 
   def createKeyspace(replicationFactor: Int) = s"""
       CREATE KEYSPACE IF NOT EXISTS ${keyspace}
       WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : ${replicationFactor} }
     """
 
-  val createTable = s"""
+  def createTable = s"""
       CREATE TABLE IF NOT EXISTS ${tableName} (
         processor_id text,
+        partition_nr bigint,
         sequence_nr bigint,
         marker text,
         message blob,
-        PRIMARY KEY (processor_id, sequence_nr, marker))
+        PRIMARY KEY ((processor_id, partition_nr), sequence_nr, marker))
     """
 
-  val insertMessage = s"""
-      INSERT INTO ${tableName} (processor_id, sequence_nr, marker, message)
-      VALUES (?, ?, 'A', ?)
+  def writeHeader = s"""
+      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker)
+      VALUES (?, ?, 0, 'H')
     """
 
-  val confirmMessage = s"""
-      INSERT INTO ${tableName} (processor_id, sequence_nr, marker)
-      VALUES (?, ?, ?)
+  def writeMessage = s"""
+      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message)
+      VALUES (?, ?, ?, 'A', ?)
     """
 
-  val deleteMessageLogical = s"""
-      INSERT INTO ${tableName} (processor_id, sequence_nr, marker)
-      VALUES (?, ?, 'B')
+  def confirmMessage = s"""
+      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker)
+      VALUES (?, ?, ?, ?)
     """
 
-  val deleteMessagePermanent = s"""
+  def deleteMessageLogical = s"""
+      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker)
+      VALUES (?, ?, ?, 'B')
+    """
+
+  def deleteMessagePermanent = s"""
       DELETE FROM ${tableName} WHERE
         processor_id = ? AND
+        partition_nr = ? AND
         sequence_nr = ?
     """
 
-  val selectMessages = s"""
+  def selectHeader = s"""
       SELECT * FROM ${tableName} WHERE
         processor_id = ? AND
+        partition_nr = ? AND
+        sequence_nr = 0
+    """
+
+  def selectMessages = s"""
+      SELECT * FROM ${tableName} WHERE
+        processor_id = ? AND
+        partition_nr = ? AND
         sequence_nr >= ? AND
         sequence_nr <= ?
+        LIMIT ${maxResultSize}
     """
+
+  private def tableName = s"${keyspace}.${table}"
 }

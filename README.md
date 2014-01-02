@@ -47,14 +47,3 @@ The default read and write consistency levels ensure that processors can read th
 - `cassandra-journal.read-consistency = "ALL"`
 
 which increases write throughput but lowers replay throughput and availability during recovery. During normal operation, processors only write to the journal, reads occur only during recovery.
-
-
-Status
-------
-
-This plugin supports all operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3-M2/scala/persistence.html#journal-plugin-api) and can be used for testing purposes.
-
-### Todo
-
-- Load and throughput tests
-- Partition processor log

@@ -14,50 +14,65 @@ import akka.serialization.SerializationExtension
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 
-class CassandraJournal extends AsyncWriteJournal with CassandraReplay {
+class CassandraJournal extends AsyncWriteJournal with CassandraReplay with CassandraStatements {
   val config = context.system.settings.config.getConfig("cassandra-journal")
 
-  private val cluster = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*).build
-  private val statements = new CassandraStatements(config.getString("keyspace"), config.getString("table"))
+  val keyspace = config.getString("keyspace")
+  val table = config.getString("table")
+
+  val maxPartitionSize = config.getInt("max-partition-size") // TODO: make persistent
+  val maxResultSize = config.getInt("max-result-size")
 
   val serialization = SerializationExtension(context.system)
-  val session = cluster.connect()
 
-  import context.dispatcher
-  import statements._
+  val cluster = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*).build
+  val session = cluster.connect()
 
   session.execute(createKeyspace(config.getInt("replication-factor")))
   session.execute(createTable)
 
-  private val writeConsistency = ConsistencyLevel.valueOf(config.getString("write-consistency"))
-  private val readConsistency = ConsistencyLevel.valueOf(config.getString("read-consistency"))
+  val writeConsistency = ConsistencyLevel.valueOf(config.getString("write-consistency"))
+  val readConsistency = ConsistencyLevel.valueOf(config.getString("read-consistency"))
 
-  val preparedWrite = session.prepare(insertMessage).setConsistencyLevel(writeConsistency)
-  val preparedReplay = session.prepare(selectMessages).setConsistencyLevel(readConsistency)
-  val preparedConfirm = session.prepare(confirmMessage).setConsistencyLevel(writeConsistency)
+  val preparedWriteHeader = session.prepare(writeHeader).setConsistencyLevel(writeConsistency)
+  val preparedWriteMessage = session.prepare(writeMessage).setConsistencyLevel(writeConsistency)
+  val preparedConfirmMessage = session.prepare(confirmMessage).setConsistencyLevel(writeConsistency)
   val preparedDeleteLogical = session.prepare(deleteMessageLogical).setConsistencyLevel(writeConsistency)
   val preparedDeletePermanent = session.prepare(deleteMessagePermanent).setConsistencyLevel(writeConsistency)
+  val preparedSelectHeader = session.prepare(selectHeader).setConsistencyLevel(readConsistency)
+  val preparedSelectMessages = session.prepare(selectMessages).setConsistencyLevel(readConsistency)
 
   def writeAsync(persistentBatch: Seq[PersistentRepr]): Future[Unit] = {
     val batch = new BatchStatement
-    persistentBatch.foreach(p => batch.add(preparedWrite.bind(p.processorId, p.sequenceNr: JLong, persistentToByteBuffer(p))))
+    persistentBatch.foreach { p =>
+      val pnr = partitionNr(p.sequenceNr)
+      if (partitionNew(p.sequenceNr)) batch.add(preparedWriteHeader.bind(p.processorId, pnr: JLong))
+      batch.add(preparedWriteMessage.bind(p.processorId, pnr: JLong, p.sequenceNr: JLong, persistentToByteBuffer(p)))
+    }
     session.executeAsync(batch).map(_ => ())
   }
 
   def deleteAsync(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, permanent: Boolean): Future[Unit] = {
     val batch = new BatchStatement
+
     fromSequenceNr to toSequenceNr foreach { sequenceNr =>
       val stmt =
-        if (permanent) preparedDeletePermanent.bind(processorId, sequenceNr: JLong)
-        else preparedDeleteLogical.bind(processorId, sequenceNr: JLong)
+        if (permanent) preparedDeletePermanent.bind(processorId, partitionNr(sequenceNr): JLong, sequenceNr: JLong)
+        else preparedDeleteLogical.bind(processorId, partitionNr(sequenceNr): JLong, sequenceNr: JLong)
       batch.add(stmt)
     }
     session.executeAsync(batch).map(_ => ())
   }
 
   def confirmAsync(processorId: String, sequenceNr: Long, channelId: String): Future[Unit] = {
-    session.executeAsync(preparedConfirm.bind(processorId, sequenceNr: JLong, confirmMarker(channelId))).map(_ => ())
+    session.executeAsync(preparedConfirmMessage.bind(processorId, partitionNr(sequenceNr): JLong, sequenceNr: JLong, confirmMarker(channelId))).map(_ => ())
   }
+
+  def partitionNr(sequenceNr: Long): Long =
+    (sequenceNr - 1L) / maxPartitionSize
+
+  def partitionNew(sequenceNr: Long): Boolean =
+    (sequenceNr - 1L) % maxPartitionSize == 0L
 
   def persistentToByteBuffer(p: PersistentRepr): ByteBuffer =
     ByteBuffer.wrap(serialization.serialize(p).get)

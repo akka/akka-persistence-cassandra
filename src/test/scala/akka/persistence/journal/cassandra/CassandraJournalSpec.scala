@@ -1,5 +1,9 @@
 package akka.persistence.journal.cassandra
 
+import java.io.File
+
+import scala.util.control.NoStackTrace
+
 import akka.actor._
 import akka.persistence._
 import akka.testkit._
@@ -7,6 +11,7 @@ import akka.testkit._
 import com.datastax.driver.core.Cluster
 
 import org.scalatest._
+import org.apache.commons.io.FileUtils
 
 object CassandraJournalSpec {
   case class Delete(snr: Long, permanent: Boolean)
@@ -31,6 +36,45 @@ object CassandraJournalSpec {
     }
   }
 
+  class ProcessorC(override val processorId: String, probe: ActorRef) extends Processor {
+    var last: String = _
+
+    def receive = {
+      case Persistent(payload: String, sequenceNr) =>
+        last = s"${payload}-${sequenceNr}"
+        probe ! s"updated-${last}"
+      case "snap" =>
+        saveSnapshot(last)
+      case SaveSnapshotSuccess(_) =>
+        probe ! s"snapped-${last}"
+      case SnapshotOffer(_, snapshot: String) =>
+        last = snapshot
+        probe ! s"offered-${last}"
+      case Delete(sequenceNr, permanent) =>
+        deleteMessage(sequenceNr, permanent)
+    }
+  }
+
+  class ProcessorCNoRecover(override val processorId: String, probe: ActorRef) extends ProcessorC(processorId, probe) {
+    override def preStart() = ()
+  }
+
+  class ProcessorD(override val processorId: String, failAt: Option[Long]) extends Processor {
+    def receive = {
+      case Persistent(payload: String, sequenceNr) =>
+        failAt.foreach(snr => if (snr == sequenceNr) throw new Exception("boom") with NoStackTrace)
+        sender ! s"${payload}-${sequenceNr}"
+    }
+
+    override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
+      message match {
+        case Some(p: Persistent) => deleteMessage(p.sequenceNr)
+        case _ =>
+      }
+      super.preRestart(reason, message)
+    }
+  }
+
   class Destination extends Actor {
     def receive = {
       case cp @ ConfirmablePersistent(payload, sequenceNr, _) =>
@@ -43,65 +87,214 @@ object CassandraJournalSpec {
 class CassandraJournalSpec extends TestKit(ActorSystem("test")) with ImplicitSender with WordSpecLike with Matchers with BeforeAndAfterAll {
   import CassandraJournalSpec._
 
-  val config = system.settings.config.getConfig("cassandra-journal")
+  val journalConfig = system.settings.config.getConfig("cassandra-journal")
+  val snapshotConfig = system.settings.config.getConfig("akka.persistence.snapshot-store.local")
 
   "A Cassandra journal" should {
     "write and replay messages" in {
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
-      processor1 ! Persistent("a")
-      expectMsgAllOf("a", 1L, false)
+      1L to 16L foreach { i =>
+        processor1 ! Persistent(s"a-${i}")
+        expectMsgAllOf(s"a-${i}", i, false)
+      }
 
       val processor2 = system.actorOf(Props(classOf[ProcessorA], "p1"))
+      1L to 16L foreach { i =>
+        expectMsgAllOf(s"a-${i}", i, true)
+      }
+
       processor2 ! Persistent("b")
-      expectMsgAllOf("a", 1L, true)
-      expectMsgAllOf("b", 2L, false)
+      expectMsgAllOf("b", 17L, false)
     }
-    "not replay messages marked as deleted" in {
-      val deleteProbe = TestProbe()
-      subscribeToDeletion(deleteProbe)
+    "write and replay some more messages" in {
+      val cycles = 1000L
 
-      val processor1 = system.actorOf(Props(classOf[ProcessorA], "p2"))
-      processor1 ! Persistent("a")
-      processor1 ! Persistent("b")
-      expectMsgAllOf("a", 1L, false)
-      expectMsgAllOf("b", 2L, false)
-      processor1 ! Delete(1L, false)
-      awaitDeletion(deleteProbe)
+      val processor1 = system.actorOf(Props(classOf[ProcessorD], "p1a", None))
+      1L to cycles foreach { i => processor1 ! Persistent("a") }
+      1L to cycles foreach { i => expectMsg(s"a-${i}") }
 
-      system.actorOf(Props(classOf[ProcessorA], "p2"))
-      expectMsgAllOf("b", 2L, true)
+      val processor2 = system.actorOf(Props(classOf[ProcessorD], "p1a", None))
+      1L to cycles foreach { i => expectMsg(s"a-${i}") }
+
+      processor2 ! Persistent("b")
+      expectMsg(s"b-${cycles + 1L}")
     }
-    "not replay permanently deleted messages" in {
-      val deleteProbe = TestProbe()
-      subscribeToDeletion(deleteProbe)
+    "write and replay some more messages under failure" in {
+      val cycles = 1000L
+      val failAt = 217L
 
-      val processor1 = system.actorOf(Props(classOf[ProcessorA], "p3"))
-      processor1 ! Persistent("a")
-      processor1 ! Persistent("b")
-      expectMsgAllOf("a", 1L, false)
-      expectMsgAllOf("b", 2L, false)
-      processor1 ! Delete(1L, true)
-      awaitDeletion(deleteProbe)
+      val processor1 = system.actorOf(Props(classOf[ProcessorD], "p1b", Some(failAt)))
+      1L to cycles foreach { i => processor1 ! Persistent("a") }
+      1L until (failAt) foreach { i => expectMsg(s"a-${i}") }
+      1L to cycles foreach { i => if (i != failAt) expectMsg(s"a-${i}") }
 
-      system.actorOf(Props(classOf[ProcessorA], "p3"))
-      expectMsgAllOf("b", 2L, true)
+      val processor2 = system.actorOf(Props(classOf[ProcessorD], "p1b", None))
+      1L to cycles foreach { i => if (i != failAt) expectMsg(s"a-${i}") }
+
+      processor2 ! Persistent("b")
+      expectMsg(s"b-${cycles + 1L}")
     }
     "write delivery confirmations" in {
       val confirmProbe = TestProbe()
       subscribeToConfirmation(confirmProbe)
 
       val processor1 = system.actorOf(Props(classOf[ProcessorB], "p4"))
-      processor1 ! Persistent("a")
-      processor1 ! Persistent("b")
-      expectMsg("a-1")
-      expectMsg("b-2")
-
-      awaitConfirmation(confirmProbe)
-      awaitConfirmation(confirmProbe)
+      1L to 16L foreach { i =>
+        processor1 ! Persistent("a")
+        awaitConfirmation(confirmProbe)
+        expectMsg(s"a-${i}")
+      }
 
       val processor2 = system.actorOf(Props(classOf[ProcessorB], "p4"))
-      processor2 ! Persistent("c")
-      expectMsg("c-3")
+      processor2 ! Persistent("b")
+      awaitConfirmation(confirmProbe)
+      expectMsg("b-17")
+    }
+    "recover from a snapshot with follow-up messages" in {
+      val processor1 = system.actorOf(Props(classOf[ProcessorC], "p5", testActor))
+      processor1 ! Persistent("a")
+      expectMsg("updated-a-1")
+      processor1 ! "snap"
+      expectMsg("snapped-a-1")
+      processor1 ! Persistent("b")
+      expectMsg("updated-b-2")
+
+      system.actorOf(Props(classOf[ProcessorC], "p5", testActor))
+      expectMsg("offered-a-1")
+      expectMsg("updated-b-2")
+    }
+    "recover from a snapshot with follow-up messages and an upper bound" in {
+      val processor1 = system.actorOf(Props(classOf[ProcessorCNoRecover], "p5a", testActor))
+      processor1 ! Recover()
+      processor1 ! Persistent("a")
+      expectMsg("updated-a-1")
+      processor1 ! "snap"
+      expectMsg("snapped-a-1")
+      2L to 7L foreach { i =>
+        processor1 ! Persistent("a")
+        expectMsg(s"updated-a-${i}")
+      }
+
+      val processor2 = system.actorOf(Props(classOf[ProcessorCNoRecover], "p5a", testActor))
+      processor2 ! Recover(toSequenceNr = 3L)
+      expectMsg("offered-a-1")
+      expectMsg("updated-a-2")
+      expectMsg("updated-a-3")
+      processor2 ! Persistent("d")
+      expectMsg("updated-d-8")
+    }
+    "recover from a snapshot without follow-up messages inside a partition" in {
+      val processor1 = system.actorOf(Props(classOf[ProcessorC], "p6", testActor))
+      processor1 ! Persistent("a")
+      expectMsg("updated-a-1")
+      processor1 ! "snap"
+      expectMsg("snapped-a-1")
+
+      val processor2 = system.actorOf(Props(classOf[ProcessorC], "p6", testActor))
+      expectMsg("offered-a-1")
+      processor2 ! Persistent("b")
+      expectMsg("updated-b-2")
+    }
+    "recover from a snapshot without follow-up messages at a partition boundary (where next partition is invalid)" in {
+      val processor1 = system.actorOf(Props(classOf[ProcessorC], "p7", testActor))
+      1L to 5L foreach { i =>
+        processor1 ! Persistent("a")
+        expectMsg(s"updated-a-${i}")
+      }
+      processor1 ! "snap"
+      expectMsg("snapped-a-5")
+
+      val processor2 = system.actorOf(Props(classOf[ProcessorC], "p7", testActor))
+      expectMsg("offered-a-5")
+      processor2 ! Persistent("b")
+      expectMsg("updated-b-6")
+    }
+    "recover from a snapshot without follow-up messages at a partition boundary (where next partition contains a message marked as deleted)" in {
+      val deleteProbe = TestProbe()
+      subscribeToDeletion(deleteProbe)
+
+      val processor1 = system.actorOf(Props(classOf[ProcessorC], "p8", testActor))
+      1L to 5L foreach { i =>
+        processor1 ! Persistent("a")
+        expectMsg(s"updated-a-${i}")
+      }
+      processor1 ! "snap"
+      expectMsg("snapped-a-5")
+
+      processor1 ! Persistent("a")
+      expectMsg("updated-a-6")
+
+      processor1 ! Delete(6L, false)
+      awaitDeletion(deleteProbe)
+
+      val processor2 = system.actorOf(Props(classOf[ProcessorC], "p8", testActor))
+      expectMsg("offered-a-5")
+      processor2 ! Persistent("b")
+      expectMsg("updated-b-7")
+    }
+    "recover from a snapshot without follow-up messages at a partition boundary (where next partition contained a permanently deleted message)" in {
+      val deleteProbe = TestProbe()
+      subscribeToDeletion(deleteProbe)
+
+      val processor1 = system.actorOf(Props(classOf[ProcessorC], "p9", testActor))
+      1L to 5L foreach { i =>
+        processor1 ! Persistent("a")
+        expectMsg(s"updated-a-${i}")
+      }
+      processor1 ! "snap"
+      expectMsg("snapped-a-5")
+
+      processor1 ! Persistent("a")
+      expectMsg("updated-a-6")
+
+      processor1 ! Delete(6L, true)
+      awaitDeletion(deleteProbe)
+
+      val processor2 = system.actorOf(Props(classOf[ProcessorC], "p9", testActor))
+      expectMsg("offered-a-5")
+      processor2 ! Persistent("b")
+      expectMsg("updated-b-6") // sequence number of permanently deleted message can be re-used
+    }
+
+    "not replay messages marked as deleted" in {
+      testDelete("p2", false)
+    }
+    "not replay permanently deleted messages" in {
+      testDelete("p3", true)
+    }
+
+    def testDelete(processorId: String, permanent: Boolean) {
+      val deleteProbe = TestProbe()
+      subscribeToDeletion(deleteProbe)
+
+      val processor1 = system.actorOf(Props(classOf[ProcessorA], processorId))
+      1L to 16L foreach { i =>
+        processor1 ! Persistent(s"a-${i}")
+        expectMsgAllOf(s"a-${i}", i, false)
+      }
+
+      // delete single message in partition
+      processor1 ! Delete(12L, permanent)
+      awaitDeletion(deleteProbe)
+
+      system.actorOf(Props(classOf[ProcessorA], processorId))
+      1L to 16L foreach { i =>
+        if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
+      }
+
+      // delete whole partition
+      6L to 10L foreach { i =>
+        processor1 ! Delete(i, permanent)
+        awaitDeletion(deleteProbe)
+      }
+
+      system.actorOf(Props(classOf[ProcessorA], processorId))
+      1L to 5L foreach { i =>
+        expectMsgAllOf(s"a-${i}", i, true)
+      }
+      11L to 16L foreach { i =>
+        if (i != 12L) expectMsgAllOf(s"a-${i}", i, true)
+      }
     }
   }
 
@@ -120,7 +313,8 @@ class CassandraJournalSpec extends TestKit(ActorSystem("test")) with ImplicitSen
   override protected def afterAll(): Unit = {
     val cluster = Cluster.builder.addContactPoint("127.0.0.1").build
     val session = cluster.connect()
-    session.execute(s"DROP KEYSPACE ${config.getString("keyspace")}")
+    session.execute(s"DROP KEYSPACE ${journalConfig.getString("keyspace")}")
+    FileUtils.deleteDirectory(new File(snapshotConfig.getString("dir")))
     system.shutdown()
   }
 }
