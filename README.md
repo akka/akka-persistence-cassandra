@@ -24,7 +24,6 @@ Build and install the journal plugin to your local Ivy cache with `sbt publishLo
 
     libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.1-SNAPSHOT"
 
-
 Configuration
 -------------
 
@@ -47,3 +46,9 @@ The default read and write consistency levels ensure that processors can read th
 - `cassandra-journal.read-consistency = "ALL"`
 
 which increases write throughput but lowers replay throughput and availability during recovery. During normal operation, processors only write to the journal, reads occur only during recovery.
+
+Status
+------
+
+This plugin supports all operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3-M2/scala/persistence.html#journal-plugin-api). Writes are batched to optimize throughput and row splitting distributes each processor log across cluster nodes.
+

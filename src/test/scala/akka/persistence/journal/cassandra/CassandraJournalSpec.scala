@@ -1,19 +1,25 @@
 package akka.persistence.journal.cassandra
 
-import java.io.File
-
 import scala.util.control.NoStackTrace
 
 import akka.actor._
 import akka.persistence._
 import akka.testkit._
 
-import com.datastax.driver.core.Cluster
+import com.typesafe.config.ConfigFactory
 
 import org.scalatest._
-import org.apache.commons.io.FileUtils
 
 object CassandraJournalSpec {
+  val config = ConfigFactory.parseString(
+    """
+      |akka.persistence.journal.plugin = "cassandra-journal"
+      |akka.persistence.snapshot-store.local.dir = "target/snapshots"
+      |akka.persistence.publish-plugin-commands = on
+      |cassandra-journal.max-partition-size = 5
+      |cassandra-journal.max-result-size = 3
+    """.stripMargin)
+
   case class Delete(snr: Long, permanent: Boolean)
 
   class ProcessorA(override val processorId: String) extends Processor {
@@ -59,22 +65,6 @@ object CassandraJournalSpec {
     override def preStart() = ()
   }
 
-  class ProcessorD(override val processorId: String, failAt: Option[Long]) extends Processor {
-    def receive = {
-      case Persistent(payload: String, sequenceNr) =>
-        failAt.foreach(snr => if (snr == sequenceNr) throw new Exception("boom") with NoStackTrace)
-        sender ! s"${payload}-${sequenceNr}"
-    }
-
-    override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
-      message match {
-        case Some(p: Persistent) => deleteMessage(p.sequenceNr)
-        case _ =>
-      }
-      super.preRestart(reason, message)
-    }
-  }
-
   class Destination extends Actor {
     def receive = {
       case cp @ ConfirmablePersistent(payload, sequenceNr, _) =>
@@ -84,12 +74,9 @@ object CassandraJournalSpec {
   }
 }
 
-class CassandraJournalSpec extends TestKit(ActorSystem("test")) with ImplicitSender with WordSpecLike with Matchers with BeforeAndAfterAll {
-  import CassandraJournalSpec._
+import CassandraJournalSpec._
 
-  val journalConfig = system.settings.config.getConfig("cassandra-journal")
-  val snapshotConfig = system.settings.config.getConfig("akka.persistence.snapshot-store.local")
-
+class CassandraJournalSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraCleanup {
   "A Cassandra journal" should {
     "write and replay messages" in {
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
@@ -105,34 +92,6 @@ class CassandraJournalSpec extends TestKit(ActorSystem("test")) with ImplicitSen
 
       processor2 ! Persistent("b")
       expectMsgAllOf("b", 17L, false)
-    }
-    "write and replay some more messages" in {
-      val cycles = 1000L
-
-      val processor1 = system.actorOf(Props(classOf[ProcessorD], "p1a", None))
-      1L to cycles foreach { i => processor1 ! Persistent("a") }
-      1L to cycles foreach { i => expectMsg(s"a-${i}") }
-
-      val processor2 = system.actorOf(Props(classOf[ProcessorD], "p1a", None))
-      1L to cycles foreach { i => expectMsg(s"a-${i}") }
-
-      processor2 ! Persistent("b")
-      expectMsg(s"b-${cycles + 1L}")
-    }
-    "write and replay some more messages under failure" in {
-      val cycles = 1000L
-      val failAt = 217L
-
-      val processor1 = system.actorOf(Props(classOf[ProcessorD], "p1b", Some(failAt)))
-      1L to cycles foreach { i => processor1 ! Persistent("a") }
-      1L until (failAt) foreach { i => expectMsg(s"a-${i}") }
-      1L to cycles foreach { i => if (i != failAt) expectMsg(s"a-${i}") }
-
-      val processor2 = system.actorOf(Props(classOf[ProcessorD], "p1b", None))
-      1L to cycles foreach { i => if (i != failAt) expectMsg(s"a-${i}") }
-
-      processor2 ! Persistent("b")
-      expectMsg(s"b-${cycles + 1L}")
     }
     "write delivery confirmations" in {
       val confirmProbe = TestProbe()
@@ -309,12 +268,4 @@ class CassandraJournalSpec extends TestKit(ActorSystem("test")) with ImplicitSen
 
   def awaitDeletion(probe: TestProbe): Unit =
     probe.expectMsgType[JournalProtocol.Delete]
-
-  override protected def afterAll(): Unit = {
-    val cluster = Cluster.builder.addContactPoint("127.0.0.1").build
-    val session = cluster.connect()
-    session.execute(s"DROP KEYSPACE ${journalConfig.getString("keyspace")}")
-    FileUtils.deleteDirectory(new File(snapshotConfig.getString("dir")))
-    system.shutdown()
-  }
 }

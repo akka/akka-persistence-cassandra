@@ -6,6 +6,8 @@ version := "0.1-SNAPSHOT"
 
 scalaVersion := "2.10.2"
 
+parallelExecution in Test := false
+
 libraryDependencies += "com.datastax.cassandra" % "cassandra-driver-core" % "2.0.0-rc2" % "compile"
 
 libraryDependencies += "com.typesafe.akka" %% "akka-persistence-experimental" % "2.3-M2" % "compile"
