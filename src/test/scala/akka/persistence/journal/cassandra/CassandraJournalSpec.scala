@@ -1,7 +1,5 @@
 package akka.persistence.journal.cassandra
 
-import scala.util.control.NoStackTrace
-
 import akka.actor._
 import akka.persistence._
 import akka.testkit._

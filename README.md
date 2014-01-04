@@ -50,5 +50,8 @@ which increases write throughput but lowers replay throughput and availability d
 Status
 ------
 
-This plugin supports all operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3-M2/scala/persistence.html#journal-plugin-api). Writes are batched to optimize throughput and row splitting distributes each processor log across cluster nodes.
-
+- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3-M2/scala/persistence.html#journal-plugin-api) are supported.
+- Row splitting per processor is implemented so that a large number of messages per processor can be stored.
+- Message writes are batched to optimize throughput. When using channels, confirmation writes are not batched yet.
+- Persistent channel recovery is not optimized yet. For details and possible optimizations details see [issue 4](https://github.com/krasserm/akka-persistence-cassandra/issues/4).
+- The plugin was tested to properly work under high load. Detailed tests under failure conditions are still missing.

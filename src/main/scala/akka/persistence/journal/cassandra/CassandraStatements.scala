@@ -18,11 +18,12 @@ trait CassandraStatements {
         marker text,
         message blob,
         PRIMARY KEY ((processor_id, partition_nr), sequence_nr, marker))
+        WITH COMPACT STORAGE
     """
 
   def writeHeader = s"""
-      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker)
-      VALUES (?, ?, 0, 'H')
+      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message)
+      VALUES (?, ?, 0, 'H', 0x00)
     """
 
   def writeMessage = s"""
@@ -31,13 +32,13 @@ trait CassandraStatements {
     """
 
   def confirmMessage = s"""
-      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message)
+      VALUES (?, ?, ?, ?, 0x00)
     """
 
   def deleteMessageLogical = s"""
-      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker)
-      VALUES (?, ?, ?, 'B')
+      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message)
+      VALUES (?, ?, ?, 'B', 0x00)
     """
 
   def deleteMessagePermanent = s"""
