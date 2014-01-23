@@ -1,26 +1,37 @@
 Cassandra Journal for Akka Persistence
 ======================================
 
-A replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.0-RC1/scala/persistence.html) journal backed by [Apache Cassandra](http://cassandra.apache.org/).
+A replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.0-RC1/scala/persistence.html) journal plugin backed by [Apache Cassandra](http://cassandra.apache.org/).
 
-Prerequisites
--------------
+Installation
+------------
 
-<table border="0">
-  <tr>
-    <td>Akka version: </td>
-    <td>2.3.0-RC1 or higher</td>
-  </tr>
-  <tr>
-    <td>Cassandra version: </td>
-    <td>2.0.3 or higher</td>
-  </tr>
-</table>
+### Plugin dependency
+
+To include the plugin into your `sbt` project, add the following lines to `build.sbt`:
+
+    resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven"
+
+    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.1"
+
+This version of the plugin depends on Akka 2.3.0-RC1 and Scala 2.10.2.
+
+### Cassandra database
+
+The plugin requires an exiting installation of Cassandra 2.0.3 or higher. You may want to follow this [Getting Started](http://wiki.apache.org/cassandra/GettingStarted) guide for basic installation instructions.
+
+Features
+--------
+
+- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3.0-RC1/scala/persistence.html#journal-plugin-api) are fully supported.
+- The plugin uses Cassandra in a pure log-oriented way i.e. data are only ever inserted but never updated (deletions are made on user request only or by persistent channels, see also [Caveats](#caveats)).
+- Writes of messages and confirmations are batched to optimize throughput. See [batch writes](http://doc.akka.io/docs/akka/2.3.0-RC1/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
+- Messages written by a single processor are partitioned across the cluster to achieve data volume scalability by adding nodes.
 
 Configuration
 -------------
 
-To activate the Cassandra journal plugin, add the following line to your Akka `application.conf`:
+To activate the plugin, add the following line to your Akka `application.conf`:
 
     akka.persistence.journal.plugin = "cassandra-journal"
 
@@ -30,6 +41,8 @@ This will run the journal with its default settings. The default settings can be
 - `cassandra-journal.keyspace`. Name of the keyspace to be used by the plugin. If the keyspace doesn't exist it is automatically created. Default value is `akka`.
 - `cassandra-journal.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `messages`.
 - `cassandra-journal.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
+- `cassandra-journal.max-partition-size`. Maximum number of entries (messages, confirmations and deletion markers) per partition. Default value is 5000000. **Do not change this setting after table creation** (not checked yet).
+- `cassandra-journal.max-result-size`. Maximum number of entries returned per query. Queries are executed recursively, if needed, to achieve recovery goals. Default value is 50001.
 - `cassandra-journal.write-consistency`. Write consistency level. Default value is `QUORUM`.
 - `cassandra-journal.read-consistency`. Read consistency level. Default value is `QUORUM`.
 
@@ -40,11 +53,15 @@ The default read and write consistency levels ensure that processors can read th
 
 which increases write throughput but lowers replay throughput and availability during recovery. During normal operation, processors only write to the journal, reads occur only during recovery.
 
-Status
-------
+Caveats
+-------
 
-- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3.0-RC1/scala/persistence.html#journal-plugin-api) are supported.
-- Row splitting per processor is implemented so that a large number of messages per processor can be stored.
-- Message writes are batched to optimize throughput. When using channels, confirmation writes are not batched yet.
-- Persistent channel recovery is not optimized yet. For details and possible optimizations details see [issue 4](https://github.com/krasserm/akka-persistence-cassandra/issues/4).
-- The plugin was tested to properly work under high load. Detailed tests under failure conditions are still missing.
+- Detailed tests under failure conditions are still missing.
+- Persistent channel recovery times are not optimized yet (see also [issue 4](https://github.com/krasserm/akka-persistence-cassandra/issues/4)).
+    - Recovery time increases with the number of [tombstones](http://www.datastax.com/documentation/cassandra/2.0/webhelp/index.html#cassandra/glossary/gloss_glossary.html#glossentry_nkr_t1r_bk) and drops to a minimum after compaction.
+    - Persistent channel throughput is independent of the number of tombstones after successful recovery.
+- Range deletion performance (i.e. `deleteMessages` up to a specified sequence number) depends on the extend of previous deletions
+    - linearly increases with the number of tombstones generated by previous permanent deletions and drops to a minimum after compaction
+    - linearly increases with the number of plugin-level deletion markers generated by previous logical deletions (recommended: always use permanent range deletions)
+
+These issues are likely to be resolved in future versions of the plugin.
