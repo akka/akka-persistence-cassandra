@@ -17,13 +17,6 @@ Prerequisites
   </tr>
 </table>
 
-Installation
-------------
-
-Build and install the journal plugin to your local Ivy cache with `sbt publishLocal` (requires sbt 0.13). It can then be included as dependency:
-
-    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.1-SNAPSHOT"
-
 Configuration
 -------------
 
