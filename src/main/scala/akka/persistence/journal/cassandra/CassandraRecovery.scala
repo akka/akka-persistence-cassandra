@@ -21,7 +21,7 @@ trait CassandraRecovery { this: CassandraJournal =>
     new MessageIterator(processorId, fromSequenceNr, Long.MaxValue, Long.MaxValue).foldLeft(fromSequenceNr) { case (acc, msg) => msg.sequenceNr }
 
   def readLowestSequenceNr(processorId: String, fromSequenceNr: Long): Long =
-    new MessageIterator(processorId, fromSequenceNr, Long.MaxValue, 1L).toStream.headOption.map(_.sequenceNr).getOrElse(fromSequenceNr)
+    new MessageIterator(processorId, fromSequenceNr, Long.MaxValue, Long.MaxValue).find(!_.deleted).map(_.sequenceNr).getOrElse(fromSequenceNr)
 
   def replayMessages(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Unit =
     new MessageIterator(processorId, fromSequenceNr, toSequenceNr, max).foreach(replayCallback)
@@ -41,7 +41,7 @@ trait CassandraRecovery { this: CassandraJournal =>
     fetch()
 
     def hasNext: Boolean =
-      n != null && mcnt <= max
+      n != null && mcnt < max
 
     def next(): PersistentRepr = {
       fetch()
@@ -51,7 +51,7 @@ trait CassandraRecovery { this: CassandraJournal =>
 
     /**
      * Make next message n the current message c, complete c
-     * (ignoring phantom markers) and pre-fetch new n.
+     * (ignoring orphan markers) and pre-fetch new n.
      */
     private def fetch(): Unit = {
       c = n
