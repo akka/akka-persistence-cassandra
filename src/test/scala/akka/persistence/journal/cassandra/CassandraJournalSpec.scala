@@ -13,6 +13,7 @@ object CassandraJournalSpec {
     """
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.snapshot-store.local.dir = "target/snapshots"
+      |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
       |cassandra-journal.max-partition-size = 5
       |cassandra-journal.max-result-size = 3
@@ -36,7 +37,7 @@ object CassandraJournalSpec {
     val channel = context.actorOf(Channel.props("channel"))
 
     def receive = {
-      case p: Persistent => channel forward Deliver(p, destination)
+      case p: Persistent => channel forward Deliver(p, destination.path)
     }
   }
 
@@ -256,14 +257,14 @@ class CassandraJournalSpec extends TestKit(ActorSystem("test", config)) with Imp
   }
 
   def subscribeToConfirmation(probe: TestProbe): Unit =
-    system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.Confirm])
+    system.eventStream.subscribe(probe.ref, classOf[Delivered])
 
   def subscribeToDeletion(probe: TestProbe): Unit =
-    system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.Delete])
+    system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessages])
 
   def awaitConfirmation(probe: TestProbe): Unit =
-    probe.expectMsgType[JournalProtocol.Confirm]
+    probe.expectMsgType[Delivered]
 
   def awaitDeletion(probe: TestProbe): Unit =
-    probe.expectMsgType[JournalProtocol.Delete]
+    probe.expectMsgType[JournalProtocol.DeleteMessages]
 }

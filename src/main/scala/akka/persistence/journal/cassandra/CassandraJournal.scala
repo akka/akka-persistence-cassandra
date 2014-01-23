@@ -8,14 +8,15 @@ import scala.collection.immutable.Seq
 import scala.concurrent._
 
 import akka.persistence.journal.AsyncWriteJournal
-import akka.persistence.PersistentRepr
+import akka.persistence._
 import akka.serialization.SerializationExtension
 
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 
-class CassandraJournal extends AsyncWriteJournal with CassandraReplay with CassandraStatements {
+class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
   val config = context.system.settings.config.getConfig("cassandra-journal")
+  val extension = Persistence(context.system)
 
   val keyspace = config.getString("keyspace")
   val table = config.getString("table")
@@ -42,30 +43,41 @@ class CassandraJournal extends AsyncWriteJournal with CassandraReplay with Cassa
   val preparedSelectHeader = session.prepare(selectHeader).setConsistencyLevel(readConsistency)
   val preparedSelectMessages = session.prepare(selectMessages).setConsistencyLevel(readConsistency)
 
-  def writeAsync(persistentBatch: Seq[PersistentRepr]): Future[Unit] = {
-    val batch = new BatchStatement
-    persistentBatch.foreach { p =>
-      val pnr = partitionNr(p.sequenceNr)
-      if (partitionNew(p.sequenceNr)) batch.add(preparedWriteHeader.bind(p.processorId, pnr: JLong))
-      batch.add(preparedWriteMessage.bind(p.processorId, pnr: JLong, p.sequenceNr: JLong, persistentToByteBuffer(p)))
+  def asyncWriteMessages(messages: Seq[PersistentRepr]): Future[Unit] = executeBatch { batch =>
+    messages.foreach { m =>
+      val pnr = partitionNr(m.sequenceNr)
+      if (partitionNew(m.sequenceNr)) batch.add(preparedWriteHeader.bind(m.processorId, pnr: JLong))
+      batch.add(preparedWriteMessage.bind(m.processorId, pnr: JLong, m.sequenceNr: JLong, persistentToByteBuffer(m)))
     }
-    session.executeAsync(batch).map(_ => ())
   }
 
-  def deleteAsync(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, permanent: Boolean): Future[Unit] = {
-    val batch = new BatchStatement
+  def asyncWriteConfirmations(confirmations: Seq[PersistentConfirmation]): Future[Unit] = executeBatch { batch =>
+    confirmations.foreach { c =>
+      batch.add((preparedConfirmMessage.bind(c.processorId, partitionNr(c.sequenceNr): JLong, c.sequenceNr: JLong, confirmMarker(c.channelId))))
+    }
+  }
 
-    fromSequenceNr to toSequenceNr foreach { sequenceNr =>
+  def asyncDeleteMessages(messageIds: Seq[PersistentId], permanent: Boolean): Future[Unit] = executeBatch { batch =>
+    messageIds.foreach { mid =>
       val stmt =
-        if (permanent) preparedDeletePermanent.bind(processorId, partitionNr(sequenceNr): JLong, sequenceNr: JLong)
-        else preparedDeleteLogical.bind(processorId, partitionNr(sequenceNr): JLong, sequenceNr: JLong)
+        if (permanent) preparedDeletePermanent.bind(mid.processorId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
+        else preparedDeleteLogical.bind(mid.processorId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
       batch.add(stmt)
     }
-    session.executeAsync(batch).map(_ => ())
   }
 
-  def confirmAsync(processorId: String, sequenceNr: Long, channelId: String): Future[Unit] = {
-    session.executeAsync(preparedConfirmMessage.bind(processorId, partitionNr(sequenceNr): JLong, sequenceNr: JLong, confirmMarker(channelId))).map(_ => ())
+  def asyncDeleteMessagesTo(processorId: String, toSequenceNr: Long, permanent: Boolean): Future[Unit] = {
+    val fromSequenceNr = readLowestSequenceNr(processorId, 1L)
+    val asyncDeletions = (fromSequenceNr to toSequenceNr).grouped(extension.settings.journal.maxDeletionBatchSize).map { group =>
+      asyncDeleteMessages(group map (PersistentIdImpl(processorId, _)), permanent)
+    }
+    Future.sequence(asyncDeletions).map(_ => ())
+  }
+
+  def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {
+    val batch = new BatchStatement
+    body(batch)
+    session.executeAsync(batch).map(_ => ())
   }
 
   def partitionNr(sequenceNr: Long): Long =

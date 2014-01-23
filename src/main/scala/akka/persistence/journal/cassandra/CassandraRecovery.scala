@@ -1,0 +1,132 @@
+package akka.persistence.journal.cassandra
+
+import java.lang.{ Long => JLong }
+
+import scala.concurrent._
+
+import com.datastax.driver.core.Row
+
+import akka.persistence.PersistentRepr
+
+trait CassandraRecovery { this: CassandraJournal =>
+  implicit lazy val replayDispatcher = context.system.dispatchers.lookup(config.getString("replay-dispatcher"))
+
+  def asyncReplayMessages(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Future[Unit] =
+    Future { replayMessages(processorId, fromSequenceNr, toSequenceNr, max)(replayCallback) }
+
+  def asyncReadHighestSequenceNr(processorId: String, fromSequenceNr: Long): Future[Long] =
+    Future { readHighestSequenceNr(processorId, fromSequenceNr ) }
+
+  def readHighestSequenceNr(processorId: String, fromSequenceNr: Long): Long =
+    new MessageIterator(processorId, fromSequenceNr, Long.MaxValue, Long.MaxValue).foldLeft(fromSequenceNr) { case (acc, msg) => msg.sequenceNr }
+
+  def readLowestSequenceNr(processorId: String, fromSequenceNr: Long): Long =
+    new MessageIterator(processorId, fromSequenceNr, Long.MaxValue, 1L).toStream.headOption.map(_.sequenceNr).getOrElse(fromSequenceNr)
+
+  def replayMessages(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Unit =
+    new MessageIterator(processorId, fromSequenceNr, toSequenceNr, max).foreach(replayCallback)
+
+  /**
+   * Iterator over messages, crossing partition boundaries.
+   */
+  class MessageIterator(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long) extends Iterator[PersistentRepr] {
+    import PersistentRepr.Undefined
+
+    private val iter = new RowIterator(processorId, fromSequenceNr, toSequenceNr)
+    private var mcnt = 0L
+
+    private var c: PersistentRepr = null
+    private var n: PersistentRepr = PersistentRepr(Undefined)
+
+    fetch()
+
+    def hasNext: Boolean =
+      n != null && mcnt <= max
+
+    def next(): PersistentRepr = {
+      fetch()
+      mcnt += 1
+      c
+    }
+
+    /**
+     * Make next message n the current message c, complete c
+     * (ignoring phantom markers) and pre-fetch new n.
+     */
+    private def fetch(): Unit = {
+      c = n
+      n = null
+      while (iter.hasNext && n == null) {
+        val row = iter.next()
+        val marker = row.getString("marker")
+        val snr = row.getLong("sequence_nr")
+        if (marker == "A") {
+          val m = persistentFromByteBuffer(row.getBytes("message"))
+          // there may be duplicates returned by iter
+          // (on scan boundaries within a partition)
+          if (snr == c.sequenceNr) c = m else n = m
+        } else if (marker == "B" && c.sequenceNr == snr) {
+          c = c.update(deleted = true)
+        } else if (c.sequenceNr == snr) {
+          val channelId = marker.substring(2)
+          c = c.update(confirms = channelId +: c.confirms)
+        }
+      }
+    }
+  }
+
+  /**
+   * Iterates over rows, crossing partition boundaries.
+   */
+  class RowIterator(processorId: String, fromSequenceNr: Long, toSequenceNr: Long) extends Iterator[Row] {
+    var currentPnr = partitionNr(fromSequenceNr)
+    var currentSnr = fromSequenceNr
+
+    var fromSnr = fromSequenceNr
+    var toSnr = math.min(sequenceNrMax(currentPnr), toSequenceNr)
+
+    var rcnt = 0
+    var iter = newIter()
+
+    def hasHeader = !session.execute(preparedSelectHeader.bind(processorId, currentPnr: JLong)).isExhausted
+    def newIter() = session.execute(preparedSelectMessages.bind(processorId, currentPnr: JLong, fromSnr: JLong, toSnr: JLong)).iterator
+
+    @annotation.tailrec
+    final def hasNext: Boolean = {
+      if (iter.hasNext) {
+        // more entries available in current partition
+        true
+      } else if (rcnt == 0 && !hasHeader) {
+        // no more entries available, non-existing partition detected
+        false
+      } else if (rcnt < maxResultSize) {
+        // all entries consumed, try next partition
+        currentPnr += 1
+        fromSnr = sequenceNrMin(currentPnr)
+        toSnr = math.min(sequenceNrMax(currentPnr), toSequenceNr)
+        rcnt = 0
+        iter = newIter()
+        hasNext
+      } else {
+        // max result set size reached, continue with same partition
+        fromSnr = currentSnr
+        rcnt = 0
+        iter = newIter()
+        hasNext
+      }
+    }
+
+    def next(): Row = {
+      val row = iter.next()
+      currentSnr = row.getLong("sequence_nr")
+      rcnt += 1
+      row
+    }
+
+    private def sequenceNrMin(partitionNr: Long): Long =
+      partitionNr * maxPartitionSize + 1L
+
+    private def sequenceNrMax(partitionNr: Long): Long =
+      (partitionNr + 1L) * maxPartitionSize
+  }
+}

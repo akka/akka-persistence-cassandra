@@ -10,9 +10,9 @@ parallelExecution in Test := false
 
 libraryDependencies += "com.datastax.cassandra" % "cassandra-driver-core" % "2.0.0-rc2" % "compile"
 
-libraryDependencies += "com.typesafe.akka" %% "akka-persistence-experimental" % "2.3-M2" % "compile"
+libraryDependencies += "com.typesafe.akka" %% "akka-persistence-experimental" % "2.3.0-RC1" % "compile"
 
-libraryDependencies += "com.typesafe.akka" %% "akka-testkit" % "2.3-M2" % "test"
+libraryDependencies += "com.typesafe.akka" %% "akka-testkit" % "2.3.0-RC1" % "test"
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.0" % "test"
 

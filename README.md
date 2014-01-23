@@ -1,7 +1,7 @@
 Cassandra Journal for Akka Persistence
 ======================================
 
-A replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3-M2/scala/persistence.html) journal backed by [Apache Cassandra](http://cassandra.apache.org/).
+A replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.0-RC1/scala/persistence.html) journal backed by [Apache Cassandra](http://cassandra.apache.org/).
 
 Prerequisites
 -------------
@@ -9,7 +9,7 @@ Prerequisites
 <table border="0">
   <tr>
     <td>Akka version: </td>
-    <td>2.3-M2 or higher</td>
+    <td>2.3.0-RC1 or higher</td>
   </tr>
   <tr>
     <td>Cassandra version: </td>
@@ -50,7 +50,7 @@ which increases write throughput but lowers replay throughput and availability d
 Status
 ------
 
-- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3-M2/scala/persistence.html#journal-plugin-api) are supported.
+- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3.0-RC1/scala/persistence.html#journal-plugin-api) are supported.
 - Row splitting per processor is implemented so that a large number of messages per processor can be stored.
 - Message writes are batched to optimize throughput. When using channels, confirmation writes are not batched yet.
 - Persistent channel recovery is not optimized yet. For details and possible optimizations details see [issue 4](https://github.com/krasserm/akka-persistence-cassandra/issues/4).
