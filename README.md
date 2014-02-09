@@ -46,12 +46,7 @@ This will run the journal with its default settings. The default settings can be
 - `cassandra-journal.write-consistency`. Write consistency level. Default value is `QUORUM`.
 - `cassandra-journal.read-consistency`. Read consistency level. Default value is `QUORUM`.
 
-The default read and write consistency levels ensure that processors can read their own writes. Applications may also choose to configure
-
-- `cassandra-journal.write-consistency = "ONE"`
-- `cassandra-journal.read-consistency = "ALL"`
-
-which increases write throughput but lowers replay throughput and availability during recovery. During normal operation, processors only write to the journal, reads occur only during recovery.
+The default read and write consistency levels ensure that processors can read their own writes. During normal operation, processors only write to the journal, reads occur only during recovery.
 
 Caveats
 -------
