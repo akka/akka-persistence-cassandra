@@ -10,7 +10,7 @@ import com.typesafe.config.ConfigFactory
 
 import org.scalatest._
 
-object CassandraJournalSpec {
+object CassandraIntegrationSpec {
   val config = ConfigFactory.parseString(
     """
       |akka.persistence.journal.plugin = "cassandra-journal"
@@ -89,9 +89,9 @@ object CassandraJournalSpec {
   }
 }
 
-import CassandraJournalSpec._
+import CassandraIntegrationSpec._
 
-class CassandraJournalSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraCleanup {
+class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraCleanup {
   def subscribeToConfirmation(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[Delivered])
 
