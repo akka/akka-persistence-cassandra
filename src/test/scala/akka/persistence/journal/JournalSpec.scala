@@ -10,7 +10,17 @@ import akka.persistence._
 import akka.persistence.JournalProtocol._
 import akka.testkit._
 
+import com.typesafe.config.ConfigFactory
+
 import org.scalatest._
+
+object JournalSpec {
+  val config = ConfigFactory.parseString(
+    """
+      |akka.persistence.publish-confirmations = on
+      |akka.persistence.publish-plugin-commands = on
+    """.stripMargin)
+}
 
 trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { this: TestKit =>
   val extension = Persistence(system)
