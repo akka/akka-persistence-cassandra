@@ -149,5 +149,17 @@ trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { t
       }
       receiverProbe.expectMsg(ReplayMessagesSuccess)
     }
+    "tolerate orphan deletion markers" in {
+      val msgIds = List(PersistentIdImpl(pid, 3), PersistentIdImpl(pid, 4))
+      journal ! DeleteMessages(msgIds, true, Some(receiverProbe.ref)) // delete message
+      receiverProbe.expectMsg(DeleteMessagesSuccess(msgIds))
+
+      journal ! DeleteMessages(msgIds, false, Some(receiverProbe.ref)) // write orphan marker
+      receiverProbe.expectMsg(DeleteMessagesSuccess(msgIds))
+
+      journal ! ReplayMessages(1, Long.MaxValue, Long.MaxValue, pid, receiverProbe.ref)
+      List(1, 2, 5) foreach { i => receiverProbe.expectMsg(replayedMessage(i)) }
+      receiverProbe.expectMsg(ReplayMessagesSuccess)
+    }
   }
 }
