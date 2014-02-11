@@ -19,6 +19,6 @@ trait CassandraCleanup extends BeforeAndAfterAll { this: TestKit with Suite =>
     session.execute(s"DROP KEYSPACE ${journalConfig.getString("keyspace")}")
     FileUtils.deleteDirectory(new File(snapshotConfig.getString("dir")))
     system.shutdown()
+    system.awaitTermination()
   }
-
 }
