@@ -20,9 +20,13 @@ object JournalSpec {
       |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
     """.stripMargin)
+
+  case class Confirmation(processorId: String, channelId: String, sequenceNr: Long) extends PersistentConfirmation
 }
 
 trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { this: TestKit =>
+  import JournalSpec._
+
   val extension = Persistence(system)
   val journal: ActorRef = extension.journalFor(null)
   val counter = new AtomicInteger(0)
@@ -89,7 +93,7 @@ trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { t
       2 to 3 foreach { i => receiverProbe.expectMsg(replayedMessage(i)) }
       receiverProbe.expectMsg(ReplayMessagesSuccess)
     }
-    "replay a single if lower equals upper sequence number bound" in {
+    "replay a single if lower sequence number bound equals upper sequence number bound" in {
       journal ! ReplayMessages(2, 2, Long.MaxValue, pid, receiverProbe.ref)
       2 to 2 foreach { i => receiverProbe.expectMsg(replayedMessage(i)) }
       receiverProbe.expectMsg(ReplayMessagesSuccess)
@@ -103,7 +107,7 @@ trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { t
       journal ! ReplayMessages(2, 4, 0, pid, receiverProbe.ref)
       receiverProbe.expectMsg(ReplayMessagesSuccess)
     }
-    "not replay messages if lower is greater than upper sequence number bound" in {
+    "not replay messages if lower  sequence number bound is greater than upper sequence number bound" in {
       journal ! ReplayMessages(3, 2, Long.MaxValue, pid, receiverProbe.ref)
       receiverProbe.expectMsg(ReplayMessagesSuccess)
     }
@@ -126,9 +130,8 @@ trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { t
 
       journal ! ReplayMessages(1, Long.MaxValue, Long.MaxValue, pid, receiverProbe.ref)
       List(4, 5) foreach { i => receiverProbe.expectMsg(replayedMessage(i)) }
-      receiverProbe.expectMsg(ReplayMessagesSuccess)
     }
-    "replay logically deleted messages with deleted=true (individual deletion)" in {
+    "replay logically deleted messages with deleted field set to true (individual deletion)" in {
       val msgIds = List(PersistentIdImpl(pid, 3), PersistentIdImpl(pid, 4))
       journal ! DeleteMessages(msgIds, false, Some(receiverProbe.ref))
       receiverProbe.expectMsg(DeleteMessagesSuccess(msgIds))
@@ -140,9 +143,8 @@ trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { t
           case 3 | 4     => receiverProbe.expectMsg(replayedMessage(i, deleted = true))
         }
       }
-      receiverProbe.expectMsg(ReplayMessagesSuccess)
     }
-    "replay logically deleted messages with deleted=true (range deletion)" in {
+    "replay logically deleted messages with deleted field set to true (range deletion)" in {
       val cmd = DeleteMessagesTo(pid, 3, false)
       val sub = TestProbe()
 
@@ -157,9 +159,28 @@ trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { t
           case 4 | 5     => receiverProbe.expectMsg(replayedMessage(i))
         }
       }
-      receiverProbe.expectMsg(ReplayMessagesSuccess)
     }
-    "tolerate orphan deletion markers" in {
+    "replay confirmed messages with corresponding channel ids contained in the confirmed field" in {
+      val confs = List(Confirmation(pid, "c1", 3), Confirmation(pid, "c2", 3))
+      val lpid = pid
+
+      journal ! WriteConfirmations(confs, receiverProbe.ref)
+      receiverProbe.expectMsg(WriteConfirmationsSuccess(confs))
+
+      journal ! ReplayMessages(1, Long.MaxValue, Long.MaxValue, pid, receiverProbe.ref, replayDeleted = true)
+      1 to 5 foreach { i =>
+        i match {
+          case 1 | 2 | 4 | 5 => receiverProbe.expectMsg(replayedMessage(i))
+          case 3 => receiverProbe.expectMsgPF() {
+            case ReplayedMessage(PersistentImpl(payload, `i`, `lpid`, false, confirms, _)) =>
+              confirms should have length (2)
+              confirms should contain ("c1")
+              confirms should contain ("c2")
+          }
+        }
+      }
+    }
+    "ignore orphan deletion markers" in {
       val msgIds = List(PersistentIdImpl(pid, 3), PersistentIdImpl(pid, 4))
       journal ! DeleteMessages(msgIds, true, Some(receiverProbe.ref)) // delete message
       receiverProbe.expectMsg(DeleteMessagesSuccess(msgIds))
@@ -169,7 +190,29 @@ trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { t
 
       journal ! ReplayMessages(1, Long.MaxValue, Long.MaxValue, pid, receiverProbe.ref)
       List(1, 2, 5) foreach { i => receiverProbe.expectMsg(replayedMessage(i)) }
-      receiverProbe.expectMsg(ReplayMessagesSuccess)
+    }
+    "ignore orphan confirmation markers" in {
+      val msgIds = List(PersistentIdImpl(pid, 3))
+      journal ! DeleteMessages(msgIds, true, Some(receiverProbe.ref)) // delete message
+      receiverProbe.expectMsg(DeleteMessagesSuccess(msgIds))
+
+      val confs = List(Confirmation(pid, "c1", 3), Confirmation(pid, "c2", 3))
+      journal ! WriteConfirmations(confs, receiverProbe.ref)
+      receiverProbe.expectMsg(WriteConfirmationsSuccess(confs))
+
+      journal ! ReplayMessages(1, Long.MaxValue, Long.MaxValue, pid, receiverProbe.ref)
+      List(1, 2, 4, 5) foreach { i => receiverProbe.expectMsg(replayedMessage(i)) }
+    }
+    "return a highest stored sequence number > 0 if the processor has already written messages and the message log is non-empty" in {
+      journal ! ReadHighestSequenceNr(3L, pid, receiverProbe.ref)
+      receiverProbe.expectMsg(ReadHighestSequenceNrSuccess(5))
+
+      journal ! ReadHighestSequenceNr(5L, pid, receiverProbe.ref)
+      receiverProbe.expectMsg(ReadHighestSequenceNrSuccess(5))
+    }
+    "return a highest stored sequence number == 0 if the processor has not yet written messages" in {
+      journal ! ReadHighestSequenceNr(0L, "non-existing-pid", receiverProbe.ref)
+      receiverProbe.expectMsg(ReadHighestSequenceNrSuccess(0))
     }
   }
 }
