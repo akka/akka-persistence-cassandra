@@ -10,7 +10,7 @@ import akka.persistence._
 import akka.persistence.JournalProtocol._
 import akka.testkit._
 
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config._
 
 import org.scalatest._
 
@@ -24,17 +24,31 @@ object JournalSpec {
   case class Confirmation(processorId: String, channelId: String, sequenceNr: Long) extends PersistentConfirmation
 }
 
-trait JournalSpec extends WordSpecLike with Matchers with BeforeAndAfterEach { this: TestKit =>
-  import JournalSpec._
+trait JournalSpec extends TestKitBase with WordSpecLike with Matchers with BeforeAndAfterAll with BeforeAndAfterEach {
+  import JournalSpec.Confirmation
 
-  val extension = Persistence(system)
-  val journal: ActorRef = extension.journalFor(null)
-  val counter = new AtomicInteger(0)
+  implicit lazy val system = ActorSystem("JournalSpec", config.withFallback(JournalSpec.config))
+  private var _extension: Persistence = _
 
-  var pid: String = _
+  private val counter = new AtomicInteger(0)
+  private var pid: String = _
 
-  var senderProbe: TestProbe = _
-  var receiverProbe: TestProbe = _
+  private var senderProbe: TestProbe = _
+  private var receiverProbe: TestProbe = _
+
+  val config: Config
+
+  def extension: Persistence =
+    _extension
+
+  def journal: ActorRef =
+    _extension.journalFor(null)
+
+  override def beforeAll(): Unit =
+    _extension = Persistence(system)
+
+  override def afterAll(): Unit =
+    shutdown(system)
 
   override def beforeEach(): Unit = {
     senderProbe = TestProbe()
