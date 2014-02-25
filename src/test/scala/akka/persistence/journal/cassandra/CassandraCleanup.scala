@@ -14,10 +14,10 @@ trait CassandraCleanup extends BeforeAndAfterAll { this: TestKitBase with Suite 
   val snapshotConfig = system.settings.config.getConfig("akka.persistence.snapshot-store.local")
 
   override def afterAll(): Unit = {
+    super.afterAll()
     val cluster = Cluster.builder.addContactPoint("127.0.0.1").build
     val session = cluster.connect()
     session.execute(s"DROP KEYSPACE ${journalConfig.getString("keyspace")}")
     FileUtils.deleteDirectory(new File(snapshotConfig.getString("dir")))
-    super.afterAll()
   }
 }
