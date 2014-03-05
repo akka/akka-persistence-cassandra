@@ -97,7 +97,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
     s"C-${channelId}"
 
   override def postStop(): Unit = {
-    session.shutdown()
-    cluster.shutdown()
+    session.close()
+    cluster.close()
   }
 }
