@@ -12,7 +12,7 @@ To include this journal plugin into your `sbt` project, add the following lines 
 
     resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven"
 
-    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.1"
+    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.2"
 
 This version of the plugin depends on Akka 2.3.0 and Scala 2.10.2.
 
