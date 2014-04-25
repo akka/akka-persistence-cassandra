@@ -1,7 +1,7 @@
 Cassandra Journal for Akka Persistence
 ======================================
 
-A replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.0/scala/persistence.html) journal backed by [Apache Cassandra](http://cassandra.apache.org/).
+A replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.2/scala/persistence.html) journal backed by [Apache Cassandra](http://cassandra.apache.org/).
 
 Installation
 ------------
@@ -12,9 +12,9 @@ To include this journal plugin into your `sbt` project, add the following lines 
 
     resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven"
 
-    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.2"
+    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.2.1"
 
-This version of the plugin depends on Akka 2.3.0 and Scala 2.10.2.
+This version of the plugin depends on Akka 2.3.2 and is cross-built against Scala 2.10.4 and 2.11.0.
 
 ### Cassandra database
 
@@ -23,9 +23,9 @@ The plugin requires an exiting installation of Cassandra 2.0.3 or higher. You ma
 Features
 --------
 
-- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3.0/scala/persistence.html#journal-plugin-api) are fully supported.
+- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3.2/scala/persistence.html#journal-plugin-api) are fully supported.
 - The plugin uses Cassandra in a pure log-oriented way i.e. data are only ever inserted but never updated (deletions are made on user request only or by persistent channels, see also [Caveats](#caveats)).
-- Writes of messages and confirmations are batched to optimize throughput. See [batch writes](http://doc.akka.io/docs/akka/2.3.0/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
+- Writes of messages and confirmations are batched to optimize throughput. See [batch writes](http://doc.akka.io/docs/akka/2.3.2/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
 - Messages written by a single processor are partitioned across the cluster to achieve scalability with data volume by adding nodes.
 
 Configuration
