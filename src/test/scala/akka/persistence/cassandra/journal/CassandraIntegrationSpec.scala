@@ -1,9 +1,10 @@
-package akka.persistence.journal.cassandra
+package akka.persistence.cassandra.journal
 
 import scala.concurrent.duration._
 
 import akka.actor._
 import akka.persistence._
+import akka.persistence.cassandra.CassandraCleanup
 import akka.testkit._
 
 import com.typesafe.config.ConfigFactory
@@ -13,9 +14,9 @@ import org.scalatest._
 object CassandraIntegrationSpec {
   val config = ConfigFactory.parseString(
     """
+      |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.journal.max-deletion-batch-size = 3
-      |akka.persistence.snapshot-store.local.dir = "target/snapshots"
       |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
       |cassandra-journal.max-partition-size = 5

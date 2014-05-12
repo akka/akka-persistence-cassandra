@@ -17,5 +17,3 @@ libraryDependencies += "com.datastax.cassandra" % "cassandra-driver-core" % "2.0
 libraryDependencies += "com.typesafe.akka" %% "akka-persistence-experimental" % "2.3.2" % "compile"
 
 libraryDependencies += "com.github.krasserm" %% "akka-persistence-testkit" % "0.3.1" % "test"
-
-libraryDependencies += "commons-io" % "commons-io" % "2.4" % "test"

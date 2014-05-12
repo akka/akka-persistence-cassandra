@@ -1,4 +1,4 @@
-package akka.persistence.journal.cassandra
+package akka.persistence.cassandra.journal
 
 import java.lang.{ Long => JLong }
 

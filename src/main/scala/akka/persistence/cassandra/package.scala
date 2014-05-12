@@ -1,4 +1,4 @@
-package akka.persistence.journal
+package akka.persistence
 
 import java.util.concurrent.Executor
 

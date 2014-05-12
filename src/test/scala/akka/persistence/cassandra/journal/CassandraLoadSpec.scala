@@ -1,10 +1,11 @@
-package akka.persistence.journal.cassandra
+package akka.persistence.cassandra.journal
 
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
 
 import akka.actor._
 import akka.persistence._
+import akka.persistence.cassandra.CassandraCleanup
 import akka.testkit._
 
 import com.typesafe.config.ConfigFactory
@@ -15,7 +16,7 @@ object CassandraLoadSpec {
   val config = ConfigFactory.parseString(
     """
       |akka.persistence.journal.plugin = "cassandra-journal"
-      |akka.persistence.snapshot-store.local.dir = "target/snapshots"
+      |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
     """.stripMargin)
 
   trait Measure extends { this: Actor ⇒

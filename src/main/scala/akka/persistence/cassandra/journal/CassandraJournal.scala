@@ -1,4 +1,4 @@
-package akka.persistence.journal.cassandra
+package akka.persistence.cassandra.journal
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
@@ -9,6 +9,7 @@ import scala.concurrent._
 
 import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence._
+import akka.persistence.cassandra._
 import akka.serialization.SerializationExtension
 
 import com.datastax.driver.core._
