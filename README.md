@@ -1,7 +1,7 @@
 Cassandra Plugins for Akka Persistence
 ======================================
 
-Replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.2/scala/persistence.html) journal and snapshot stores backed by [Apache Cassandra](http://cassandra.apache.org/).
+Replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.2/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](http://cassandra.apache.org/).
 
 Installation
 ------------
