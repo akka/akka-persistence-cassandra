@@ -347,5 +347,22 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       processor2 ! Persistent("b")
       expectMsg("updated-b-6") // sequence number of permanently deleted message can be re-used
     }
+    "properly recover after all messages have been deleted" in {
+      val deleteProbe = TestProbe()
+      subscribeToBatchDeletion(deleteProbe)
+
+      val p = system.actorOf(Props(classOf[ProcessorA], "p16"))
+
+      p ! Persistent("a")
+      expectMsgAllOf("a", 1L, false)
+
+      p ! Delete(1L, true)
+      awaitBatchDeletion(deleteProbe)
+
+      val r = system.actorOf(Props(classOf[ProcessorA], "p16"))
+
+      r ! Persistent("b")
+      expectMsgAllOf("b", 1L, false)
+    }
   }
 }

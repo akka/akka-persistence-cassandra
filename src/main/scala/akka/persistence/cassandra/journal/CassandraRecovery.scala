@@ -18,7 +18,7 @@ trait CassandraRecovery { this: CassandraJournal =>
     Future { readHighestSequenceNr(processorId, fromSequenceNr ) }
 
   def readHighestSequenceNr(processorId: String, fromSequenceNr: Long): Long =
-    new MessageIterator(processorId, fromSequenceNr, Long.MaxValue, Long.MaxValue).foldLeft(fromSequenceNr) { case (acc, msg) => msg.sequenceNr }
+    new MessageIterator(processorId, math.max(1L, fromSequenceNr), Long.MaxValue, Long.MaxValue).foldLeft(fromSequenceNr) { case (acc, msg) => msg.sequenceNr }
 
   def readLowestSequenceNr(processorId: String, fromSequenceNr: Long): Long =
     new MessageIterator(processorId, fromSequenceNr, Long.MaxValue, Long.MaxValue).find(!_.deleted).map(_.sequenceNr).getOrElse(fromSequenceNr)
