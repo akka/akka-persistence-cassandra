@@ -17,6 +17,7 @@ import akka.serialization.SerializationExtension
 
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
+import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 
 /**
  * Optimized and fully async version of [[akka.persistence.snapshot.SnapshotStore]].
@@ -78,6 +79,13 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
       config.getString("authentication.username"),
       config.getString("authentication.password"))
   }
+
+  if(config.hasPath("local-datacenter")) {
+    clusterBuilder.withLoadBalancingPolicy(
+      new DCAwareRoundRobinPolicy(config.getString("local-datacenter"))
+    )
+  }
+
   val cluster = clusterBuilder.build
   val session = cluster.connect()
 

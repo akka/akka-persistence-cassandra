@@ -54,6 +54,10 @@ To connect to the Cassandra hosts with credentials, add the following lines:
 - `cassandra-journal.authentication.username`. The username to use to login to Cassandra hosts. No authentication is set as default.
 - `cassandra-journal.authentication.password`. The password corresponding to username. No authentication is set as default.
 
+To limit the Cassandra hosts this plugin connects with to a specific datacenter, use the following setting:
+
+- `cassandra-journal.local-datacenter`.  The id for the local datacenter of the Cassandra hosts that this module should connect to.  By default, this property is not set resulting in Datastax's standard round robin policy being used.
+
 ### Caveats
 
 - Detailed tests under failure conditions are still missing.
@@ -93,6 +97,10 @@ To connect to the Cassandra hosts with credentials, add the following lines:
 
 - `cassandra-snapshot-store.authentication.username`. The username to use to login to Cassandra hosts. No authentication is set as default.
 - `cassandra-snapshot-store.authentication.password`. The password corresponding to username. No authentication is set as default.
+
+To limit the Cassandra hosts this plugin connects with to a specific datacenter, use the following setting:
+
+- `cassandra-snapshot-store.local-datacenter`.  The id for the local datacenter of the Cassandra hosts that this module should connect to.  By default, this property is not set resulting in Datastax's standard round robin policy being used.
 
 
 
