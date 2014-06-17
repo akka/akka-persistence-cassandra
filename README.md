@@ -49,6 +49,11 @@ This will run the journal with its default settings. The default settings can be
 
 The default read and write consistency levels ensure that processors can read their own writes. During normal operation, processors only write to the journal, reads occur only during recovery.
 
+To connect to the Cassandra hosts with credentials, add the following lines:
+
+- `cassandra-journal.authentication.username`. The username to use to login to Cassandra hosts. No authentication is set as default.
+- `cassandra-journal.authentication.password`. The password corresponding to username. No authentication is set as default.
+
 ### Caveats
 
 - Detailed tests under failure conditions are still missing.
@@ -83,4 +88,12 @@ This will run the snapshot store with its default settings. The default settings
 - `cassandra-snapshot-store.max-metadata-result-size`. Maximum number of snapshot metadata to load per recursion (when trying to find a snapshot that matches specified selection criteria). Default value is `10`. Only increase this value when selection criteria frequently select snapshots that are much older than the most recent snapshot i.e. if there are much more than 10 snapshots between the most recent one and selected one. This setting is only for increasing load efficiency of snapshots.
 - `cassandra-snapshot-store.write-consistency`. Write consistency level. Default value is `ONE`.
 - `cassandra-snapshot-store.read-consistency`. Read consistency level. Default value is `ONE`.
+
+To connect to the Cassandra hosts with credentials, add the following lines:
+
+- `cassandra-snapshot-store.authentication.username`. The username to use to login to Cassandra hosts. No authentication is set as default.
+- `cassandra-snapshot-store.authentication.password`. The password corresponding to username. No authentication is set as default.
+
+
+
 
