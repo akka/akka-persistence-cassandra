@@ -17,6 +17,7 @@ import akka.serialization.SerializationExtension
 
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
+import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 
 /**
  * Optimized and fully async version of [[akka.persistence.snapshot.SnapshotStore]].
@@ -72,7 +73,20 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   val maxMetadataResultSize = config.getInt("max-metadata-result-size")
   val serialization = SerializationExtension(context.system)
 
-  val cluster = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*).build
+  val clusterBuilder = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*)
+  if(config.hasPath("authentication")) {
+    clusterBuilder.withCredentials(
+      config.getString("authentication.username"),
+      config.getString("authentication.password"))
+  }
+
+  if(config.hasPath("local-datacenter")) {
+    clusterBuilder.withLoadBalancingPolicy(
+      new DCAwareRoundRobinPolicy(config.getString("local-datacenter"))
+    )
+  }
+
+  val cluster = clusterBuilder.build
   val session = cluster.connect()
 
   session.execute(createKeyspace(config.getInt("replication-factor")))
