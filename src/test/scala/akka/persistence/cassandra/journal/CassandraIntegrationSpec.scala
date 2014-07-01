@@ -26,62 +26,61 @@ object CassandraIntegrationSpec {
   case class Delete(snr: Long, permanent: Boolean)
   case class DeleteTo(snr: Long, permanent: Boolean)
 
-  class ProcessorA(override val processorId: String) extends Processor {
-    def receive = {
-      case Persistent(payload, sequenceNr) =>
-        sender ! payload
-        sender ! sequenceNr
-        sender ! recoveryRunning
+  class ProcessorA(val persistenceId: String) extends PersistentActor {
+    def receiveRecover: Receive = handle
+    def receiveCommand: Receive = {
       case Delete(sequenceNr, permanent) =>
         deleteMessage(sequenceNr, permanent)
       case DeleteTo(sequenceNr, permanent) =>
         deleteMessages(sequenceNr, permanent)
+      case payload: String =>
+        persist(payload)(handle)
+    }
+    def handle: Receive = {
+      case payload: String =>
+        sender ! payload
+        sender ! lastSequenceNr
+        sender ! recoveryRunning
     }
   }
 
-  class ProcessorB(override val processorId: String) extends Processor {
-    val destination = context.actorOf(Props[Destination])
-    val channel = context.actorOf(Channel.props("channel"))
-
-    def receive = {
-      case p: Persistent => channel forward Deliver(p, destination.path)
-    }
-  }
-
-  class ProcessorC(override val processorId: String, probe: ActorRef) extends Processor {
+  class ProcessorC(val persistenceId: String, probe: ActorRef) extends PersistentActor {
     var last: String = _
 
-    def receive = {
-      case Persistent(payload: String, sequenceNr) =>
-        last = s"${payload}-${sequenceNr}"
-        probe ! s"updated-${last}"
+    def receiveRecover: Receive = {
+      case SnapshotOffer(_, snapshot: String) =>
+        last = snapshot
+        probe ! s"offered-${last}"
+      case payload: String =>
+        handle(payload)
+    }
+
+    def receiveCommand: Receive = {
       case "snap" =>
         saveSnapshot(last)
       case SaveSnapshotSuccess(_) =>
         probe ! s"snapped-${last}"
-      case SnapshotOffer(_, snapshot: String) =>
-        last = snapshot
-        probe ! s"offered-${last}"
       case Delete(sequenceNr, permanent) =>
         deleteMessage(sequenceNr, permanent)
+      case payload: String =>
+        persist(payload)(handle)
+
+    }
+
+    def handle: Receive = {
+      case payload: String =>
+        last = s"${payload}-${lastSequenceNr}"
+        probe ! s"updated-${last}"
     }
   }
 
-  class ProcessorCNoRecover(override val processorId: String, probe: ActorRef) extends ProcessorC(processorId, probe) {
+  class ProcessorCNoRecover(override val persistenceId: String, probe: ActorRef) extends ProcessorC(persistenceId, probe) {
     override def preStart() = ()
   }
 
-  class Destination extends Actor {
+  class ViewA(val viewId: String, val persistenceId: String, probe: ActorRef) extends PersistentView {
     def receive = {
-      case cp @ ConfirmablePersistent(payload, sequenceNr, _) =>
-        sender ! s"${payload}-${sequenceNr}"
-        cp.confirm()
-    }
-  }
-
-  class ViewA(val processorId: String, probe: ActorRef) extends View {
-    def receive = {
-      case Persistent(payload, _) =>
+      case payload =>
         probe ! payload
     }
 
@@ -102,9 +101,6 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
   def subscribeToRangeDeletion(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessagesTo])
 
-  def awaitConfirmation(probe: TestProbe): Unit =
-    probe.expectMsgType[Delivered]
-
   def awaitBatchDeletion(probe: TestProbe): Unit =
     probe.expectMsgType[JournalProtocol.DeleteMessages]
 
@@ -117,7 +113,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
     val processor1 = system.actorOf(Props(classOf[ProcessorA], processorId))
     1L to 16L foreach { i =>
-      processor1 ! Persistent(s"a-${i}")
+      processor1 ! s"a-${i}"
       expectMsgAllOf(s"a-${i}", i, false)
     }
 
@@ -151,7 +147,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
     val processor1 = system.actorOf(Props(classOf[ProcessorA], processorId))
     1L to 16L foreach { i =>
-      processor1 ! Persistent(s"a-${i}")
+      processor1 ! s"a-${i}"
       expectMsgAllOf(s"a-${i}", i, false)
     }
 
@@ -176,7 +172,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
     "write and replay messages" in {
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
       1L to 16L foreach { i =>
-        processor1 ! Persistent(s"a-${i}")
+        processor1 ! s"a-${i}"
         expectMsgAllOf(s"a-${i}", i, false)
       }
 
@@ -185,24 +181,8 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
         expectMsgAllOf(s"a-${i}", i, true)
       }
 
-      processor2 ! Persistent("b")
+      processor2 ! "b"
       expectMsgAllOf("b", 17L, false)
-    }
-    "write delivery confirmations" in {
-      val confirmProbe = TestProbe()
-      subscribeToConfirmation(confirmProbe)
-
-      val processor1 = system.actorOf(Props(classOf[ProcessorB], "p2"))
-      1L to 16L foreach { i =>
-        processor1 ! Persistent("a")
-        awaitConfirmation(confirmProbe)
-        expectMsg(s"a-${i}")
-      }
-
-      val processor2 = system.actorOf(Props(classOf[ProcessorB], "p2"))
-      processor2 ! Persistent("b")
-      awaitConfirmation(confirmProbe)
-      expectMsg("b-17")
     }
     "not replay messages marked as deleted" in {
       testIndividualDelete("p3", false)
@@ -220,11 +200,11 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       val probe = TestProbe()
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p7"))
       1L to 6L foreach { i =>
-        processor1 ! Persistent(s"a-${i}")
+        processor1 ! s"a-${i}"
         expectMsgAllOf(s"a-${i}", i, false)
       }
 
-      val view = system.actorOf(Props(classOf[ViewA], "p7", probe.ref))
+      val view = system.actorOf(Props(classOf[ViewA], "p7-view", "p7", probe.ref))
       probe.expectNoMsg(200.millis)
 
       view ! Update(true, replayMax = 3L)
@@ -244,11 +224,11 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
   "A processor" should {
     "recover from a snapshot with follow-up messages" in {
       val processor1 = system.actorOf(Props(classOf[ProcessorC], "p10", testActor))
-      processor1 ! Persistent("a")
+      processor1 ! "a"
       expectMsg("updated-a-1")
       processor1 ! "snap"
       expectMsg("snapped-a-1")
-      processor1 ! Persistent("b")
+      processor1 ! "b"
       expectMsg("updated-b-2")
 
       system.actorOf(Props(classOf[ProcessorC], "p10", testActor))
@@ -258,12 +238,12 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
     "recover from a snapshot with follow-up messages and an upper bound" in {
       val processor1 = system.actorOf(Props(classOf[ProcessorCNoRecover], "p11", testActor))
       processor1 ! Recover()
-      processor1 ! Persistent("a")
+      processor1 ! "a"
       expectMsg("updated-a-1")
       processor1 ! "snap"
       expectMsg("snapped-a-1")
       2L to 7L foreach { i =>
-        processor1 ! Persistent("a")
+        processor1 ! "a"
         expectMsg(s"updated-a-${i}")
       }
 
@@ -272,25 +252,25 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       expectMsg("offered-a-1")
       expectMsg("updated-a-2")
       expectMsg("updated-a-3")
-      processor2 ! Persistent("d")
+      processor2 ! "d"
       expectMsg("updated-d-8")
     }
     "recover from a snapshot without follow-up messages inside a partition" in {
       val processor1 = system.actorOf(Props(classOf[ProcessorC], "p12", testActor))
-      processor1 ! Persistent("a")
+      processor1 ! "a"
       expectMsg("updated-a-1")
       processor1 ! "snap"
       expectMsg("snapped-a-1")
 
       val processor2 = system.actorOf(Props(classOf[ProcessorC], "p12", testActor))
       expectMsg("offered-a-1")
-      processor2 ! Persistent("b")
+      processor2 ! "b"
       expectMsg("updated-b-2")
     }
     "recover from a snapshot without follow-up messages at a partition boundary (where next partition is invalid)" in {
       val processor1 = system.actorOf(Props(classOf[ProcessorC], "p13", testActor))
       1L to 5L foreach { i =>
-        processor1 ! Persistent("a")
+        processor1 ! "a"
         expectMsg(s"updated-a-${i}")
       }
       processor1 ! "snap"
@@ -298,7 +278,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
       val processor2 = system.actorOf(Props(classOf[ProcessorC], "p13", testActor))
       expectMsg("offered-a-5")
-      processor2 ! Persistent("b")
+      processor2 ! "b"
       expectMsg("updated-b-6")
     }
     "recover from a snapshot without follow-up messages at a partition boundary (where next partition contains a message marked as deleted)" in {
@@ -307,13 +287,13 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
       val processor1 = system.actorOf(Props(classOf[ProcessorC], "p14", testActor))
       1L to 5L foreach { i =>
-        processor1 ! Persistent("a")
+        processor1 ! "a"
         expectMsg(s"updated-a-${i}")
       }
       processor1 ! "snap"
       expectMsg("snapped-a-5")
 
-      processor1 ! Persistent("a")
+      processor1 ! "a"
       expectMsg("updated-a-6")
 
       processor1 ! Delete(6L, false)
@@ -321,7 +301,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
       val processor2 = system.actorOf(Props(classOf[ProcessorC], "p14", testActor))
       expectMsg("offered-a-5")
-      processor2 ! Persistent("b")
+      processor2 ! "b"
       expectMsg("updated-b-7")
     }
     "recover from a snapshot without follow-up messages at a partition boundary (where next partition contains a permanently deleted message)" in {
@@ -330,13 +310,13 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
       val processor1 = system.actorOf(Props(classOf[ProcessorC], "p15", testActor))
       1L to 5L foreach { i =>
-        processor1 ! Persistent("a")
+        processor1 ! "a"
         expectMsg(s"updated-a-${i}")
       }
       processor1 ! "snap"
       expectMsg("snapped-a-5")
 
-      processor1 ! Persistent("a")
+      processor1 ! "a"
       expectMsg("updated-a-6")
 
       processor1 ! Delete(6L, true)
@@ -344,7 +324,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
       val processor2 = system.actorOf(Props(classOf[ProcessorC], "p15", testActor))
       expectMsg("offered-a-5")
-      processor2 ! Persistent("b")
+      processor2 ! "b"
       expectMsg("updated-b-6") // sequence number of permanently deleted message can be re-used
     }
     "properly recover after all messages have been deleted" in {
@@ -353,7 +333,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
       val p = system.actorOf(Props(classOf[ProcessorA], "p16"))
 
-      p ! Persistent("a")
+      p ! "a"
       expectMsgAllOf("a", 1L, false)
 
       p ! Delete(1L, true)
@@ -361,7 +341,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
       val r = system.actorOf(Props(classOf[ProcessorA], "p16"))
 
-      r ! Persistent("b")
+      r ! "b"
       expectMsgAllOf("b", 1L, false)
     }
   }

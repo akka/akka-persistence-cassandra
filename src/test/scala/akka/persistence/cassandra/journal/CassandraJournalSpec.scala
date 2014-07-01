@@ -1,11 +1,11 @@
 package akka.persistence.cassandra.journal
 
 import akka.persistence.cassandra.CassandraCleanup
-import akka.persistence.journal.JournalSpec
+import akka.persistence.journal.LegacyJournalSpec
 
 import com.typesafe.config.ConfigFactory
 
-class CassandraJournalSpec extends JournalSpec with CassandraCleanup {
+class CassandraJournalSpec extends LegacyJournalSpec with CassandraCleanup {
   lazy val config = ConfigFactory.parseString(
     """
       |akka.persistence.journal.plugin = "cassandra-journal"

@@ -12,8 +12,8 @@ parallelExecution in Test := false
 
 resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven"
 
-libraryDependencies += "com.datastax.cassandra" % "cassandra-driver-core" % "2.0.1" % "compile"
+libraryDependencies += "com.datastax.cassandra" % "cassandra-driver-core" % "2.0.3" % "compile"
 
-libraryDependencies += "com.typesafe.akka" %% "akka-persistence-experimental" % "2.3.2" % "compile"
+libraryDependencies += "com.typesafe.akka" %% "akka-persistence-experimental" % "2.3.4" % "compile"
 
-libraryDependencies += "com.github.krasserm" %% "akka-persistence-testkit" % "0.3.1" % "test"
+libraryDependencies += "com.github.krasserm" %% "akka-persistence-testkit" % "0.3.3" % "test"

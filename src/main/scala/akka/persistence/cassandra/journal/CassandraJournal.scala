@@ -14,6 +14,7 @@ import akka.serialization.SerializationExtension
 
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
+import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 
 class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
   val config = context.system.settings.config.getConfig("cassandra-journal")
@@ -27,7 +28,20 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
 
   val serialization = SerializationExtension(context.system)
 
-  val cluster = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*).build
+  private val clusterBuilder = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*)
+  if(config.hasPath("authentication")) {
+    clusterBuilder.withCredentials(
+      config.getString("authentication.username"),
+      config.getString("authentication.password"))
+  }
+
+  if(config.hasPath("local-datacenter")) {
+    clusterBuilder.withLoadBalancingPolicy(
+      new DCAwareRoundRobinPolicy(config.getString("local-datacenter"))
+    )
+  }
+
+  val cluster = clusterBuilder.build
   val session = cluster.connect()
 
   session.execute(createKeyspace(config.getInt("replication-factor")))
