@@ -74,6 +74,11 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   val serialization = SerializationExtension(context.system)
 
   val clusterBuilder = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*)
+
+  if(config.hasPath("port")) {
+    clusterBuilder.withPort(config.getInt("port"))
+  }
+
   if(config.hasPath("authentication")) {
     clusterBuilder.withCredentials(
       config.getString("authentication.username"),
