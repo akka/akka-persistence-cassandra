@@ -17,6 +17,7 @@ object CassandraLoadSpec {
     """
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
+      |akka.test.single-expect-default = 10s
     """.stripMargin)
 
   trait Measure extends { this: Actor ⇒
@@ -47,9 +48,9 @@ object CassandraLoadSpec {
 
     def receiveCommand: Receive = {
       case c @ "start" =>
-        defer(c)(_ => startMeasure())
+        defer(c) { _ => startMeasure(); sender ! "started" }
       case c @ "stop" =>
-        defer(c)(_ => stopMeasure())
+        defer(c) { _ => stopMeasure() }
       case payload: String =>
         persistAsync(payload)(handle)
     }
@@ -84,6 +85,7 @@ class CassandraLoadSpec extends TestKit(ActorSystem("test", config)) with Implic
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1a"))
       1L to warmCycles foreach { i => processor1 ! "a" }
       processor1 ! "start"
+      expectMsg("started")
       1L to loadCycles foreach { i => processor1 ! "a" }
       processor1 ! "stop"
       expectMsgPF(100 seconds) { case throughput: Double ⇒ println(f"\nthroughput = $throughput%.2f persistent commands per second") }
