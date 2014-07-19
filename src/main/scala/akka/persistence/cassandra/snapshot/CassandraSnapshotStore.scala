@@ -145,7 +145,7 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   } yield res
 
   def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {
-    val batch = new BatchStatement
+    val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
     body(batch)
     session.executeAsync(batch).map(_ => ())
   }

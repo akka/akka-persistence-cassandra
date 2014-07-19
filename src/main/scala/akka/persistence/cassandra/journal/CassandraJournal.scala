@@ -55,11 +55,11 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   val writeConsistency = ConsistencyLevel.valueOf(config.getString("write-consistency"))
   val readConsistency = ConsistencyLevel.valueOf(config.getString("read-consistency"))
 
-  val preparedWriteHeader = session.prepare(writeHeader).setConsistencyLevel(writeConsistency)
-  val preparedWriteMessage = session.prepare(writeMessage).setConsistencyLevel(writeConsistency)
-  val preparedConfirmMessage = session.prepare(confirmMessage).setConsistencyLevel(writeConsistency)
-  val preparedDeleteLogical = session.prepare(deleteMessageLogical).setConsistencyLevel(writeConsistency)
-  val preparedDeletePermanent = session.prepare(deleteMessagePermanent).setConsistencyLevel(writeConsistency)
+  val preparedWriteHeader = session.prepare(writeHeader)
+  val preparedWriteMessage = session.prepare(writeMessage)
+  val preparedConfirmMessage = session.prepare(confirmMessage)
+  val preparedDeleteLogical = session.prepare(deleteMessageLogical)
+  val preparedDeletePermanent = session.prepare(deleteMessagePermanent)
   val preparedSelectHeader = session.prepare(selectHeader).setConsistencyLevel(readConsistency)
   val preparedSelectMessages = session.prepare(selectMessages).setConsistencyLevel(readConsistency)
 
@@ -95,7 +95,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   }
 
   def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {
-    val batch = new BatchStatement
+    val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
     body(batch)
     session.executeAsync(batch).map(_ => ())
   }
