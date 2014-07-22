@@ -12,7 +12,7 @@ To include the Cassandra plugins into your `sbt` project, add the following line
 
     resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven"
 
-    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.2"
+    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.3"
 
 This version of `akka-persistence-cassandra` depends on Akka 2.3.4 and is cross-built against Scala 2.10.4 and 2.11.0.
 
