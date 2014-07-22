@@ -74,6 +74,11 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   val serialization = SerializationExtension(context.system)
 
   val clusterBuilder = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*)
+
+  if(config.hasPath("port")) {
+    clusterBuilder.withPort(config.getInt("port"))
+  }
+
   if(config.hasPath("authentication")) {
     clusterBuilder.withCredentials(
       config.getString("authentication.username"),
@@ -140,7 +145,7 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   } yield res
 
   def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {
-    val batch = new BatchStatement
+    val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
     body(batch)
     session.executeAsync(batch).map(_ => ())
   }
