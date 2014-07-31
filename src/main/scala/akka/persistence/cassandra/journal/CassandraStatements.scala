@@ -1,12 +1,10 @@
 package akka.persistence.cassandra.journal
 
 trait CassandraStatements {
-  def keyspace: String
-  def table: String
-  def maxResultSize: Int
+  def config: CassandraJournalConfig
 
   def createKeyspace(replicationFactor: Int) = s"""
-      CREATE KEYSPACE IF NOT EXISTS ${keyspace}
+      CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
       WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : ${replicationFactor} }
     """
 
@@ -61,8 +59,8 @@ trait CassandraStatements {
         partition_nr = ? AND
         sequence_nr >= ? AND
         sequence_nr <= ?
-        LIMIT ${maxResultSize}
+        LIMIT ${config.maxResultSize}
     """
 
-  private def tableName = s"${keyspace}.${table}"
+  private def tableName = s"${config.keyspace}.${config.table}"
 }

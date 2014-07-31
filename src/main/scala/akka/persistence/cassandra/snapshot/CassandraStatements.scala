@@ -1,11 +1,10 @@
 package akka.persistence.cassandra.snapshot
 
 trait CassandraStatements {
-  def keyspace: String
-  def table: String
+  def config: CassandraSnapshotStoreConfig
 
   def createKeyspace(replicationFactor: Int) = s"""
-      CREATE KEYSPACE IF NOT EXISTS ${keyspace}
+      CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
       WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : ${replicationFactor} }
     """
 
@@ -43,5 +42,5 @@ trait CassandraStatements {
         ${limit.map(l => s"LIMIT ${l}").getOrElse("")}
     """
 
-  private def tableName = s"${keyspace}.${table}"
+  private def tableName = s"${config.keyspace}.${config.table}"
 }

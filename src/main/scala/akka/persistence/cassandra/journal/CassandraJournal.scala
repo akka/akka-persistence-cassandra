@@ -3,7 +3,6 @@ package akka.persistence.cassandra.journal
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 
-import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent._
 
@@ -14,44 +13,19 @@ import akka.serialization.SerializationExtension
 
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
-import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 
 class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
-  val config = context.system.settings.config.getConfig("cassandra-journal")
-  val extension = Persistence(context.system)
-
-  val keyspace = config.getString("keyspace")
-  val table = config.getString("table")
-
-  val maxPartitionSize = config.getInt("max-partition-size") // TODO: make persistent
-  val maxResultSize = config.getInt("max-result-size")
-
+  val config = new CassandraJournalConfig(context.system.settings.config.getConfig("cassandra-journal"))
   val serialization = SerializationExtension(context.system)
+  val persistence = Persistence(context.system)
 
-  val clusterBuilder = Cluster.builder
-    .addContactPoints(config.getStringList("contact-points").asScala: _*)
-    .withPort(config.getInt("port"))
-
-  if (config.hasPath("authentication")) {
-    clusterBuilder.withCredentials(
-      config.getString("authentication.username"),
-      config.getString("authentication.password"))
-  }
-
-  if (config.hasPath("local-datacenter")) {
-    clusterBuilder.withLoadBalancingPolicy(
-      new DCAwareRoundRobinPolicy(config.getString("local-datacenter"))
-    )
-  }
+  import config._
 
   val cluster = clusterBuilder.build
   val session = cluster.connect()
 
-  session.execute(createKeyspace(config.getInt("replication-factor")))
+  session.execute(createKeyspace(replicationFactor))
   session.execute(createTable)
-
-  val writeConsistency = ConsistencyLevel.valueOf(config.getString("write-consistency"))
-  val readConsistency = ConsistencyLevel.valueOf(config.getString("read-consistency"))
 
   val preparedWriteHeader = session.prepare(writeHeader)
   val preparedWriteMessage = session.prepare(writeMessage)
@@ -86,7 +60,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
 
   def asyncDeleteMessagesTo(processorId: String, toSequenceNr: Long, permanent: Boolean): Future[Unit] = {
     val fromSequenceNr = readLowestSequenceNr(processorId, 1L)
-    val asyncDeletions = (fromSequenceNr to toSequenceNr).grouped(extension.settings.journal.maxDeletionBatchSize).map { group =>
+    val asyncDeletions = (fromSequenceNr to toSequenceNr).grouped(persistence.settings.journal.maxDeletionBatchSize).map { group =>
       asyncDeleteMessages(group map (PersistentIdImpl(processorId, _)), permanent)
     }
     Future.sequence(asyncDeletions).map(_ => ())

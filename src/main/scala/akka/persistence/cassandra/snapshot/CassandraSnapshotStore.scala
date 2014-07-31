@@ -4,7 +4,6 @@ import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 
 import scala.collection.immutable
-import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.util._
 
@@ -17,7 +16,6 @@ import akka.serialization.SerializationExtension
 
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
-import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 
 /**
  * Optimized and fully async version of [[akka.persistence.snapshot.SnapshotStore]].
@@ -64,40 +62,17 @@ trait CassandraSnapshotStoreEndpoint extends Actor {
 }
 
 class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with CassandraStatements with ActorLogging {
-  import context.dispatcher
-
-  val config = context.system.settings.config.getConfig("cassandra-snapshot-store")
-  val keyspace = config.getString("keyspace")
-  val table = config.getString("table")
-
-  val maxMetadataResultSize = config.getInt("max-metadata-result-size")
+  val config = new CassandraSnapshotStoreConfig(context.system.settings.config.getConfig("cassandra-snapshot-store"))
   val serialization = SerializationExtension(context.system)
 
-
-  val clusterBuilder = Cluster.builder
-    .addContactPoints(config.getStringList("contact-points").asScala: _*)
-    .withPort(config.getInt("port"))
-
-  if(config.hasPath("authentication")) {
-    clusterBuilder.withCredentials(
-      config.getString("authentication.username"),
-      config.getString("authentication.password"))
-  }
-
-  if(config.hasPath("local-datacenter")) {
-    clusterBuilder.withLoadBalancingPolicy(
-      new DCAwareRoundRobinPolicy(config.getString("local-datacenter"))
-    )
-  }
+  import context.dispatcher
+  import config._
 
   val cluster = clusterBuilder.build
   val session = cluster.connect()
 
-  session.execute(createKeyspace(config.getInt("replication-factor")))
+  session.execute(createKeyspace(replicationFactor))
   session.execute(createTable)
-
-  val writeConsistency = ConsistencyLevel.valueOf(config.getString("write-consistency"))
-  val readConsistency = ConsistencyLevel.valueOf(config.getString("read-consistency"))
 
   val preparedWriteSnapshot = session.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
   val preparedDeleteSnapshot = session.prepare(deleteSnapshot).setConsistencyLevel(writeConsistency)
