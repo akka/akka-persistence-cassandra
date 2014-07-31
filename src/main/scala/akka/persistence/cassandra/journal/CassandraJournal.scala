@@ -28,19 +28,17 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
 
   val serialization = SerializationExtension(context.system)
 
-  private val clusterBuilder = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*)
+  val clusterBuilder = Cluster.builder
+    .addContactPoints(config.getStringList("contact-points").asScala: _*)
+    .withPort(config.getInt("port"))
 
-  if(config.hasPath("port")) {
-    clusterBuilder.withPort(config.getInt("port"))
-  }
-
-  if(config.hasPath("authentication")) {
+  if (config.hasPath("authentication")) {
     clusterBuilder.withCredentials(
       config.getString("authentication.username"),
       config.getString("authentication.password"))
   }
 
-  if(config.hasPath("local-datacenter")) {
+  if (config.hasPath("local-datacenter")) {
     clusterBuilder.withLoadBalancingPolicy(
       new DCAwareRoundRobinPolicy(config.getString("local-datacenter"))
     )

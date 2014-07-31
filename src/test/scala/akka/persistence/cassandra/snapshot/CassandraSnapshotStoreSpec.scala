@@ -7,18 +7,21 @@ import scala.collection.JavaConverters._
 
 import akka.persistence._
 import akka.persistence.SnapshotProtocol._
-import akka.persistence.cassandra.CassandraCleanup
+import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
 
-import com.datastax.driver.core.Cluster
+import com.datastax.driver.core._
 import com.typesafe.config.ConfigFactory
 
-class CassandraSnapshotStoreSpec extends SnapshotStoreSpec with CassandraStatements with CassandraCleanup {
+class CassandraSnapshotStoreSpec extends SnapshotStoreSpec with CassandraStatements with CassandraLifecycle {
   lazy val config = ConfigFactory.parseString(
     """
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
+      |akka.test.single-expect-default = 10s
+      |cassandra-journal.port = 9142
+      |cassandra-snapshot-store.port = 9142
       |cassandra-snapshot-store.max-metadata-result-size = 2
     """.stripMargin)
 
@@ -27,8 +30,14 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec with CassandraStateme
   val keyspace = storeConfig.getString("keyspace")
   val table = storeConfig.getString("table")
 
-  val cluster = Cluster.builder.addContactPoints(storeConfig.getStringList("contact-points").asScala: _*).build
-  val session = cluster.connect()
+  var cluster: Cluster = _
+  var session: Session = _
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    cluster = Cluster.builder.addContactPoints(storeConfig.getStringList("contact-points").asScala: _*).withPort(storeConfig.getInt("port")).build
+    session = cluster.connect()
+  }
 
   override def afterAll(): Unit = {
     session.close()

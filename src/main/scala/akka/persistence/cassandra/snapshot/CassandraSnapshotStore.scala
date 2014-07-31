@@ -73,11 +73,10 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   val maxMetadataResultSize = config.getInt("max-metadata-result-size")
   val serialization = SerializationExtension(context.system)
 
-  val clusterBuilder = Cluster.builder.addContactPoints(config.getStringList("contact-points").asScala: _*)
 
-  if(config.hasPath("port")) {
-    clusterBuilder.withPort(config.getInt("port"))
-  }
+  val clusterBuilder = Cluster.builder
+    .addContactPoints(config.getStringList("contact-points").asScala: _*)
+    .withPort(config.getInt("port"))
 
   if(config.hasPath("authentication")) {
     clusterBuilder.withCredentials(
