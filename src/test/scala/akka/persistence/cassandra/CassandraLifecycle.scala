@@ -1,16 +1,19 @@
 package akka.persistence.cassandra
 
-import org.cassandraunit.utils.EmbeddedCassandraServerHelper
+import scala.concurrent.duration._
+
 import org.scalatest._
+
+import akka.persistence.cassandra.server.CassandraServer
 
 trait CassandraLifecycle extends BeforeAndAfterAll { this: Suite =>
   override protected def beforeAll(): Unit = {
-    EmbeddedCassandraServerHelper.startEmbeddedCassandra()
+    CassandraServer.start(60.seconds)
     super.beforeAll()
   }
 
   override protected def afterAll(): Unit = {
-    EmbeddedCassandraServerHelper.cleanEmbeddedCassandra()
+    CassandraServer.clean()
     super.afterAll()
   }
 }
