@@ -5,10 +5,8 @@ Replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.4/scala/persisten
 
 [![Build Status](https://travis-ci.org/krasserm/akka-persistence-cassandra.svg?branch=master)](https://travis-ci.org/krasserm/akka-persistence-cassandra)
 
-Installation
-------------
-
-### Project dependency
+Dependency
+----------
 
 To include the Cassandra plugins into your `sbt` project, add the following lines to your `build.sbt` file:
 
@@ -16,11 +14,7 @@ To include the Cassandra plugins into your `sbt` project, add the following line
 
     libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.3"
 
-This version of `akka-persistence-cassandra` depends on Akka 2.3.4 and is cross-built against Scala 2.10.4 and 2.11.0.
-
-### Cassandra database
-
-The plugins require an exiting installation of Cassandra 2.0.3 or higher. You may want to follow this [Getting Started](http://wiki.apache.org/cassandra/GettingStarted) guide for basic installation instructions.
+This version of `akka-persistence-cassandra` depends on Akka 2.3.4 and is cross-built against Scala 2.10.4 and 2.11.0. It is compatible with Cassandra 2.0.3 or higher. 
 
 Journal plugin
 --------------
@@ -102,7 +96,3 @@ To connect to the Cassandra hosts with credentials, add the following lines:
 To limit the Cassandra hosts this plugin connects with to a specific datacenter, use the following setting:
 
 - `cassandra-snapshot-store.local-datacenter`.  The id for the local datacenter of the Cassandra hosts that this module should connect to.  By default, this property is not set resulting in Datastax's standard round robin policy being used.
-
-
-
-
