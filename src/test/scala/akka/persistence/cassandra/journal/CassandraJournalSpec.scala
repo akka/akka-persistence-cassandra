@@ -1,13 +1,13 @@
 package akka.persistence.cassandra.journal
 
-import akka.persistence.journal.LegacyJournalSpec
+import akka.persistence.journal._
 import akka.persistence.cassandra.CassandraLifecycle
 
 import com.typesafe.config.ConfigFactory
 
 import org.scalatest.BeforeAndAfterAll
 
-class CassandraJournalSpec extends LegacyJournalSpec with BeforeAndAfterAll with CassandraLifecycle {
+class CassandraJournalSpec extends JournalSpec with JournalPerfSpec with BeforeAndAfterAll with CassandraLifecycle {
   lazy val config = ConfigFactory.parseString(
     """
       |akka.persistence.journal.plugin = "cassandra-journal"
