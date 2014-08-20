@@ -1,5 +1,7 @@
 package akka.persistence.cassandra.journal
 
+import scala.concurrent.duration._
+
 import akka.persistence.journal._
 import akka.persistence.cassandra.CassandraLifecycle
 
@@ -16,4 +18,6 @@ class CassandraJournalSpec extends JournalSpec with JournalPerfSpec with BeforeA
       |cassandra-journal.port = 9142
       |cassandra-snapshot-store.port = 9142
     """.stripMargin)
+
+  override def awaitDurationMillis: Long = 20.seconds.toMillis
 }
