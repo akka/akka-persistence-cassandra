@@ -13,7 +13,7 @@ fork in Test := true
 parallelExecution in Test := false
 
 libraryDependencies ++= Seq(
-  "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.0.3",
+  "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.0.5",
   "com.typesafe.akka"      %% "akka-persistence-experimental"     % "2.3.5",
   "com.typesafe.akka"      %% "akka-persistence-tck-experimental" % "2.3.5"   % "test",
   "org.scalatest"          %% "scalatest"                         % "2.1.4"   % "test",
