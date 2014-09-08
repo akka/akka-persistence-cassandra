@@ -9,6 +9,13 @@ import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 class CassandraPluginConfig(config: Config) {
   val keyspace: String = config.getString("keyspace")
   val table: String = config.getString("table")
+  val configureKeyspace: Boolean = config.getBoolean("configure-keyspace")
+  val configureTable: Boolean = config.getBoolean("configure-table")
+  val keyspaceStrategyClass: String = config.getString("keyspace-strategyClass")
+  val keyspaceStrategyClassDC1Name: String = config.getString("keyspace-strategyClass-DC1")
+  val keyspaceStrategyClassDC1RepFactor: Int = config.getInt("keyspace-strategyClass-DC1-replication-factor")
+  val keyspaceStrategyClassDC2Name: String = config.getString("keyspace-strategyClass-DC2")
+  val keyspaceStrategyClassDC2RepFactor: Int = config.getInt("keyspace-strategyClass-DC2-replication-factor")
 
   val replicationFactor: Int = config.getInt("replication-factor")
   val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))

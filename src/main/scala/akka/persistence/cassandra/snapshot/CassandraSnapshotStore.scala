@@ -2,18 +2,15 @@ package akka.persistence.cassandra.snapshot
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
-
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.util._
-
 import akka.actor._
 import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.serialization.Snapshot
 import akka.serialization.SerializationExtension
-
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 
@@ -28,27 +25,28 @@ trait CassandraSnapshotStoreEndpoint extends Actor {
   val publish = extension.settings.internal.publishPluginCommands
 
   final def receive = {
-    case LoadSnapshot(processorId, criteria, toSequenceNr) ⇒
+    case LoadSnapshot(processorId, criteria, toSequenceNr) =>
       val p = sender
       loadAsync(processorId, criteria.limit(toSequenceNr)) map {
-        sso ⇒ LoadSnapshotResult(sso, toSequenceNr)
+      
+        sso => LoadSnapshotResult(sso, toSequenceNr)
       } recover {
-        case e ⇒ LoadSnapshotResult(None, toSequenceNr)
+        case e => LoadSnapshotResult(None, toSequenceNr)
       } pipeTo (p)
-    case SaveSnapshot(metadata, snapshot) ⇒
+    case SaveSnapshot(metadata, snapshot) =>
       val p = sender
       val md = metadata.copy(timestamp = System.currentTimeMillis)
       saveAsync(md, snapshot) map {
-        _ ⇒ SaveSnapshotSuccess(md)
+        _ => SaveSnapshotSuccess(md)
       } recover {
-        case e ⇒ SaveSnapshotFailure(metadata, e)
+        case e => SaveSnapshotFailure(metadata, e)
       } pipeTo (p)
-    case d @ DeleteSnapshot(metadata) ⇒
+    case d @ DeleteSnapshot(metadata) =>
       deleteAsync(metadata) onComplete {
         case Success(_) => if (publish) context.system.eventStream.publish(d)
         case Failure(_) =>
       }
-    case d @ DeleteSnapshots(processorId, criteria) ⇒
+    case d @ DeleteSnapshots(processorId, criteria) =>
       deleteAsync(processorId, criteria) onComplete {
         case Success(_) => if (publish) context.system.eventStream.publish(d)
         case Failure(_) =>
@@ -61,19 +59,21 @@ trait CassandraSnapshotStoreEndpoint extends Actor {
   def deleteAsync(processorId: String, criteria: SnapshotSelectionCriteria): Future[Unit]
 }
 
-class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with CassandraStatements with ActorLogging {
+class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with CassandraStatements with ActorLogging with CassandraPlugin{
   val config = new CassandraSnapshotStoreConfig(context.system.settings.config.getConfig("cassandra-snapshot-store"))
   val serialization = SerializationExtension(context.system)
+  val logger = log
+  private def tableName = s"${config.keyspace}.${config.table}"
 
   import context.dispatcher
   import config._
 
   val cluster = clusterBuilder.build
   val session = cluster.connect()
-
-  session.execute(createKeyspace(replicationFactor))
-  session.execute(createTable)
-
+  
+  createKeyspace(session)
+  createSnapshotTable(session)
+  
   val preparedWriteSnapshot = session.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
   val preparedDeleteSnapshot = session.prepare(deleteSnapshot).setConsistencyLevel(writeConsistency)
   val preparedSelectSnapshot = session.prepare(selectSnapshot).setConsistencyLevel(readConsistency)
@@ -83,6 +83,9 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
 
   val preparedSelectSnapshotMetadataForDelete =
     session.prepare(selectSnapshotMetadata(limit = None)).setConsistencyLevel(readConsistency)
+    
+  val preparedDeleteSnapshotBatch : StringBuilder = new StringBuilder
+   preparedDeleteSnapshotBatch.append("BEGIN BATCH")
 
   def loadAsync(processorId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = for {
     mds <- Future(metadata(processorId, criteria).take(3).toVector)
@@ -90,6 +93,7 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   } yield res
 
   def loadNAsync(metadata: immutable.Seq[SnapshotMetadata]): Future[Option[SelectedSnapshot]] = metadata match {
+
     case Seq() => Future.successful(None)
     case md +: mds => load1Async(md) map {
       case Snapshot(s) => Some(SelectedSnapshot(md, s))
@@ -103,7 +107,7 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
     session.executeAsync(stmt).map(rs => deserialize(rs.one().getBytes("snapshot")))
   }
 
-  def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
+   def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
     val stmt = preparedWriteSnapshot.bind(metadata.processorId, metadata.sequenceNr: JLong, metadata.timestamp: JLong, serialize(Snapshot(snapshot)))
     session.executeAsync(stmt).map(_ => ())
   }
@@ -113,17 +117,25 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
     session.executeAsync(stmt).map(_ => ())
   }
 
-  def deleteAsync(processorId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = for {
-    mds <- Future(metadata(processorId, criteria).toVector)
-    res <- executeBatch(batch => mds.foreach(md => batch.add(preparedDeleteSnapshot.bind(md.processorId, md.sequenceNr: JLong))))
-  } yield res
-
-  def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {
-    val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
-    body(batch)
-    session.executeAsync(batch).map(_ => ())
+  def deleteAsync(processorId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
+    val mds = metadata(processorId, criteria).toVector
+    mds.foreach{md => 
+      val processorId = md.processorId
+      val sequenceNr :JLong = md.sequenceNr
+      var psDel = s"DELETE FROM ${tableName} WHERE processor_id = '${processorId}' AND sequence_nr = ${sequenceNr}"
+      preparedDeleteSnapshotBatch.append("\n")
+      preparedDeleteSnapshotBatch.append(psDel)
+    }
+    preparedDeleteSnapshotBatch.append("\n")
+    preparedDeleteSnapshotBatch.append("APPLY BATCH;")
+    executeBatch(preparedDeleteSnapshotBatch.toString)
   }
 
+  def executeBatch(batch:String): Future[Unit] = {
+    val stmt = new SimpleStatement(batch).setConsistencyLevel(writeConsistency).asInstanceOf[SimpleStatement]
+    session.executeAsync(stmt).map(_ => ())
+  }
+  
   private def serialize(snapshot: Snapshot): ByteBuffer =
     ByteBuffer.wrap(serialization.findSerializerFor(snapshot).toBinary(snapshot))
 
@@ -140,7 +152,9 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
     var rowCount = 0
     var iter = newIter()
 
-    def newIter() = session.execute(selectSnapshotMetadata(Some(maxMetadataResultSize)), processorId, currentSequenceNr: JLong).iterator
+    def newIter() = {
+      session.execute(preparedSelectSnapshotMetadataForLoad.bind(processorId, currentSequenceNr: JLong)).iterator
+    }
 
     @annotation.tailrec
     final def hasNext: Boolean =

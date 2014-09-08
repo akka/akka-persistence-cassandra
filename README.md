@@ -14,7 +14,7 @@ To include the Cassandra plugins into your `sbt` project, add the following line
 
     libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.3"
 
-This version of `akka-persistence-cassandra` depends on Akka 2.3.4 and is cross-built against Scala 2.10.4 and 2.11.0. It is compatible with Cassandra 2.0.3 or higher. 
+This version of `akka-persistence-cassandra` depends on Akka 2.3.4 and is cross-built against Scala 2.10.4 and 2.11.0. It is compatible with Cassandra protocol version 1.2. 
 
 Journal plugin
 --------------
@@ -36,9 +36,16 @@ This will run the journal with its default settings. The default settings can be
 
 - `cassandra-journal.contact-points`. A comma-separated list of contact points in a Cassandra cluster. Default value is `[127.0.0.1]`.
 - `cassandra-journal.port`. Port to use to connect to the Cassandra host. Default value is `9042`.
-- `cassandra-journal.keyspace`. Name of the keyspace to be used by the plugin. If the keyspace doesn't exist it is automatically created. Default value is `akka`.
-- `cassandra-journal.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `messages`.
-- `cassandra-journal.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
+- `cassandra-journal-configure-keyspace`. Boolean value to signify if a keyspace needs to be configured.Default value is `true`. Possible values are `true` or `false`.
+- `cassandra-journal.keyspace`. Name of the keyspace to be used by the plugin. Default keyspace value is `akka`.
+- `cassandra-journal-keyspace-strategyClass`. Signifies which strategy class to be used while creating the keyspace. Default value is `SimpleStrategy`. Possible values are `SimpleStrategy` and  `NetworkTopologyStrategy`.
+- `cassandra-journal-keyspace-strategyClass-DC1`. First DataCenter Name if keyspace strategy class is `NetworkTopologyStrategy`.Default value is `DC1`.
+- `cassandra-journal-keyspace-strategyClass-DC1-replication-factor`. First Datacenter replicator factor to be used if keyspace strategy class is `NetworkTopologyStrategy`.Default value is `1`.
+- `cassandra-journal-keyspace-strategyClass-DC2`. Second DataCenter Name if keyspace strategy class is `NetworkTopologyStrategy`.Default value is `DC2`.
+- `cassandra-journal-keyspace-strategyClass-DC2-replication-factor`. Second Datacenter replicator factor to be used if keyspace strategy class is `NetworkTopologyStrategy`.Default value is `1`.
+- `cassandra-journal-configure-table`. Boolean value to signify if a table needs to be configured.Default value is `true`. Possible values are `true` or `false`.
+- `cassandra-journal.table`. Name of the table to be used by the plugin.Default value is `messages`.
+- `cassandra-journal.replication-factor`. Replication factor to use when a keyspace is created with default strategy class `SimpleStrategy`. Default value is `1`.
 - `cassandra-journal.max-partition-size`. Maximum number of entries (messages, confirmations and deletion markers) per partition. Default value is 5000000. **Do not change this setting after table creation** (not checked yet).
 - `cassandra-journal.max-result-size`. Maximum number of entries returned per query. Queries are executed recursively, if needed, to achieve recovery goals. Default value is 50001.
 - `cassandra-journal.write-consistency`. Write consistency level. Default value is `QUORUM`.
@@ -81,10 +88,17 @@ This will run the snapshot store with its default settings. The default settings
 
 - `cassandra-snapshot-store.contact-points`. A comma-separated list of contact points in a Cassandra cluster. Default value is `[127.0.0.1]`.
 - `cassandra-snapshot-store.port`. Port to use to connect to the Cassandra host. Default value is `9042`.
-- `cassandra-snapshot-store.keyspace`. Name of the keyspace to be used by the plugin. If the keyspace doesn't exist it is automatically created. Default value is `akka_snapshot`.
-- `cassandra-snapshot-store.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `snapshots`.
-- `cassandra-snapshot-store.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
-- `cassandra-snapshot-store.max-metadata-result-size`. Maximum number of snapshot metadata to load per recursion (when trying to find a snapshot that matches specified selection criteria). Default value is `10`. Only increase this value when selection criteria frequently select snapshots that are much older than the most recent snapshot i.e. if there are much more than 10 snapshots between the most recent one and selected one. This setting is only for increasing load efficiency of snapshots.
+- `cassandra-snapshot-configure-keyspace`. Boolean value to signify if a keyspace needs to be configured.Default value is `true`. Possible values are `true` or `false`.
+- `cassandra-snapshot-store.keyspace`. Name of the keyspace to be used by the plugin.Default value is `akka_snapshot`.
+- `cassandra-snapshot-keyspace-strategyClass`. Signifies which strategy class to be used while creating the keyspace. Default value is `SimpleStrategy`. Possible values are `SimpleStrategy` and `NetworkTopologyStrategy`.
+- `cassandra-snapshot-keyspace-strategyClass-DC1`. First DataCenter Name if keyspace strategy class is `NetworkTopologyStrategy`.Default value is `DC1`.
+- `cassandra-snapshot-keyspace-strategyClass-DC1-replication-factor`.First Datacenter replicator factor to be used if keyspace strategy class is `NetworkTopologyStrategy`.Default value is `1`.
+- `cassandra-snapshot-keyspace-strategyClass-DC2`. Second DataCenter Name if keyspace strategy class is `NetworkTopologyStrategy`.Default value is `DC2`.
+- `cassandra-snapshot-keyspace-strategyClass-DC2-replication-factor`.Second Datacenter replicator factor to be used if keyspace strategy class is `NetworkTopologyStrategy`.Default value is `1`.
+- `cassandra-snapshot-configure-table`. Boolean value to signify if a table needs to be configured.Default value is `true`.Possible values are `true` or `false`.
+- `cassandra-snapshot-store.table`. Name of the table to be used by the plugin.Default value is `snapshots`.
+- `cassandra-snapshot-store.replication-factor`. Replication factor to use when a keyspace is created with default strategy class `SimpleStrategy`.Default value is `1`.
+- `cassandra-snapshot-store.max-metadata-result-size`.Maximum number of snapshot metadata to load per recursion (when trying to find a snapshot that matches specified selection criteria). Default value is `10`. Only increase this value when selection criteria frequently select snapshots that are much older than the most recent snapshot i.e. if there are much more than 10 snapshots between the most recent one and selected one. This setting is only for increasing load efficiency of snapshots.
 - `cassandra-snapshot-store.write-consistency`. Write consistency level. Default value is `ONE`.
 - `cassandra-snapshot-store.read-consistency`. Read consistency level. Default value is `ONE`.
 
