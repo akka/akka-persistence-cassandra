@@ -55,8 +55,9 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec with CassandraLifecyc
       val expected = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
 
       // write two more snapshots that cannot be de-serialized.
-      session.execute(writeSnapshot, pid, 17: JLong, 123: JLong, ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
-      session.execute(writeSnapshot, pid, 18: JLong, 124: JLong, ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
+      val ps = session.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
+      session.execute(ps.bind(pid,17: JLong, 123: JLong, ByteBuffer.wrap("fail-1".getBytes("UTF-8"))))
+      session.execute(ps.bind(pid,18: JLong, 124: JLong, ByteBuffer.wrap("fail-2".getBytes("UTF-8"))))
 
       // load most recent snapshot, first two attempts will fail ...
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
@@ -74,9 +75,10 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec with CassandraLifecyc
       probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
 
       // write three more snapshots that cannot be de-serialized.
-      session.execute(writeSnapshot, pid, 17: JLong, 123: JLong, ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
-      session.execute(writeSnapshot, pid, 18: JLong, 124: JLong, ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
-      session.execute(writeSnapshot, pid, 19: JLong, 125: JLong, ByteBuffer.wrap("fail-3".getBytes("UTF-8")))
+      val ps = session.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
+      session.execute(ps.bind(pid,17: JLong, 123: JLong, ByteBuffer.wrap("fail-1".getBytes("UTF-8"))))
+      session.execute(ps.bind(pid,18: JLong, 124: JLong, ByteBuffer.wrap("fail-2".getBytes("UTF-8"))))
+      session.execute(ps.bind(pid,19: JLong, 125: JLong, ByteBuffer.wrap("fail-3".getBytes("UTF-8"))))
 
       // load most recent snapshot, first three attempts will fail ...
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
