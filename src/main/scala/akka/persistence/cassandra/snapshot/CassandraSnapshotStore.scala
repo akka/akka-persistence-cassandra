@@ -59,11 +59,10 @@ trait CassandraSnapshotStoreEndpoint extends Actor {
   def deleteAsync(processorId: String, criteria: SnapshotSelectionCriteria): Future[Unit]
 }
 
-class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with CassandraStatements with ActorLogging with CassandraPlugin{
+class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with CassandraStatements with ActorLogging with CassandraPlugin {
   val config = new CassandraSnapshotStoreConfig(context.system.settings.config.getConfig("cassandra-snapshot-store"))
   val serialization = SerializationExtension(context.system)
   val logger = log
-  private def tableName = s"${config.keyspace}.${config.table}"
 
   import context.dispatcher
   import config._
@@ -72,7 +71,7 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   val session = cluster.connect()
   
   createKeyspace(session)
-  createSnapshotTable(session)
+  createTable(session, createTable)
   
   val preparedWriteSnapshot = session.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
   val preparedDeleteSnapshot = session.prepare(deleteSnapshot).setConsistencyLevel(writeConsistency)
@@ -93,7 +92,6 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   } yield res
 
   def loadNAsync(metadata: immutable.Seq[SnapshotMetadata]): Future[Option[SelectedSnapshot]] = metadata match {
-
     case Seq() => Future.successful(None)
     case md +: mds => load1Async(md) map {
       case Snapshot(s) => Some(SelectedSnapshot(md, s))

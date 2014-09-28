@@ -15,13 +15,11 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 import akka.actor.ActorLogging
 
-class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with CassandraStatements with CassandraPlugin with ActorLogging{
+class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with CassandraStatements with CassandraPlugin with ActorLogging {
   val config = new CassandraJournalConfig(context.system.settings.config.getConfig("cassandra-journal"))
   val serialization = SerializationExtension(context.system)
   val persistence = Persistence(context.system)
   val logger = log
-
-  private def tableName = s"${config.keyspace}.${config.table}"
 
   import config._
 
@@ -29,7 +27,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   val session = cluster.connect()
   
   createKeyspace(session)
-  createJournalTable(session)
+  createTable(session, createTable)
 
   val preparedSelectHeader = session.prepare(selectHeader).setConsistencyLevel(readConsistency)
   val preparedSelectMessages = session.prepare(selectMessages).setConsistencyLevel(readConsistency)
@@ -42,7 +40,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
       val processorId = m.processorId
       val sequenceNr : JLong = m.sequenceNr
       val byteBuffer = Bytes.toHexString(persistentToByteBuffer(m))
-      if (partitionNew(m.sequenceNr)){
+      if (partitionNew(m.sequenceNr)) {
         var psHeader = s"INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message) VALUES ('${processorId}', ${pnr}, 0, 'H', 0x00)"
         preparedWriteBatch.append("\n")
         preparedWriteBatch.append(psHeader)
@@ -50,10 +48,10 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
       var psMessage = s"INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message) VALUES ('${processorId}', ${pnr}, ${sequenceNr}, 'A', ${byteBuffer})"
       preparedWriteBatch.append("\n")
       preparedWriteBatch.append(psMessage)
-      }
-     preparedWriteBatch.append("\n")
-     preparedWriteBatch.append("APPLY BATCH;")
-     executeBatch(preparedWriteBatch.toString)
+    }
+    preparedWriteBatch.append("\n")
+    preparedWriteBatch.append("APPLY BATCH;")
+    executeBatch(preparedWriteBatch.toString)
   }
 
   def asyncWriteConfirmations(confirmations: Seq[PersistentConfirmation]): Future[Unit] = {
@@ -79,30 +77,28 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
     val preparedDeleteLogicalBatch : StringBuilder = new StringBuilder
     preparedDeleteLogicalBatch.append("BEGIN BATCH")
     messageIds.foreach { mid =>
-        val processorId = mid.processorId
-        val partitionNR :JLong = partitionNr(mid.sequenceNr)
-        val sequenceNr :JLong = mid.sequenceNr
-        if (permanent){
-          var psDelPermanent = s"DELETE FROM ${tableName} WHERE processor_id = '${processorId}' AND partition_nr = ${partitionNR} AND sequence_nr = ${sequenceNr}"
-          preparedDeletePermanentBatch.append("\n")
-          preparedDeletePermanentBatch.append(psDelPermanent)
-        }
-        else { 
-            var psDelLogical = s"INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message) VALUES ('${processorId}', ${partitionNR}, ${sequenceNr}, 'B',0x00)"
-            preparedDeleteLogicalBatch.append("\n")
-            preparedDeleteLogicalBatch.append(psDelLogical)
-           }
-        }
-        if(permanent){
-          preparedDeletePermanentBatch.append("\n")
-          preparedDeletePermanentBatch.append("APPLY BATCH;")
-          executeBatch(preparedDeletePermanentBatch.toString)
-        }
-        else {
-          preparedDeleteLogicalBatch.append("\n")
-          preparedDeleteLogicalBatch.append("APPLY BATCH;")
-          executeBatch(preparedDeleteLogicalBatch.toString)
-        } 
+      val processorId = mid.processorId
+      val partitionNR :JLong = partitionNr(mid.sequenceNr)
+      val sequenceNr :JLong = mid.sequenceNr
+      if (permanent) {
+        var psDelPermanent = s"DELETE FROM ${tableName} WHERE processor_id = '${processorId}' AND partition_nr = ${partitionNR} AND sequence_nr = ${sequenceNr}"
+        preparedDeletePermanentBatch.append("\n")
+        preparedDeletePermanentBatch.append(psDelPermanent)
+      } else {
+        var psDelLogical = s"INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message) VALUES ('${processorId}', ${partitionNR}, ${sequenceNr}, 'B',0x00)"
+        preparedDeleteLogicalBatch.append("\n")
+        preparedDeleteLogicalBatch.append(psDelLogical)
+      }
+    }
+    if (permanent) {
+      preparedDeletePermanentBatch.append("\n")
+      preparedDeletePermanentBatch.append("APPLY BATCH;")
+      executeBatch(preparedDeletePermanentBatch.toString)
+    } else {
+      preparedDeleteLogicalBatch.append("\n")
+      preparedDeleteLogicalBatch.append("APPLY BATCH;")
+      executeBatch(preparedDeleteLogicalBatch.toString)
+    }
   }
 
   def asyncDeleteMessagesTo(processorId: String, toSequenceNr: Long, permanent: Boolean): Future[Unit] = {

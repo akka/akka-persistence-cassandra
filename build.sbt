@@ -1,6 +1,6 @@
 organization := "com.github.krasserm"
 
-name := "akka-persistence-cassandra"
+name := "akka-persistence-cassandra-12"
 
 version := "0.4-SNAPSHOT"
 
