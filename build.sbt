@@ -10,6 +10,8 @@ crossScalaVersions := Seq("2.10.4", "2.11.0")
 
 fork in Test := true
 
+javaOptions in Test += "-Xmx2500M"
+
 parallelExecution in Test := false
 
 libraryDependencies ++= Seq(
