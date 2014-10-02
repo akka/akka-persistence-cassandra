@@ -4,7 +4,7 @@ import scala.concurrent.duration._
 
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.CassandraCleanup
+import akka.persistence.cassandra.CassandraLifecycle
 import akka.testkit._
 
 import com.typesafe.config.ConfigFactory
@@ -19,8 +19,11 @@ object CassandraIntegrationSpec {
       |akka.persistence.journal.max-deletion-batch-size = 3
       |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
+      |akka.test.single-expect-default = 10s
       |cassandra-journal.max-partition-size = 5
       |cassandra-journal.max-result-size = 3
+      |cassandra-journal.port = 9142
+      |cassandra-snapshot-store.port = 9142
     """.stripMargin)
 
   case class Delete(snr: Long, permanent: Boolean)
@@ -91,7 +94,7 @@ object CassandraIntegrationSpec {
 
 import CassandraIntegrationSpec._
 
-class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraCleanup {
+class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
   def subscribeToConfirmation(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[Delivered])
 

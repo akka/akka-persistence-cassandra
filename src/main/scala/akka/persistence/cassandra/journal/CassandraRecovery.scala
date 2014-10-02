@@ -9,7 +9,9 @@ import com.datastax.driver.core.Row
 import akka.persistence.PersistentRepr
 
 trait CassandraRecovery { this: CassandraJournal =>
-  implicit lazy val replayDispatcher = context.system.dispatchers.lookup(config.getString("replay-dispatcher"))
+  import config._
+
+  implicit lazy val replayDispatcher = context.system.dispatchers.lookup(replayDispatcherId)
 
   def asyncReplayMessages(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Future[Unit] =
     Future { replayMessages(processorId, fromSequenceNr, toSequenceNr, max)(replayCallback) }

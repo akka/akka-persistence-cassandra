@@ -1,33 +1,29 @@
 Cassandra Plugins for Akka Persistence
 ======================================
 
-Replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.4/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](http://cassandra.apache.org/).
+Replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.3.6/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](http://cassandra.apache.org/).
 
-Installation
-------------
+[![Build Status](https://travis-ci.org/krasserm/akka-persistence-cassandra.svg?branch=master)](https://travis-ci.org/krasserm/akka-persistence-cassandra)
 
-### Project dependency
+Dependency
+----------
 
 To include the Cassandra plugins into your `sbt` project, add the following lines to your `build.sbt` file:
 
     resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven"
 
-    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.2"
+    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.4"
 
-This version of `akka-persistence-cassandra` depends on Akka 2.3.4 and is cross-built against Scala 2.10.4 and 2.11.0.
-
-### Cassandra database
-
-The plugins require an exiting installation of Cassandra 2.0.3 or higher. You may want to follow this [Getting Started](http://wiki.apache.org/cassandra/GettingStarted) guide for basic installation instructions.
+This version of `akka-persistence-cassandra` depends on Akka 2.3.6 and is cross-built against Scala 2.10.4 and 2.11.0. It is compatible with Cassandra 2.0.3 or higher. Versions of the Cassandra plugins that are compatible with Cassandra 1.2.x are maintained on the [cassandra-1.2](https://github.com/krasserm/akka-persistence-cassandra/tree/cassandra-1.2) branch.   
 
 Journal plugin
 --------------
 
 ### Features
 
-- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3.4/scala/persistence.html#journal-plugin-api) are fully supported.
+- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.3.6/scala/persistence.html#journal-plugin-api) are fully supported.
 - The plugin uses Cassandra in a pure log-oriented way i.e. data are only ever inserted but never updated (deletions are made on user request only or by persistent channels, see also [Caveats](#caveats)).
-- Writes of messages and confirmations are batched to optimize throughput. See [batch writes](http://doc.akka.io/docs/akka/2.3.4/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
+- Writes of messages and confirmations are batched to optimize throughput. See [batch writes](http://doc.akka.io/docs/akka/2.3.6/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
 - Messages written by a single processor are partitioned across the cluster to achieve scalability with data volume by adding nodes.
 
 ### Configuration
@@ -73,7 +69,7 @@ Snapshot store plugin
 
 ### Features
 
-- Implements its own handler of the (internal) Akka Persistence snapshot protocol, making snapshot IO fully asynchronous (i.e. does not implement the Akka Persistence [snapshot store plugin API](http://doc.akka.io/docs/akka/2.3.4/scala/persistence.html#snapshot-store-plugin-api) directly).
+- Implements its own handler of the (internal) Akka Persistence snapshot protocol, making snapshot IO fully asynchronous (i.e. does not implement the Akka Persistence [snapshot store plugin API](http://doc.akka.io/docs/akka/2.3.6/scala/persistence.html#snapshot-store-plugin-api) directly).
 
 ### Configuration
 
@@ -100,7 +96,3 @@ To connect to the Cassandra hosts with credentials, add the following lines:
 To limit the Cassandra hosts this plugin connects with to a specific datacenter, use the following setting:
 
 - `cassandra-snapshot-store.local-datacenter`.  The id for the local datacenter of the Cassandra hosts that this module should connect to.  By default, this property is not set resulting in Datastax's standard round robin policy being used.
-
-
-
-

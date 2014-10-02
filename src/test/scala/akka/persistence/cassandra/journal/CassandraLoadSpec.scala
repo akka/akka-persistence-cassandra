@@ -5,7 +5,7 @@ import scala.util.control.NoStackTrace
 
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.CassandraCleanup
+import akka.persistence.cassandra.CassandraLifecycle
 import akka.testkit._
 
 import com.typesafe.config.ConfigFactory
@@ -18,6 +18,8 @@ object CassandraLoadSpec {
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
       |akka.test.single-expect-default = 10s
+      |cassandra-journal.port = 9142
+      |cassandra-snapshot-store.port = 9142
     """.stripMargin)
 
   trait Measure extends { this: Actor ⇒
@@ -76,7 +78,7 @@ object CassandraLoadSpec {
 
 import CassandraLoadSpec._
 
-class CassandraLoadSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraCleanup {
+class CassandraLoadSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
   "A Cassandra journal" should {
     "have some reasonable write throughput" in {
       val warmCycles = 100L
