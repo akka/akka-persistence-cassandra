@@ -12,9 +12,9 @@ To include the Cassandra plugins into your `sbt` project, add the following line
 
     resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven"
 
-    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.3"
+    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.4"
 
-This version of `akka-persistence-cassandra` depends on Akka 2.3.6 and is cross-built against Scala 2.10.4 and 2.11.0. It is compatible with Cassandra 2.0.3 or higher. 
+This version of `akka-persistence-cassandra` depends on Akka 2.3.6 and is cross-built against Scala 2.10.4 and 2.11.0. It is compatible with Cassandra 2.0.3 or higher. Versions of the Cassandra plugins that are compatible with Cassandra 1.2.x are maintained on the [cassandra-1.2](https://github.com/krasserm/akka-persistence-cassandra/tree/cassandra-1.2) branch.   
 
 Journal plugin
 --------------
