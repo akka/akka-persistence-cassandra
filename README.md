@@ -34,8 +34,8 @@ To activate the journal plugin, add the following line to your Akka `application
 
 This will run the journal with its default settings. The default settings can be changed with the following configuration keys:
 
-- `cassandra-journal.contact-points`. A comma-separated list of contact points in a Cassandra cluster. Default value is `[127.0.0.1]`.
-- `cassandra-journal.port`. Port to use to connect to the Cassandra host. Default value is `9042`.
+- `cassandra-journal.contact-points`. A comma-separated list of contact points in a Cassandra cluster. Default value is `[127.0.0.1]`. Host:Port pairs are also supported. In that case the port parameter will be ignored.
+- `cassandra-journal.port`. Port to use to connect to the Cassandra host. Default value is `9042`. Will be ignored if the contact point list is defined by host:port pairs.
 - `cassandra-journal.keyspace`. Name of the keyspace to be used by the plugin. If the keyspace doesn't exist it is automatically created. Default value is `akka`.
 - `cassandra-journal.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `messages`.
 - `cassandra-journal.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
@@ -79,8 +79,8 @@ To activate the snapshot-store plugin, add the following line to your Akka `appl
 
 This will run the snapshot store with its default settings. The default settings can be changed with the following configuration keys:
 
-- `cassandra-snapshot-store.contact-points`. A comma-separated list of contact points in a Cassandra cluster. Default value is `[127.0.0.1]`.
-- `cassandra-snapshot-store.port`. Port to use to connect to the Cassandra host. Default value is `9042`.
+- `cassandra-snapshot-store.contact-points`. A comma-separated list of contact points in a Cassandra cluster. Default value is `[127.0.0.1]`. Host:Port pairs are also supported. In that case the port parameter will be ignored.
+- `cassandra-snapshot-store.port`. Port to use to connect to the Cassandra host. Default value is `9042`. Will be ignored if the contact point list is defined by host:port pairs.
 - `cassandra-snapshot-store.keyspace`. Name of the keyspace to be used by the plugin. If the keyspace doesn't exist it is automatically created. Default value is `akka_snapshot`.
 - `cassandra-snapshot-store.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `snapshots`.
 - `cassandra-snapshot-store.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
