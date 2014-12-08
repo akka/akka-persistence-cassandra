@@ -14,7 +14,12 @@ class CassandraPluginConfig(config: Config) {
   val keyspace: String = config.getString("keyspace")
   val table: String = config.getString("table")
 
-  val replicationFactor: Int = config.getInt("replication-factor")
+
+  val replicationStrategy: String = getReplicationStrategy(
+    config.getString("replication-strategy"),
+    config.getInt("replication-factor"),
+    config.getStringList("data-center-replication-factors").asScala)
+
   val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))
   val writeConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("write-consistency"))
   val port: Int = config.getInt("port")
@@ -51,6 +56,31 @@ object CassandraPluginConfig {
           case msg => throw new IllegalArgumentException(s"A contact point should have the form [host:port] or [host] but was: $msg.")
         }
       }
+    }
+  }
+
+  /**
+   * Builds replication strategy command to create a keyspace.
+   */
+  def getReplicationStrategy(strategy: String, replicationFactor: Int, dataCenterReplicationFactors: Seq[String]): String = {
+
+    def getDataCenterReplicationFactorList(dcrfList: Seq[String]): String = {
+      val result: Seq[String] = dcrfList match {
+        case null | Nil => throw new IllegalArgumentException("data-center-replication-factors cannot be empty when using NetworkTopologyStrategy.")
+        case dcrfs => dcrfs.map {
+          dataCenterWithReplicationFactor => dataCenterWithReplicationFactor.split(":") match {
+            case Array(dataCenter, replicationFactor) => s"'$dataCenter':$replicationFactor"
+            case msg => throw new IllegalArgumentException(s"A data-center-replication-factor must have the form [dataCenterName:replicationFactor] but was: $msg.")
+          }
+        }
+      }
+      result.mkString(",")
+    }
+
+    strategy.toLowerCase() match {
+      case "simplestrategy" => s"'SimpleStrategy','replication_factor':$replicationFactor"
+      case "networktopologystrategy" => s"'NetworkTopologyStrategy',${getDataCenterReplicationFactorList(dataCenterReplicationFactors)}"
+      case unknownStrategy => throw new IllegalArgumentException(s"$unknownStrategy as replication strategy is unknown and not supported.")
     }
   }
 }
