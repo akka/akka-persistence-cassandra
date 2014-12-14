@@ -1,16 +1,13 @@
 package akka.persistence.cassandra.journal
 
-import scala.concurrent.duration._
-import scala.util.control.NoStackTrace
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.testkit._
-
 import com.typesafe.config.ConfigFactory
-
 import org.scalatest._
+
+import scala.concurrent.duration._
 
 object CassandraLoadSpec {
   val config = ConfigFactory.parseString(
@@ -20,6 +17,8 @@ object CassandraLoadSpec {
       |akka.test.single-expect-default = 10s
       |cassandra-journal.port = 9142
       |cassandra-snapshot-store.port = 9142
+      |cassandra-journal.replication-strategy = NetworkTopologyStrategy
+      |cassandra-journal.data-center-replication-factors = ["dc1:1"]
     """.stripMargin)
 
   trait Measure extends { this: Actor ⇒
@@ -76,7 +75,7 @@ object CassandraLoadSpec {
   }
 }
 
-import CassandraLoadSpec._
+import akka.persistence.cassandra.journal.CassandraLoadSpec._
 
 class CassandraLoadSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
   "A Cassandra journal" should {
