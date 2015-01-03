@@ -45,7 +45,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
 
   def asyncWriteConfirmations(confirmations: Seq[PersistentConfirmation]): Future[Unit] = executeBatch { batch =>
     confirmations.foreach { c =>
-      batch.add((preparedConfirmMessage.bind(c.processorId, partitionNr(c.sequenceNr): JLong, c.sequenceNr: JLong, confirmMarker(c.channelId))))
+      batch.add((preparedConfirmMessage.bind(c.persistenceId, partitionNr(c.sequenceNr): JLong, c.sequenceNr: JLong, confirmMarker(c.channelId))))
     }
   }
 

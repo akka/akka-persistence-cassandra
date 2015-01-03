@@ -2,11 +2,11 @@ package akka.persistence
 
 import java.util.concurrent.Executor
 
-import scala.concurrent._
-import scala.util.Try
-
 import com.google.common.util.concurrent.ListenableFuture
 
+import scala.concurrent._
+import scala.language.implicitConversions
+import scala.util.Try
 package object cassandra {
   implicit def listenableFutureToFuture[A](lf: ListenableFuture[A])(implicit executionContext: ExecutionContext): Future[A] = {
     val promise = Promise[A]
