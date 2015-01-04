@@ -3,9 +3,9 @@ package akka.persistence.cassandra.snapshot
 trait CassandraStatements {
   def config: CassandraSnapshotStoreConfig
 
-  def createKeyspace(replicationFactor: Int) = s"""
+  def createKeyspace = s"""
       CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
-      WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : ${replicationFactor} }
+      WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
     """
 
   def createTable = s"""
