@@ -8,6 +8,7 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object CassandraLoadSpec {
   val config = ConfigFactory.parseString(
@@ -27,8 +28,8 @@ object CassandraLoadSpec {
     var startTime: Long = 0L
     var stopTime: Long = 0L
 
-    var startSequenceNr = 0L;
-    var stopSequenceNr = 0L;
+    var startSequenceNr = 0L
+    var stopSequenceNr = 0L
 
     def startMeasure(): Unit = {
       startSequenceNr = lastSequenceNr

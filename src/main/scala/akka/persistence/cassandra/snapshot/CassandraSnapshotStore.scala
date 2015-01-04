@@ -29,20 +29,20 @@ trait CassandraSnapshotStoreEndpoint extends Actor {
 
   final def receive = {
     case LoadSnapshot(processorId, criteria, toSequenceNr) ⇒
-      val p = sender
+      val p = sender()
       loadAsync(processorId, criteria.limit(toSequenceNr)) map {
         sso ⇒ LoadSnapshotResult(sso, toSequenceNr)
       } recover {
         case e ⇒ LoadSnapshotResult(None, toSequenceNr)
-      } pipeTo (p)
+      } pipeTo p
     case SaveSnapshot(metadata, snapshot) ⇒
-      val p = sender
+      val p = sender()
       val md = metadata.copy(timestamp = System.currentTimeMillis)
       saveAsync(md, snapshot) map {
         _ ⇒ SaveSnapshotSuccess(md)
       } recover {
         case e ⇒ SaveSnapshotFailure(metadata, e)
-      } pipeTo (p)
+      } pipeTo p
     case d @ DeleteSnapshot(metadata) ⇒
       deleteAsync(metadata) onComplete {
         case Success(_) => if (publish) context.system.eventStream.publish(d)
@@ -99,23 +99,23 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   }
 
   def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
-    val stmt = preparedSelectSnapshot.bind(metadata.processorId, metadata.sequenceNr: JLong)
+    val stmt = preparedSelectSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong)
     session.executeAsync(stmt).map(rs => deserialize(rs.one().getBytes("snapshot")))
   }
 
   def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
-    val stmt = preparedWriteSnapshot.bind(metadata.processorId, metadata.sequenceNr: JLong, metadata.timestamp: JLong, serialize(Snapshot(snapshot)))
+    val stmt = preparedWriteSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong, metadata.timestamp: JLong, serialize(Snapshot(snapshot)))
     session.executeAsync(stmt).map(_ => ())
   }
 
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
-    val stmt = preparedDeleteSnapshot.bind(metadata.processorId, metadata.sequenceNr: JLong)
+    val stmt = preparedDeleteSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong)
     session.executeAsync(stmt).map(_ => ())
   }
 
   def deleteAsync(processorId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = for {
     mds <- Future(metadata(processorId, criteria).toVector)
-    res <- executeBatch(batch => mds.foreach(md => batch.add(preparedDeleteSnapshot.bind(md.processorId, md.sequenceNr: JLong))))
+    res <- executeBatch(batch => mds.foreach(md => batch.add(preparedDeleteSnapshot.bind(md.persistenceId, md.sequenceNr: JLong))))
   } yield res
 
   def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {
