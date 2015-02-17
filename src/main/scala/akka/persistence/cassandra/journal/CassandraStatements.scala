@@ -17,6 +17,7 @@ trait CassandraStatements {
         message blob,
         PRIMARY KEY ((processor_id, partition_nr), sequence_nr, marker))
         WITH COMPACT STORAGE
+         AND gc_grace_seconds =${config.gc_grace_seconds}
     """
 
   def writeHeader = s"""
