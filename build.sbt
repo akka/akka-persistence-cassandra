@@ -4,9 +4,9 @@ name := "akka-persistence-cassandra"
 
 version := "0.3.6"
 
-scalaVersion := "2.11.4"
+scalaVersion := "2.11.6"
 
-crossScalaVersions := Seq("2.10.4", "2.11.4")
+crossScalaVersions := Seq("2.10.4", "2.11.6")
 
 fork in Test := true
 
@@ -28,9 +28,9 @@ scalacOptions ++= Seq(
 parallelExecution in Test := false
 
 libraryDependencies ++= Seq(
-  "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.1.1",
-  "com.typesafe.akka"      %% "akka-persistence-experimental"     % "2.3.8",
-  "com.typesafe.akka"      %% "akka-persistence-tck-experimental" % "2.3.8"   % "test",
+  "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.1.5",
+  "com.typesafe.akka"      %% "akka-persistence-experimental"     % "2.3.9",
+  "com.typesafe.akka"      %% "akka-persistence-tck-experimental" % "2.3.9"   % "test",
   "org.scalatest"          %% "scalatest"                         % "2.1.4"   % "test",
   "org.cassandraunit"       % "cassandra-unit"                    % "2.0.2.2" % "test"
 )
