@@ -28,7 +28,7 @@ scalacOptions ++= Seq(
 parallelExecution in Test := false
 
 libraryDependencies ++= Seq(
-  "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.1.4",
+  "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.1.5",
   "com.typesafe.akka"      %% "akka-persistence-experimental"     % "2.3.8",
   "com.typesafe.akka"      %% "akka-persistence-tck-experimental" % "2.3.8"   % "test",
   "org.scalatest"          %% "scalatest"                         % "2.1.4"   % "test",
