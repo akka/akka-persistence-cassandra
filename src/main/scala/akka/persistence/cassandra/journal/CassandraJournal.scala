@@ -24,7 +24,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   val cluster = clusterBuilder.build
   val session = cluster.connect()
 
-  session.execute(createKeyspace)
+  if (config.keyspaceAutoCreate) session.execute(createKeyspace)
   session.execute(createTable)
 
   val preparedWriteHeader = session.prepare(writeHeader)

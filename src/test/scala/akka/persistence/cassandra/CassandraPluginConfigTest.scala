@@ -11,6 +11,7 @@ import org.scalatest.{MustMatchers, WordSpec}
 class CassandraPluginConfigTest extends WordSpec with MustMatchers {
   lazy val defaultConfig = ConfigFactory.parseString(
     """
+      |keyspace-autocreate = true
       |keyspace = test-keyspace
       |table = test-table
       |replication-strategy = "SimpleStrategy"
@@ -87,6 +88,13 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       intercept[IllegalArgumentException] {
         CassandraPluginConfig.getReplicationStrategy("NetworkTopologyStrategy", 0, Seq("dc1"))
       }
+    }
+
+    "parse keyspace-autocreate parameter" in {
+      val configWithFalseKeyspaceAutocreate = ConfigFactory.parseString( """keyspace-autocreate = false""").withFallback(defaultConfig)
+
+      val config = new CassandraPluginConfig(configWithFalseKeyspaceAutocreate)
+      config.keyspaceAutoCreate must be(false)
     }
   }
 }
