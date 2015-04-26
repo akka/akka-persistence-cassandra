@@ -15,6 +15,7 @@ class CassandraPluginConfig(config: Config) {
   val table: String = config.getString("table")
 
   val keyspaceAutoCreate: Boolean = config.getBoolean("keyspace-autocreate")
+  val keyspaceAutoCreateRetries: Int = config.getInt("keyspace-autocreate-retries")
 
   val replicationStrategy: String = getReplicationStrategy(
     config.getString("replication-strategy"),
