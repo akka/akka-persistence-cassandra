@@ -12,6 +12,7 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
   lazy val defaultConfig = ConfigFactory.parseString(
     """
       |keyspace-autocreate = true
+      |keyspace-autocreate-retries = 1
       |keyspace = test-keyspace
       |table = test-table
       |replication-strategy = "SimpleStrategy"

@@ -38,6 +38,7 @@ This will run the journal with its default settings. The default settings can be
 - `cassandra-journal.port`. Port to use to connect to the Cassandra host. Default value is `9042`. Will be ignored if the contact point list is defined by host:port pairs.
 - `cassandra-journal.keyspace`. Name of the keyspace to be used by the plugin. Default value is `akka`.
 - `cassandra-journal.keyspace-autocreate`. Boolean parameter indicating whether the keyspace should be automatically created if it doesn't exist. Default value is `true`.
+- `cassandra-journal.keyspace-autocreate-retries`. Int parameter which defines a number of retries before giving up on automatic schema creation. Default value is `1`.
 - `cassandra-journal.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `messages`.
 - `cassandra-journal.replication-strategy`. Replication strategy to use. SimpleStrategy or NetworkTopologyStrategy
 - `cassandra-journal.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
@@ -86,6 +87,7 @@ This will run the snapshot store with its default settings. The default settings
 - `cassandra-snapshot-store.port`. Port to use to connect to the Cassandra host. Default value is `9042`. Will be ignored if the contact point list is defined by host:port pairs.
 - `cassandra-snapshot-store.keyspace`. Name of the keyspace to be used by the plugin. Default value is `akka_snapshot`.
 - `cassandra-snapshot-store.keyspace-autocreate`. Boolean parameter indicating whether the keyspace should be automatically created if it doesn't exist. Default value is `true`.
+- `cassandra-snapshot-store.keyspace-autocreate-retries`. Int parameter which defines a number of retries before giving up on automatic schema creation. Default value is `1`.
 - `cassandra-snapshot-store.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `snapshots`.
 - `cassandra-snapshot-store.replication-strategy`. Replication strategy to use. SimpleStrategy or NetworkTopologyStrategy
 - `cassandra-snapshot-store.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
