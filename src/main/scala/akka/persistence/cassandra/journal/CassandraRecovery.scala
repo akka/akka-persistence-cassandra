@@ -13,28 +13,28 @@ trait CassandraRecovery { this: CassandraJournal =>
 
   implicit lazy val replayDispatcher = context.system.dispatchers.lookup(replayDispatcherId)
 
-  def asyncReplayMessages(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Future[Unit] =
-    Future { replayMessages(processorId, fromSequenceNr, toSequenceNr, max)(replayCallback) }
+  def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Future[Unit] =
+    Future { replayMessages(persistenceId, fromSequenceNr, toSequenceNr, max)(replayCallback) }
 
-  def asyncReadHighestSequenceNr(processorId: String, fromSequenceNr: Long): Future[Long] =
-    Future { readHighestSequenceNr(processorId, fromSequenceNr ) }
+  def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] =
+    Future { readHighestSequenceNr(persistenceId, fromSequenceNr ) }
 
-  def readHighestSequenceNr(processorId: String, fromSequenceNr: Long): Long =
-    new MessageIterator(processorId, math.max(1L, fromSequenceNr), Long.MaxValue, Long.MaxValue).foldLeft(fromSequenceNr) { case (acc, msg) => msg.sequenceNr }
+  def readHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Long =
+    new MessageIterator(persistenceId, math.max(1L, fromSequenceNr), Long.MaxValue, Long.MaxValue).foldLeft(fromSequenceNr) { case (acc, msg) => msg.sequenceNr }
 
-  def readLowestSequenceNr(processorId: String, fromSequenceNr: Long): Long =
-    new MessageIterator(processorId, fromSequenceNr, Long.MaxValue, Long.MaxValue).find(!_.deleted).map(_.sequenceNr).getOrElse(fromSequenceNr)
+  def readLowestSequenceNr(persistenceId: String, fromSequenceNr: Long): Long =
+    new MessageIterator(persistenceId, fromSequenceNr, Long.MaxValue, Long.MaxValue).find(!_.deleted).map(_.sequenceNr).getOrElse(fromSequenceNr)
 
-  def replayMessages(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Unit =
-    new MessageIterator(processorId, fromSequenceNr, toSequenceNr, max).foreach(replayCallback)
+  def replayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Unit =
+    new MessageIterator(persistenceId, fromSequenceNr, toSequenceNr, max).foreach(replayCallback)
 
   /**
    * Iterator over messages, crossing partition boundaries.
    */
-  class MessageIterator(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long) extends Iterator[PersistentRepr] {
+  class MessageIterator(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long) extends Iterator[PersistentRepr] {
     import PersistentRepr.Undefined
 
-    private val iter = new RowIterator(processorId, fromSequenceNr, toSequenceNr)
+    private val iter = new RowIterator(persistenceId, fromSequenceNr, toSequenceNr)
     private var mcnt = 0L
 
     private var c: PersistentRepr = null
@@ -69,9 +69,6 @@ trait CassandraRecovery { this: CassandraJournal =>
           if (snr == c.sequenceNr) c = m else n = m
         } else if (marker == "B" && c.sequenceNr == snr) {
           c = c.update(deleted = true)
-        } else if (c.sequenceNr == snr) {
-          val channelId = marker.substring(2)
-          c = c.update(confirms = channelId +: c.confirms)
         }
       }
     }
@@ -80,7 +77,7 @@ trait CassandraRecovery { this: CassandraJournal =>
   /**
    * Iterates over rows, crossing partition boundaries.
    */
-  class RowIterator(processorId: String, fromSequenceNr: Long, toSequenceNr: Long) extends Iterator[Row] {
+  class RowIterator(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long) extends Iterator[Row] {
     var currentPnr = partitionNr(fromSequenceNr)
     var currentSnr = fromSequenceNr
 
@@ -90,8 +87,8 @@ trait CassandraRecovery { this: CassandraJournal =>
     var rcnt = 0
     var iter = newIter()
 
-    def hasHeader = !session.execute(preparedSelectHeader.bind(processorId, currentPnr: JLong)).isExhausted
-    def newIter() = session.execute(preparedSelectMessages.bind(processorId, currentPnr: JLong, fromSnr: JLong, toSnr: JLong)).iterator
+    def hasHeader = !session.execute(preparedSelectHeader.bind(persistenceId, currentPnr: JLong)).isExhausted
+    def newIter() = session.execute(preparedSelectMessages.bind(persistenceId, currentPnr: JLong, fromSnr: JLong, toSnr: JLong)).iterator
 
     @annotation.tailrec
     final def hasNext: Boolean = {

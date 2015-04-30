@@ -26,6 +26,8 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   val cluster = clusterBuilder.build
   val session = cluster.connect()
 
+  case class MessageId(persistenceId: String, sequenceNr: Long)
+
   if (config.keyspaceAutoCreate) {
     retry(config.keyspaceAutoCreateRetries) {
       session.execute(createKeyspace)
@@ -53,30 +55,24 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   def asyncWriteMessages(messages: Seq[PersistentRepr]): Future[Unit] = executeBatch { batch =>
     messages.foreach { m =>
       val pnr = partitionNr(m.sequenceNr)
-      if (partitionNew(m.sequenceNr)) batch.add(preparedWriteHeader.bind(m.processorId, pnr: JLong))
-      batch.add(preparedWriteMessage.bind(m.processorId, pnr: JLong, m.sequenceNr: JLong, persistentToByteBuffer(m)))
+      if (partitionNew(m.sequenceNr)) batch.add(preparedWriteHeader.bind(m.persistenceId, pnr: JLong))
+      batch.add(preparedWriteMessage.bind(m.persistenceId, pnr: JLong, m.sequenceNr: JLong, persistentToByteBuffer(m)))
     }
   }
 
-  def asyncWriteConfirmations(confirmations: Seq[PersistentConfirmation]): Future[Unit] = executeBatch { batch =>
-    confirmations.foreach { c =>
-      batch.add((preparedConfirmMessage.bind(c.persistenceId, partitionNr(c.sequenceNr): JLong, c.sequenceNr: JLong, confirmMarker(c.channelId))))
-    }
-  }
-
-  def asyncDeleteMessages(messageIds: Seq[PersistentId], permanent: Boolean): Future[Unit] = executeBatch { batch =>
+  private def asyncDeleteMessages(messageIds: Seq[MessageId], permanent: Boolean): Future[Unit] = executeBatch { batch =>
     messageIds.foreach { mid =>
       val stmt =
-        if (permanent) preparedDeletePermanent.bind(mid.processorId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
-        else preparedDeleteLogical.bind(mid.processorId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
+        if (permanent) preparedDeletePermanent.bind(mid.persistenceId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
+        else preparedDeleteLogical.bind(mid.persistenceId, partitionNr(mid.sequenceNr): JLong, mid.sequenceNr: JLong)
       batch.add(stmt)
     }
   }
 
-  def asyncDeleteMessagesTo(processorId: String, toSequenceNr: Long, permanent: Boolean): Future[Unit] = {
-    val fromSequenceNr = readLowestSequenceNr(processorId, 1L)
+  def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long, permanent: Boolean): Future[Unit] = {
+    val fromSequenceNr = readLowestSequenceNr(persistenceId, 1L)
     val asyncDeletions = (fromSequenceNr to toSequenceNr).grouped(persistence.settings.journal.maxDeletionBatchSize).map { group =>
-      asyncDeleteMessages(group map (PersistentIdImpl(processorId, _)), permanent)
+      asyncDeleteMessages(group map (MessageId(persistenceId, _)), permanent)
     }
     Future.sequence(asyncDeletions).map(_ => ())
   }
@@ -99,9 +95,6 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   def persistentFromByteBuffer(b: ByteBuffer): PersistentRepr = {
     serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
   }
-
-  private def confirmMarker(channelId: String) =
-    s"C-${channelId}"
 
   override def postStop(): Unit = {
     session.close()
