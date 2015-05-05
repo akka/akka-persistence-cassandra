@@ -55,6 +55,13 @@ To connect to the Cassandra hosts with credentials, add the following lines:
 - `cassandra-journal.authentication.username`. The username to use to login to Cassandra hosts. No authentication is set as default.
 - `cassandra-journal.authentication.password`. The password corresponding to username. No authentication is set as default.
 
+To connect to the Cassandra host with SSL enabled, add the following configuration. For detailed instructions, please refer to the [DataStax Cassandra chapter about SSL Encryption](http://docs.datastax.com/en/cassandra/2.0/cassandra/security/secureSslEncryptionTOC.html).
+
+- `cassandra-journal.ssl.truststore.path`. Path to the JKS Truststore file.
+- `cassandra-journal.ssl.truststore.password`. Password to unlock the JKS Truststore.
+- `cassandra-journal.ssl.keystore.path`. Path to the JKS Keystore file.
+- `cassandra-journal.ssl.keystore.password`. Password to unlock JKS Truststore and access the private key (both must use the same password).
+
 To limit the Cassandra hosts this plugin connects with to a specific datacenter, use the following setting:
 
 - `cassandra-journal.local-datacenter`.  The id for the local datacenter of the Cassandra hosts that this module should connect to.  By default, this property is not set resulting in Datastax's standard round robin policy being used.
@@ -100,6 +107,14 @@ To connect to the Cassandra hosts with credentials, add the following lines:
 
 - `cassandra-snapshot-store.authentication.username`. The username to use to login to Cassandra hosts. No authentication is set as default.
 - `cassandra-snapshot-store.authentication.password`. The password corresponding to username. No authentication is set as default.
+
+To connect to the Cassandra host with SSL enabled, add the following configuration. For detailed instructions, please refer to the [DataStax Cassandra chapter about SSL Encryption](http://docs.datastax.com/en/cassandra/2.0/cassandra/security/secureSslEncryptionTOC.html).
+
+- `cassandra-snapshot-store.ssl.truststore.path`. Path to the JKS Truststore file.
+- `cassandra-snapshot-store.ssl.truststore.password`. Password to unlock the JKS Truststore.
+- `cassandra-snapshot-store.ssl.keystore.path`. Path to the JKS Keystore file.
+- `cassandra-snapshot-store.ssl.keystore.password`. Password to unlock JKS Truststore and access the private key (both must use the same password).
+
 
 To limit the Cassandra hosts this plugin connects with to a specific datacenter, use the following setting:
 
