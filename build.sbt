@@ -2,7 +2,7 @@ organization := "com.github.krasserm"
 
 name := "akka-persistence-cassandra"
 
-version := "0.3.7"
+version := "0.3.8"
 
 scalaVersion := "2.11.6"
 
