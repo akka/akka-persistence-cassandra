@@ -12,7 +12,7 @@ To include the Cassandra plugins into your `sbt` project, add the following line
 
     resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven"
 
-    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.7"
+    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.3.8"
 
 This version of `akka-persistence-cassandra` depends on Akka 2.3.9 and is cross-built against Scala 2.10.4 and 2.11.6. It is compatible with Cassandra 2.1.0 or higher. Versions of the Cassandra plugins that are compatible with Cassandra 1.2.x are maintained on the [cassandra-1.2](https://github.com/krasserm/akka-persistence-cassandra/tree/cassandra-1.2) branch.   
 
@@ -36,7 +36,9 @@ This will run the journal with its default settings. The default settings can be
 
 - `cassandra-journal.contact-points`. A comma-separated list of contact points in a Cassandra cluster. Default value is `[127.0.0.1]`. Host:Port pairs are also supported. In that case the port parameter will be ignored.
 - `cassandra-journal.port`. Port to use to connect to the Cassandra host. Default value is `9042`. Will be ignored if the contact point list is defined by host:port pairs.
-- `cassandra-journal.keyspace`. Name of the keyspace to be used by the plugin. If the keyspace doesn't exist it is automatically created. Default value is `akka`.
+- `cassandra-journal.keyspace`. Name of the keyspace to be used by the plugin. Default value is `akka`.
+- `cassandra-journal.keyspace-autocreate`. Boolean parameter indicating whether the keyspace should be automatically created if it doesn't exist. Default value is `true`.
+- `cassandra-journal.keyspace-autocreate-retries`. Int parameter which defines a number of retries before giving up on automatic schema creation. Default value is `1`.
 - `cassandra-journal.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `messages`.
 - `cassandra-journal.replication-strategy`. Replication strategy to use. SimpleStrategy or NetworkTopologyStrategy
 - `cassandra-journal.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
@@ -83,7 +85,9 @@ This will run the snapshot store with its default settings. The default settings
 
 - `cassandra-snapshot-store.contact-points`. A comma-separated list of contact points in a Cassandra cluster. Default value is `[127.0.0.1]`. Host:Port pairs are also supported. In that case the port parameter will be ignored.
 - `cassandra-snapshot-store.port`. Port to use to connect to the Cassandra host. Default value is `9042`. Will be ignored if the contact point list is defined by host:port pairs.
-- `cassandra-snapshot-store.keyspace`. Name of the keyspace to be used by the plugin. If the keyspace doesn't exist it is automatically created. Default value is `akka_snapshot`.
+- `cassandra-snapshot-store.keyspace`. Name of the keyspace to be used by the plugin. Default value is `akka_snapshot`.
+- `cassandra-snapshot-store.keyspace-autocreate`. Boolean parameter indicating whether the keyspace should be automatically created if it doesn't exist. Default value is `true`.
+- `cassandra-snapshot-store.keyspace-autocreate-retries`. Int parameter which defines a number of retries before giving up on automatic schema creation. Default value is `1`.
 - `cassandra-snapshot-store.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `snapshots`.
 - `cassandra-snapshot-store.replication-strategy`. Replication strategy to use. SimpleStrategy or NetworkTopologyStrategy
 - `cassandra-snapshot-store.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.

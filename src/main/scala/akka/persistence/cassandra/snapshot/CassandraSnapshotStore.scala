@@ -71,7 +71,11 @@ class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with Cassand
   val cluster = clusterBuilder.build
   val session = cluster.connect()
 
-  session.execute(createKeyspace)
+  if (config.keyspaceAutoCreate) {
+    retry(config.keyspaceAutoCreateRetries) {
+      session.execute(createKeyspace)
+    }
+  }
   session.execute(createTable)
 
   val preparedWriteSnapshot = session.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
