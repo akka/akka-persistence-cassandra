@@ -1,15 +1,11 @@
 package akka.persistence.cassandra.journal
 
-import scala.concurrent.duration._
-
 import akka.persistence.journal._
 import akka.persistence.cassandra.CassandraLifecycle
 
 import com.typesafe.config.ConfigFactory
 
-import org.scalatest.BeforeAndAfterAll
-
-class CassandraJournalSpec extends JournalSpec with JournalPerfSpec with BeforeAndAfterAll with CassandraLifecycle {
+object CassandraJournalConfiguration {
   lazy val config = ConfigFactory.parseString(
     """
       |akka.persistence.journal.plugin = "cassandra-journal"
@@ -18,6 +14,8 @@ class CassandraJournalSpec extends JournalSpec with JournalPerfSpec with BeforeA
       |cassandra-journal.port = 9142
       |cassandra-snapshot-store.port = 9142
     """.stripMargin)
-
-  override def awaitDurationMillis: Long = 20.seconds.toMillis
 }
+
+class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle
+
+class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfiguration.config) with CassandraLifecycle

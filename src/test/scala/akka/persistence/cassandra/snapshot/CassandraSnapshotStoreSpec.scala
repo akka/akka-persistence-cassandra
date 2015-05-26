@@ -12,7 +12,7 @@ import akka.testkit.TestProbe
 import com.datastax.driver.core._
 import com.typesafe.config.ConfigFactory
 
-class CassandraSnapshotStoreSpec extends SnapshotStoreSpec with CassandraLifecycle {
+object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(
     """
       |akka.persistence.journal.plugin = "cassandra-journal"
@@ -22,6 +22,9 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec with CassandraLifecyc
       |cassandra-snapshot-store.port = 9142
       |cassandra-snapshot-store.max-metadata-result-size = 2
     """.stripMargin)
+}
+
+class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config) with CassandraLifecycle {  
 
   val storeConfig = new CassandraSnapshotStoreConfig(system.settings.config.getConfig("cassandra-snapshot-store"))
   val storeStatements = new CassandraStatements { def config = storeConfig }
