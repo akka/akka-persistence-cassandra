@@ -7,8 +7,10 @@ import org.scalatest._
 import akka.persistence.cassandra.server.CassandraServer
 
 trait CassandraLifecycle extends BeforeAndAfterAll { this: Suite =>
+  def withSsl: Boolean = false
+
   override protected def beforeAll(): Unit = {
-    CassandraServer.start(60.seconds)
+    CassandraServer.start(60.seconds, withSsl)
     super.beforeAll()
   }
 
