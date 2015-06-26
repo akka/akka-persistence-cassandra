@@ -3,9 +3,11 @@ package akka.persistence.cassandra
 import java.net.InetSocketAddress
 
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
-import com.datastax.driver.core.{Cluster, ConsistencyLevel}
+import com.datastax.driver.core.{Cluster, ConsistencyLevel, SSLOptions}
 import com.typesafe.config.Config
+
 import scala.collection.JavaConverters._
+
 
 class CassandraPluginConfig(config: Config) {
 
@@ -40,6 +42,21 @@ class CassandraPluginConfig(config: Config) {
     clusterBuilder.withLoadBalancingPolicy(
       new DCAwareRoundRobinPolicy(config.getString("local-datacenter"))
     )
+  }
+
+  if(config.hasPath("ssl")) {
+    val trustStorePath: String = config.getString("ssl.truststore.path")
+    val trustStorePW: String = config.getString("ssl.truststore.password")
+    val keyStorePath: String = config.getString("ssl.keystore.path")
+    val keyStorePW: String = config.getString("ssl.keystore.password")
+    
+    val context = SSLSetup.constructContext(
+      trustStorePath,
+      trustStorePW,
+      keyStorePath,
+      keyStorePW )
+
+    clusterBuilder.withSSL(new SSLOptions(context,SSLOptions.DEFAULT_SSL_CIPHER_SUITES))
   }
 }
 
