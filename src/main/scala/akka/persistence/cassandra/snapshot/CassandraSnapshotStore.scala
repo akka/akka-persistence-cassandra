@@ -3,12 +3,12 @@ package akka.persistence.cassandra.snapshot
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 
+import akka.persistence.snapshot.SnapshotStore
+
 import scala.collection.immutable
 import scala.concurrent.Future
-import scala.util._
 
 import akka.actor._
-import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.serialization.Snapshot
@@ -17,51 +17,7 @@ import akka.serialization.SerializationExtension
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 
-/**
- * Optimized and fully async version of [[akka.persistence.snapshot.SnapshotStore]].
- */
-trait CassandraSnapshotStoreEndpoint extends Actor {
-  import SnapshotProtocol._
-  import context.dispatcher
-
-  val extension = Persistence(context.system)
-  val publish = extension.settings.internal.publishPluginCommands
-
-  final def receive = {
-    case LoadSnapshot(persistenceId, criteria, toSequenceNr) ⇒
-      val p = sender()
-      loadAsync(persistenceId, criteria.limit(toSequenceNr)) map {
-        sso ⇒ LoadSnapshotResult(sso, toSequenceNr)
-      } recover {
-        case e ⇒ LoadSnapshotResult(None, toSequenceNr)
-      } pipeTo p
-    case SaveSnapshot(metadata, snapshot) ⇒
-      val p = sender()
-      val md = metadata.copy(timestamp = System.currentTimeMillis)
-      saveAsync(md, snapshot) map {
-        _ ⇒ SaveSnapshotSuccess(md)
-      } recover {
-        case e ⇒ SaveSnapshotFailure(metadata, e)
-      } pipeTo p
-    case d @ DeleteSnapshot(metadata) ⇒
-      deleteAsync(metadata) onComplete {
-        case Success(_) => if (publish) context.system.eventStream.publish(d)
-        case Failure(_) =>
-      }
-    case d @ DeleteSnapshots(persistenceId, criteria) ⇒
-      deleteAsync(persistenceId, criteria) onComplete {
-        case Success(_) => if (publish) context.system.eventStream.publish(d)
-        case Failure(_) =>
-      }
-  }
-
-  def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]]
-  def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit]
-  def deleteAsync(metadata: SnapshotMetadata): Future[Unit]
-  def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit]
-}
-
-class CassandraSnapshotStore extends CassandraSnapshotStoreEndpoint with CassandraStatements with ActorLogging {
+class CassandraSnapshotStore extends SnapshotStore with CassandraStatements with ActorLogging {
   val config = new CassandraSnapshotStoreConfig(context.system.settings.config.getConfig("cassandra-snapshot-store"))
   val serialization = SerializationExtension(context.system)
 

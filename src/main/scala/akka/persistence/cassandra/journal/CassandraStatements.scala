@@ -40,12 +40,7 @@ trait CassandraStatements {
       VALUES (?, ?, ?, ?, 0x00)
     """
 
-  def deleteMessageLogical = s"""
-      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, marker, message)
-      VALUES (?, ?, ?, 'B', 0x00)
-    """
-
-  def deleteMessagePermanent = s"""
+  def deleteMessage = s"""
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND
         partition_nr = ? AND

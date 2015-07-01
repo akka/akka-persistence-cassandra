@@ -26,23 +26,23 @@ object CassandraIntegrationSpec {
       |cassandra-snapshot-store.port = 9142
     """.stripMargin)
 
-  case class DeleteTo(snr: Long, permanent: Boolean)
+  case class DeleteTo(snr: Long)
 
-  class ProcessorA(val persistenceId: String) extends PersistentActor {
+  class ProcessorA(val persistenceId: String, receiver: ActorRef) extends PersistentActor {
     def receiveRecover: Receive = handle
 
     def receiveCommand: Receive = {
-      case DeleteTo(sequenceNr, permanent) =>
-        deleteMessages(sequenceNr, permanent)
+      case DeleteTo(sequenceNr) =>
+        deleteMessages(sequenceNr)
       case payload: String =>
         persist(payload)(handle)
     }
 
     def handle: Receive = {
       case payload: String =>
-        sender ! payload
-        sender ! lastSequenceNr
-        sender ! recoveryRunning
+        receiver ! payload
+        receiver ! lastSequenceNr
+        receiver ! recoveryRunning
     }
   }
 
@@ -64,8 +64,8 @@ object CassandraIntegrationSpec {
         probe ! s"snapped-${last}"
       case payload: String =>
         persist(payload)(handle)
-      case DeleteTo(sequenceNr, permanent) =>
-        deleteMessages(sequenceNr, permanent)
+      case DeleteTo(sequenceNr) =>
+        deleteMessages(sequenceNr)
 
     }
 
@@ -102,28 +102,28 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
   def awaitRangeDeletion(probe: TestProbe): Unit =
     probe.expectMsgType[JournalProtocol.DeleteMessagesTo]
 
-  def testRangeDelete(persistenceId: String, permanent: Boolean): Unit = {
+  def testRangeDelete(persistenceId: String): Unit = {
     val deleteProbe = TestProbe()
     subscribeToRangeDeletion(deleteProbe)
 
-    val processor1 = system.actorOf(Props(classOf[ProcessorA], persistenceId))
+    val processor1 = system.actorOf(Props(classOf[ProcessorA], persistenceId, self))
     1L to 16L foreach { i =>
       processor1 ! s"a-${i}"
       expectMsgAllOf(s"a-${i}", i, false)
     }
 
-    processor1 ! DeleteTo(3L, permanent)
+    processor1 ! DeleteTo(3L)
     awaitRangeDeletion(deleteProbe)
 
-    system.actorOf(Props(classOf[ProcessorA], persistenceId))
+    system.actorOf(Props(classOf[ProcessorA], persistenceId, self))
     4L to 16L foreach { i =>
       expectMsgAllOf(s"a-${i}", i, true)
     }
 
-    processor1 ! DeleteTo(7L, permanent)
+    processor1 ! DeleteTo(7L)
     awaitRangeDeletion(deleteProbe)
 
-    system.actorOf(Props(classOf[ProcessorA], persistenceId))
+    system.actorOf(Props(classOf[ProcessorA], persistenceId, self))
     8L to 16L foreach { i =>
       expectMsgAllOf(s"a-${i}", i, true)
     }
@@ -131,13 +131,13 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
 
   "A Cassandra journal" should {
     "write and replay messages" in {
-      val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
+      val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1", self))
       1L to 16L foreach { i =>
         processor1 ! s"a-${i}"
         expectMsgAllOf(s"a-${i}", i, false)
       }
 
-      val processor2 = system.actorOf(Props(classOf[ProcessorA], "p1"))
+      val processor2 = system.actorOf(Props(classOf[ProcessorA], "p1", self))
       1L to 16L foreach { i =>
         expectMsgAllOf(s"a-${i}", i, true)
       }
@@ -145,15 +145,12 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       processor2 ! "b"
       expectMsgAllOf("b", 17L, false)
     }
-    "not replay messages marked as range-deleted" in {
-      testRangeDelete("p5", false)
-    }
-    "not replay permanently range-deleted messages" in {
-      testRangeDelete("p6", true)
+    "not replay range-deleted messages" in {
+      testRangeDelete("p6")
     }
     "replay messages incrementally" in {
       val probe = TestProbe()
-      val processor1 = system.actorOf(Props(classOf[ProcessorA], "p7"))
+      val processor1 = system.actorOf(Props(classOf[ProcessorA], "p7", self))
       1L to 6L foreach { i =>
         processor1 ! s"a-${i}"
         expectMsgAllOf(s"a-${i}", i, false)
@@ -162,13 +159,13 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       val view = system.actorOf(Props(classOf[ViewA], "p7-view", "p7", probe.ref))
       probe.expectNoMsg(200.millis)
 
-      view ! Update(true, replayMax = 3L)
+      view ! Update(await = true, replayMax = 3L)
       probe.expectMsg(s"a-1")
       probe.expectMsg(s"a-2")
       probe.expectMsg(s"a-3")
       probe.expectNoMsg(200.millis)
 
-      view ! Update(true, replayMax = 3L)
+      view ! Update(await = true, replayMax = 3L)
       probe.expectMsg(s"a-4")
       probe.expectMsg(s"a-5")
       probe.expectMsg(s"a-6")
@@ -236,29 +233,6 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       processor2 ! "b"
       expectMsg("updated-b-6")
     }
-    "recover from a snapshot without follow-up messages at a partition boundary (where next partition contains a message marked as deleted)" in {
-      val deleteProbe = TestProbe()
-      subscribeToRangeDeletion(deleteProbe)
-
-      val processor1 = system.actorOf(Props(classOf[ProcessorC], "p14", testActor))
-      1L to 5L foreach { i =>
-        processor1 ! "a"
-        expectMsg(s"updated-a-${i}")
-      }
-      processor1 ! "snap"
-      expectMsg("snapped-a-5")
-
-      processor1 ! "a"
-      expectMsg("updated-a-6")
-
-      processor1 ! DeleteTo(6L, false)
-      awaitRangeDeletion(deleteProbe)
-
-      val processor2 = system.actorOf(Props(classOf[ProcessorC], "p14", testActor))
-      expectMsg("offered-a-5")
-      processor2 ! "b"
-      expectMsg("updated-b-7")
-    }
     "recover from a snapshot without follow-up messages at a partition boundary (where next partition contains a permanently deleted message)" in {
       val deleteProbe = TestProbe()
       subscribeToRangeDeletion(deleteProbe)
@@ -274,7 +248,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       processor1 ! "a"
       expectMsg("updated-a-6")
 
-      processor1 ! DeleteTo(6L, true)
+      processor1 ! DeleteTo(6L)
       awaitRangeDeletion(deleteProbe)
 
       val processor2 = system.actorOf(Props(classOf[ProcessorC], "p15", testActor))
@@ -286,15 +260,15 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       val deleteProbe = TestProbe()
       subscribeToRangeDeletion(deleteProbe)
 
-      val p = system.actorOf(Props(classOf[ProcessorA], "p16"))
+      val p = system.actorOf(Props(classOf[ProcessorA], "p16", self))
 
       p ! "a"
       expectMsgAllOf("a", 1L, false)
 
-      p ! DeleteTo(1L, true)
+      p ! DeleteTo(1L)
       awaitRangeDeletion(deleteProbe)
 
-      val r = system.actorOf(Props(classOf[ProcessorA], "p16"))
+      val r = system.actorOf(Props(classOf[ProcessorA], "p16", self))
 
       r ! "b"
       expectMsgAllOf("b", 1L, false)
