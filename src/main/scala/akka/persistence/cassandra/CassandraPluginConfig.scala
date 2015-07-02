@@ -2,7 +2,7 @@ package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
 
-import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
+import com.datastax.driver.core.policies.{TokenAwarePolicy, DCAwareRoundRobinPolicy}
 import com.datastax.driver.core.{Cluster, ConsistencyLevel, SSLOptions}
 import com.typesafe.config.Config
 
@@ -40,7 +40,9 @@ class CassandraPluginConfig(config: Config) {
 
   if (config.hasPath("local-datacenter")) {
     clusterBuilder.withLoadBalancingPolicy(
-      new DCAwareRoundRobinPolicy(config.getString("local-datacenter"))
+      new TokenAwarePolicy(
+        new DCAwareRoundRobinPolicy(config.getString("local-datacenter"))
+      )
     )
   }
 
