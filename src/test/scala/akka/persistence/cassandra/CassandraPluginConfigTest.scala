@@ -4,6 +4,9 @@ import java.net.InetSocketAddress
 
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{MustMatchers, WordSpec}
+import org.scalatest.prop.TableDrivenPropertyChecks._
+
+import scala.util.Random
 
 /**
  *
@@ -13,8 +16,8 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
     """
       |keyspace-autocreate = true
       |keyspace-autocreate-retries = 1
-      |keyspace = test-keyspace
-      |table = test-table
+      |keyspace = test_keyspace
+      |table = test_table
       |replication-strategy = "SimpleStrategy"
       |replication-factor = 1
       |data-center-replication-factors = []
@@ -23,6 +26,38 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       |contact-points = ["127.0.0.1"]
       |port = 9142
     """.stripMargin)
+
+
+  lazy val keyspaceNames = {
+    // Generate a key that is the max acceptable length ensuring the first char is alpha
+    def maxKey = Random.alphanumeric.dropWhile(_.toString.matches("[^a-zA-Z]")).take(32).mkString
+
+    Table (
+      ("Keyspace", "isValid"),
+      ("test",        true),
+      ("_test_123",   false),
+      ("",            false),
+      ("test-space",  false),
+      ("'test'",      false),
+      ("a",           true),
+      ("a_",          true),
+      ("1",           false),
+      ("a1",          true),
+      ("_",           false),
+      ("asdf!",       false),
+      (maxKey,        true),
+      ("\"_asdf\"",   false),
+      ("\"_\"",       false),
+      ("\"a\"",       true),
+      ("\"a_sdf\"",   true),
+      ("\"\"",        false),
+      ("\"valid_with_quotes\"",       true),
+      ("\"missing_trailing_quote",    false),
+      ("missing_leading_quote\"",     false),
+      ('"' + maxKey + '"',            true),
+      (maxKey + "_",                  false)
+    )
+  }
 
 
   "A CassandraPluginConfig" should {
@@ -90,6 +125,25 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
         CassandraPluginConfig.getReplicationStrategy("NetworkTopologyStrategy", 0, Seq("dc1"))
       }
     }
+
+    "validate keyspace parameter" in {
+      forAll(keyspaceNames) { (keyspace, isValid) =>
+        if(isValid) CassandraPluginConfig.validateKeyspaceName(keyspace) must be(keyspace)
+        else intercept[IllegalArgumentException] {
+          CassandraPluginConfig.validateKeyspaceName(keyspace)
+        }
+      }
+    }
+
+    "validate table name parameter" in {
+      forAll(keyspaceNames) { (tableName, isValid) =>
+        if(isValid) CassandraPluginConfig.validateKeyspaceName(tableName) must be(tableName)
+        else intercept[IllegalArgumentException] {
+          CassandraPluginConfig.validateKeyspaceName(tableName)
+        }
+      }
+    }
+
 
     "parse keyspace-autocreate parameter" in {
       val configWithFalseKeyspaceAutocreate = ConfigFactory.parseString( """keyspace-autocreate = false""").withFallback(defaultConfig)
