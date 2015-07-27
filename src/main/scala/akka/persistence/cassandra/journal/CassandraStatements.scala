@@ -15,29 +15,23 @@ trait CassandraStatements {
 
   def createTable = s"""
       CREATE TABLE IF NOT EXISTS ${tableName} (
+        used boolean static,
         persistence_id text,
         partition_nr bigint,
         sequence_nr bigint,
-        marker text,
         message blob,
-        PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, marker))
-        WITH COMPACT STORAGE
-         AND gc_grace_seconds =${config.gc_grace_seconds}
-    """
-
-  def writeHeader = s"""
-      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, marker, message)
-      VALUES (?, ?, 0, 'H', 0x00)
+        PRIMARY KEY ((persistence_id, partition_nr), sequence_nr))
+        WITH gc_grace_seconds =${config.gc_grace_seconds}
     """
 
   def writeMessage = s"""
-      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, marker, message)
-      VALUES (?, ?, ?, 'A', ?)
+      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, message, used)
+      VALUES (?, ?, ?, ?, true)
     """
 
   def confirmMessage = s"""
-      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, marker, message)
-      VALUES (?, ?, ?, ?, 0x00)
+      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, message)
+      VALUES (?, ?, ?, 0x00)
     """
 
   def deleteMessage = s"""
@@ -45,13 +39,6 @@ trait CassandraStatements {
         persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr = ?
-    """
-
-  def selectHeader = s"""
-      SELECT * FROM ${tableName} WHERE
-        persistence_id = ? AND
-        partition_nr = ? AND
-        sequence_nr = 0
     """
 
   def selectMessages = s"""
@@ -71,6 +58,19 @@ trait CassandraStatements {
       INSERT INTO ${configTableName}(property, value) VALUES(?, ?)
     """
 
+  def selectInUse =
+    s"""
+       SELECT used from ${tableName}
+       WHERE persistence_id = ? AND
+       partition_nr = ?
+     """
+
+  def writeInUse =
+    s"""
+       INSERT INTO ${tableName} (persistence_id, partition_nr, used)
+       VALUES(?, ?, true)
+     """
+  
   private def tableName = s"${config.keyspace}.${config.table}"
   private def configTableName = s"${config.keyspace}.${config.configTable}"
 }
