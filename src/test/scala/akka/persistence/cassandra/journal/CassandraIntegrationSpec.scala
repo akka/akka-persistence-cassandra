@@ -96,7 +96,8 @@ object CassandraIntegrationSpec {
     }
   }
 
-  class ProcessorCNoRecover(override val persistenceId: String, probe: ActorRef) extends ProcessorC(persistenceId, probe) {
+  class ProcessorCNoRecover(override val persistenceId: String, probe: ActorRef, recoverConfig: Recovery) extends ProcessorC(persistenceId, probe) {
+    override def recovery = recoverConfig
     override def preStart() = ()
   }
 
@@ -283,8 +284,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
     }
     "recover from a snapshot with follow-up messages and an upper bound" in {
       val persistenceId = UUID.randomUUID().toString
-      val processor1 = system.actorOf(Props(classOf[ProcessorCNoRecover], persistenceId, testActor))
-      processor1 ! Recover()
+      val processor1 = system.actorOf(Props(classOf[ProcessorCNoRecover], persistenceId, testActor, Recovery()))
       processor1 ! "a"
       expectMsg("updated-a-1")
       processor1 ! "snap"
@@ -294,8 +294,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
         expectMsg(s"updated-a-${i}")
       }
 
-      val processor2 = system.actorOf(Props(classOf[ProcessorCNoRecover], persistenceId, testActor))
-      processor2 ! Recover(toSequenceNr = 3L)
+      val processor2 = system.actorOf(Props(classOf[ProcessorCNoRecover], persistenceId, testActor, Recovery(toSequenceNr = 3L)))
       expectMsg("offered-a-1")
       expectMsg("updated-a-2")
       expectMsg("updated-a-3")

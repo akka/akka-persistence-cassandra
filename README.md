@@ -16,7 +16,7 @@ To include the Cassandra plugins into your `sbt` project, add the following line
 
     libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.4-SNAPSHOT"
 
-This version of `akka-persistence-cassandra` depends on Akka 2.4.M2 and is cross-built against Scala 2.10.4 and 2.11.6. It is compatible with Cassandra 2.1.0 or higher. Versions of the Cassandra plugins that are compatible with Cassandra 1.2.x are maintained on the [cassandra-1.2](https://github.com/krasserm/akka-persistence-cassandra/tree/cassandra-1.2) branch.
+This version of `akka-persistence-cassandra` depends on Akka Akka 2.4-RC1 and is cross-built against Scala 2.10.4 and 2.11.6. It is compatible with Cassandra 2.1.0 or higher. Versions of the Cassandra plugins that are compatible with Cassandra 1.2.x are maintained on the [cassandra-1.2](https://github.com/krasserm/akka-persistence-cassandra/tree/cassandra-1.2) branch.
    
 Migrating from 0.3 (Akka 2.3)
 -----------------------------
@@ -50,6 +50,7 @@ This will run the journal with its default settings. The default settings can be
 - `cassandra-journal.replication-strategy`. Replication strategy to use. SimpleStrategy or NetworkTopologyStrategy
 - `cassandra-journal.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
 - `cassandra-journal.data-center-replication-factors`. Replication factor list for data centers, e.g. ["dc1:3", "dc2:2"]. Is only used when replication-strategy is NetworkTopologyStrategy.
+- `cassandra-journal."max-message-batch-size"`. Maximum number of messages that will be batched when using `persistAsync`. Also used as the max batch size for deletes.
 - `cassandra-journal.target-partition-size`. Target number of messages per cassandra partition. Default value is 5000000. Will only go above the target if you use persistAll and persistAllAsync **Do not change this setting after table creation** (not checked yet).
 - `cassandra-journal.max-result-size`. Maximum number of entries returned per query. Queries are executed recursively, if needed, to achieve recovery goals. Default value is 50001.
 - `cassandra-journal.write-consistency`. Write consistency level. Default value is `QUORUM`.
