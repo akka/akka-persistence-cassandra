@@ -8,6 +8,11 @@ trait CassandraStatements {
       WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
     """
 
+  def createConfigTable = s"""
+      CREATE TABLE IF NOT EXISTS ${configTableName} (
+        property text primary key, value text)
+     """
+
   def createTable = s"""
       CREATE TABLE IF NOT EXISTS ${tableName} (
         processor_id text,
@@ -63,5 +68,14 @@ trait CassandraStatements {
         LIMIT ${config.maxResultSize}
     """
 
+  def selectConfig = s"""
+      SELECT * FROM ${configTableName}
+    """
+
+  def writeConfig = s"""
+      INSERT INTO ${configTableName}(property, value) VALUES(?, ?)
+    """
+
   private def tableName = s"${config.keyspace}.${config.table}"
+  private def configTableName = s"${config.keyspace}.${config.configTable}"
 }

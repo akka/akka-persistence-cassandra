@@ -18,6 +18,7 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       |keyspace-autocreate-retries = 1
       |keyspace = test_keyspace
       |table = test_table
+      |config-table = config
       |replication-strategy = "SimpleStrategy"
       |replication-factor = 1
       |data-center-replication-factors = []
