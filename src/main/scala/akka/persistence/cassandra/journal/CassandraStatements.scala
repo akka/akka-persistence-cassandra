@@ -62,7 +62,7 @@ trait CassandraStatements {
 
   def selectHighestSequenceNr =
     s"""
-       SELECT sequence_nr FROM ${tableName} WHERE
+       SELECT sequence_nr, used FROM ${tableName} WHERE
        persistence_id = ? AND
        partition_nr = ?
        ORDER BY sequence_nr
