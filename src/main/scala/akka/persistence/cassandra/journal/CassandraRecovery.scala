@@ -111,7 +111,6 @@ trait CassandraRecovery extends ActorLogging {
     var fromSnr = fromSequenceNr
     var toSnr = toSequenceNr
 
-    var rcnt = 0
     var iter = newIter()
 
     def newIter() = {
@@ -129,20 +128,13 @@ trait CassandraRecovery extends ActorLogging {
       if (iter.hasNext) {
         // more entries available in current resultset
         true
-      } else if (rcnt == 0 && !inUse) {
-        // empty partition and inUse not set, empty partitions are a result of deletions or large persistAll calls
+      } else if (!inUse) {
+        // partition has never been in use so stop
         false
-      } else if (rcnt < maxResultSize) {
+      } else {
         // all entries consumed, try next partition
         currentPnr += 1
         fromSnr = currentSnr
-        rcnt = 0
-        iter = newIter()
-        hasNext
-      } else {
-        // max result set size reached, continue with same partition moving the fromSnr forward
-        fromSnr = currentSnr
-        rcnt = 0
         iter = newIter()
         hasNext
       }
@@ -151,7 +143,6 @@ trait CassandraRecovery extends ActorLogging {
     def next(): Row = {
       val row = iter.next()
       currentSnr = row.getLong("sequence_nr")
-      rcnt += 1
       row
     }
 

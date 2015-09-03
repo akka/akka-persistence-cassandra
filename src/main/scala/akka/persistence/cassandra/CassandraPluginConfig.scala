@@ -3,7 +3,7 @@ package akka.persistence.cassandra
 import java.net.InetSocketAddress
 
 import com.datastax.driver.core.policies.{TokenAwarePolicy, DCAwareRoundRobinPolicy}
-import com.datastax.driver.core.{Cluster, ConsistencyLevel, SSLOptions}
+import com.datastax.driver.core.{QueryOptions, Cluster, ConsistencyLevel, SSLOptions}
 import com.typesafe.config.Config
 
 import scala.collection.JavaConverters._
@@ -30,9 +30,11 @@ class CassandraPluginConfig(config: Config) {
   val writeConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("write-consistency"))
   val port: Int = config.getInt("port")
   val contactPoints = getContactPoints(config.getStringList("contact-points").asScala, port)
+  val fetchSize = config.getInt("max-result-size")
 
   val clusterBuilder: Cluster.Builder = Cluster.builder
     .addContactPointsWithPorts(contactPoints.asJava)
+    .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
 
   if (config.hasPath("authentication")) {
     clusterBuilder.withCredentials(
@@ -48,7 +50,7 @@ class CassandraPluginConfig(config: Config) {
     )
   }
 
-  if(config.hasPath("ssl")) {
+  if (config.hasPath("ssl")) {
     val trustStorePath: String = config.getString("ssl.truststore.path")
     val trustStorePW: String = config.getString("ssl.truststore.password")
     val keyStorePath: String = config.getString("ssl.keystore.path")
