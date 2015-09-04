@@ -351,7 +351,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       val processor2 = system.actorOf(Props(classOf[ProcessorC], persistenceId, testActor))
       expectMsg("offered-a-5")
       processor2 ! "b"
-      expectMsg("updated-b-6") // sequence number of permanently deleted message can be re-used
+      expectMsg("updated-b-7") // no longer re-using sequence numbers
     }
     "properly recover after all messages have been deleted" in {
       val persistenceId = UUID.randomUUID().toString
@@ -369,7 +369,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with
       val r = system.actorOf(Props(classOf[ProcessorA], persistenceId, self))
 
       r ! "b"
-      expectMsgAllOf("b", 1L, false)
+      expectMsgAllOf("b", 2L, false) // no longer re-using sequence numbers
     }
   }
 }

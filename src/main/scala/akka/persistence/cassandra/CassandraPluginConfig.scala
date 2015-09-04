@@ -13,9 +13,10 @@ class CassandraPluginConfig(config: Config) {
 
   import akka.persistence.cassandra.CassandraPluginConfig._
 
-  val keyspace: String = validateKeyspaceName(config.getString("keyspace"))
+  val keyspace: String = config.getString("keyspace")
+  val table: String = config.getString("table")
+  val metadataTable: String = config.getString("metadata-table")
 
-  val table: String = validateTableName(config.getString("table"))
   val configTable: String = validateTableName(config.getString("config-table"))
 
   val keyspaceAutoCreate: Boolean = config.getBoolean("keyspace-autocreate")

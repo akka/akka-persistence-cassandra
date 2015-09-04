@@ -3,6 +3,9 @@ package akka.persistence.cassandra.journal
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 
+import com.datastax.driver.core.policies.{LoggingRetryPolicy, RetryPolicy}
+import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
+
 import scala.concurrent._
 import scala.collection.immutable.Seq
 import scala.collection.JavaConversions._
@@ -35,6 +38,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
     }
   }
   session.execute(createTable)
+  session.execute(createMetatdataTable)
   session.execute(createConfigTable)
 
   val persistentConfig: Map[String, String] = session.execute(selectConfig).all().toList
@@ -51,6 +55,8 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   val preparedCheckInUse = session.prepare(selectInUse).setConsistencyLevel(readConsistency)
   val preparedWriteInUse = session.prepare(writeInUse)
   val preparedSelectHighestSequenceNr = session.prepare(selectHighestSequenceNr).setConsistencyLevel(readConsistency)
+  val preparedSelectDeletedTo = session.prepare(selectDeletedTo).setConsistencyLevel(readConsistency)
+  val preparedInsertDeletedTo = session.prepare(insertDeletedTo).setConsistencyLevel(writeConsistency)
 
   def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
     // we need to preserve the order / size of this sequence even though we don't map
@@ -99,18 +105,25 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   }
 
   def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
+    val logicalDelete = session.executeAsync(preparedInsertDeletedTo.bind(persistenceId, toSequenceNr: JLong))
+
     val fromSequenceNr = readLowestSequenceNr(persistenceId, 1L)
     val lowestPartition = partitionNr(fromSequenceNr)
     val highestPartition = partitionNr(toSequenceNr) + 1 // may have been moved to the next partition
     val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSequenceNr))
 
-    val asyncDeletions = partitionInfos.map( future => future.flatMap( pi => {
+    partitionInfos.map( future => future.flatMap( pi => {
       Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group => {
-        asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
-      }
+          val delete = asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
+          delete.onFailure {
+            case e => log.warning(s"Unable to complete deletes for persistence id ${persistenceId}, toSequenceNr ${toSequenceNr}. The plugin will continue to function correctly but you will need to manually delete the old messages.", e)
+          }
+          delete
+        }
       })
     }))
-    Future.sequence(asyncDeletions).map(_ => ())
+
+    logicalDelete.map(_ => ())
   }
 
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
@@ -120,14 +133,15 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
         .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
   }
 
-  private def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = executeBatch { batch =>
+  private def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = executeBatch({ batch =>
     messageIds.foreach { mid =>
       batch.add(preparedDeletePermanent.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong))
     }
-  }
+  }, Some(config.deleteRetries))
 
-  private def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {
+  private def executeBatch(body: BatchStatement ⇒ Unit, retries: Option[Int] = None): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
+    retries.foreach(times => batch.setRetryPolicy(new LoggingRetryPolicy(new FixedRetryPolicy(times))))
     body(batch)
     session.executeAsync(batch).map(_ => ())
   }
@@ -156,4 +170,14 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   private case class SerializedAtomicWrite(persistenceId: String, payload: Seq[Serialized])
   private case class Serialized(sequenceNr: Long, serialized: ByteBuffer)
   private case class PartitionInfo(partitionNr: Long, minSequenceNr: Long, maxSequenceNr: Long)
+}
+
+class FixedRetryPolicy(number: Int) extends RetryPolicy {
+  def onUnavailable(statement: Statement, cl: ConsistencyLevel, requiredReplica: Int, aliveReplica: Int, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
+  def onWriteTimeout(statement: Statement, cl: ConsistencyLevel, writeType: WriteType, requiredAcks: Int, receivedAcks: Int, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
+  def onReadTimeout(statement: Statement, cl: ConsistencyLevel, requiredResponses: Int, receivedResponses: Int, dataRetrieved: Boolean, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
+
+  private def retry(cl: ConsistencyLevel, nbRetry: Int): RetryDecision = {
+    if (nbRetry < number) RetryDecision.retry(cl) else RetryDecision.rethrow()
+  }
 }

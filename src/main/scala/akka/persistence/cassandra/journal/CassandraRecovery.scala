@@ -25,7 +25,7 @@ trait CassandraRecovery extends ActorLogging {
   }
 
   def readHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Long = {
-    findHighestSequenceNr(persistenceId, fromSequenceNr)
+    findHighestSequenceNr(persistenceId, math.max(fromSequenceNr, highestDeletedSequenceNumber(persistenceId)))
   }
 
   def readLowestSequenceNr(persistenceId: String, fromSequenceNr: Long): Long = {
@@ -45,7 +45,10 @@ trait CassandraRecovery extends ActorLogging {
 
     import PersistentRepr.Undefined
 
-    private val iter = new RowIterator(persistenceId, fromSequenceNr, toSequenceNr)
+    private val initialFromSequenceNr = math.max(highestDeletedSequenceNumber(persistenceId) + 1, fromSequenceNr)
+    log.debug("Starting message scan from {}", initialFromSequenceNr)
+
+    private val iter = new RowIterator(persistenceId, initialFromSequenceNr, toSequenceNr)
     private var mcnt = 0L
 
     private var c: PersistentRepr = null
@@ -99,6 +102,12 @@ trait CassandraRecovery extends ActorLogging {
     }
     find(partitionNr(fromSequenceNr), fromSequenceNr)
   }
+
+  private def highestDeletedSequenceNumber(persistenceId: String): Long = {
+    Option(session.execute(preparedSelectDeletedTo.bind(persistenceId)).one())
+      .map(_.getLong("deleted_to")).getOrElse(0)
+  }
+
   /**
    * Iterates over rows, crossing partition boundaries.
    */
