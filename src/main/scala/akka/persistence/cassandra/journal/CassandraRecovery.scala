@@ -21,13 +21,11 @@ trait CassandraRecovery extends ActorLogging {
   }
 
   def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = Future {
-      readHighestSequenceNr(persistenceId, fromSequenceNr)
+    readHighestSequenceNr(persistenceId, fromSequenceNr)
   }
 
   def readHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Long = {
-    // see https://github.com/akka/akka/issues/18296
-    val default = math.max(0, fromSequenceNr - 1)
-    findHighestSequenceNr(persistenceId, default)
+    findHighestSequenceNr(persistenceId, fromSequenceNr)
   }
 
   def readLowestSequenceNr(persistenceId: String, fromSequenceNr: Long): Long = {
