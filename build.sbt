@@ -6,8 +6,6 @@ version := "0.4-SNAPSHOT"
 
 scalaVersion := "2.11.6"
 
-crossScalaVersions := Seq("2.10.4", "2.11.6")
-
 fork in Test := true
 
 javaOptions in Test += "-Xmx2500M"

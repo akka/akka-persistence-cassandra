@@ -1,11 +1,7 @@
 language: scala
 sudo: false
 scala:
-  - "2.10.4"
   - "2.11.0"
 jdk:
   - oraclejdk8
   - openjdk7
-branches:
-  except:
-    - /^wip-.*$/
