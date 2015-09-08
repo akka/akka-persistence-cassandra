@@ -8,7 +8,10 @@
         </encoder>
     </appender>
 
-    <root level="ERROR">
+    <logger name="org.apache.cassandra" level="ERROR" />
+    <logger name="com.datastax.driver.core" level="WARN" />
+
+    <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
 

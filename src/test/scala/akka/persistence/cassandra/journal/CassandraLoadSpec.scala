@@ -50,9 +50,9 @@ object CassandraLoadSpec {
 
     def receiveCommand: Receive = {
       case c @ "start" =>
-        defer(c) { _ => startMeasure(); sender ! "started" }
+        deferAsync(c) { _ => startMeasure(); sender ! "started" }
       case c @ "stop" =>
-        defer(c) { _ => stopMeasure() }
+        deferAsync(c) { _ => stopMeasure() }
       case payload: String =>
         persistAsync(payload)(handle)
     }
@@ -62,7 +62,7 @@ object CassandraLoadSpec {
     }
   }
 
-  class ProcessorB(val persistenceId: String, failAt: Option[Long]) extends PersistentActor {
+  class ProcessorB(val persistenceId: String, failAt: Option[Long], receiver: ActorRef) extends PersistentActor {
     def receiveRecover: Receive = handle
 
     def receiveCommand: Receive = {
@@ -71,7 +71,7 @@ object CassandraLoadSpec {
 
     def handle: Receive = {
       case payload: String =>
-        sender ! s"${payload}-${lastSequenceNr}"
+        receiver ! s"${payload}-${lastSequenceNr}"
     }
   }
 }
@@ -95,11 +95,11 @@ class CassandraLoadSpec extends TestKit(ActorSystem("test", config)) with Implic
     "work properly under load" in {
       val cycles = 1000L
 
-      val processor1 = system.actorOf(Props(classOf[ProcessorB], "p1b", None))
+      val processor1 = system.actorOf(Props(classOf[ProcessorB], "p1b", None, self))
       1L to cycles foreach { i => processor1 ! "a" }
       1L to cycles foreach { i => expectMsg(s"a-${i}") }
 
-      val processor2 = system.actorOf(Props(classOf[ProcessorB], "p1b", None))
+      val processor2 = system.actorOf(Props(classOf[ProcessorB], "p1b", None, self))
       1L to cycles foreach { i => expectMsg(s"a-${i}") }
 
       processor2 ! "b"

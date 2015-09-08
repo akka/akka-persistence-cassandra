@@ -15,59 +15,48 @@ trait CassandraStatements {
 
   def createTable = s"""
       CREATE TABLE IF NOT EXISTS ${tableName} (
-        processor_id text,
+        used boolean static,
+        persistence_id text,
         partition_nr bigint,
         sequence_nr bigint,
-        marker text,
         message blob,
-        PRIMARY KEY ((processor_id, partition_nr), sequence_nr, marker))
-        WITH COMPACT STORAGE
-         AND gc_grace_seconds =${config.gc_grace_seconds}
+        PRIMARY KEY ((persistence_id, partition_nr), sequence_nr))
+        WITH gc_grace_seconds =${config.gc_grace_seconds}
     """
 
-  def writeHeader = s"""
-      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message)
-      VALUES (?, ?, 0, 'H', 0x00)
-    """
+  def createMetatdataTable = s"""
+      CREATE TABLE IF NOT EXISTS ${metadataTableName}(
+        persistence_id text PRIMARY KEY,
+        deleted_to bigint,
+        properties map<text,text>
+      );
+   """
 
   def writeMessage = s"""
-      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message)
-      VALUES (?, ?, ?, 'A', ?)
+      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, message, used)
+      VALUES (?, ?, ?, ?, true)
     """
 
-  def confirmMessage = s"""
-      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message)
-      VALUES (?, ?, ?, ?, 0x00)
-    """
-
-  def deleteMessageLogical = s"""
-      INSERT INTO ${tableName} (processor_id, partition_nr, sequence_nr, marker, message)
-      VALUES (?, ?, ?, 'B', 0x00)
-    """
-
-  def deleteMessagePermanent = s"""
+  def deleteMessage = s"""
       DELETE FROM ${tableName} WHERE
-        processor_id = ? AND
+        persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr = ?
     """
 
-  def selectHeader = s"""
-      SELECT * FROM ${tableName} WHERE
-        processor_id = ? AND
-        partition_nr = ? AND
-        sequence_nr = 0
-    """
-
   def selectMessages = s"""
       SELECT * FROM ${tableName} WHERE
-        processor_id = ? AND
+        persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr >= ? AND
         sequence_nr <= ?
-        LIMIT ${config.maxResultSize}
     """
 
+  def selectInUse = s"""
+     SELECT used from ${tableName} WHERE
+      persistence_id = ? AND
+      partition_nr = ?
+   """
   def selectConfig = s"""
       SELECT * FROM ${configTableName}
     """
@@ -76,6 +65,31 @@ trait CassandraStatements {
       INSERT INTO ${configTableName}(property, value) VALUES(?, ?)
     """
 
+  def selectHighestSequenceNr = s"""
+     SELECT sequence_nr, used FROM ${tableName} WHERE
+       persistence_id = ? AND
+       partition_nr = ?
+       ORDER BY sequence_nr
+       DESC LIMIT 1
+   """
+
+  def selectDeletedTo = s"""
+      SELECT deleted_to FROM ${metadataTableName} WHERE
+        persistence_id = ?
+    """
+
+  def insertDeletedTo = s"""
+      INSERT INTO ${metadataTableName} (persistence_id, deleted_to)
+      VALUES ( ?, ? )
+    """
+
+  def writeInUse =
+    s"""
+       INSERT INTO ${tableName} (persistence_id, partition_nr, used)
+       VALUES(?, ?, true)
+     """
+  
   private def tableName = s"${config.keyspace}.${config.table}"
   private def configTableName = s"${config.keyspace}.${config.configTable}"
+  private def metadataTableName = s"${config.keyspace}.${config.metadataTable}"
 }

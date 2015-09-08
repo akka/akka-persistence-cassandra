@@ -2,39 +2,53 @@ package akka.persistence.cassandra.journal
 
 import java.lang.{ Long => JLong }
 
+import akka.actor.ActorLogging
+
 import scala.concurrent._
 
-import com.datastax.driver.core.Row
+import com.datastax.driver.core.{ResultSet, Row}
 
 import akka.persistence.PersistentRepr
 
-trait CassandraRecovery { this: CassandraJournal =>
+trait CassandraRecovery extends ActorLogging {
+  this: CassandraJournal =>
   import config._
 
   implicit lazy val replayDispatcher = context.system.dispatchers.lookup(replayDispatcherId)
 
-  def asyncReplayMessages(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Future[Unit] =
-    Future { replayMessages(processorId, fromSequenceNr, toSequenceNr, max)(replayCallback) }
+  def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Future[Unit] = Future {
+    replayMessages(persistenceId, fromSequenceNr, toSequenceNr, max)(replayCallback)
+  }
 
-  def asyncReadHighestSequenceNr(processorId: String, fromSequenceNr: Long): Future[Long] =
-    Future { readHighestSequenceNr(processorId, fromSequenceNr ) }
+  def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = Future {
+    readHighestSequenceNr(persistenceId, fromSequenceNr)
+  }
 
-  def readHighestSequenceNr(processorId: String, fromSequenceNr: Long): Long =
-    new MessageIterator(processorId, math.max(1L, fromSequenceNr), Long.MaxValue, Long.MaxValue).foldLeft(fromSequenceNr) { case (acc, msg) => msg.sequenceNr }
+  def readHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Long = {
+    findHighestSequenceNr(persistenceId, math.max(fromSequenceNr, highestDeletedSequenceNumber(persistenceId)))
+  }
 
-  def readLowestSequenceNr(processorId: String, fromSequenceNr: Long): Long =
-    new MessageIterator(processorId, fromSequenceNr, Long.MaxValue, Long.MaxValue).find(!_.deleted).map(_.sequenceNr).getOrElse(fromSequenceNr)
+  def readLowestSequenceNr(persistenceId: String, fromSequenceNr: Long): Long = {
+    new MessageIterator(persistenceId, fromSequenceNr, Long.MaxValue, Long.MaxValue).find(!_.deleted).map(_.sequenceNr).getOrElse(fromSequenceNr)
+  }
 
-  def replayMessages(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Unit =
-    new MessageIterator(processorId, fromSequenceNr, toSequenceNr, max).foreach(replayCallback)
+  def replayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Unit = {
+    new MessageIterator(persistenceId, fromSequenceNr, toSequenceNr, max).foreach( msg => {
+      replayCallback(msg)
+    })
+  }
 
   /**
    * Iterator over messages, crossing partition boundaries.
    */
-  class MessageIterator(processorId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long) extends Iterator[PersistentRepr] {
+  class MessageIterator(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long) extends Iterator[PersistentRepr] {
+
     import PersistentRepr.Undefined
 
-    private val iter = new RowIterator(processorId, fromSequenceNr, toSequenceNr)
+    private val initialFromSequenceNr = math.max(highestDeletedSequenceNumber(persistenceId) + 1, fromSequenceNr)
+    log.debug("Starting message scan from {}", initialFromSequenceNr)
+
+    private val iter = new RowIterator(persistenceId, initialFromSequenceNr, toSequenceNr)
     private var mcnt = 0L
 
     private var c: PersistentRepr = null
@@ -53,66 +67,81 @@ trait CassandraRecovery { this: CassandraJournal =>
 
     /**
      * Make next message n the current message c, complete c
-     * (ignoring orphan markers) and pre-fetch new n.
+     * and pre-fetch new n.
      */
     private def fetch(): Unit = {
       c = n
       n = null
       while (iter.hasNext && n == null) {
         val row = iter.next()
-        val marker = row.getString("marker")
         val snr = row.getLong("sequence_nr")
-        if (marker == "A") {
-          val m = persistentFromByteBuffer(row.getBytes("message"))
-          // there may be duplicates returned by iter
-          // (on scan boundaries within a partition)
-          if (snr == c.sequenceNr) c = m else n = m
-        } else if (marker == "B" && c.sequenceNr == snr) {
-          c = c.update(deleted = true)
-        } else if (c.sequenceNr == snr) {
-          val channelId = marker.substring(2)
-          c = c.update(confirms = channelId +: c.confirms)
-        }
+        val m = persistentFromByteBuffer(row.getBytes("message"))
+        // there may be duplicates returned by iter
+        // (on scan boundaries within a partition)
+        if (snr == c.sequenceNr) c = m else n = m
       }
     }
+  }
+
+
+  private def findHighestSequenceNr(persistenceId: String, fromSequenceNr: Long) = {
+    @annotation.tailrec
+    def find(currentPnr: Long, currentSnr: Long): Long = {
+      // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
+      val next = Option(session.execute(preparedSelectHighestSequenceNr.bind(persistenceId, currentPnr: JLong)).one())
+        .map(row => (row.getBool("used"), row.getLong("sequence_nr")))
+      next match {
+        // never been to this partition
+        case None => currentSnr
+        // don't currently explicitly set false
+        case Some((false, _)) => currentSnr
+        // everything deleted in this partition, move to the next
+        case Some((true, 0)) => find(currentPnr+1, currentSnr)
+        case Some((_, nextHighest)) => find(currentPnr+1, nextHighest)
+      }
+    }
+    find(partitionNr(fromSequenceNr), fromSequenceNr)
+  }
+
+  private def highestDeletedSequenceNumber(persistenceId: String): Long = {
+    Option(session.execute(preparedSelectDeletedTo.bind(persistenceId)).one())
+      .map(_.getLong("deleted_to")).getOrElse(0)
   }
 
   /**
    * Iterates over rows, crossing partition boundaries.
    */
-  class RowIterator(processorId: String, fromSequenceNr: Long, toSequenceNr: Long) extends Iterator[Row] {
+  class RowIterator(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long) extends Iterator[Row] {
     var currentPnr = partitionNr(fromSequenceNr)
     var currentSnr = fromSequenceNr
 
     var fromSnr = fromSequenceNr
-    var toSnr = math.min(sequenceNrMax(currentPnr), toSequenceNr)
+    var toSnr = toSequenceNr
 
-    var rcnt = 0
     var iter = newIter()
 
-    def hasHeader = !session.execute(preparedSelectHeader.bind(processorId, currentPnr: JLong)).isExhausted
-    def newIter() = session.execute(preparedSelectMessages.bind(processorId, currentPnr: JLong, fromSnr: JLong, toSnr: JLong)).iterator
+    def newIter() = {
+      session.execute(preparedSelectMessages.bind(persistenceId, currentPnr: JLong, fromSnr: JLong, toSnr: JLong)).iterator
+    }
+
+    def inUse: Boolean = {
+      val execute: ResultSet = session.execute(preparedCheckInUse.bind(persistenceId, currentPnr: JLong))
+      if (execute.isExhausted) false
+      else execute.one().getBool("used")
+    }
 
     @annotation.tailrec
     final def hasNext: Boolean = {
       if (iter.hasNext) {
-        // more entries available in current partition
+        // more entries available in current resultset
         true
-      } else if (rcnt == 0 && !hasHeader) {
-        // no more entries available, non-existing partition detected
+      } else if (!inUse) {
+        // partition has never been in use so stop
         false
-      } else if (rcnt < maxResultSize) {
+      } else {
         // all entries consumed, try next partition
         currentPnr += 1
-        fromSnr = sequenceNrMin(currentPnr)
-        toSnr = math.min(sequenceNrMax(currentPnr), toSequenceNr)
-        rcnt = 0
-        iter = newIter()
-        hasNext
-      } else {
-        // max result set size reached, continue with same partition
         fromSnr = currentSnr
-        rcnt = 0
         iter = newIter()
         hasNext
       }
@@ -121,14 +150,13 @@ trait CassandraRecovery { this: CassandraJournal =>
     def next(): Row = {
       val row = iter.next()
       currentSnr = row.getLong("sequence_nr")
-      rcnt += 1
       row
     }
 
     private def sequenceNrMin(partitionNr: Long): Long =
-      partitionNr * maxPartitionSize + 1L
+      partitionNr * targetPartitionSize + 1L
 
     private def sequenceNrMax(partitionNr: Long): Long =
-      (partitionNr + 1L) * maxPartitionSize
+      (partitionNr + 1L) * targetPartitionSize
   }
 }

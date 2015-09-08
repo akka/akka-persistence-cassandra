@@ -6,8 +6,6 @@ version := "0.4-SNAPSHOT"
 
 scalaVersion := "2.11.6"
 
-crossScalaVersions := Seq("2.10.4", "2.11.6")
-
 fork in Test := true
 
 javaOptions in Test += "-Xmx2500M"
@@ -29,8 +27,12 @@ parallelExecution in Test := false
 
 libraryDependencies ++= Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.1.5",
-  "com.typesafe.akka"      %% "akka-persistence-experimental"     % "2.3.11",
-  "com.typesafe.akka"      %% "akka-persistence-tck-experimental" % "2.3.11"  % "test",
-  "org.scalatest"          %% "scalatest"                         % "2.1.4"   % "test",
-  "org.cassandraunit"       % "cassandra-unit"                    % "2.0.2.2" % "test"
+  "com.typesafe.akka"      %% "akka-persistence"                  % "2.4.0-RC2",
+  "com.typesafe.akka"      %% "akka-persistence-tck"              % "2.4.0-RC2"  % "test",
+  "org.scalatest"          %% "scalatest"                         % "2.1.4"      % "test",
+  // override cassandra unit cassandra version as there is a bug with static columns in 2.1.3
+  // remove once PR https://github.com/jsevellec/cassandra-unit/pull/141 merged/released
+  "org.apache.cassandra"    % "cassandra-all"                     % "2.1.8"      % "test",
+  "org.cassandraunit"       % "cassandra-unit"                    % "2.1.3.1"    % "test"
 )
+
