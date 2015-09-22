@@ -36,3 +36,19 @@ libraryDependencies ++= Seq(
   "org.cassandraunit"       % "cassandra-unit"                    % "2.1.3.1"    % "test"
 )
 
+credentials += Credentials(
+  "Artifactory Realm",
+  "oss.jfrog.org",
+  sys.env.getOrElse("OSS_JFROG_USER", ""),
+  sys.env.getOrElse("OSS_JFROG_PASS", "")
+)
+
+publishTo := {
+  val jfrog = "https://oss.jfrog.org/artifactory/"
+  if (isSnapshot.value)
+    Some("OJO Snapshots" at jfrog + "oss-snapshot-local")
+  else
+    Some("OJO Releases" at jfrog + "oss-release-local")
+}
+
+publishMavenStyle := true
