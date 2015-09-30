@@ -27,13 +27,10 @@ parallelExecution in Test := false
 
 libraryDependencies ++= Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.1.5",
-  "com.typesafe.akka"      %% "akka-persistence"                  % "2.4.0-RC2",
-  "com.typesafe.akka"      %% "akka-persistence-tck"              % "2.4.0-RC2"  % "test",
+  "com.typesafe.akka"      %% "akka-persistence"                  % "2.4.0",
+  "com.typesafe.akka"      %% "akka-persistence-tck"              % "2.4.0"      % "test",
   "org.scalatest"          %% "scalatest"                         % "2.1.4"      % "test",
-  // override cassandra unit cassandra version as there is a bug with static columns in 2.1.3
-  // remove once PR https://github.com/jsevellec/cassandra-unit/pull/141 merged/released
-  "org.apache.cassandra"    % "cassandra-all"                     % "2.1.8"      % "test",
-  "org.cassandraunit"       % "cassandra-unit"                    % "2.1.3.1"    % "test"
+  "org.cassandraunit"       % "cassandra-unit"                    % "2.1.9.2"    % "test"
 )
 
 credentials += Credentials(
