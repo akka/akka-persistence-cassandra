@@ -1,8 +1,8 @@
 package akka.persistence.cassandra.server
 
-import scala.concurrent.duration._
-
 import org.cassandraunit.utils.EmbeddedCassandraServerHelper
+
+import scala.concurrent.duration._
 
 object CassandraServer {
   def toggleSsl(path:String, toggle:Boolean):String = 
@@ -10,7 +10,7 @@ object CassandraServer {
     else path
 
   def start(timeout: FiniteDuration = 10.seconds, withSsl:Boolean) = 
-    CassandraServerHelper.startEmbeddedCassandra(
+    EmbeddedCassandraServerHelper.startEmbeddedCassandra(
       toggleSsl("cassandra_network_strategy.yaml", withSsl), 
       timeout.toMillis)
 
