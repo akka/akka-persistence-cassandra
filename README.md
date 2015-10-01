@@ -28,7 +28,7 @@ To include a current development snapshot of the Cassandra plugins into your `sb
 
     libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra" % "0.4-SNAPSHOT"
 
-This version of `akka-persistence-cassandra` depends on Akka 2.4-RC2 and Scala 2.11.6. It is compatible with Cassandra 2.1.0 or higher.
+This version of `akka-persistence-cassandra` depends on Akka 2.4 and Scala 2.11.6. It is compatible with Cassandra 2.1.6 or higher (versions < 2.1.6 have a static column bug)
    
 Migrating from 0.3 (Akka 2.3)
 -----------------------------
