@@ -20,7 +20,7 @@ import akka.serialization.SerializationExtension
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 
-class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
+class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with CassandraConfigChecker with CassandraStatements {
 
   val config = new CassandraJournalConfig(context.system.settings.config.getConfig("cassandra-journal"))
   val serialization = SerializationExtension(context.system)
@@ -41,13 +41,7 @@ class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with Cas
   session.execute(createMetatdataTable)
   session.execute(createConfigTable)
 
-  val persistentConfig: Map[String, String] = session.execute(selectConfig).all().toList
-    .map(row => (row.getString("property"), row.getString("value"))).toMap
-
-  persistentConfig.get(CassandraJournalConfig.TargetPartitionProperty).foreach(oldValue =>
-    require(oldValue.toInt == config.targetPartitionSize, "Can't change target-partition-size"))
-
-  session.execute(writeConfig, CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
+  val persistentConfig: Map[String, String] = initializePersistentConfig
 
   val preparedWriteMessage = session.prepare(writeMessage)
   val preparedDeletePermanent = session.prepare(deleteMessage)
