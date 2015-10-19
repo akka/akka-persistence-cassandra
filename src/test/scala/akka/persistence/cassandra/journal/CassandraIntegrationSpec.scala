@@ -22,7 +22,7 @@ object CassandraIntegrationSpec {
       |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
       |akka.test.single-expect-default = 10s
-      |cassandra-journal.max-partition-size = 5
+      |cassandra-journal.target-partition-size = 5
       |cassandra-journal.max-result-size = 3
       |cassandra-journal.port = 9142
       |cassandra-snapshot-store.port = 9142
