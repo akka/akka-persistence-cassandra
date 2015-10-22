@@ -62,7 +62,7 @@ trait CassandraStatements {
     """
 
   def writeConfig = s"""
-      INSERT INTO ${configTableName}(property, value) VALUES(?, ?)
+      INSERT INTO ${configTableName}(property, value) VALUES(?, ?) IF NOT EXISTS
     """
 
   def selectHighestSequenceNr = s"""
