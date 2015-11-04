@@ -2,6 +2,7 @@ package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
 
+import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
 import com.datastax.driver.core.policies.{TokenAwarePolicy, DCAwareRoundRobinPolicy}
 import com.datastax.driver.core.{QueryOptions, Cluster, ConsistencyLevel, SSLOptions}
 import com.typesafe.config.Config
@@ -16,8 +17,9 @@ class CassandraPluginConfig(config: Config) {
   val keyspace: String = config.getString("keyspace")
   val table: String = config.getString("table")
   val metadataTable: String = config.getString("metadata-table")
-
   val configTable: String = validateTableName(config.getString("config-table"))
+
+  val tableCompactionStrategy: CassandraCompactionStrategy = CassandraCompactionStrategy(config.getConfig("table-compaction-strategy"))
 
   val keyspaceAutoCreate: Boolean = config.getBoolean("keyspace-autocreate")
   val keyspaceAutoCreateRetries: Int = config.getInt("keyspace-autocreate-retries")

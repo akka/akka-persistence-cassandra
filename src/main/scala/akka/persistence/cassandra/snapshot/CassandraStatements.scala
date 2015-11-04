@@ -16,6 +16,7 @@ trait CassandraStatements {
         snapshot blob,
         PRIMARY KEY (persistence_id, sequence_nr))
         WITH CLUSTERING ORDER BY (sequence_nr DESC)
+        AND compaction = ${config.tableCompactionStrategy.asCQL}
     """
 
   def writeSnapshot = s"""

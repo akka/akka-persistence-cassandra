@@ -22,14 +22,14 @@ trait CassandraStatements {
         message blob,
         PRIMARY KEY ((persistence_id, partition_nr), sequence_nr))
         WITH gc_grace_seconds =${config.gc_grace_seconds}
+        AND compaction = ${config.tableCompactionStrategy.asCQL}
     """
 
   def createMetatdataTable = s"""
       CREATE TABLE IF NOT EXISTS ${metadataTableName}(
         persistence_id text PRIMARY KEY,
         deleted_to bigint,
-        properties map<text,text>
-      );
+        properties map<text,text>)
    """
 
   def writeMessage = s"""
