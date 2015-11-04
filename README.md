@@ -59,6 +59,7 @@ This will run the journal with its default settings. The default settings can be
 - `cassandra-journal.keyspace-autocreate`. Boolean parameter indicating whether the keyspace should be automatically created if it doesn't exist. Default value is `true`.
 - `cassandra-journal.keyspace-autocreate-retries`. Int parameter which defines a number of retries before giving up on automatic schema creation. Default value is `1`.
 - `cassandra-journal.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `messages`.
+- `cassandra-journal.table-compaction-strategy`. Configurations used to configure the CompactionStrategy for the table. Please refer to the tests for example configurations. Default value is `SizeTieredCompactionStrategy`. Refer to http://docs.datastax.com/en/cql/3.1/cql/cql_reference/compactSubprop.html for more information regarding the properties.
 - `cassandra-journal.replication-strategy`. Replication strategy to use. SimpleStrategy or NetworkTopologyStrategy
 - `cassandra-journal.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
 - `cassandra-journal.data-center-replication-factors`. Replication factor list for data centers, e.g. ["dc1:3", "dc2:2"]. Is only used when replication-strategy is NetworkTopologyStrategy.
@@ -117,6 +118,7 @@ This will run the snapshot store with its default settings. The default settings
 - `cassandra-snapshot-store.keyspace-autocreate`. Boolean parameter indicating whether the keyspace should be automatically created if it doesn't exist. Default value is `true`.
 - `cassandra-snapshot-store.keyspace-autocreate-retries`. Int parameter which defines a number of retries before giving up on automatic schema creation. Default value is `1`.
 - `cassandra-snapshot-store.table`. Name of the table to be used by the plugin. If the table doesn't exist it is automatically created. Default value is `snapshots`.
+- `cassandra-snapshot-store.table-compaction-strategy`. Configurations used to configure the CompactionStrategy for the table. Please refer to the tests for example configurations. Default value is `SizeTieredCompactionStrategy`. Refer to http://docs.datastax.com/en/cql/3.1/cql/cql_reference/compactSubprop.html for more information regarding the properties.
 - `cassandra-snapshot-store.replication-strategy`. Replication strategy to use. SimpleStrategy or NetworkTopologyStrategy
 - `cassandra-snapshot-store.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
 - `cassandra-snapshot-store.data-center-replication-factors`. Replication factor list for data centers, e.g. ["dc1:3", "dc2:2"]. Is only used when replication-strategy is NetworkTopologyStrategy.
