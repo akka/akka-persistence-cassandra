@@ -1,28 +1,26 @@
 package akka.persistence.cassandra.journal
 
-import java.lang.{ Long => JLong }
+import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 
-import com.datastax.driver.core.policies.{LoggingRetryPolicy, RetryPolicy}
-import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
-
-import scala.concurrent._
-import scala.collection.immutable.Seq
-import scala.collection.JavaConversions._
-import scala.math.min
-import scala.util.{Success, Failure, Try}
-
-import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence._
 import akka.persistence.cassandra._
+import akka.persistence.journal.AsyncWriteJournal
 import akka.serialization.SerializationExtension
-
 import com.datastax.driver.core._
+import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
+import com.datastax.driver.core.policies.{LoggingRetryPolicy, RetryPolicy}
 import com.datastax.driver.core.utils.Bytes
+import com.typesafe.config.Config
 
-class CassandraJournal extends AsyncWriteJournal with CassandraRecovery with CassandraConfigChecker with CassandraStatements {
+import scala.collection.immutable.Seq
+import scala.concurrent._
+import scala.math.min
+import scala.util.{Failure, Success, Try}
 
-  val config = new CassandraJournalConfig(context.system.settings.config.getConfig("cassandra-journal"))
+class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraConfigChecker with CassandraStatements {
+
+  val config = new CassandraJournalConfig(cfg)
   val serialization = SerializationExtension(context.system)
 
   import config._
