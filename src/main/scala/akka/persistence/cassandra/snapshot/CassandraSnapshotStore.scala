@@ -1,28 +1,27 @@
 package akka.persistence.cassandra.snapshot
 
-import java.lang.{ Long => JLong }
+import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
-
-import akka.persistence.snapshot.SnapshotStore
-
-import scala.collection.immutable
-import scala.concurrent.Future
 
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.serialization.Snapshot
+import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.SerializationExtension
-
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
+import com.typesafe.config.Config
 
-class CassandraSnapshotStore extends SnapshotStore with CassandraStatements with ActorLogging {
-  val config = new CassandraSnapshotStoreConfig(context.system.settings.config.getConfig("cassandra-snapshot-store"))
+import scala.collection.immutable
+import scala.concurrent.Future
+
+class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
+  val config = new CassandraSnapshotStoreConfig(cfg)
   val serialization = SerializationExtension(context.system)
 
-  import context.dispatcher
   import config._
+  import context.dispatcher
 
   val cluster = clusterBuilder.build
   val session = cluster.connect()
