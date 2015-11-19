@@ -4,7 +4,7 @@ name := "akka-persistence-cassandra"
 
 version := "0.5-SNAPSHOT"
 
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.7"
 
 fork in Test := true
 
