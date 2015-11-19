@@ -82,7 +82,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     res <- executeBatch(batch => mds.foreach(md => batch.add(preparedDeleteSnapshot.bind(md.persistenceId, md.sequenceNr: JLong))))
   } yield res
 
-  def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {
+  def executeBatch(body: BatchStatement => Unit): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
     body(batch)
     session.executeAsync(batch).map(_ => ())

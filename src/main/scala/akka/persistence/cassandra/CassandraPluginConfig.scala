@@ -10,6 +10,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import com.datastax.driver.core.JdkSSLOptions
 
+
 class CassandraPluginConfig(config: Config) {
 
   import akka.persistence.cassandra.CassandraPluginConfig._
