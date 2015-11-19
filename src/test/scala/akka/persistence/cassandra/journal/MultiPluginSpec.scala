@@ -8,13 +8,16 @@ import com.datastax.driver.core.{ Session, Cluster }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
 import scala.collection.JavaConverters._
+import akka.persistence.cassandra.testkit.CassandraLauncher
 
 object MultiPluginSpec {
-  val journalKeyspace= "multiplugin_spec_journal"
-  val snapshotKeyspace= "multiplugin_spec_snapshot"
-  val cassandraPort = 9142
+  val journalKeyspace = "multiplugin_spec_journal"
+  val snapshotKeyspace = "multiplugin_spec_snapshot"
+  val cassandraPort = CassandraLauncher.randomPort
   val config = ConfigFactory.parseString(
     s"""
+        |akka.test.single-expect-default = 10s
+        |
         |cassandra-journal.keyspace = $journalKeyspace
         |cassandra-journal.port=$cassandraPort
         |cassandra-journal.keyspace-autocreate=false
@@ -73,12 +76,14 @@ object MultiPluginSpec {
 import akka.persistence.cassandra.journal.MultiPluginSpec._
 
 class MultiPluginSpec
-  extends TestKit(ActorSystem("test", config.withFallback(ConfigFactory.load("reference.conf")).resolve()))
+  extends TestKit(ActorSystem("MultiPluginSpec", config.withFallback(ConfigFactory.load("reference.conf")).resolve()))
   with ImplicitSender
   with WordSpecLike
   with CassandraLifecycle {
   val clusterBuilder: Cluster.Builder = Cluster.builder
     .addContactPointsWithPorts(CassandraPluginConfig.getContactPoints(List("127.0.0.1"), MultiPluginSpec.cassandraPort).asJava)
+
+  override def systemName: String = "MultiPluginSpec"
 
   var cluster: Cluster = _
   var session: Session = _

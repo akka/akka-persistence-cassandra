@@ -1,5 +1,6 @@
 package akka.persistence.cassandra.journal
 
+import akka.persistence.cassandra.testkit.CassandraLauncher
 import scala.concurrent.duration._
 
 import akka.actor._
@@ -13,7 +14,7 @@ import org.scalatest._
 
 object CassandraSslSpec {
   val config = ConfigFactory.parseString(
-    """
+    s"""
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.journal.max-deletion-batch-size = 3
@@ -22,8 +23,8 @@ object CassandraSslSpec {
       |akka.test.single-expect-default = 10s
       |cassandra-journal.target-partition-size = 5
       |cassandra-journal.max-result-size = 3
-      |cassandra-journal.port = 9142
-      |cassandra-snapshot-store.port = 9142
+      |cassandra-journal.port = ${CassandraLauncher.randomPort}
+      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.ssl.truststore.path="src/test/resources/security/client_truststore.jks"
       |cassandra-journal.ssl.truststore.password="hbbUtqn3Y1D4Tw"
       |cassandra-journal.ssl.keystore.path="src/test/resources/security/client_keystore.jks"
@@ -53,13 +54,15 @@ object CassandraSslSpec {
 
 import CassandraSslSpec._
 
-class CassandraSslSpec extends TestKit(ActorSystem("test", config)) 
-  with ImplicitSender 
-  with WordSpecLike 
-  with Matchers 
+class CassandraSslSpec extends TestKit(ActorSystem("CassandraSslSpec", config))
+  with ImplicitSender
+  with WordSpecLike
+  with Matchers
   with CassandraLifecycle {
 
   override val withSsl = true
+
+  override def systemName: String = "CassandraSslSpec"
 
   "A Cassandra journal" ignore {
     "write messages over SSL" in {

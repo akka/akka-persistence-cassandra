@@ -3,3 +3,11 @@
 *.log
 *.iml
 target/
+/.target/
+.DS_Store
+.cache
+.classpath
+.project
+.settings
+
+/bin/

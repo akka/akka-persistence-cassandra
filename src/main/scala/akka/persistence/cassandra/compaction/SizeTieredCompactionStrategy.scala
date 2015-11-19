@@ -15,12 +15,10 @@ class SizeTieredCompactionStrategy(config: Config) extends BaseCompactionStrateg
       .asScala
       .map(_.getKey)
       .forall(SizeTieredCompactionStrategy.propertyKeys.contains(_)),
-    s"Config contains properties not supported by a ${SizeTieredCompactionStrategy.ClassName}"
-  )
+    s"Config contains properties not supported by a ${SizeTieredCompactionStrategy.ClassName}")
 
   val bucketHigh: Double = if (config.hasPath("bucket_high")) config.getDouble("bucket_high") else 1.5
   val bucketLow: Double = if (config.hasPath("bucket_low")) config.getDouble("bucket_low") else 0.5
-  val coldReadsToOmit: Double = if (config.hasPath("cold_reads_to_omit")) config.getDouble("cold_reads_to_omit") else 0.05
   val maxThreshold: Int = if (config.hasPath("max_threshold")) config.getInt("max_threshold") else 32
   val minThreshold: Int = if (config.hasPath("min_threshold")) config.getInt("min_threshold") else 4
   val minSSTableSize: Long = if (config.hasPath("min_sstable_size")) config.getLong("min_sstable_size") else 50
@@ -37,7 +35,6 @@ class SizeTieredCompactionStrategy(config: Config) extends BaseCompactionStrateg
        |${super.asCQL},
        |'bucket_high' : $bucketHigh,
        |'bucket_low' : $bucketLow,
-       |'cold_reads_to_omit' : $coldReadsToOmit,
        |'max_threshold' : $maxThreshold,
        |'min_threshold' : $minThreshold,
        |'min_sstable_size' : $minSSTableSize
@@ -52,12 +49,9 @@ object SizeTieredCompactionStrategy extends CassandraCompactionStrategyConfig[Si
     BaseCompactionStrategy.propertyKeys union List(
       "bucket_high",
       "bucket_low",
-      "cold_reads_to_omit",
       "max_threshold",
       "min_threshold",
-      "min_sstable_size"
-    )
-  ).sorted
+      "min_sstable_size")).sorted
 
   override def fromConfig(config: Config): SizeTieredCompactionStrategy = new SizeTieredCompactionStrategy(config)
 }

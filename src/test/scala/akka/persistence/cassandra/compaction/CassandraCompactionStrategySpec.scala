@@ -1,15 +1,16 @@
 package akka.persistence.cassandra.compaction
 
+import akka.persistence.cassandra.testkit.CassandraLauncher
 import java.util.concurrent.TimeUnit
 
-import akka.persistence.cassandra.{CassandraPluginConfig, CassandraLifecycle}
-import com.datastax.driver.core.{Session, Cluster}
+import akka.persistence.cassandra.{ CassandraPluginConfig, CassandraLifecycle }
+import com.datastax.driver.core.{ Session, Cluster }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{MustMatchers, WordSpec}
+import org.scalatest.{ MustMatchers, WordSpec }
 
 class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with CassandraLifecycle {
   val defaultConfigs = ConfigFactory.parseString(
-    """keyspace-autocreate = true
+    s"""keyspace-autocreate = true
       |keyspace-autocreate-retries = 1
       |keyspace = test-keyspace
       |connect-retries = 3
@@ -24,7 +25,7 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
       |read-consistency = QUORUM
       |write-consistency = QUORUM
       |contact-points = ["127.0.0.1"]
-      |port = 9142
+      |port = ${CassandraLauncher.randomPort}
       |max-result-size = 50
       |delete-retries = 4
     """.stripMargin)
@@ -35,6 +36,8 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
   var session: Session = _
 
   import cassandraPluginConfig._
+
+  override def systemName: String = "CassandraCompactionStrategySpec"
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -157,7 +160,6 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | unchecked_tombstone_compaction = false
           | bucket_high = 5.0
           | bucket_low = 2.5
-          | cold_reads_to_omit = 0.01
           | max_threshold = 20
           | min_threshold = 10
           | min_sstable_size = 100
@@ -172,7 +174,6 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
       compactionStrategy.uncheckedTombstoneCompaction mustEqual false
       compactionStrategy.bucketHigh mustEqual 5.0
       compactionStrategy.bucketLow mustEqual 2.5
-      compactionStrategy.coldReadsToOmit mustEqual 0.01
       compactionStrategy.maxThreshold mustEqual 20
       compactionStrategy.minThreshold mustEqual 10
       compactionStrategy.minSSTableSize mustEqual 100
@@ -188,7 +189,6 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | unchecked_tombstone_compaction = false
           | bucket_high = 5.0
           | bucket_low = 2.5
-          | cold_reads_to_omit = 0.01
           | max_threshold = 20
           | min_threshold = 10
           | min_sstable_size = 100
