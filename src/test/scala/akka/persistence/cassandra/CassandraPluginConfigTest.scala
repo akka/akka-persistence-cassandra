@@ -17,6 +17,8 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       |keyspace-autocreate = true
       |keyspace-autocreate-retries = 1
       |keyspace = test-keyspace
+      |connect-retries = 3
+      |connect-retry-delay = 5s
       |table = test-table
       |table-compaction-strategy { class = "SizeTieredCompactionStrategy" }
       |metadata-table = test-metadata-table

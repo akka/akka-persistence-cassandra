@@ -1,5 +1,6 @@
 package akka.persistence.cassandra
 
+import java.util.concurrent.TimeUnit
 import java.net.InetSocketAddress
 
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
@@ -8,6 +9,7 @@ import com.datastax.driver.core.{QueryOptions, Cluster, ConsistencyLevel, SSLOpt
 import com.typesafe.config.Config
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration._
 
 
 class CassandraPluginConfig(config: Config) {
@@ -23,6 +25,9 @@ class CassandraPluginConfig(config: Config) {
 
   val keyspaceAutoCreate: Boolean = config.getBoolean("keyspace-autocreate")
   val keyspaceAutoCreateRetries: Int = config.getInt("keyspace-autocreate-retries")
+  
+  val connectionRetries: Int = config.getInt("connect-retries")
+  val connectionRetryDelay : FiniteDuration = config.getDuration("connect-retry-delay", TimeUnit.MILLISECONDS).millis
 
   val replicationStrategy: String = getReplicationStrategy(
     config.getString("replication-strategy"),
