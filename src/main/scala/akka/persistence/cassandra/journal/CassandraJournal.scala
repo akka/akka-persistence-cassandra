@@ -8,6 +8,7 @@ import akka.persistence.cassandra._
 import akka.persistence.journal.AsyncWriteJournal
 import akka.serialization.SerializationExtension
 import com.datastax.driver.core._
+import com.datastax.driver.core.exceptions.NoHostAvailableException
 import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
 import com.datastax.driver.core.policies.{LoggingRetryPolicy, RetryPolicy}
 import com.datastax.driver.core.utils.Bytes
@@ -25,8 +26,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   import config._
 
-  val cluster = clusterBuilder.build
-  val session = cluster.connect()
+  val session = connect()
 
   case class MessageId(persistenceId: String, sequenceNr: Long)
 
@@ -50,6 +50,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   val preparedSelectDeletedTo = session.prepare(selectDeletedTo).setConsistencyLevel(readConsistency)
   val preparedInsertDeletedTo = session.prepare(insertDeletedTo).setConsistencyLevel(writeConsistency)
 
+  private def connect(): Session = {
+    retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
+  }
+  
   def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
     // we need to preserve the order / size of this sequence even though we don't map
     // AtomicWrites 1:1 with a C* insert
@@ -156,7 +160,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   override def postStop(): Unit = {
     session.close()
-    cluster.close()
+    session.getCluster().close()
   }
 
   private case class SerializedAtomicWrite(persistenceId: String, payload: Seq[Serialized])

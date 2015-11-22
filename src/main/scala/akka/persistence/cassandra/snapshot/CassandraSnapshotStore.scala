@@ -10,11 +10,13 @@ import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.SerializationExtension
 import com.datastax.driver.core._
+import com.datastax.driver.core.exceptions.NoHostAvailableException
 import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
 
 import scala.collection.immutable
 import scala.concurrent.Future
+import scala.util.{Failure, Success, Try}
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
   val config = new CassandraSnapshotStoreConfig(cfg)
@@ -23,8 +25,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   import config._
   import context.dispatcher
 
-  val cluster = clusterBuilder.build
-  val session = cluster.connect()
+  val session = connect()
 
   if (config.keyspaceAutoCreate) {
     retry(config.keyspaceAutoCreateRetries) {
@@ -42,6 +43,10 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
   val preparedSelectSnapshotMetadataForDelete =
     session.prepare(selectSnapshotMetadata(limit = None)).setConsistencyLevel(readConsistency)
+    
+  private def connect(): Session = {
+    retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
+  }
 
   def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = for {
     mds <- Future(metadata(persistenceId, criteria).take(3).toVector)
@@ -124,6 +129,6 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
   override def postStop(): Unit = {
     session.close()
-    cluster.close()
+    session.getCluster().close()
   }
 }
