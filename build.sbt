@@ -2,7 +2,7 @@ import Tests._
 
 organization := "com.github.krasserm"
 
-name := "akka-persistence-cassandra"
+name := "akka-persistence-cassandra3"
 
 version := "0.5-SNAPSHOT"
 
