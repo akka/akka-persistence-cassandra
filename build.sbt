@@ -1,3 +1,5 @@
+import Tests._
+
 organization := "com.github.krasserm"
 
 name := "akka-persistence-cassandra"
@@ -5,10 +7,6 @@ name := "akka-persistence-cassandra"
 version := "0.5-SNAPSHOT"
 
 scalaVersion := "2.11.7"
-
-fork in Test := true
-
-javaOptions in Test += "-Xmx2500M"
 
 scalacOptions ++= Seq(
   "-encoding", "UTF-8",
@@ -23,14 +21,40 @@ scalacOptions ++= Seq(
   "-Xfuture"
 )
 
+// group tests, a single test per group
+def singleTests(tests: Seq[TestDefinition]) =
+  // We could group non Cassandra tests into another group
+  // to avoid new JVM for each test, see http://www.scala-sbt.org/release/docs/Testing.html
+  tests map { test =>
+    new Group(
+      name = test.name,
+      tests = Seq(test),
+      runPolicy = SubProcess(javaOptions = Seq.empty[String]))
+  }
+
+javaOptions in Test += "-Xmx2500M"
+
+fork in Test := true // for Cassandra tests
+
+testGrouping in Test <<= definedTests in Test map singleTests // for Cassandra tests
+
+// show full stack traces and test case durations
+testOptions in Test += Tests.Argument("-oDF")
+
+// -v Log "test run started" / "test started" / "test run finished" events on log level "info" instead of "debug".
+// -a Show stack traces and exception class name for AssertionErrors.
+testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a")
+
+// disable parallel tests
 parallelExecution in Test := false
 
 libraryDependencies ++= Seq(
-  "com.datastax.cassandra"  % "cassandra-driver-core"             % "2.1.5",
+  "com.datastax.cassandra"  % "cassandra-driver-core"             % "3.0.0-alpha5",
   "com.typesafe.akka"      %% "akka-persistence"                  % "2.4.0",
   "com.typesafe.akka"      %% "akka-persistence-tck"              % "2.4.0"      % "test",
   "org.scalatest"          %% "scalatest"                         % "2.1.4"      % "test",
-  "org.cassandraunit"       % "cassandra-unit"                    % "2.1.9.2"    % "test"
+  // cassandra-all for testkit.CassandraLauncher, app should define it as test dependency if needed
+  "org.apache.cassandra"    % "cassandra-all"                     % "3.0.0"      % "optional"
 )
 
 credentials += Credentials(

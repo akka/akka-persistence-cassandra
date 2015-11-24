@@ -1,5 +1,6 @@
 package akka.persistence.cassandra.journal
 
+import akka.persistence.cassandra.testkit.CassandraLauncher
 import java.util.UUID
 
 import scala.concurrent.duration._
@@ -15,7 +16,7 @@ import org.scalatest._
 
 object CassandraIntegrationSpec {
   val config = ConfigFactory.parseString(
-    """
+    s"""
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.journal.max-deletion-batch-size = 3
@@ -24,8 +25,8 @@ object CassandraIntegrationSpec {
       |akka.test.single-expect-default = 10s
       |cassandra-journal.target-partition-size = 5
       |cassandra-journal.max-result-size = 3
-      |cassandra-journal.port = 9142
-      |cassandra-snapshot-store.port = 9142
+      |cassandra-journal.port = ${CassandraLauncher.randomPort}
+      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
     """.stripMargin)
 
   case class DeleteTo(snr: Long)
@@ -116,7 +117,10 @@ object CassandraIntegrationSpec {
 
 import CassandraIntegrationSpec._
 
-class CassandraIntegrationSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
+class CassandraIntegrationSpec extends TestKit(ActorSystem("CassandraIntegrationSpec", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
+
+  override def systemName: String = "CassandraIntegrationSpec"
+
   def subscribeToRangeDeletion(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessagesTo])
 

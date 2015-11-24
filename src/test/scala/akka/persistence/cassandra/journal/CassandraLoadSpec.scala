@@ -1,5 +1,6 @@
 package akka.persistence.cassandra.journal
 
+import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra.CassandraLifecycle
@@ -12,12 +13,12 @@ import scala.language.postfixOps
 
 object CassandraLoadSpec {
   val config = ConfigFactory.parseString(
-    """
+    s"""
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
       |akka.test.single-expect-default = 10s
-      |cassandra-journal.port = 9142
-      |cassandra-snapshot-store.port = 9142
+      |cassandra-journal.port = ${CassandraLauncher.randomPort}
+      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.replication-strategy = NetworkTopologyStrategy
       |cassandra-journal.data-center-replication-factors = ["dc1:1"]
     """.stripMargin)
@@ -78,7 +79,13 @@ object CassandraLoadSpec {
 
 import akka.persistence.cassandra.journal.CassandraLoadSpec._
 
-class CassandraLoadSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
+class CassandraLoadSpec extends TestKit(ActorSystem("CassandraLoadSpec", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
+
+  override def systemName: String = "CassandraLoadSpec"
+
+  // use PropertyFileSnitch with cassandra-topology.properties
+  override def cassandraConfigResource: String = "test-embedded-cassandra-net.yaml"
+
   "A Cassandra journal" should {
     "have some reasonable write throughput" in {
       val warmCycles = 100L
