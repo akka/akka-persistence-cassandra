@@ -3,11 +3,9 @@ package akka.persistence.cassandra.journal
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 
-import scala.collection.JavaConversions._
 import scala.collection.immutable.Seq
 import scala.concurrent._
 import scala.math.min
-import scala.util.{ Success, Failure, Try }
 import scala.util.{ Failure, Success, Try }
 
 import akka.persistence._
@@ -65,12 +63,16 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     })
     val result = serialized.map(a => a.map(_ => ()))
 
-    val byPersistenceId = serialized.collect({ case Success(caw) => caw }).groupBy(_.persistenceId).values
+    val byPersistenceId = serialized.collect { case Success(caw) => caw }.groupBy(_.persistenceId).values
     val boundStatements = byPersistenceId.map(statementGroup)
 
-    val batchStatements = boundStatements.map({ unit =>
-      executeBatch(batch => unit.foreach(batch.add))
-    })
+    val batchStatements = boundStatements.map { unit =>
+      unit.length match {
+        case 0 => Future.successful(())
+        case 1 => execute(unit.head)
+        case _ => executeBatch(batch => unit.foreach(batch.add))
+      }
+    }
     val promise = Promise[Seq[Try[Unit]]]()
 
     Future.sequence(batchStatements).onComplete {
@@ -143,6 +145,12 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     retries.foreach(times => batch.setRetryPolicy(new LoggingRetryPolicy(new FixedRetryPolicy(times))))
     body(batch)
     session.executeAsync(batch).map(_ => ())
+  }
+
+  private def execute(stmt: Statement, retries: Option[Int] = None): Future[Unit] = {
+    stmt.setConsistencyLevel(writeConsistency)
+    retries.foreach(times => stmt.setRetryPolicy(new LoggingRetryPolicy(new FixedRetryPolicy(times))))
+    session.executeAsync(stmt).map(_ => ())
   }
 
   def partitionNr(sequenceNr: Long): Long =
