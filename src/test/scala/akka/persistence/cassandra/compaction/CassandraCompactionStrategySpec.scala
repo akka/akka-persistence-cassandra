@@ -157,7 +157,6 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | unchecked_tombstone_compaction = false
           | bucket_high = 5.0
           | bucket_low = 2.5
-          | cold_reads_to_omit = 0.01
           | max_threshold = 20
           | min_threshold = 10
           | min_sstable_size = 100
@@ -172,7 +171,6 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
       compactionStrategy.uncheckedTombstoneCompaction mustEqual false
       compactionStrategy.bucketHigh mustEqual 5.0
       compactionStrategy.bucketLow mustEqual 2.5
-      compactionStrategy.coldReadsToOmit mustEqual 0.01
       compactionStrategy.maxThreshold mustEqual 20
       compactionStrategy.minThreshold mustEqual 10
       compactionStrategy.minSSTableSize mustEqual 100
@@ -188,7 +186,6 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | unchecked_tombstone_compaction = false
           | bucket_high = 5.0
           | bucket_low = 2.5
-          | cold_reads_to_omit = 0.01
           | max_threshold = 20
           | min_threshold = 10
           | min_sstable_size = 100
