@@ -12,7 +12,6 @@ import akka.actor.NoSerializationVerificationNeeded
 import akka.actor.OneForOneStrategy
 import akka.actor.Props
 import akka.actor.SupervisorStrategy
-import akka.persistence.cassandra.journal.CassandraJournal
 import akka.stream.actor.ActorPublisher
 import akka.stream.actor.ActorPublisherMessage.Cancel
 import akka.stream.actor.ActorPublisherMessage.Request

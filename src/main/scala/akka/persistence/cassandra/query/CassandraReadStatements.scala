@@ -4,7 +4,8 @@ private[query] trait CassandraReadStatements {
 
   def config: CassandraReadJournalConfig
 
-  def eventsByTagViewName = s"${config.keyspace}.${config.eventsByTagView}"
+  private def eventsByTagViewName = s"${config.keyspace}.${config.eventsByTagView}"
+  private def tableName = s"${config.keyspace}.${config.table}"
 
   def selectEventsByTag(tagId: Int) = s"""
       SELECT * FROM $eventsByTagViewName$tagId WHERE
@@ -15,5 +16,4 @@ private[query] trait CassandraReadStatements {
         ORDER BY timestamp ASC
         LIMIT ?
     """
-
 }

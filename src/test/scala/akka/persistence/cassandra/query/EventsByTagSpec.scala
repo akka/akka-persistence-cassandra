@@ -12,8 +12,6 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 import akka.actor.ActorSystem
-import akka.actor.Props
-import akka.persistence.PersistentActor
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.journal.CassandraJournalConfig
@@ -76,26 +74,6 @@ object EventsByTagSpec {
       delayed-event-timeout = 3s
     }
     """)
-
-  object TestActor {
-    def props(persistenceId: String): Props =
-      Props(new TestActor(persistenceId))
-  }
-
-  class TestActor(override val persistenceId: String) extends PersistentActor {
-
-    val receiveRecover: Receive = {
-      case evt: String =>
-    }
-
-    val receiveCommand: Receive = {
-      case cmd: String =>
-        persist(cmd) { evt =>
-          sender() ! evt + "-done"
-        }
-    }
-
-  }
 
   // TODO this will be supported in akka-stream 2.0
   implicit class ProbeOps(val probe: TestSubscriber.Probe[Any]) {

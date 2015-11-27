@@ -36,6 +36,8 @@ object CassandraReadJournal {
  */
 class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query.scaladsl.CassandraReadJournal)
   extends ReadJournal
+  with EventsByPersistenceIdQuery
+  with CurrentEventsByPersistenceIdQuery
   with EventsByTagQuery
   with CurrentEventsByTagQuery {
 
@@ -145,5 +147,45 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    */
   def currentEventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, Unit] =
     scaladslReadJournal.currentEventsByTag(tag, offset).asJava
+
+  /**
+    * `eventsByPersistenceId` is used to retrieve a stream of events for a particular persistenceId.
+    *
+    * In addition to the `offset` the `EventEnvelope` also provides `persistenceId` and `sequenceNr`
+    * for each event. The `sequenceNr` is the sequence number for the persistent actor with the
+    * `persistenceId` that persisted the event. The `persistenceId` + `sequenceNr` is an unique
+    * identifier for the event.
+    *
+    * `sequenceNr` and `offset` are always the same for an event and they define ordering for events
+    * emitted by this query. Causality is guaranteed (`sequenceNr`s of events for a particular
+    * `persistenceId` are always ordered in a sequence monotonically increasing by one). Multiple
+    * executions of the same bounded stream are guaranteed to emit exactly the same stream of events.
+    *
+    * `fromSequenceNr` and `toSequenceNr` can be specified to limit the set of returned events.
+    * The `fromSequenceNr` and `toSequenceNr` are inclusive.
+    *
+    * Deleted events are also deleted from the event stream.
+    *
+    * The stream is not completed when it reaches the end of the currently stored events,
+    * but it continues to push new events when new events are persisted.
+    * Corresponding query that is completed when it reaches the end of the currently
+    * stored events is provided by `currentEventsByPersistenceId`.
+    */
+  override def eventsByPersistenceId(
+      persistenceId: String,
+      fromSequenceNr: Long,
+      toSequenceNr: Long): Source[EventEnvelope, Unit] =
+    scaladslReadJournal.eventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr).asJava
+
+  /**
+    * Same type of query as `eventsByPersistenceId` but the event stream
+    * is completed immediately when it reaches the end of the "result set". Events that are
+    * stored after the query is completed are not included in the event stream.
+    */
+  override def currentEventsByPersistenceId(
+      persistenceId: String,
+      fromSequenceNr: Long,
+      toSequenceNr: Long): Source[EventEnvelope, Unit] =
+    scaladslReadJournal.currentEventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr).asJava
 }
 

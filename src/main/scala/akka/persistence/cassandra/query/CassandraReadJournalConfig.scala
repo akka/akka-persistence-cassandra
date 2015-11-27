@@ -20,5 +20,6 @@ private[query] class CassandraReadJournalConfig(config: Config, writePluginConfi
 
   val eventsByTagView: String = writePluginConfig.eventsByTagView
   val keyspace: String = writePluginConfig.keyspace
-
+  val targetPartitionSize: Int = writePluginConfig.targetPartitionSize
+  val table: String = writePluginConfig.table
 }
