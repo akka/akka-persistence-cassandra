@@ -64,7 +64,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
     // we need to preserve the order / size of this sequence even though we don't map
     // AtomicWrites 1:1 with a C* insert
-    val serialized = messages.map(aw => Try {
+    // We must NOT catch serialization exceptions here because rejections will cause
+    // holes in the sequence number series and we use the sequence numbers to detect
+    // missing (delayed) events in the eventByTag query
+    val serialized = messages.map { aw =>
       SerializedAtomicWrite(
         aw.payload.head.persistenceId,
         aw.payload.map { pr =>
@@ -75,10 +78,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
           }
           Serialized(pr.sequenceNr, persistentToByteBuffer(pr2), tags)
         })
-    })
-    val result = serialized.map(a => a.map(_ => ()))
+    }
 
-    val byPersistenceId = serialized.collect { case Success(caw) => caw }.groupBy(_.persistenceId).values
+    val byPersistenceId = serialized.groupBy(_.persistenceId).values
     val boundStatements = byPersistenceId.map(statementGroup)
 
     val batchStatements = boundStatements.map { unit =>
@@ -91,7 +93,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val promise = Promise[Seq[Try[Unit]]]()
 
     Future.sequence(batchStatements).onComplete {
-      case Success(_) => promise.complete(Success(result))
+      case Success(_) => promise.complete(Success(Nil)) // Nil == all good
       case Failure(e) => promise.failure(e)
     }
 
@@ -145,12 +147,13 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   }
 
   def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
-    val logicalDelete = session.executeAsync(preparedInsertDeletedTo.bind(persistenceId, toSequenceNr: JLong))
-
     val fromSequenceNr = readLowestSequenceNr(persistenceId, 1L)
     val lowestPartition = partitionNr(fromSequenceNr)
-    val highestPartition = partitionNr(toSequenceNr) + 1 // may have been moved to the next partition
-    val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSequenceNr))
+    val toSeqNr = math.min(toSequenceNr, readHighestSequenceNr(persistenceId, fromSequenceNr))
+    val highestPartition = partitionNr(toSeqNr) + 1 // may have been moved to the next partition
+    val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
+
+    val logicalDelete = session.executeAsync(preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong))
 
     partitionInfos.map(future => future.flatMap(pi => {
       Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>

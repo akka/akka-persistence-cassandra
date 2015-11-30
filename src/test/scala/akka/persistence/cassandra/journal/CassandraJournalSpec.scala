@@ -20,10 +20,14 @@ object CassandraJournalConfiguration {
 
 class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
   override def systemName: String = "CassandraJournalSpec"
+
+  override def supportsRejectingNonSerializableObjects = false
 }
 
 class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
   override def systemName: String = "CassandraJournalPerfSpec"
 
   override def awaitDurationMillis: Long = 20.seconds.toMillis
+
+  override def supportsRejectingNonSerializableObjects = false
 }
