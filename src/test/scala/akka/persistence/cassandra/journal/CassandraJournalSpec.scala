@@ -16,6 +16,11 @@ object CassandraJournalConfiguration {
     """.stripMargin)
 }
 
-class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle
+class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
+  override def supportsRejectingNonSerializableObjects = false
+}
 
-class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfiguration.config) with CassandraLifecycle
+class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
+  override def supportsRejectingNonSerializableObjects = false
+}
+
