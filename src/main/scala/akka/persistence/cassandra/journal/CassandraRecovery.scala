@@ -6,7 +6,7 @@ import akka.actor.ActorLogging
 
 import scala.concurrent._
 
-import com.datastax.driver.core.{ResultSet, Row}
+import com.datastax.driver.core.{ ResultSet, Row }
 
 import akka.persistence.PersistentRepr
 
@@ -33,7 +33,7 @@ trait CassandraRecovery extends ActorLogging {
   }
 
   def replayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(replayCallback: (PersistentRepr) => Unit): Unit = {
-    new MessageIterator(persistenceId, fromSequenceNr, toSequenceNr, max).foreach( msg => {
+    new MessageIterator(persistenceId, fromSequenceNr, toSequenceNr, max).foreach(msg => {
       replayCallback(msg)
     })
   }
@@ -83,7 +83,6 @@ trait CassandraRecovery extends ActorLogging {
     }
   }
 
-
   private def findHighestSequenceNr(persistenceId: String, fromSequenceNr: Long) = {
     @annotation.tailrec
     def find(currentPnr: Long, currentSnr: Long): Long = {
@@ -92,12 +91,12 @@ trait CassandraRecovery extends ActorLogging {
         .map(row => (row.getBool("used"), row.getLong("sequence_nr")))
       next match {
         // never been to this partition
-        case None => currentSnr
+        case None                   => currentSnr
         // don't currently explicitly set false
-        case Some((false, _)) => currentSnr
+        case Some((false, _))       => currentSnr
         // everything deleted in this partition, move to the next
-        case Some((true, 0)) => find(currentPnr+1, currentSnr)
-        case Some((_, nextHighest)) => find(currentPnr+1, nextHighest)
+        case Some((true, 0))        => find(currentPnr + 1, currentSnr)
+        case Some((_, nextHighest)) => find(currentPnr + 1, nextHighest)
       }
     }
     find(partitionNr(fromSequenceNr), fromSequenceNr)

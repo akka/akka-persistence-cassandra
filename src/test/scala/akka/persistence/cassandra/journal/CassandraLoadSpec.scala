@@ -23,7 +23,7 @@ object CassandraLoadSpec {
       |cassandra-journal.data-center-replication-factors = ["dc1:1"]
     """.stripMargin)
 
-  trait Measure extends { this: Actor ⇒
+  trait Measure extends { this: Actor =>
     val NanoToSecond = 1000.0 * 1000 * 1000
 
     var startTime: Long = 0L
@@ -97,7 +97,7 @@ class CassandraLoadSpec extends TestKit(ActorSystem("CassandraLoadSpec", config)
       expectMsg("started")
       1L to loadCycles foreach { i => processor1 ! "a" }
       processor1 ! "stop"
-      expectMsgPF(100 seconds) { case throughput: Double ⇒ println(f"\nthroughput = $throughput%.2f persistent commands per second") }
+      expectMsgPF(100 seconds) { case throughput: Double => println(f"\nthroughput = $throughput%.2f persistent commands per second") }
     }
     "work properly under load" in {
       val cycles = 1000L
