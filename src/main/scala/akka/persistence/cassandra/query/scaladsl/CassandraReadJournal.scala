@@ -65,7 +65,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
 
   private class CassandraSession {
 
-    val session: Session = connect()
+    val underlying: Session = connect()
 
     private def connect(): Session = {
       val cluster = writePluginConfig.clusterBuilder.build
@@ -82,18 +82,18 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     }
     if (writePluginConfig.keyspaceAutoCreate) {
       akka.persistence.cassandra.retry(writePluginConfig.keyspaceAutoCreateRetries) {
-        session.execute(writeStatements.createKeyspace)
+        underlying.execute(writeStatements.createKeyspace)
       }
     }
 
-    session.execute(writeStatements.createTable)
+    underlying.execute(writeStatements.createTable)
 
     for (tagId <- 1 to writePluginConfig.maxTagId)
-      session.execute(writeStatements.createEventsByTagMaterializedView(tagId))
+      underlying.execute(writeStatements.createEventsByTagMaterializedView(tagId))
 
     val preparedSelectEventsByTag: Vector[PreparedStatement] =
       (1 to writePluginConfig.maxTagId).map { tagId =>
-        session.prepare(queryStatements.selectEventsByTag(tagId))
+        underlying.prepare(queryStatements.selectEventsByTag(tagId))
           .setConsistencyLevel(queryPluginConfig.readConsistency)
       }.toVector
 
@@ -118,7 +118,20 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         .setConsistencyLevel(queryPluginConfig.readConsistency)
   }
 
-  private lazy val cassandraSession: CassandraSession = new CassandraSession
+  @volatile private var sessionUsed = false
+
+  private lazy val cassandraSession: CassandraSession = {
+    val s = new CassandraSession
+    sessionUsed = true
+    s
+  }
+
+  system.registerOnTermination {
+    if (sessionUsed) {
+      cassandraSession.underlying.close()
+      cassandraSession.underlying.getCluster().close()
+    }
+  }
 
   private def selectStatement(tag: String): PreparedStatement = {
     val tagId = writePluginConfig.tags.getOrElse(tag, 1)
@@ -220,7 +233,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     try {
       import queryPluginConfig._
       Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
-        None, queryPluginConfig, cassandraSession.session, selectStatement(tag)))
+        None, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
         .mapMaterializedValue(_ => ())
         .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
         .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
@@ -264,7 +277,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       import queryPluginConfig._
       val toOffset = Some(offsetUuid(System.currentTimeMillis()))
       Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
-        toOffset, queryPluginConfig, cassandraSession.session, selectStatement(tag)))
+        toOffset, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
         .mapMaterializedValue(_ => ())
         .named("currentEventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
         .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
