@@ -28,7 +28,7 @@ object EventsByPersistenceIdSpec {
 }
 
 class EventsByPersistenceIdSpec
-  extends TestKit(ActorSystem("ScalaCassandraReadJournalSpec", ConfigFactory.parseString(EventsByPersistenceIdSpec.config)))
+  extends TestKit(ActorSystem("EventsByPersistenceIdSpec", ConfigFactory.parseString(EventsByPersistenceIdSpec.config)))
   with ScalaFutures
   with ImplicitSender
   with WordSpecLike
@@ -109,7 +109,7 @@ class EventsByPersistenceIdSpec
         .expectNoMsg(100.millis)
         .request(5)
         .expectNext("e-3")
-        .expectComplete() // f-4 not seen
+        .expectComplete() // e-4 not seen
     }
 
     "only deliver what requested if there is more in the buffer" in {

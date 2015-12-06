@@ -15,11 +15,11 @@ import com.datastax.driver.core.utils.Bytes
 import com.datastax.driver.core.{Row, PreparedStatement, ResultSet}
 
 import akka.persistence.cassandra.listenableFutureToFuture
-import akka.persistence.cassandra.query.QueryActorPublisher.ReplayDone
-import akka.persistence.cassandra.query.EventsByPersistenceIdFetcherActor._
-import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByPersistenceIdSession
+import akka.persistence.cassandra.query.EventsByPersistenceIdFetcher._
+import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.{ReplayDone,
+EventsByPersistenceIdSession}
 
-private[query] object EventsByPersistenceIdFetcherActor {
+private[query] object EventsByPersistenceIdFetcher {
   private sealed trait Action
   private final case class StreamResultSet(
       partitionNr: Long, from: Long, rs: ResultSet) extends Action
@@ -29,7 +29,7 @@ private[query] object EventsByPersistenceIdFetcherActor {
       persistenceId: String, from: Long, to: Long, replyTo: ActorRef,
       session: EventsByPersistenceIdSession, settings: CassandraReadJournalConfig): Props =
     Props(
-      new EventsByPersistenceIdFetcherActor(persistenceId, from, to, replyTo, session, settings))
+      new EventsByPersistenceIdFetcher(persistenceId, from, to, replyTo, session, settings))
       .withDispatcher(settings.pluginDispatcher)
 }
 
@@ -37,7 +37,7 @@ private[query] object EventsByPersistenceIdFetcherActor {
   * Non blocking reader of events by persistence id.
   * Iterates over messages, crossing partition boundaries.
   */
-private[query] class EventsByPersistenceIdFetcherActor(
+private[query] class EventsByPersistenceIdFetcher(
     persistenceId: String, from: Long, to: Long, replyTo: ActorRef,
     session: EventsByPersistenceIdSession, settings: CassandraReadJournalConfig) extends Actor {
 
@@ -57,7 +57,7 @@ private[query] class EventsByPersistenceIdFetcherActor(
       case StreamResultSet(pnr, f, rs) =>
         continue(pnr, f, rs).pipeTo(self)
       case Finished =>
-        replyTo ! ReplayDone
+        replyTo ! ReplayDone()
         context.stop(self)
     }
 

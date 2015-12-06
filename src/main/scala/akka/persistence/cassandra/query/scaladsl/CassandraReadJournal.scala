@@ -1,26 +1,29 @@
 package akka.persistence.cassandra.query.scaladsl
 
+import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
+
 import java.net.URLEncoder
 import java.util.UUID
+
 import akka.actor.ExtendedActorSystem
-import akka.persistence.cassandra.journal.CassandraJournalConfig
-import akka.persistence.cassandra.journal.CassandraStatements
+import akka.event.Logging
+import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
 import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByPersistenceIdSession
 import akka.persistence.cassandra.query._
+import akka.persistence.cassandra.retry
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.stream.ActorAttributes
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.datastax.driver.core.PreparedStatement
+import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
-import akka.persistence.cassandra.retry
-import com.datastax.driver.core.Session
-import scala.util.control.NonFatal
-import akka.event.Logging
 
-import scala.concurrent.duration.FiniteDuration
+import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.CassandraStatements
 
 object CassandraReadJournal {
   /**
@@ -49,6 +52,8 @@ object CassandraReadJournal {
  */
 class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   extends ReadJournal
+  with AllPersistenceIdsQuery
+  with CurrentPersistenceIdsQuery
   with EventsByPersistenceIdQuery
   with CurrentEventsByPersistenceIdQuery
   with EventsByTagQuery
@@ -105,6 +110,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     val preparedSelectDeletedTo =
       session
         .prepare(writeStatements.selectDeletedTo)
+        .setConsistencyLevel(queryPluginConfig.readConsistency)
+
+    val preparedSelectDistinctPersistenceIds =
+      session
+        .prepare(queryStatements.selectDistinctPersistenceIds)
         .setConsistencyLevel(queryPluginConfig.readConsistency)
   }
 
@@ -291,14 +301,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   override def eventsByPersistenceId(
       persistenceId: String,
       fromSequenceNr: Long,
-      toSequenceNr: Long): Source[EventEnvelope, Unit] = {
-
+      toSequenceNr: Long): Source[EventEnvelope, Unit] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
       toSequenceNr,
-      Some(queryPluginConfig.refreshInterval))
-  }
+      Some(queryPluginConfig.refreshInterval),
+      s"eventsByPersistenceId-$persistenceId")
 
   /**
    * Same type of query as `eventsByPersistenceId` but the event stream
@@ -309,14 +318,19 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       persistenceId: String,
       fromSequenceNr: Long,
       toSequenceNr: Long): Source[EventEnvelope, Unit] =
-    eventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr, None)
+    eventsByPersistenceId(
+      persistenceId,
+      fromSequenceNr,
+      toSequenceNr,
+      None,
+      s"currentEventsByPersistenceId-$persistenceId")
 
   private[this] def eventsByPersistenceId(
     persistenceId: String,
     fromSequenceNr: Long,
     toSequenceNr: Long,
-    refreshInterval: Option[FiniteDuration]) = {
-    val name = s"eventsByPersistenceId-$persistenceId"
+    refreshInterval: Option[FiniteDuration],
+    name: String) = {
 
     Source.actorPublisher[EventEnvelope](
       EventsByPersistenceIdPublisher.props(
@@ -333,4 +347,48 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       .mapMaterializedValue(_ => ())
       .named(name)
   }
+
+  /**
+   * `allPersistenceIds` is used to retrieve a stream of `persistenceId`s.
+   *
+   * The stream emits `persistenceId` strings.
+   *
+   * The stream guarantees that a `persistenceId` is only emitted once and there are no duplicates.
+   * Order is not defined. Multiple executions of the same stream (even bounded) may emit different
+   * sequence of `persistenceId`s.
+   *
+   * The stream is not completed when it reaches the end of the currently known `persistenceId`s,
+   * but it continues to push new `persistenceId`s when new events are persisted.
+   * Corresponding query that is completed when it reaches the end of the currently
+   * known `persistenceId`s is provided by `currentPersistenceIds`.
+   *
+   * Note the query is inefficient, especially for large numbers of `persistenceId`s, because
+   * of limitation of current internal implementation providing no information supporting
+   * ordering/offset queries. The query uses Cassandra's `select distinct` capabilities.
+   * More importantly the live query has to repeatedly execute the query each `refresh-interval`,
+   * because order is not defined and new `persistenceId`s may appear anywhere in the query results.
+   */
+  def allPersistenceIds(): Source[String, Unit] =
+    persistenceIds(Some(queryPluginConfig.refreshInterval), "allPersistenceIds")
+
+  /**
+   * Same type of query as `allPersistenceIds` but the event stream
+   * is completed immediately when it reaches the end of the "result set". Events that are
+   * stored after the query is completed are not included in the event stream.
+   */
+  def currentPersistenceIds(): Source[String, Unit] =
+    persistenceIds(None, "currentPersistenceIds")
+
+  private[this] def persistenceIds(
+      refreshInterval: Option[FiniteDuration],
+      name: String): Source[String, Unit] =
+    Source.actorPublisher[String](
+      AllPersistenceIdsPublisher.props(
+        refreshInterval,
+        AllPersistenceIdsSession(
+          cassandraSession.preparedSelectDistinctPersistenceIds,
+          cassandraSession.session),
+        queryPluginConfig))
+      .mapMaterializedValue(_ => ())
+      .named(name)
 }

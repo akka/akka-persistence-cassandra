@@ -7,7 +7,7 @@ import akka.persistence.PersistentRepr
 import akka.persistence.query.EventEnvelope
 import com.datastax.driver.core.{PreparedStatement, Session}
 
-import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByPersistenceIdSession
+import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher._
 
 private[query] object EventsByPersistenceIdPublisher {
   private[query] final case class EventsByPersistenceIdSession(
@@ -15,6 +15,7 @@ private[query] object EventsByPersistenceIdPublisher {
     selectInUse: PreparedStatement,
     selectDeletedTo: PreparedStatement,
     session: Session)
+  private[query] final case class ReplayDone()
 
   def props(
       persistenceId: String, fromSeqNr: Long, toSeqNr: Long, refreshInterval: Option[FiniteDuration],
@@ -27,14 +28,14 @@ private[query] object EventsByPersistenceIdPublisher {
 private[query] class EventsByPersistenceIdPublisher(
     persistenceId: String, fromSeqNr: Long, toSeqNr: Long, refreshInterval: Option[FiniteDuration],
     session: EventsByPersistenceIdSession, config: CassandraReadJournalConfig)
-  extends QueryActorPublisher[EventEnvelope, Long, PersistentRepr](refreshInterval, config.maxBufferSize) {
+  extends QueryActorPublisher[EventEnvelope, Long, PersistentRepr, ReplayDone](refreshInterval, config.maxBufferSize) {
 
   private[this] val step = config.maxBufferSize
 
   override protected def query(state: Long, max: Long): Props = {
     val to = Math.min(Math.min(state + step, toSeqNr), state + max)
 
-    EventsByPersistenceIdFetcherActor.props(persistenceId, state, to, self, session, config)
+    EventsByPersistenceIdFetcher.props(persistenceId, state, to, self, session, config)
   }
 
   override protected def initialState: Long = Math.max(1, fromSeqNr)
@@ -54,4 +55,6 @@ private[query] class EventsByPersistenceIdPublisher(
 
   private[this] def toEventEnvelope(persistentRepr: PersistentRepr, offset: Long): EventEnvelope =
     EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, persistentRepr.payload)
+
+  override protected def updateState(state: Long, replayDone: ReplayDone): Long = state
 }
