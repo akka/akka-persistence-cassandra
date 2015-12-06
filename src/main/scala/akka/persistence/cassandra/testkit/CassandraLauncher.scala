@@ -22,6 +22,27 @@ object CassandraLauncher {
    */
   val DefaultTestConfigResource: String = "test-embedded-cassandra.yaml"
 
+  /**
+   * Main method to start Cassandra, see [[#start]].
+   * Note that `cassandra-all` jar must be in classpath.
+   *
+   * `port can be defined with `-DCassandraLauncher.port=4000`
+   * `clean` can be defined with `-DCassandraLauncher.clean=true`
+   * `directory` can be defined with `-DCassandraLauncher.directory=target/embedded-cassandra`
+   */
+  def main(args: Array[String]): Unit = {
+    val port: Int =
+      if (args.length > 0) args(0).toInt
+      else Integer.getInteger("CassandraLauncher.port", 0)
+    val clean =
+      if (args.length > 1) args(1).toBoolean
+      else java.lang.Boolean.getBoolean("CassandraLauncher.clean")
+    val dir =
+      if (args.length > 2) new File(args(2))
+      else new File(System.getProperty("CassandraLauncher.directory", "target/embedded-cassandra"))
+    CassandraLauncher.start(dir, CassandraLauncher.DefaultTestConfigResource, clean, port)
+  }
+
   private var cassandraDaemon: Option[CassandraDaemon] = None
 
   /**
