@@ -16,11 +16,12 @@ object CassandraLoadSpec {
     s"""
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
-      |akka.test.single-expect-default = 10s
+      |akka.test.single-expect-default = 20s
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.replication-strategy = NetworkTopologyStrategy
       |cassandra-journal.data-center-replication-factors = ["dc1:1"]
+      |cassandra-journal.circuit-breaker.call-timeout = 20s
     """.stripMargin)
 
   trait Measure extends { this: Actor =>

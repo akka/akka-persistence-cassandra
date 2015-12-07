@@ -12,9 +12,10 @@ object CassandraJournalConfiguration {
     s"""
       |akka.persistence.journal.plugin = "cassandra-journal"
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
-      |akka.test.single-expect-default = 10s
+      |akka.test.single-expect-default = 20s
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
+      |cassandra-journal.circuit-breaker.call-timeout = 20s
     """.stripMargin)
 }
 

@@ -82,6 +82,7 @@ trait CassandraRecovery extends ActorLogging {
   }
 
   private def findHighestSequenceNr(persistenceId: String, fromSequenceNr: Long) = {
+    import cassandraSession._
     @annotation.tailrec
     def find(currentPnr: Long, currentSnr: Long): Long = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
@@ -101,7 +102,7 @@ trait CassandraRecovery extends ActorLogging {
   }
 
   private def highestDeletedSequenceNumber(persistenceId: String): Long = {
-    Option(session.execute(preparedSelectDeletedTo.bind(persistenceId)).one())
+    Option(session.execute(cassandraSession.preparedSelectDeletedTo.bind(persistenceId)).one())
       .map(_.getLong("deleted_to")).getOrElse(0)
   }
 
@@ -109,6 +110,7 @@ trait CassandraRecovery extends ActorLogging {
    * Iterates over rows, crossing partition boundaries.
    */
   class RowIterator(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long) extends Iterator[Row] {
+    import cassandraSession._
     var currentPnr = partitionNr(fromSequenceNr)
     var currentSnr = fromSequenceNr
 

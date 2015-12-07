@@ -98,22 +98,22 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       }.toVector
 
     val preparedSelectEventsByPersistenceId: PreparedStatement =
-      session
+      underlying
         .prepare(writeStatements.selectMessages)
         .setConsistencyLevel(queryPluginConfig.readConsistency)
 
     val preparedSelectInUse: PreparedStatement =
-      session
+      underlying
         .prepare(writeStatements.selectInUse)
         .setConsistencyLevel(queryPluginConfig.readConsistency)
 
     val preparedSelectDeletedTo =
-      session
+      underlying
         .prepare(writeStatements.selectDeletedTo)
         .setConsistencyLevel(queryPluginConfig.readConsistency)
 
     val preparedSelectDistinctPersistenceIds =
-      session
+      underlying
         .prepare(queryStatements.selectDistinctPersistenceIds)
         .setConsistencyLevel(queryPluginConfig.readConsistency)
   }
@@ -312,9 +312,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * stored events is provided by `currentEventsByPersistenceId`.
    */
   override def eventsByPersistenceId(
-      persistenceId: String,
-      fromSequenceNr: Long,
-      toSequenceNr: Long): Source[EventEnvelope, Unit] =
+    persistenceId: String,
+    fromSequenceNr: Long,
+    toSequenceNr: Long): Source[EventEnvelope, Unit] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -328,9 +328,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * stored after the query is completed are not included in the event stream.
    */
   override def currentEventsByPersistenceId(
-      persistenceId: String,
-      fromSequenceNr: Long,
-      toSequenceNr: Long): Source[EventEnvelope, Unit] =
+    persistenceId: String,
+    fromSequenceNr: Long,
+    toSequenceNr: Long): Source[EventEnvelope, Unit] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -355,7 +355,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
           cassandraSession.preparedSelectEventsByPersistenceId,
           cassandraSession.preparedSelectInUse,
           cassandraSession.preparedSelectDeletedTo,
-          cassandraSession.session),
+          cassandraSession.underlying),
         queryPluginConfig))
       .mapMaterializedValue(_ => ())
       .named(name)
@@ -393,14 +393,14 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     persistenceIds(None, "currentPersistenceIds")
 
   private[this] def persistenceIds(
-      refreshInterval: Option[FiniteDuration],
-      name: String): Source[String, Unit] =
+    refreshInterval: Option[FiniteDuration],
+    name: String): Source[String, Unit] =
     Source.actorPublisher[String](
       AllPersistenceIdsPublisher.props(
         refreshInterval,
         AllPersistenceIdsSession(
           cassandraSession.preparedSelectDistinctPersistenceIds,
-          cassandraSession.session),
+          cassandraSession.underlying),
         queryPluginConfig))
       .mapMaterializedValue(_ => ())
       .named(name)
