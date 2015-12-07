@@ -2,13 +2,11 @@ package akka.persistence.cassandra.journal
 
 import java.lang.{ Long => JLong }
 
-import akka.actor.ActorLogging
-
 import scala.concurrent._
 
-import com.datastax.driver.core.{ ResultSet, Row }
-
+import akka.actor.ActorLogging
 import akka.persistence.PersistentRepr
+import com.datastax.driver.core.{ ResultSet, Row }
 
 trait CassandraRecovery extends ActorLogging {
   this: CassandraJournal =>
