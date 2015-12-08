@@ -11,6 +11,7 @@ class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(confi
   val gc_grace_seconds: Long = config.getLong("gc-grace-seconds")
   val maxMessageBatchSize = config.getInt("max-message-batch-size")
   val deleteRetries: Int = config.getInt("delete-retries")
+  val writeRetries: Int = config.getInt("write-retries")
 }
 
 object CassandraJournalConfig {
