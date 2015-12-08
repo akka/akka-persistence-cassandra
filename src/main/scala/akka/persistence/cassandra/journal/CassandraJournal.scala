@@ -1,28 +1,27 @@
 package akka.persistence.cassandra.journal
 
-import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
+
+import java.lang.{ Long => JLong }
 import scala.collection.immutable.Seq
 import scala.concurrent._
 import scala.math.min
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.journal.Tagged
 import akka.serialization.SerializationExtension
 import com.datastax.driver.core._
-import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
+import com.datastax.driver.core.policies.LoggingRetryPolicy
+import com.datastax.driver.core.policies.RetryPolicy
 import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
 import com.datastax.driver.core.utils.Bytes
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
 
 class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraConfigChecker with CassandraStatements {
 
@@ -57,6 +56,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   val preparedSelectDeletedTo = session.prepare(selectDeletedTo).setConsistencyLevel(readConsistency)
   val preparedInsertDeletedTo = session.prepare(insertDeletedTo).setConsistencyLevel(writeConsistency)
 
+  private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
+  private val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
+
   private def connect(): Session = {
     retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
   }
@@ -86,8 +88,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val batchStatements = boundStatements.map { unit =>
       unit.length match {
         case 0 => Future.successful(())
-        case 1 => execute(unit.head)
-        case _ => executeBatch(batch => unit.foreach(batch.add))
+        case 1 => execute(unit.head, writeRetryPolicy)
+        case _ => executeBatch(batch => unit.foreach(batch.add), writeRetryPolicy)
       }
     }
     val promise = Promise[Seq[Try[Unit]]]()
@@ -147,6 +149,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   }
 
   def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
+
     val fromSequenceNr = readLowestSequenceNr(persistenceId, 1L)
     val lowestPartition = partitionNr(fromSequenceNr)
     val toSeqNr = math.min(toSequenceNr, readHighestSequenceNr(persistenceId, fromSequenceNr))
@@ -181,18 +184,16 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     messageIds.foreach { mid =>
       batch.add(preparedDeletePermanent.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong))
     }
-  }, Some(config.deleteRetries))
+  }, deleteRetryPolicy)
 
-  private def executeBatch(body: BatchStatement => Unit, retries: Option[Int] = None): Future[Unit] = {
-    val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
-    retries.foreach(times => batch.setRetryPolicy(new LoggingRetryPolicy(new FixedRetryPolicy(times))))
+  private def executeBatch(body: BatchStatement ⇒ Unit, retryPolicy: RetryPolicy): Future[Unit] = {
+    val batch = new BatchStatement().setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy).asInstanceOf[BatchStatement]
     body(batch)
     session.executeAsync(batch).map(_ => ())
   }
 
-  private def execute(stmt: Statement, retries: Option[Int] = None): Future[Unit] = {
-    stmt.setConsistencyLevel(writeConsistency)
-    retries.foreach(times => stmt.setRetryPolicy(new LoggingRetryPolicy(new FixedRetryPolicy(times))))
+  private def execute(stmt: Statement, retryPolicy: RetryPolicy): Future[Unit] = {
+    stmt.setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy)
     session.executeAsync(stmt).map(_ => ())
   }
 
