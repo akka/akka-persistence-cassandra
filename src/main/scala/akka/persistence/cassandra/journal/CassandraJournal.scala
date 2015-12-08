@@ -49,6 +49,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   val preparedSelectDeletedTo = session.prepare(selectDeletedTo).setConsistencyLevel(readConsistency)
   val preparedInsertDeletedTo = session.prepare(insertDeletedTo).setConsistencyLevel(writeConsistency)
 
+  private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
+  private val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
+
   private def connect(): Session = {
     retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
   }
@@ -69,8 +72,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val batchStatements = boundStatements.map { unit =>
       unit.length match {
         case 0 => Future.successful(())
-        case 1 => execute(unit.head)
-        case _ => executeBatch(batch => unit.foreach(batch.add))
+        case 1 => execute(unit.head, writeRetryPolicy)
+        case _ => executeBatch(batch => unit.foreach(batch.add), writeRetryPolicy)
       }
     }
     val promise = Promise[Seq[Try[Unit]]]()
@@ -140,18 +143,16 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     messageIds.foreach { mid =>
       batch.add(preparedDeletePermanent.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong))
     }
-  }, Some(config.deleteRetries))
+  }, deleteRetryPolicy)
 
-  private def executeBatch(body: BatchStatement ⇒ Unit, retries: Option[Int] = None): Future[Unit] = {
-    val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
-    retries.foreach(times => batch.setRetryPolicy(new LoggingRetryPolicy(new FixedRetryPolicy(times))))
+  private def executeBatch(body: BatchStatement ⇒ Unit, retryPolicy: RetryPolicy): Future[Unit] = {
+    val batch = new BatchStatement().setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy).asInstanceOf[BatchStatement]
     body(batch)
     session.executeAsync(batch).map(_ => ())
   }
 
-  private def execute(stmt: Statement, retries: Option[Int] = None): Future[Unit] = {
-    stmt.setConsistencyLevel(writeConsistency)
-    retries.foreach(times => stmt.setRetryPolicy(new LoggingRetryPolicy(new FixedRetryPolicy(times))))
+  private def execute(stmt: Statement, retryPolicy: RetryPolicy): Future[Unit] = {
+    stmt.setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy)
     session.executeAsync(stmt).map(_ => ())
   }
 
