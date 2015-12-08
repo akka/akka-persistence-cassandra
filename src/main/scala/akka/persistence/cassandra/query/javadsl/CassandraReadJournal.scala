@@ -1,11 +1,12 @@
 package akka.persistence.cassandra.query.javadsl
 
-import scala.concurrent.duration._
+import java.util.UUID
+
 import akka.persistence.query.EventEnvelope
 import akka.persistence.query.javadsl._
 import akka.stream.javadsl.Source
+
 import akka.persistence.cassandra.query.UUIDEventEnvelope
-import java.util.UUID
 
 object CassandraReadJournal {
   /**
@@ -36,6 +37,8 @@ object CassandraReadJournal {
  */
 class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query.scaladsl.CassandraReadJournal)
   extends ReadJournal
+  with AllPersistenceIdsQuery
+  with CurrentPersistenceIdsQuery
   with EventsByPersistenceIdQuery
   with CurrentEventsByPersistenceIdQuery
   with EventsByTagQuery
@@ -186,6 +189,38 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
       persistenceId: String,
       fromSequenceNr: Long,
       toSequenceNr: Long): Source[EventEnvelope, Unit] =
-    scaladslReadJournal.currentEventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr).asJava
+    scaladslReadJournal
+      .currentEventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr)
+      .asJava
+
+  /**
+    * `allPersistenceIds` is used to retrieve a stream of `persistenceId`s.
+    *
+    * The stream emits `persistenceId` strings.
+    *
+    * The stream guarantees that a `persistenceId` is only emitted once and there are no duplicates.
+    * Order is not defined. Multiple executions of the same stream (even bounded) may emit different
+    * sequence of `persistenceId`s.
+    *
+    * The stream is not completed when it reaches the end of the currently known `persistenceId`s,
+    * but it continues to push new `persistenceId`s when new events are persisted.
+    * Corresponding query that is completed when it reaches the end of the currently
+    * known `persistenceId`s is provided by `currentPersistenceIds`.
+    *
+    * Note the query is inefficient, especially for large numbers of `persistenceId`s, because
+    * of limitation of current internal implementation providing no information supporting
+    * ordering/offset queries. The query uses Cassandra's `select distinct` capabilities.
+    * More importantly the live query has to repeatedly execute the query each `refresh-interval`,
+    * because order is not defined and new `persistenceId`s may appear anywhere in the query results.
+    */
+  def allPersistenceIds(): Source[String, Unit] = scaladslReadJournal.allPersistenceIds().asJava
+
+  /**
+    * Same type of query as `allPersistenceIds` but the event stream
+    * is completed immediately when it reaches the end of the "result set". Events that are
+    * stored after the query is completed are not included in the event stream.
+    */
+  def currentPersistenceIds(): Source[String, Unit] =
+    scaladslReadJournal.currentPersistenceIds().asJava
 }
 
