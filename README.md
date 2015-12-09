@@ -74,6 +74,7 @@ This will run the journal with its default settings. The default settings can be
 - `cassandra-journal.replication-factor`. Replication factor to use when a keyspace is created by the plugin. Default value is `1`.
 - `cassandra-journal.data-center-replication-factors`. Replication factor list for data centers, e.g. ["dc1:3", "dc2:2"]. Is only used when replication-strategy is NetworkTopologyStrategy.
 - `cassandra-journal.max-message-batch-size`. Maximum number of messages that will be batched when using `persistAsync`. Also used as the max batch size for deletes.
+- `cassandra-journal.write-retries`. The number of retries when a write request returns a TimeoutException or an UnavailableException. Default value is 3.
 - `cassandra-journal.delete-retries`. Deletes are achieved using a metadata entry and then the actual messages are deleted asynchronously. Number of retries before giving up. Default value is 3. 
 - `cassandra-journal.target-partition-size`. Target number of messages per cassandra partition. Default value is 500000. Will only go above the target if you use persistAll and persistAllAsync **Do not change this setting after table creation** (not checked yet).
 - `cassandra-journal.max-result-size`. Maximum number of entries returned per query. Queries are executed recursively, if needed, to achieve recovery goals. Default value is 50001.
