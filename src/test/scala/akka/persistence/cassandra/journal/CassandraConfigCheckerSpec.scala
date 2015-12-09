@@ -23,7 +23,8 @@ object CassandraConfigCheckerSpec {
       |akka.persistence.journal.max-deletion-batch-size = 3
       |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
-      |akka.test.single-expect-default = 10s
+      |akka.test.single-expect-default = 20s
+      |cassandra-journal.circuit-breaker.call-timeout = 20s
       |cassandra-journal.target-partition-size = 5
       |cassandra-journal.max-result-size = 3
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
@@ -112,10 +113,10 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigChe
       success.head._2.isSuccess must be(true)
       success.head._2.get.get(CassandraJournalConfig.TargetPartitionProperty).get must be(firstSize)
 
-      failure.foreach(_._2 match {
-        case Success(_) => fail("instance should fail due to wrong target-partition-size")
-        case Failure(e) => e.isInstanceOf[IllegalArgumentException] must be(true)
-      })
+      failure.foreach(f =>
+        intercept[IllegalArgumentException] {
+          f._2.get
+        })
     }
   }
 

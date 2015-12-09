@@ -3,11 +3,10 @@ package akka.persistence.cassandra.journal
 import scala.collection.JavaConverters._
 import com.datastax.driver.core._
 
-
 trait CassandraConfigChecker extends CassandraStatements {
   def session: Session
 
-  def initializePersistentConfig: Map[String, String] = {
+  def initializePersistentConfig(): Map[String, String] = {
     val result = session.execute(selectConfig).all().asScala
       .map(row => (row.getString("property"), row.getString("value"))).toMap
 

@@ -20,11 +20,12 @@ object CassandraSslSpec {
       |akka.persistence.journal.max-deletion-batch-size = 3
       |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
-      |akka.test.single-expect-default = 10s
+      |akka.test.single-expect-default = 20s
       |cassandra-journal.target-partition-size = 5
       |cassandra-journal.max-result-size = 3
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
+      |cassandra-journal.circuit-breaker.call-timeout = 20s
       |cassandra-journal.ssl.truststore.path="src/test/resources/security/client_truststore.jks"
       |cassandra-journal.ssl.truststore.password="hbbUtqn3Y1D4Tw"
       |cassandra-journal.ssl.keystore.path="src/test/resources/security/client_keystore.jks"
