@@ -2,7 +2,6 @@ package akka.persistence.cassandra.journal
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
-
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.journal.AsyncWriteJournal
@@ -12,48 +11,91 @@ import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
-
 import scala.collection.immutable.Seq
 import scala.concurrent._
 import scala.math.min
 import scala.util.{ Failure, Success, Try }
+import scala.util.control.NonFatal
 
-class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraConfigChecker with CassandraStatements {
+class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
 
   val config = new CassandraJournalConfig(cfg)
   val serialization = SerializationExtension(context.system)
 
   import config._
 
-  val session = connect()
+  val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
+  val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
 
   case class MessageId(persistenceId: String, sequenceNr: Long)
 
-  if (config.keyspaceAutoCreate) {
-    retry(config.keyspaceAutoCreateRetries) {
-      session.execute(createKeyspace)
+  private[journal] class CassandraSession {
+
+    val underlying: Session = connect()
+
+    if (config.keyspaceAutoCreate) {
+      retry(config.keyspaceAutoCreateRetries) {
+        underlying.execute(createKeyspace)
+      }
+    }
+    underlying.execute(createTable)
+    underlying.execute(createMetatdataTable)
+    underlying.execute(createConfigTable)
+
+    val preparedWriteMessage = underlying.prepare(writeMessage)
+    val preparedDeletePermanent = underlying.prepare(deleteMessage)
+    val preparedSelectMessages = underlying.prepare(selectMessages).setConsistencyLevel(readConsistency)
+    val preparedCheckInUse = underlying.prepare(selectInUse).setConsistencyLevel(readConsistency)
+    val preparedWriteInUse = underlying.prepare(writeInUse)
+    val preparedSelectHighestSequenceNr = underlying.prepare(selectHighestSequenceNr).setConsistencyLevel(readConsistency)
+    val preparedSelectDeletedTo = underlying.prepare(selectDeletedTo).setConsistencyLevel(readConsistency)
+    val preparedInsertDeletedTo = underlying.prepare(insertDeletedTo).setConsistencyLevel(writeConsistency)
+
+    private def connect(): Session = {
+      retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
+    }
+
+    def close(): Unit = {
+      underlying.close()
+      underlying.getCluster().close()
     }
   }
-  session.execute(createTable)
-  session.execute(createMetatdataTable)
-  session.execute(createConfigTable)
 
-  val persistentConfig: Map[String, String] = initializePersistentConfig
+  private var sessionUsed = false
 
-  val preparedWriteMessage = session.prepare(writeMessage)
-  val preparedDeletePermanent = session.prepare(deleteMessage)
-  val preparedSelectMessages = session.prepare(selectMessages).setConsistencyLevel(readConsistency)
-  val preparedCheckInUse = session.prepare(selectInUse).setConsistencyLevel(readConsistency)
-  val preparedWriteInUse = session.prepare(writeInUse)
-  val preparedSelectHighestSequenceNr = session.prepare(selectHighestSequenceNr).setConsistencyLevel(readConsistency)
-  val preparedSelectDeletedTo = session.prepare(selectDeletedTo).setConsistencyLevel(readConsistency)
-  val preparedInsertDeletedTo = session.prepare(insertDeletedTo).setConsistencyLevel(writeConsistency)
+  private[journal] lazy val cassandraSession: CassandraSession = {
+    val s = new CassandraSession
 
-  private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
-  private val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
+    new CassandraConfigChecker {
+      override def session: Session = s.underlying
+      override def config: CassandraJournalConfig = CassandraJournal.this.config
+    }.initializePersistentConfig()
 
-  private def connect(): Session = {
-    retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
+    sessionUsed = true
+    s
+  }
+
+  def session: Session = cassandraSession.underlying
+
+  override def preStart(): Unit = {
+    // eager initialization, but not from constructor
+    self ! CassandraJournal.Init
+  }
+
+  override def receivePluginInternal: Receive = {
+    case CassandraJournal.Init =>
+      try {
+        cassandraSession
+      } catch {
+        case NonFatal(e) =>
+          log.warning("Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
+            e.getMessage)
+      }
+  }
+
+  override def postStop(): Unit = {
+    if (sessionUsed)
+      cassandraSession.close()
   }
 
   def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
@@ -87,6 +129,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   }
 
   private def statementGroup(atomicWrites: Seq[SerializedAtomicWrite]): Seq[BoundStatement] = {
+    import cassandraSession._
     val maxPnr = partitionNr(atomicWrites.last.payload.last.sequenceNr)
     val firstSeq = atomicWrites.head.payload.head.sequenceNr
     val minPnr = partitionNr(firstSeq)
@@ -115,7 +158,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val highestPartition = partitionNr(toSeqNr) + 1 // may have been moved to the next partition
     val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
 
-    val logicalDelete = session.executeAsync(preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong))
+    val logicalDelete = session.executeAsync(
+      cassandraSession.preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong))
 
     partitionInfos.map(future => future.flatMap(pi => {
       Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>
@@ -133,7 +177,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   }
 
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
-    session.executeAsync(preparedSelectHighestSequenceNr.bind(persistenceId, partitionNr: JLong))
+    session.executeAsync(
+      cassandraSession.preparedSelectHighestSequenceNr.bind(persistenceId, partitionNr: JLong))
       .map(rs => Option(rs.one()))
       .map(row => row.map(s => PartitionInfo(partitionNr, minSequenceNr(partitionNr), min(s.getLong("sequence_nr"), maxSequenceNr)))
         .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
@@ -141,7 +186,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   private def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = executeBatch({ batch =>
     messageIds.foreach { mid =>
-      batch.add(preparedDeletePermanent.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong))
+      batch.add(cassandraSession.preparedDeletePermanent.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong))
     }
   }, deleteRetryPolicy)
 
@@ -172,14 +217,13 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
   }
 
-  override def postStop(): Unit = {
-    session.close()
-    session.getCluster().close()
-  }
-
   private case class SerializedAtomicWrite(persistenceId: String, payload: Seq[Serialized])
   private case class Serialized(sequenceNr: Long, serialized: ByteBuffer)
   private case class PartitionInfo(partitionNr: Long, minSequenceNr: Long, maxSequenceNr: Long)
+}
+
+private[journal] object CassandraJournal {
+  private case object Init
 }
 
 class FixedRetryPolicy(number: Int) extends RetryPolicy {

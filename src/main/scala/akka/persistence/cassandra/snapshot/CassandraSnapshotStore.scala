@@ -1,8 +1,7 @@
 package akka.persistence.cassandra.snapshot
 
-import java.lang.{Long => JLong}
+import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
@@ -13,10 +12,10 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.exceptions.NoHostAvailableException
 import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
-
 import scala.collection.immutable
 import scala.concurrent.Future
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
+import scala.util.control.NonFatal
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
   val config = new CassandraSnapshotStoreConfig(cfg)
@@ -25,27 +24,66 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   import config._
   import context.dispatcher
 
-  val session = connect()
+  private[this] class CassandraSession {
 
-  if (config.keyspaceAutoCreate) {
-    retry(config.keyspaceAutoCreateRetries) {
-      session.execute(createKeyspace)
+    val underlying: Session = connect()
+
+    if (config.keyspaceAutoCreate) {
+      retry(config.keyspaceAutoCreateRetries) {
+        underlying.execute(createKeyspace)
+      }
+    }
+    underlying.execute(createTable)
+
+    val preparedWriteSnapshot = underlying.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
+    val preparedDeleteSnapshot = underlying.prepare(deleteSnapshot).setConsistencyLevel(writeConsistency)
+    val preparedSelectSnapshot = underlying.prepare(selectSnapshot).setConsistencyLevel(readConsistency)
+
+    val preparedSelectSnapshotMetadataForLoad =
+      underlying.prepare(selectSnapshotMetadata(limit = Some(maxMetadataResultSize))).setConsistencyLevel(readConsistency)
+
+    val preparedSelectSnapshotMetadataForDelete =
+      underlying.prepare(selectSnapshotMetadata(limit = None)).setConsistencyLevel(readConsistency)
+
+    private def connect(): Session = {
+      retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
+    }
+
+    def close(): Unit = {
+      underlying.close()
+      underlying.getCluster().close()
     }
   }
-  session.execute(createTable)
 
-  val preparedWriteSnapshot = session.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
-  val preparedDeleteSnapshot = session.prepare(deleteSnapshot).setConsistencyLevel(writeConsistency)
-  val preparedSelectSnapshot = session.prepare(selectSnapshot).setConsistencyLevel(readConsistency)
+  private var sessionUsed = false
 
-  val preparedSelectSnapshotMetadataForLoad =
-    session.prepare(selectSnapshotMetadata(limit = Some(maxMetadataResultSize))).setConsistencyLevel(readConsistency)
+  private[this] lazy val cassandraSession: CassandraSession = {
+    val s = new CassandraSession
+    sessionUsed = true
+    s
+  }
 
-  val preparedSelectSnapshotMetadataForDelete =
-    session.prepare(selectSnapshotMetadata(limit = None)).setConsistencyLevel(readConsistency)
-    
-  private def connect(): Session = {
-    retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
+  def session: Session = cassandraSession.underlying
+
+  override def preStart(): Unit = {
+    // eager initialization, but not from constructor
+    self ! CassandraSnapshotStore.Init
+  }
+
+  override def receivePluginInternal: Receive = {
+    case CassandraSnapshotStore.Init =>
+      try {
+        cassandraSession
+      } catch {
+        case NonFatal(e) =>
+          log.warning("Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
+            e.getMessage)
+      }
+  }
+
+  override def postStop(): Unit = {
+    if (sessionUsed)
+      cassandraSession.close()
   }
 
   def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = for {
@@ -63,23 +101,26 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   }
 
   def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
-    val stmt = preparedSelectSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong)
+    val stmt = cassandraSession.preparedSelectSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong)
     session.executeAsync(stmt).map(rs => deserialize(rs.one().getBytes("snapshot")))
   }
 
   def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
-    val stmt = preparedWriteSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong, metadata.timestamp: JLong, serialize(Snapshot(snapshot)))
+    val stmt = cassandraSession.preparedWriteSnapshot.bind(
+      metadata.persistenceId, metadata.sequenceNr: JLong, metadata.timestamp: JLong, serialize(Snapshot(snapshot)))
     session.executeAsync(stmt).map(_ => ())
   }
 
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
-    val stmt = preparedDeleteSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong)
+    val stmt = cassandraSession.preparedDeleteSnapshot.bind(
+      metadata.persistenceId, metadata.sequenceNr: JLong)
     session.executeAsync(stmt).map(_ => ())
   }
 
   def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = for {
     mds <- Future(metadata(persistenceId, criteria).toVector)
-    res <- executeBatch(batch => mds.foreach(md => batch.add(preparedDeleteSnapshot.bind(md.persistenceId, md.sequenceNr: JLong))))
+    res <- executeBatch(batch => mds.foreach(md => batch.add(
+      cassandraSession.preparedDeleteSnapshot.bind(md.persistenceId, md.sequenceNr: JLong))))
   } yield res
 
   def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {
@@ -126,9 +167,9 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
       row
     }
   }
-
-  override def postStop(): Unit = {
-    session.close()
-    session.getCluster().close()
-  }
 }
+
+private[snapshot] object CassandraSnapshotStore {
+  private case object Init
+}
+
