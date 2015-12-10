@@ -26,9 +26,19 @@ To include the latest release of the Cassandra plugins for Cassandra 3.x into yo
 
     resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven"
 
-    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra3" % "0.5"
+    libraryDependencies += "com.github.krasserm" %% "akka-persistence-cassandra-3x" % "0.5"
 
-This version of `akka-persistence-cassandra` depends on Akka 2.4 and Scala 2.11.6. It is compatible with Cassandra 2.3.0 or higher.   
+This version of `akka-persistence-cassandra` depends on Akka 2.4 and Scala 2.11.6. It is compatible with Cassandra 3.0.0 or higher.
+
+It implements the following [Persistence Queries](http://doc.akka.io/docs/akka/2.4.1/scala/persistence-query.html):
+
+* allPersistenceIds, currentPersistenceIds
+* eventsByPersistenceId, currentEventsByPersistenceId
+* eventsByTag, currentEventsByTag
+
+Schema changes mean that you can't currently upgrade from a Cassandra 2.x version of the plugin to the Cassandra 3.x version and use existing data.
+
+You should be able to export the data and load it to the [new table definition](https://github.com/krasserm/akka-persistence-cassandra/blob/cassandra-3.x/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L16-L31).
 
 ### Development snapshot
 
