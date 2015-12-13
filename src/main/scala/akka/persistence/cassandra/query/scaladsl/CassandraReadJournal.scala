@@ -8,10 +8,7 @@ import java.util.UUID
 
 import akka.actor.ExtendedActorSystem
 import akka.event.Logging
-import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
-import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByPersistenceIdSession
-import akka.persistence.cassandra.query._
-import akka.persistence.cassandra.retry
+import akka.persistence.PersistentRepr
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.stream.ActorAttributes
@@ -24,6 +21,10 @@ import com.typesafe.config.Config
 
 import akka.persistence.cassandra.journal.CassandraJournalConfig
 import akka.persistence.cassandra.journal.CassandraStatements
+import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
+import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByPersistenceIdSession
+import akka.persistence.cassandra.query._
+import akka.persistence.cassandra.retry
 
 object CassandraReadJournal {
   /**
@@ -319,8 +320,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       persistenceId,
       fromSequenceNr,
       toSequenceNr,
+      Long.MaxValue,
+      queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId")
+      .map(r => toEventEnvelope(r, r.sequenceNr))
 
   /**
    * Same type of query as `eventsByPersistenceId` but the event stream
@@ -335,21 +339,28 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       persistenceId,
       fromSequenceNr,
       toSequenceNr,
+      Long.MaxValue,
+      queryPluginConfig.fetchSize,
       None,
       s"currentEventsByPersistenceId-$persistenceId")
+      .map(r => toEventEnvelope(r, r.sequenceNr))
 
-  private[this] def eventsByPersistenceId(
+  private[cassandra] def eventsByPersistenceId(
     persistenceId: String,
     fromSequenceNr: Long,
     toSequenceNr: Long,
+    max: Long,
+    fetchSize: Int,
     refreshInterval: Option[FiniteDuration],
     name: String) = {
 
-    Source.actorPublisher[EventEnvelope](
+    Source.actorPublisher[PersistentRepr](
       EventsByPersistenceIdPublisher.props(
         persistenceId,
         fromSequenceNr,
         toSequenceNr,
+        max,
+        fetchSize,
         refreshInterval,
         EventsByPersistenceIdSession(
           cassandraSession.preparedSelectEventsByPersistenceId,
@@ -357,9 +368,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
           cassandraSession.preparedSelectDeletedTo,
           cassandraSession.underlying),
         queryPluginConfig))
+      .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
       .mapMaterializedValue(_ => ())
       .named(name)
   }
+
+  private[this] def toEventEnvelope(persistentRepr: PersistentRepr, offset: Long): EventEnvelope =
+    EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, persistentRepr.payload)
 
   /**
    * `allPersistenceIds` is used to retrieve a stream of `persistenceId`s.
@@ -402,6 +417,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
           cassandraSession.preparedSelectDistinctPersistenceIds,
           cassandraSession.underlying),
         queryPluginConfig))
+      .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
       .mapMaterializedValue(_ => ())
       .named(name)
 }

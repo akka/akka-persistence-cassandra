@@ -27,7 +27,7 @@ object AllPersistenceIdsSpec {
     cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
-    cassandra-query-journal.fetch-size = 10
+    cassandra-query-journal.max-result-size-query = 10
     cassandra-journal.target-partition-size = 15
                """
 }
@@ -96,7 +96,7 @@ class AllPersistenceIdsSpec
         .expectComplete()
     }
 
-    "find existing persistence ids in batches if there is more of them than fetch-size" in {
+    "find existing persistence ids in batches if there is more of them than max-result-size-query" in {
       for(i <- 1 to 1000) {
         setup(UUID.randomUUID().toString, 1)
       }

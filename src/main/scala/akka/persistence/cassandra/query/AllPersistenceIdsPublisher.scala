@@ -1,21 +1,21 @@
 package akka.persistence.cassandra.query
 
+import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
 import akka.actor.Props
-import com.datastax.driver.core.{ResultSet, Session, PreparedStatement}
+import com.datastax.driver.core.{Row, ResultSet, Session, PreparedStatement}
 
+import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher._
+import akka.persistence.cassandra.query.QueryActorPublisher._
 
 private[query] object AllPersistenceIdsPublisher {
   private[query] final case class AllPersistenceIdsSession(
-    selectDistinctPersistenceIds: PreparedStatement,
-    session: Session)
+      selectDistinctPersistenceIds: PreparedStatement,
+      session: Session)
   private[query] final case class ReplayDone(resultSet: Option[ResultSet])
-  private[query] final case class State(
-    queryProgress: Option[ResultSet],
-    knownPersistenceIds: Set[String],
-    iteration: Int)
+  private[query] final case class AllPersistenceIdsState(knownPersistenceIds: Set[String])
 
   def props(
       refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
@@ -26,49 +26,44 @@ private[query] object AllPersistenceIdsPublisher {
 private[query] class AllPersistenceIdsPublisher(
     refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
     config: CassandraReadJournalConfig)
-  extends QueryActorPublisher[String, State, String, ReplayDone](refreshInterval, config.maxBufferSize) {
+  extends QueryActorPublisher[String, AllPersistenceIdsState](refreshInterval, config) {
 
-  private[this] val step = config.maxBufferSize.toLong
+  import context.dispatcher
 
-  override protected def query(state: State, max: Long): Props =
-    AllPersistenceIdsFetcher.props(self, session, Math.min(max, step), state.queryProgress, config)
+  override protected def initialState: Future[AllPersistenceIdsState] =
+    Future.successful(AllPersistenceIdsState(Set.empty))
 
-  override protected def completionCondition(state: State): Boolean = false
+  override protected def initialQuery(initialState: AllPersistenceIdsState): Future[Action] =
+    query(initialState)
 
-  override protected def initialState: State = State(None, Set.empty, 0)
+  override protected def completionCondition(state: AllPersistenceIdsState): Boolean = false
 
-  override protected def updateBuffer(
-      buf: Vector[String],
-      newBuf: String,
-      state: State): (Vector[String], State) = {
-    if(state.knownPersistenceIds.contains(newBuf)) {
-      (buf, state)
+  override protected def updateState(
+      state: AllPersistenceIdsState, row: Row): (Option[String], AllPersistenceIdsState) = {
+
+    val event = row.getString("persistence_id")
+
+    if (state.knownPersistenceIds.contains(event)) {
+      (None, state)
     } else {
-      (buf :+ newBuf, state.copy(knownPersistenceIds = state.knownPersistenceIds + newBuf))
+      (Some(event), state.copy(knownPersistenceIds = state.knownPersistenceIds + event))
     }
   }
-  
-  /**
-    * For currentPersistenceIds if dataset is exhausted we return the same state
-    * (and the query publisher notices it did not change and stops). If dataset is not exhausted
-    * we increment state. For allPersistenceIds however we need to restart state to None to start
-    * scanning from beginning again (because order is not defined and new persistence ids may
-    * appear anywhere in the result set).
-    */
-  override protected def updateState(
-      state: State,
-      replayDone: ReplayDone): State = {
 
-    def nextIteration(state: State, resultSet: ResultSet): State =
-      state.copy(queryProgress = Some(resultSet), iteration = state.iteration + 1)
+  override protected def requestNext(
+      state: AllPersistenceIdsState,
+      resultSet: ResultSet): Future[Action] =
+    query(state)
 
-    refreshInterval match {
-      case Some(_) =>
-        replayDone.resultSet
-          .fold(state.copy(queryProgress = None))(nextIteration(state, _))
-      case None =>
-        replayDone.resultSet
-          .fold(state)(nextIteration(state, _))
-    }
+  override protected def requestNextFinished(
+      state: AllPersistenceIdsState,
+      resultSet: ResultSet): Future[Action] =
+    requestNext(state, resultSet)
+
+  private[this] def query(state: AllPersistenceIdsState): Future[Action] = {
+    val boundStatement = session.selectDistinctPersistenceIds.bind()
+    boundStatement.setFetchSize(config.fetchSize)
+
+    listenableFutureToFuture(session.session.executeAsync(boundStatement)).map(Finished)
   }
 }

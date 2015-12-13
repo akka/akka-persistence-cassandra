@@ -9,6 +9,7 @@ class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(confi
   val replayDispatcherId: String = config.getString("replay-dispatcher")
   val targetPartitionSize: Int = config.getInt(CassandraJournalConfig.TargetPartitionProperty)
   val maxResultSize: Int = config.getInt("max-result-size")
+  val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
   val gc_grace_seconds: Long = config.getLong("gc-grace-seconds")
   val maxMessageBatchSize = config.getInt("max-message-batch-size")
   val deleteRetries: Int = config.getInt("delete-retries")

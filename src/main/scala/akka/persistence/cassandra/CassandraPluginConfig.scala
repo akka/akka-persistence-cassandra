@@ -4,11 +4,10 @@ import java.util.concurrent.TimeUnit
 import java.net.InetSocketAddress
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
 import com.datastax.driver.core.policies.{ TokenAwarePolicy, DCAwareRoundRobinPolicy }
-import com.datastax.driver.core.{ QueryOptions, Cluster, ConsistencyLevel, SSLOptions }
+import com.datastax.driver.core._
 import com.typesafe.config.Config
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-import com.datastax.driver.core.JdkSSLOptions
 
 
 class CassandraPluginConfig(config: Config) {
@@ -39,8 +38,35 @@ class CassandraPluginConfig(config: Config) {
   val contactPoints = getContactPoints(config.getStringList("contact-points").asScala, port)
   val fetchSize = config.getInt("max-result-size")
 
+  private[this] val connectionPoolConfig = config.getConfig("connection-pool")
+
+  val poolingOptions = new PoolingOptions()
+    .setNewConnectionThreshold(
+      HostDistance.LOCAL,
+      connectionPoolConfig.getInt("new-connection-threshold-local"))
+    .setNewConnectionThreshold(
+      HostDistance.REMOTE,
+      connectionPoolConfig.getInt("new-connection-threshold-remote"))
+    .setMaxRequestsPerConnection(
+      HostDistance.LOCAL,
+      connectionPoolConfig.getInt("max-requests-per-connection-local"))
+    .setMaxRequestsPerConnection(
+      HostDistance.REMOTE,
+      connectionPoolConfig.getInt("max-requests-per-connection-remote"))
+    .setConnectionsPerHost(
+      HostDistance.LOCAL,
+      connectionPoolConfig.getInt("connections-per-host-core-local"),
+      connectionPoolConfig.getInt("connections-per-host-max-local"))
+    .setConnectionsPerHost(
+      HostDistance.REMOTE,
+      connectionPoolConfig.getInt("connections-per-host-core-remote"),
+      connectionPoolConfig.getInt("connections-per-host-max-remote"))
+    .setPoolTimeoutMillis(
+      connectionPoolConfig.getInt("pool-timeout-millis"))
+
   val clusterBuilder: Cluster.Builder = Cluster.builder
     .addContactPointsWithPorts(contactPoints.asJava)
+    .withPoolingOptions(poolingOptions)
     .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
 
   if (config.hasPath("authentication")) {

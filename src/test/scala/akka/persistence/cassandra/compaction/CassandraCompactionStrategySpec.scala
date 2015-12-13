@@ -15,6 +15,17 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
       |keyspace = test-keyspace
       |connect-retries = 3
       |connect-retry-delay = 5s
+      |connection-pool {
+      |  new-connection-threshold-local = 100
+      |  new-connection-threshold-remote = 100
+      |  connections-per-host-core-local = 1
+      |  connections-per-host-max-local = 1
+      |  connections-per-host-core-remote = 1
+      |  connections-per-host-max-remote = 1
+      |  max-requests-per-connection-local = 32768
+      |  max-requests-per-connection-remote = 2000
+      |  pool-timeout-millis = 0
+      |}
       |table = test-table
       |table-compaction-strategy { class = "SizeTieredCompactionStrategy" }
       |metadata-table = test-metadata-table
