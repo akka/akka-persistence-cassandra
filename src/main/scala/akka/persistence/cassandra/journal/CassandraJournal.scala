@@ -1,7 +1,6 @@
 package akka.persistence.cassandra.journal
 
 import java.nio.ByteBuffer
-
 import java.lang.{ Long => JLong }
 import scala.collection.immutable.Seq
 import scala.concurrent._
@@ -9,7 +8,6 @@ import scala.math.min
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.journal.AsyncWriteJournal
@@ -23,6 +21,7 @@ import com.datastax.driver.core.utils.Bytes
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
 import scala.util.control.NonFatal
+import com.datastax.driver.core.exceptions.DriverException
 
 class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
 
@@ -275,6 +274,7 @@ class FixedRetryPolicy(number: Int) extends RetryPolicy {
   override def onUnavailable(statement: Statement, cl: ConsistencyLevel, requiredReplica: Int, aliveReplica: Int, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
   override def onWriteTimeout(statement: Statement, cl: ConsistencyLevel, writeType: WriteType, requiredAcks: Int, receivedAcks: Int, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
   override def onReadTimeout(statement: Statement, cl: ConsistencyLevel, requiredResponses: Int, receivedResponses: Int, dataRetrieved: Boolean, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
+  override def onRequestError(statement: Statement, cl: ConsistencyLevel, cause: DriverException, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
 
   private def retry(cl: ConsistencyLevel, nbRetry: Int): RetryDecision = {
     if (nbRetry < number) RetryDecision.retry(cl) else RetryDecision.rethrow()
