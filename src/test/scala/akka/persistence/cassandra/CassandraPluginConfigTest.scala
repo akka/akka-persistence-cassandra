@@ -37,7 +37,7 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
 
   lazy val keyspaceNames = {
     // Generate a key that is the max acceptable length ensuring the first char is alpha
-    def maxKey = Random.alphanumeric.dropWhile(_.toString.matches("[^a-zA-Z]")).take(32).mkString
+    def maxKey = Random.alphanumeric.dropWhile(_.toString.matches("[^a-zA-Z]")).take(48).mkString
 
     Table (
       ("Keyspace", "isValid"),
