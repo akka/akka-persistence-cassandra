@@ -10,11 +10,13 @@ import org.scalatest.WordSpecLike
 import scala.collection.JavaConverters._
 
 object MultiPluginSpec {
-  val journalKeyspace= "multiplugin_spec_journal"
-  val snapshotKeyspace= "multiplugin_spec_snapshot"
+  val journalKeyspace = "multiplugin_spec_journal"
+  val snapshotKeyspace = "multiplugin_spec_snapshot"
   val cassandraPort = 9142
   val config = ConfigFactory.parseString(
     s"""
+        |akka.test.single-expect-default = 10s
+        |
         |cassandra-journal.keyspace = $journalKeyspace
         |cassandra-journal.port=$cassandraPort
         |cassandra-journal.keyspace-autocreate=false
