@@ -11,7 +11,6 @@ import org.scalatest.{ MustMatchers, WordSpec }
 class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with CassandraLifecycle {
   val defaultConfigs = ConfigFactory.parseString(
     s"""keyspace-autocreate = true
-      |keyspace-autocreate-retries = 1
       |keyspace = test-keyspace
       |connect-retries = 3
       |connect-retry-delay = 5s

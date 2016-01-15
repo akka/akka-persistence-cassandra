@@ -34,20 +34,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   case class MessageId(persistenceId: String, sequenceNr: Long)
 
-  private[journal] class CassandraSession {
+  private[journal] class CassandraSession(val underlying: Session) {
 
-    val underlying: Session = connect()
-
-    if (config.keyspaceAutoCreate) {
-      retry(config.keyspaceAutoCreateRetries) {
-        underlying.execute(createKeyspace)
-      }
-    }
-    underlying.execute(createTable)
-    underlying.execute(createMetatdataTable)
-    underlying.execute(createConfigTable)
-    for (tagId <- 1 to maxTagId)
-      underlying.execute(createEventsByTagMaterializedView(tagId))
+    executeCreateKeyspaceAndTables(underlying, config.keyspaceAutoCreate, maxTagId)
 
     val preparedWriteMessage = underlying.prepare(writeMessage)
     val preparedDeletePermanent = underlying.prepare(deleteMessage)
@@ -57,33 +46,41 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val preparedSelectHighestSequenceNr = underlying.prepare(selectHighestSequenceNr).setConsistencyLevel(readConsistency)
     val preparedSelectDeletedTo = underlying.prepare(selectDeletedTo).setConsistencyLevel(readConsistency)
     val preparedInsertDeletedTo = underlying.prepare(insertDeletedTo).setConsistencyLevel(writeConsistency)
-
-    private def connect(): Session = {
-      retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
-    }
-
-    def close(): Unit = {
-      underlying.close()
-      underlying.getCluster().close()
-    }
-
   }
 
   private var sessionUsed = false
 
   private[journal] lazy val cassandraSession: CassandraSession = {
-    val s = new CassandraSession
-
-    new CassandraConfigChecker {
-      override def session: Session = s.underlying
-      override def config: CassandraJournalConfig = CassandraJournal.this.config
-    }.initializePersistentConfig()
-
-    sessionUsed = true
-    s
+    retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis) {
+      val underlying: Session = clusterBuilder.build().connect()
+      try {
+        val s = new CassandraSession(underlying)
+        new CassandraConfigChecker {
+          override def session: Session = s.underlying
+          override def config: CassandraJournalConfig = CassandraJournal.this.config
+        }.initializePersistentConfig()
+        log.debug("initialized CassandraSession successfully")
+        sessionUsed = true
+        s
+      } catch {
+        case NonFatal(e) =>
+          // will be retried
+          if (log.isDebugEnabled)
+            log.debug("issue with initialization of CassandraSession, will be retried: {}", e.getMessage)
+          closeSession(underlying)
+          throw e
+      }
+    }
   }
 
   def session: Session = cassandraSession.underlying
+
+  private def closeSession(session: Session): Unit = try {
+    session.close()
+    session.getCluster().close()
+  } catch {
+    case NonFatal(_) => // nothing we can do
+  }
 
   override def preStart(): Unit = {
     // eager initialization, but not from constructor
@@ -106,7 +103,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   override def postStop(): Unit = {
     if (sessionUsed)
-      cassandraSession.close()
+      closeSession(cassandraSession.underlying)
   }
 
   def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {

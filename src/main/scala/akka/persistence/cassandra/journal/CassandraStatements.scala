@@ -1,5 +1,11 @@
 package akka.persistence.cassandra.journal
 
+import com.datastax.driver.core.Session
+
+private object CassandraStatements {
+  val createKeyspaceAndTablesLock = new Object
+}
+
 trait CassandraStatements {
   def config: CassandraJournalConfig
 
@@ -108,4 +114,22 @@ trait CassandraStatements {
   private def configTableName = s"${config.keyspace}.${config.configTable}"
   private def metadataTableName = s"${config.keyspace}.${config.metadataTable}"
   private def eventsByTagViewName = s"${config.keyspace}.${config.eventsByTagView}"
+
+  /**
+   * Execute creation of keyspace and tables in synchronized block to
+   * reduce the risk of (annoying) "Column family ID mismatch" exception
+   * when write and read-side plugins are started at the same time.
+   * Those statements are retried, because that could happen across different
+   * nodes also but synchronizing those statements gives a better "experience".
+   */
+  def executeCreateKeyspaceAndTables(session: Session, keyspaceAutoCreate: Boolean, maxTagId: Int): Unit =
+    CassandraStatements.createKeyspaceAndTablesLock.synchronized {
+      if (keyspaceAutoCreate)
+        session.execute(createKeyspace)
+      session.execute(createTable)
+      session.execute(createMetatdataTable)
+      session.execute(createConfigTable)
+      for (tagId <- 1 to maxTagId)
+        session.execute(createEventsByTagMaterializedView(tagId))
+    }
 }

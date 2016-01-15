@@ -64,16 +64,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   private val writePluginConfig = new CassandraJournalConfig(system.settings.config.getConfig(config.getString("write-plugin")))
   private val queryPluginConfig = new CassandraReadJournalConfig(config, writePluginConfig)
 
-  private class CassandraSession {
-
-    val underlying: Session = connect()
-
-    private def connect(): Session = {
-      val cluster = writePluginConfig.clusterBuilder.build
-      retry(writePluginConfig.connectionRetries + 1, writePluginConfig.connectionRetryDelay.toMillis) {
-        cluster.connect()
-      }
-    }
+  private class CassandraSession(val underlying: Session) {
 
     private val writeStatements: CassandraStatements = new CassandraStatements {
       def config: CassandraJournalConfig = writePluginConfig
@@ -81,16 +72,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     private val queryStatements: CassandraReadStatements = new CassandraReadStatements {
       override def config = queryPluginConfig
     }
-    if (writePluginConfig.keyspaceAutoCreate) {
-      akka.persistence.cassandra.retry(writePluginConfig.keyspaceAutoCreateRetries) {
-        underlying.execute(writeStatements.createKeyspace)
-      }
-    }
 
-    underlying.execute(writeStatements.createTable)
-
-    for (tagId <- 1 to writePluginConfig.maxTagId)
-      underlying.execute(writeStatements.createEventsByTagMaterializedView(tagId))
+    writeStatements.executeCreateKeyspaceAndTables(underlying, writePluginConfig.keyspaceAutoCreate,
+      writePluginConfig.maxTagId)
 
     val preparedSelectEventsByTag: Vector[PreparedStatement] =
       (1 to writePluginConfig.maxTagId).map { tagId =>
@@ -122,16 +106,34 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   @volatile private var sessionUsed = false
 
   private lazy val cassandraSession: CassandraSession = {
-    val s = new CassandraSession
-    sessionUsed = true
-    s
+    retry(writePluginConfig.connectionRetries + 1, writePluginConfig.connectionRetryDelay.toMillis) {
+      val underlying: Session = writePluginConfig.clusterBuilder.build.connect()
+      try {
+        val s = new CassandraSession(underlying)
+        log.debug("initialized CassandraSession successfully")
+        sessionUsed = true
+        s
+      } catch {
+        case NonFatal(e) =>
+          // will be retried
+          if (log.isDebugEnabled)
+            log.debug("issue with initialization of CassandraSession, will be retried: {}", e.getMessage)
+          closeSession(underlying)
+          throw e
+      }
+    }
   }
 
   system.registerOnTermination {
-    if (sessionUsed) {
-      cassandraSession.underlying.close()
-      cassandraSession.underlying.getCluster().close()
-    }
+    if (sessionUsed)
+      closeSession(cassandraSession.underlying)
+  }
+
+  private def closeSession(session: Session): Unit = try {
+    session.close()
+    session.getCluster().close()
+  } catch {
+    case NonFatal(_) => // nothing we can do
   }
 
   private def selectStatement(tag: String): PreparedStatement = {
