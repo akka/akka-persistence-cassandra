@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.query.javadsl
 
 import java.util.UUID
@@ -223,4 +226,3 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
   def currentPersistenceIds(): Source[String, Unit] =
     scaladslReadJournal.currentPersistenceIds().asJava
 }
-

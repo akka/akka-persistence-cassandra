@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.query
 
 import akka.stream.actor.ActorPublisher

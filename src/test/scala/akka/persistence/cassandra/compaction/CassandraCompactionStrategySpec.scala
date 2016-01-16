@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.compaction
 
 import akka.persistence.cassandra.testkit.CassandraLauncher
