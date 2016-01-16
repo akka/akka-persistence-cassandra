@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.snapshot
 
 import java.lang.{ Long => JLong }
@@ -172,4 +175,3 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 private[snapshot] object CassandraSnapshotStore {
   private case object Init
 }
-

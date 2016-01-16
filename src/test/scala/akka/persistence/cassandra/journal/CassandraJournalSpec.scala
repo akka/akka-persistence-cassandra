@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.journal
 
 import scala.concurrent.duration._
@@ -28,4 +31,3 @@ class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfigura
   
   override def supportsRejectingNonSerializableObjects = false
 }
-

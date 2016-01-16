@@ -1,3 +1,8 @@
+import Tests._
+import de.heikoseeberger.sbtheader.HeaderPattern
+
+enablePlugins(AutomateHeaderPlugin)
+
 organization := "com.github.krasserm"
 
 name := "akka-persistence-cassandra"
@@ -51,3 +56,13 @@ publishTo := {
 }
 
 publishMavenStyle := true
+
+headers := headers.value ++ Map(
+  "scala" -> (
+    HeaderPattern.cStyleBlockComment,
+    """|/*
+       | * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+       | */
+       |""".stripMargin
+  )
+)
