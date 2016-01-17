@@ -18,8 +18,8 @@ These guidelines mainly apply to Typesafe’s “mature” projects - not necess
 
 Depending on which version (or sometimes module) you want to work on, you should target a specific branch as explained below:
 
-* `master` – development branch for Cassandra 2.2.x
-* `cassandra-3.x` – development branch for Cassandra 3.x
+* `master` – development branch for Cassandra 3.x
+* `cassandra-2.x` – development branch for Cassandra 2.x
 
 ## General Workflow
 
