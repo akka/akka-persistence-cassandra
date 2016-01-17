@@ -26,15 +26,10 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   import config._
   import context.dispatcher
 
-  private[snapshot] class CassandraSession {
+  private[snapshot] class CassandraSession(val underlying: Session) {
 
-    val underlying: Session = connect()
-
-    if (config.keyspaceAutoCreate) {
-      retry(config.keyspaceAutoCreateRetries) {
-        underlying.execute(createKeyspace)
-      }
-    }
+    if (config.keyspaceAutoCreate)
+      underlying.execute(createKeyspace)
     underlying.execute(createTable)
 
     val preparedWriteSnapshot = underlying.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
@@ -47,26 +42,37 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     val preparedSelectSnapshotMetadataForDelete =
       underlying.prepare(selectSnapshotMetadata(limit = None)).setConsistencyLevel(readConsistency)
 
-    private def connect(): Session = {
-      retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis)(clusterBuilder.build().connect())
-    }
-
-    def close(): Unit = {
-      underlying.close()
-      underlying.getCluster().close()
-    }
   }
 
   private var sessionUsed = false
 
   private[this] lazy val cassandraSession: CassandraSession = {
-    val s = new CassandraSession
-
-    sessionUsed = true
-    s
+    retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis) {
+      val underlying: Session = clusterBuilder.build.connect()
+      try {
+        val s = new CassandraSession(underlying)
+        log.debug("initialized CassandraSession successfully")
+        sessionUsed = true
+        s
+      } catch {
+        case NonFatal(e) =>
+          // will be retried
+          if (log.isDebugEnabled)
+            log.debug("issue with initialization of CassandraSession, will be retried: {}", e.getMessage)
+          closeSession(underlying)
+          throw e
+      }
+    }
   }
 
   def session: Session = cassandraSession.underlying
+
+  private def closeSession(session: Session): Unit = try {
+    session.close()
+    session.getCluster().close()
+  } catch {
+    case NonFatal(_) => // nothing we can do
+  }
 
   override def preStart(): Unit = {
     // eager initialization, but not from constructor
@@ -85,7 +91,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
   override def postStop(): Unit = {
     if (sessionUsed)
-      cassandraSession.close()
+      closeSession(cassandraSession.underlying)
   }
 
   def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = for {

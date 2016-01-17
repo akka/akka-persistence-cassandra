@@ -9,7 +9,6 @@ import com.typesafe.config.Config
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 
-
 class CassandraPluginConfig(config: Config) {
 
   import akka.persistence.cassandra.CassandraPluginConfig._
@@ -22,7 +21,6 @@ class CassandraPluginConfig(config: Config) {
   val tableCompactionStrategy: CassandraCompactionStrategy = CassandraCompactionStrategy(config.getConfig("table-compaction-strategy"))
 
   val keyspaceAutoCreate: Boolean = config.getBoolean("keyspace-autocreate")
-  val keyspaceAutoCreateRetries: Int = config.getInt("keyspace-autocreate-retries")
 
   val connectionRetries: Int = config.getInt("connect-retries")
   val connectionRetryDelay: FiniteDuration = config.getDuration("connect-retry-delay", TimeUnit.MILLISECONDS).millis
