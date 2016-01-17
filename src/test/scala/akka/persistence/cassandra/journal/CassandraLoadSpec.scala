@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.journal
 
 import akka.persistence.cassandra.testkit.CassandraLauncher
@@ -22,7 +25,8 @@ object CassandraLoadSpec {
       |cassandra-journal.replication-strategy = NetworkTopologyStrategy
       |cassandra-journal.data-center-replication-factors = ["dc1:1"]
       |cassandra-journal.circuit-breaker.call-timeout = 20s
-    """.stripMargin)
+    """.stripMargin
+  )
 
   trait Measure extends { this: Actor =>
     val NanoToSecond = 1000.0 * 1000 * 1000

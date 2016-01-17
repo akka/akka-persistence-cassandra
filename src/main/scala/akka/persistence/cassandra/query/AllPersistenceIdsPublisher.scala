@@ -1,10 +1,13 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.query
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
 import akka.actor.Props
-import com.datastax.driver.core.{Row, ResultSet, Session, PreparedStatement}
+import com.datastax.driver.core.{ Row, ResultSet, Session, PreparedStatement }
 
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher._
@@ -12,20 +15,23 @@ import akka.persistence.cassandra.query.QueryActorPublisher._
 
 private[query] object AllPersistenceIdsPublisher {
   private[query] final case class AllPersistenceIdsSession(
-      selectDistinctPersistenceIds: PreparedStatement,
-      session: Session)
+    selectDistinctPersistenceIds: PreparedStatement,
+    session:                      Session
+  )
   private[query] final case class ReplayDone(resultSet: Option[ResultSet])
   private[query] final case class AllPersistenceIdsState(knownPersistenceIds: Set[String])
 
   def props(
-      refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
-      config: CassandraReadJournalConfig): Props =
+    refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
+    config: CassandraReadJournalConfig
+  ): Props =
     Props(new AllPersistenceIdsPublisher(refreshInterval, session, config))
 }
 
 private[query] class AllPersistenceIdsPublisher(
-    refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
-    config: CassandraReadJournalConfig)
+  refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
+  config: CassandraReadJournalConfig
+)
   extends QueryActorPublisher[String, AllPersistenceIdsState](refreshInterval, config) {
 
   import context.dispatcher
@@ -39,7 +45,8 @@ private[query] class AllPersistenceIdsPublisher(
   override protected def completionCondition(state: AllPersistenceIdsState): Boolean = false
 
   override protected def updateState(
-      state: AllPersistenceIdsState, row: Row): (Option[String], AllPersistenceIdsState) = {
+    state: AllPersistenceIdsState, row: Row
+  ): (Option[String], AllPersistenceIdsState) = {
 
     val event = row.getString("persistence_id")
 
@@ -51,13 +58,15 @@ private[query] class AllPersistenceIdsPublisher(
   }
 
   override protected def requestNext(
-      state: AllPersistenceIdsState,
-      resultSet: ResultSet): Future[Action] =
+    state:     AllPersistenceIdsState,
+    resultSet: ResultSet
+  ): Future[Action] =
     query(state)
 
   override protected def requestNextFinished(
-      state: AllPersistenceIdsState,
-      resultSet: ResultSet): Future[Action] =
+    state:     AllPersistenceIdsState,
+    resultSet: ResultSet
+  ): Future[Action] =
     requestNext(state, resultSet)
 
   private[this] def query(state: AllPersistenceIdsState): Future[Action] = {

@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra
 
 import java.util.concurrent.TimeUnit
@@ -28,7 +31,8 @@ class CassandraPluginConfig(config: Config) {
   val replicationStrategy: String = getReplicationStrategy(
     config.getString("replication-strategy"),
     config.getInt("replication-factor"),
-    config.getStringList("data-center-replication-factors").asScala)
+    config.getStringList("data-center-replication-factors").asScala
+  )
 
   val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))
   val writeConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("write-consistency"))
@@ -41,26 +45,33 @@ class CassandraPluginConfig(config: Config) {
   val poolingOptions = new PoolingOptions()
     .setNewConnectionThreshold(
       HostDistance.LOCAL,
-      connectionPoolConfig.getInt("new-connection-threshold-local"))
+      connectionPoolConfig.getInt("new-connection-threshold-local")
+    )
     .setNewConnectionThreshold(
       HostDistance.REMOTE,
-      connectionPoolConfig.getInt("new-connection-threshold-remote"))
+      connectionPoolConfig.getInt("new-connection-threshold-remote")
+    )
     .setMaxRequestsPerConnection(
       HostDistance.LOCAL,
-      connectionPoolConfig.getInt("max-requests-per-connection-local"))
+      connectionPoolConfig.getInt("max-requests-per-connection-local")
+    )
     .setMaxRequestsPerConnection(
       HostDistance.REMOTE,
-      connectionPoolConfig.getInt("max-requests-per-connection-remote"))
+      connectionPoolConfig.getInt("max-requests-per-connection-remote")
+    )
     .setConnectionsPerHost(
       HostDistance.LOCAL,
       connectionPoolConfig.getInt("connections-per-host-core-local"),
-      connectionPoolConfig.getInt("connections-per-host-max-local"))
+      connectionPoolConfig.getInt("connections-per-host-max-local")
+    )
     .setConnectionsPerHost(
       HostDistance.REMOTE,
       connectionPoolConfig.getInt("connections-per-host-core-remote"),
-      connectionPoolConfig.getInt("connections-per-host-max-remote"))
+      connectionPoolConfig.getInt("connections-per-host-max-remote")
+    )
     .setPoolTimeoutMillis(
-      connectionPoolConfig.getInt("pool-timeout-millis"))
+      connectionPoolConfig.getInt("pool-timeout-millis")
+    )
 
   val clusterBuilder: Cluster.Builder = Cluster.builder
     .addContactPointsWithPorts(contactPoints.asJava)
@@ -70,13 +81,16 @@ class CassandraPluginConfig(config: Config) {
   if (config.hasPath("authentication")) {
     clusterBuilder.withCredentials(
       config.getString("authentication.username"),
-      config.getString("authentication.password"))
+      config.getString("authentication.password")
+    )
   }
 
   if (config.hasPath("local-datacenter")) {
     clusterBuilder.withLoadBalancingPolicy(
       new TokenAwarePolicy(
-        DCAwareRoundRobinPolicy.builder.withLocalDc(config.getString("local-datacenter")).build()))
+        DCAwareRoundRobinPolicy.builder.withLocalDc(config.getString("local-datacenter")).build()
+      )
+    )
   }
 
   if (config.hasPath("ssl")) {
@@ -89,7 +103,8 @@ class CassandraPluginConfig(config: Config) {
       trustStorePath,
       trustStorePW,
       keyStorePath,
-      keyStorePW)
+      keyStorePW
+    )
 
     // FIXME there is also a NettySSLOptions? what about SSLOptions?
     clusterBuilder.withSSL(JdkSSLOptions.builder.withSSLContext(context).build())

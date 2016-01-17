@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
@@ -42,7 +45,8 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       |port = 9142
       |max-result-size = 50
       |delete-retries = 4
-    """.stripMargin)
+    """.stripMargin
+  )
 
   lazy val keyspaceNames = {
     // Generate a key that is the max acceptable length ensuring the first char is alpha
@@ -71,7 +75,8 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       ("\"missing_trailing_quote", false),
       ("missing_leading_quote\"", false),
       ('"' + maxKey + '"', true),
-      (maxKey + "_", false))
+      (maxKey + "_", false)
+    )
   }
 
   "A CassandraPluginConfig" should {
@@ -91,7 +96,9 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       config.contactPoints must be(
         List(
           new InetSocketAddress("127.0.0.1", 19142),
-          new InetSocketAddress("127.0.0.1", 29142)))
+          new InetSocketAddress("127.0.0.1", 29142)
+        )
+      )
 
     }
 
@@ -101,7 +108,9 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       config.contactPoints must be(
         List(
           new InetSocketAddress("127.0.0.1", 9142),
-          new InetSocketAddress("127.0.0.2", 9142)))
+          new InetSocketAddress("127.0.0.2", 9142)
+        )
+      )
     }
 
     "throw an exception when contact point list is empty" in {
@@ -123,7 +132,8 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
         """
           |replication-strategy = "NetworkTopologyStrategy"
           |data-center-replication-factors = ["dc1:3", "dc2:2"]
-        """.stripMargin).withFallback(defaultConfig)
+        """.stripMargin
+      ).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }

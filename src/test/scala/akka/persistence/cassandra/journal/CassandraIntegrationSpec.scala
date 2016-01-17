@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.journal
 
 import akka.persistence.cassandra.testkit.CassandraLauncher
@@ -28,7 +31,8 @@ object CassandraIntegrationSpec {
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.circuit-breaker.call-timeout = 20s
-    """.stripMargin)
+    """.stripMargin
+  )
 
   case class DeleteTo(snr: Long)
 

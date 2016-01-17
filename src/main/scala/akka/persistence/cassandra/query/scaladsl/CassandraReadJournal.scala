@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.query.scaladsl
 
 import scala.concurrent.duration.FiniteDuration
@@ -218,7 +221,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         offset = UUIDs.unixTimestamp(env.offset),
         persistenceId = env.persistenceId,
         sequenceNr = env.sequenceNr,
-        event = env.event))
+        event = env.event
+      ))
   }
 
   /**
@@ -261,7 +265,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         offset = UUIDs.unixTimestamp(env.offset),
         persistenceId = env.persistenceId,
         sequenceNr = env.sequenceNr,
-        event = env.event))
+        event = env.event
+      ))
   }
 
   /**
@@ -315,9 +320,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * stored events is provided by `currentEventsByPersistenceId`.
    */
   override def eventsByPersistenceId(
-    persistenceId: String,
+    persistenceId:  String,
     fromSequenceNr: Long,
-    toSequenceNr: Long): Source[EventEnvelope, Unit] =
+    toSequenceNr:   Long
+  ): Source[EventEnvelope, Unit] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -325,7 +331,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       Long.MaxValue,
       queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
-      s"eventsByPersistenceId-$persistenceId")
+      s"eventsByPersistenceId-$persistenceId"
+    )
       .map(r => toEventEnvelope(r, r.sequenceNr))
 
   /**
@@ -334,9 +341,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * stored after the query is completed are not included in the event stream.
    */
   override def currentEventsByPersistenceId(
-    persistenceId: String,
+    persistenceId:  String,
     fromSequenceNr: Long,
-    toSequenceNr: Long): Source[EventEnvelope, Unit] =
+    toSequenceNr:   Long
+  ): Source[EventEnvelope, Unit] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -344,17 +352,19 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       Long.MaxValue,
       queryPluginConfig.fetchSize,
       None,
-      s"currentEventsByPersistenceId-$persistenceId")
+      s"currentEventsByPersistenceId-$persistenceId"
+    )
       .map(r => toEventEnvelope(r, r.sequenceNr))
 
   private[cassandra] def eventsByPersistenceId(
-    persistenceId: String,
-    fromSequenceNr: Long,
-    toSequenceNr: Long,
-    max: Long,
-    fetchSize: Int,
+    persistenceId:   String,
+    fromSequenceNr:  Long,
+    toSequenceNr:    Long,
+    max:             Long,
+    fetchSize:       Int,
     refreshInterval: Option[FiniteDuration],
-    name: String) = {
+    name:            String
+  ) = {
 
     Source.actorPublisher[PersistentRepr](
       EventsByPersistenceIdPublisher.props(
@@ -368,8 +378,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
           cassandraSession.preparedSelectEventsByPersistenceId,
           cassandraSession.preparedSelectInUse,
           cassandraSession.preparedSelectDeletedTo,
-          cassandraSession.underlying),
-        queryPluginConfig))
+          cassandraSession.underlying
+        ),
+        queryPluginConfig
+      )
+    )
       .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
       .mapMaterializedValue(_ => ())
       .named(name)
@@ -411,14 +424,18 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
 
   private[this] def persistenceIds(
     refreshInterval: Option[FiniteDuration],
-    name: String): Source[String, Unit] =
+    name:            String
+  ): Source[String, Unit] =
     Source.actorPublisher[String](
       AllPersistenceIdsPublisher.props(
         refreshInterval,
         AllPersistenceIdsSession(
           cassandraSession.preparedSelectDistinctPersistenceIds,
-          cassandraSession.underlying),
-        queryPluginConfig))
+          cassandraSession.underlying
+        ),
+        queryPluginConfig
+      )
+    )
       .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
       .mapMaterializedValue(_ => ())
       .named(name)

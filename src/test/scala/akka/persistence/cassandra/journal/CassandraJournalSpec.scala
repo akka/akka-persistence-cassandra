@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.journal
 
 import scala.concurrent.duration._
@@ -16,7 +19,8 @@ object CassandraJournalConfiguration {
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.circuit-breaker.call-timeout = 20s
-    """.stripMargin)
+    """.stripMargin
+  )
 }
 
 class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {

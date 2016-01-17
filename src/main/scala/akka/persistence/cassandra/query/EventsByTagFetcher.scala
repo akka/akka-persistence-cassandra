@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.query
 
 import java.nio.ByteBuffer
@@ -36,7 +39,8 @@ private[query] object EventsByTagFetcher {
 private[query] class EventsByTagFetcher(
   tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int, backtracking: Boolean,
   replyTo: ActorRef, session: Session, preparedSelect: PreparedStatement,
-  seqN: SequenceNumbers, settings: CassandraReadJournalConfig)
+  seqN: SequenceNumbers, settings: CassandraReadJournalConfig
+)
   extends Actor with ActorLogging {
 
   import context.dispatcher
@@ -110,7 +114,8 @@ private[query] class EventsByTagFetcher(
                 offset = offs,
                 persistenceId = pid,
                 sequenceNr = row.getLong("sequence_nr"),
-                event = m.payload)
+                event = m.payload
+              )
               replyTo ! eventEnvelope
               loop(n - 1)
 

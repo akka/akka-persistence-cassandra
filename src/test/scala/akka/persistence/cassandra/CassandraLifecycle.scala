@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra
 
 import scala.concurrent.duration._
@@ -22,7 +25,8 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: Suite =>
       cassandraDirectory,
       configResource = toggleSsl(cassandraConfigResource, withSsl),
       clean = true,
-      port = 0)
+      port = 0
+    )
 
     super.beforeAll()
   }

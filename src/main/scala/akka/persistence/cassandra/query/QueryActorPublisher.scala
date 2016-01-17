@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.query
 
 import scala.annotation.tailrec
@@ -8,8 +11,8 @@ import scala.reflect.ClassTag
 import akka.actor._
 import akka.pattern.pipe
 import akka.stream.actor.ActorPublisher
-import akka.stream.actor.ActorPublisherMessage.{Cancel, Request, SubscriptionTimeoutExceeded}
-import com.datastax.driver.core.{Row, ResultSet}
+import akka.stream.actor.ActorPublisherMessage.{ Cancel, Request, SubscriptionTimeoutExceeded }
+import com.datastax.driver.core.{ Row, ResultSet }
 
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.QueryActorPublisher._
@@ -38,8 +41,9 @@ object QueryActorPublisher {
  * @tparam State Type of state.
  */
 private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
-    refreshInterval: Option[FiniteDuration],
-    config: CassandraReadJournalConfig)
+  refreshInterval: Option[FiniteDuration],
+  config:          CassandraReadJournalConfig
+)
   extends ActorPublisher[MessageType]
   with ActorLogging {
 
@@ -52,7 +56,7 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
   import context.dispatcher
 
   private[this] val tickTask =
-    refreshInterval.map{
+    refreshInterval.map {
       i => context.system.scheduler.schedule(i, i, self, Continue)(context.dispatcher)
     }
 
@@ -62,11 +66,11 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
   }
 
   override def preStart(): Unit = initialState
-    .flatMap{ state =>
-      initialQuery(state).map{
-        case NewResultSet(rs) => InitialNewResultSet(state, rs)
+    .flatMap { state =>
+      initialQuery(state).map {
+        case NewResultSet(rs)     => InitialNewResultSet(state, rs)
         case FetchedResultSet(rs) => InitialNewResultSet(state, rs)
-        case Finished(rs) => InitialFinished(state, rs)
+        case Finished(rs)         => InitialFinished(state, rs)
       }
     }
     .pipeTo(self)
@@ -102,34 +106,37 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
   override def receive: Receive = starting
 
   private[this] def exhaustFetchAndBecome(
-      resultSet: ResultSet,
-      state: State,
-      finished: Boolean,
-      continue: Boolean,
-      behaviour: Option[(ResultSet, State, Boolean) => Receive] = None): Receive = {
+    resultSet: ResultSet,
+    state:     State,
+    finished:  Boolean,
+    continue:  Boolean,
+    behaviour: Option[(ResultSet, State, Boolean) => Receive] = None
+  ): Receive = {
 
     val (newRs, newState) =
       exhaustFetch(resultSet, state, resultSet.getAvailableWithoutFetching, 0, totalDemand)
 
-    behaviour.fold{
+    behaviour.fold {
       nextBehavior(newRs, newState, finished, continue)
-    }{
+    } {
       _(newRs, newState, finished)
     }
   }
 
   // TODO: Optimize.
   private[this] def nextBehavior(
-      resultSet: ResultSet,
-      state: State,
-      finished: Boolean,
-      continue: Boolean): Receive = {
+    resultSet: ResultSet,
+    state:     State,
+    finished:  Boolean,
+    continue:  Boolean
+  ): Receive = {
 
     val availableWithoutFetching = resultSet.getAvailableWithoutFetching
     val isFullyFetched = resultSet.isFullyFetched
 
     if (shouldFetchMore(
-      availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue)) {
+      availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue
+    )) {
       listenableFutureToFuture(resultSet.fetchMoreResults())
         .map(FetchedResultSet)
         .pipeTo(self)
@@ -156,32 +163,35 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
     availableWithoutFetching > 0 && !completionCondition(state)
 
   private[this] def shouldFetchMore(
-      availableWithoutFetching: Int,
-      isFullyFetched: Boolean,
-      demand: Long,
-      state: State,
-      finished: Boolean,
-      continue: Boolean) =
+    availableWithoutFetching: Int,
+    isFullyFetched:           Boolean,
+    demand:                   Long,
+    state:                    State,
+    finished:                 Boolean,
+    continue:                 Boolean
+  ) =
     !isFullyFetched &&
-    (availableWithoutFetching + config.fetchSize <= config.maxBufferSize
-      || availableWithoutFetching == 0) &&
-    !completionCondition(state)
+      (availableWithoutFetching + config.fetchSize <= config.maxBufferSize
+        || availableWithoutFetching == 0) &&
+        !completionCondition(state)
 
   private[this] def shouldRequestMore(
-      isExhausted: Boolean,
-      demand: Long,
-      state: State,
-      finished: Boolean,
-      continue: Boolean) =
+    isExhausted: Boolean,
+    demand:      Long,
+    state:       State,
+    finished:    Boolean,
+    continue:    Boolean
+  ) =
     (!completionCondition(state) || refreshInterval.isDefined) &&
-    !(finished && !continue) &&
-    isExhausted
+      !(finished && !continue) &&
+      isExhausted
 
   private[this] def shouldComplete(
-      isExhausted: Boolean,
-      refreshInterval: Option[FiniteDuration],
-      state: State,
-      finished: Boolean) =
+    isExhausted:     Boolean,
+    refreshInterval: Option[FiniteDuration],
+    state:           State,
+    finished:        Boolean
+  ) =
     (finished && refreshInterval.isEmpty && isExhausted) || completionCondition(state)
 
   // ResultSet methods isExhausted(), one() etc. cause blocking database fetch if there aren't
@@ -191,11 +201,12 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
 
   @tailrec
   final protected def exhaustFetch(
-      resultSet: ResultSet,
-      state: State,
-      available: Int,
-      count: Long,
-      max: Long): (ResultSet, State) = {
+    resultSet: ResultSet,
+    state:     State,
+    available: Int,
+    count:     Long,
+    max:       Long
+  ): (ResultSet, State) = {
     if (available == 0 || count == max || completionCondition(state)) {
       (resultSet, state)
     } else {

@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.query
 
 import java.util.UUID
@@ -7,7 +10,8 @@ import java.util.UUID
  * `eventsByTag` query, or similar queries.
  */
 final case class UUIDEventEnvelope(
-  offset: UUID,
+  offset:        UUID,
   persistenceId: String,
-  sequenceNr: Long,
-  event: Any)
+  sequenceNr:    Long,
+  event:         Any
+)

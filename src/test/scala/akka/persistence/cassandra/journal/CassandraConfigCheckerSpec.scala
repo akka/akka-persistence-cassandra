@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.journal
 
 import akka.persistence.cassandra.testkit.CassandraLauncher
@@ -29,7 +32,8 @@ object CassandraConfigCheckerSpec {
       |cassandra-journal.max-result-size = 3
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
-    """.stripMargin)
+    """.stripMargin
+  )
 
   class DummyActor(val persistenceId: String, receiver: ActorRef) extends PersistentActor {
     def receiveRecover: Receive = {

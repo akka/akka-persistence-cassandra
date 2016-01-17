@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.compaction
 
 import com.typesafe.config.Config
@@ -15,7 +18,8 @@ class SizeTieredCompactionStrategy(config: Config) extends BaseCompactionStrateg
       .asScala
       .map(_.getKey)
       .forall(SizeTieredCompactionStrategy.propertyKeys.contains(_)),
-    s"Config contains properties not supported by a ${SizeTieredCompactionStrategy.ClassName}")
+    s"Config contains properties not supported by a ${SizeTieredCompactionStrategy.ClassName}"
+  )
 
   val bucketHigh: Double = if (config.hasPath("bucket_high")) config.getDouble("bucket_high") else 1.5
   val bucketLow: Double = if (config.hasPath("bucket_low")) config.getDouble("bucket_low") else 0.5
@@ -51,7 +55,9 @@ object SizeTieredCompactionStrategy extends CassandraCompactionStrategyConfig[Si
       "bucket_low",
       "max_threshold",
       "min_threshold",
-      "min_sstable_size")).sorted
+      "min_sstable_size"
+    )
+  ).sorted
 
   override def fromConfig(config: Config): SizeTieredCompactionStrategy = new SizeTieredCompactionStrategy(config)
 }

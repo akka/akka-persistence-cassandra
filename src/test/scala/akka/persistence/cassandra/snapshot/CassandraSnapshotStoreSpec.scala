@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.snapshot
 
 import akka.persistence.cassandra.testkit.CassandraLauncher
@@ -22,7 +25,8 @@ object CassandraSnapshotStoreConfiguration {
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.max-metadata-result-size = 2
-    """.stripMargin)
+    """.stripMargin
+  )
 }
 
 class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config) with CassandraLifecycle {
