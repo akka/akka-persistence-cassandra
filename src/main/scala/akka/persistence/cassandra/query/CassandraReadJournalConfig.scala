@@ -9,7 +9,7 @@ import akka.persistence.cassandra.journal.TimeBucket
 private[query] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig) {
   val refreshInterval: FiniteDuration = config.getDuration("refresh-interval", MILLISECONDS).millis
   val maxBufferSize: Int = config.getInt("max-buffer-size")
-  val fetchSize: Int = config.getInt("fetch-size")
+  val fetchSize: Int = config.getInt("max-result-size-query")
   val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))
   val firstTimeBucket: TimeBucket = TimeBucket(config.getString("first-time-bucket"))
   val eventualConsistencyDelay: FiniteDuration =

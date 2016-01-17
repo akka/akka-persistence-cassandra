@@ -1,46 +1,55 @@
 package akka.persistence.cassandra.query
 
-import akka.actor._
-import akka.persistence.cassandra.query.QueryActorPublisher.ReplayFailed
-import akka.stream.actor.ActorPublisher
-import akka.stream.actor.ActorPublisherMessage.{Cancel, Request, SubscriptionTimeoutExceeded}
-
+import scala.annotation.tailrec
+import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
+
+import akka.actor._
+import akka.pattern.pipe
+import akka.stream.actor.ActorPublisher
+import akka.stream.actor.ActorPublisherMessage.{Cancel, Request, SubscriptionTimeoutExceeded}
+import com.datastax.driver.core.{Row, ResultSet}
+
+import akka.persistence.cassandra._
+import akka.persistence.cassandra.query.QueryActorPublisher._
 
 object QueryActorPublisher {
   private[query] final case class ReplayFailed(cause: Throwable)
     extends DeadLetterSuppression with NoSerializationVerificationNeeded
+
+  sealed trait Action
+  final case class NewResultSet(rs: ResultSet) extends Action
+  final case class FetchedResultSet(rs: ResultSet) extends Action
+  final case class Finished(resultSet: ResultSet) extends Action
 }
 
-//TODO: Optimizations - manage the buffer size efficienly, e.g. based on nr requests, remaining elements etc.
-//TODO: Database timeout, retry and failure handling.
+//TODO: Handle database timeout, retry and failure handling.
 //TODO: Write tests for buffer size, delivery buffer etc.
-//TODO: Extending classes must handle 'to offset' in a query manually. Restrict their responsibility and move to QueryActorPublisher??.
 /**
  * Abstract Query publisher. Can be integrated with Akka Streams as a Source.
- * Intended to be extended by concrete Query publisher classes. This class manages the stream lifecycle,
- * live stream updates, refreshInterval, max buffer size and causal consistency given an
- * offset queryable data source. Causality is achieved by only a single request for data in flight
- * at any point in time. Implementer must provide concrete initial state, update operation
- * and end condition.
+ * Intended to be extended by concrete Query publisher classes. This class manages the stream
+ * lifecycle, live stream updates, refreshInterval, max buffer size and causal consistency given an
+ * offset queryable data source.
  *
  * @param refreshInterval Refresh interval.
- * @param maxBufferSize Maximal buffer size.
+ * @param config Configuration.
  * @tparam MessageType Type of message.
  * @tparam State Type of state.
- * @tparam FetchType Type of message returned by fetcher actor when new item is returned
- * @tparam ReplayDone Type of message returned by fetcher actor when it finishes its job.
  */
-private[query] abstract class QueryActorPublisher[MessageType, State, FetchType : ClassTag, ReplayDone : ClassTag](
+private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
     refreshInterval: Option[FiniteDuration],
-    maxBufferSize: Int)
+    config: CassandraReadJournalConfig)
   extends ActorPublisher[MessageType]
-  with ImmutableDeliveryBuffer[MessageType]
   with ActorLogging {
 
-  private[this] case class More(buf: Vector[MessageType])
+  private[this] sealed trait InitialAction
+  private[this] case class InitialNewResultSet(s: State, rs: ResultSet) extends InitialAction
+  private[this] case class InitialFinished(s: State, rs: ResultSet) extends InitialAction
+
   private[this] case object Continue
+
+  import context.dispatcher
 
   private[this] val tickTask =
     refreshInterval.map{
@@ -52,101 +61,154 @@ private[query] abstract class QueryActorPublisher[MessageType, State, FetchType 
     super.postStop()
   }
 
-  override val supervisorStrategy = OneForOneStrategy() {
-    case e =>
-      self ! ReplayFailed(e)
-      SupervisorStrategy.Stop
+  override def preStart(): Unit = initialState
+    .flatMap{ state =>
+      initialQuery(state).map{
+        case NewResultSet(rs) => InitialNewResultSet(state, rs)
+        case FetchedResultSet(rs) => InitialNewResultSet(state, rs)
+        case Finished(rs) => InitialFinished(state, rs)
+      }
+    }
+    .pipeTo(self)
+
+  private[this] val starting: Receive = {
+    case _: Cancel | SubscriptionTimeoutExceeded => context.stop(self)
+    case InitialNewResultSet(s, newRs) =>
+      context.become(exhaustFetchAndBecome(newRs, s, false, false))
+    case InitialFinished(s, newRs) =>
+      context.become(exhaustFetchAndBecome(newRs, s, true, false))
+  }
+
+  private[this] def awaiting(rs: ResultSet, s: State, f: Boolean): Receive = {
+    case _: Cancel | SubscriptionTimeoutExceeded => context.stop(self)
+    case Request(_) =>
+      context.become(exhaustFetchAndBecome(rs, s, f, false, Some(awaiting)))
+    case NewResultSet(newRs) =>
+      context.become(exhaustFetchAndBecome(newRs, s, f, false))
+    case FetchedResultSet(newRs) =>
+      context.become(exhaustFetchAndBecome(newRs, s, f, false))
+    case Finished(newRs) =>
+      context.become(exhaustFetchAndBecome(newRs, s, true, false))
+  }
+
+  private[this] def idle(rs: ResultSet, s: State, f: Boolean): Receive = {
+    case _: Cancel | SubscriptionTimeoutExceeded => context.stop(self)
+    case Request(_) =>
+      context.become(exhaustFetchAndBecome(rs, s, f, false))
+    case Continue =>
+      context.become(exhaustFetchAndBecome(rs, s, f, true))
   }
 
   override def receive: Receive = starting
 
-  /**
-   * Initial state. Initialises state and buffer.
-   *
-   * @return Receive.
-   */
-  private[this] val starting: Receive = {
-    case Request(_) =>
-      context.become(nextBehavior(Vector.empty[MessageType], initialState))
-  }
+  private[this] def exhaustFetchAndBecome(
+      resultSet: ResultSet,
+      state: State,
+      finished: Boolean,
+      continue: Boolean,
+      behaviour: Option[(ResultSet, State, Boolean) => Receive] = None): Receive = {
 
-  /**
-   * The stream is idle awaiting either Continue after defined refreshInterval value was reached
-   * or Request for more data from subscribers.
-   *
-   * @param buffer Buffer of values to be delivered to subscribers.
-   * @param state Stream state.
-   * @return Receive.
-   */
-  private[this] def idle(buffer: Vector[MessageType], state: State): Receive = {
-    case _: Cancel | SubscriptionTimeoutExceeded => context.stop(self)
-    case Request(_) => context.become(nextBehavior(deliverBuf(buffer), state))
-    case Continue => context.become(nextBehavior(buffer, state))
-  }
+    val (newRs, newState) =
+      exhaustFetch(resultSet, state, resultSet.getAvailableWithoutFetching, 0, totalDemand)
 
-  /**
-   * The stream requested more data and is awaiting the response. It can not leave this state until
-   * the response is received to ensure only one request is in flight at any time to ensure causality.
-   *
-   * @param buffer Buffer of values to be delivered to subscribers.
-   * @param state Stream state.
-   * @return Receive.
-   */
-  private[this] def requesting(buffer: Vector[MessageType], state: State): Receive = {
-    case _: Cancel | SubscriptionTimeoutExceeded => context.stop(self)
-    case Request(_) => context.become(requesting(deliverBuf(buffer), state))
-    case r: FetchType =>
-      val (updatedBuffer, updatedState) = updateBuffer(buffer, r, state)
-      context.become(requesting(updatedBuffer, updatedState))
-    case d: ReplayDone =>
-      val updatedState = updateState(state, d)
-      context.become(nextBehavior(deliverBuf(buffer), updatedState, Some(state)))
-    case ReplayFailed(cause) =>
-      log.debug("Query failed due to [{}]", cause.getMessage)
-      // TODO: Will deliver all?
-      deliverBuf(buffer)
-      onErrorThenStop(cause)
-  }
-
-  // Impure. Uses env and side effects.
-  // Decision based on state only and not current behavior.
-  private[this] def nextBehavior(
-      buffer: Vector[MessageType],
-      newState: State,
-      oldState: Option[State] = None): Receive =
-    if (shouldComplete(buffer, refreshInterval, newState, oldState)) {
-      onCompleteThenStop()
-      Actor.emptyBehavior
-    } else if (shouldRequestMore(buffer, totalDemand, maxBufferSize, newState, oldState)) {
-      requestMore(newState, maxBufferSize.toLong - buffer.size)
-      requesting(buffer, newState)
-    } else {
-      idle(buffer, newState)
+    behaviour.fold{
+      nextBehavior(newRs, newState, finished, continue)
+    }{
+      _(newRs, newState, finished)
     }
+  }
 
-  private[this] def requestMore(state: State, max: Long): Unit =
-    context.actorOf(query(state, max))
+  // TODO: Optimize.
+  private[this] def nextBehavior(
+      resultSet: ResultSet,
+      state: State,
+      finished: Boolean,
+      continue: Boolean): Receive = {
 
-  private [this] def stateChanged(state: State, oldState: Option[State]): Boolean =
-    oldState.fold(true)(state != _)
+    val availableWithoutFetching = resultSet.getAvailableWithoutFetching
+    val isFullyFetched = resultSet.isFullyFetched
 
-  private[this] def bufferEmptyAndStateUnchanged(buffer: Vector[MessageType], newState: State, oldState: Option[State] = None) =
-    buffer.isEmpty && !stateChanged(newState, oldState)
+    if (shouldFetchMore(
+      availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue)) {
+      listenableFutureToFuture(resultSet.fetchMoreResults())
+        .map(FetchedResultSet)
+        .pipeTo(self)
+      awaiting(resultSet, state, finished)
+    } else if (shouldIdle(availableWithoutFetching, state)) {
+      idle(resultSet, state, finished)
+    } else {
+      val exhausted = isExhausted(resultSet)
 
-  // TODO: How aggressively do we want to fill the buffer. Change to totaldemand || ... do keep it full.
-  private[this] def shouldRequestMore(buffer: Vector[MessageType], demand: Long, maxBufferSize: Int, newState: State, oldState: Option[State] = None) =
-    !bufferEmptyAndStateUnchanged(buffer, newState, oldState) && demand > 0 && buffer.size < maxBufferSize.toLong
+      if (shouldComplete(exhausted, refreshInterval, state, finished)) {
+        onCompleteThenStop()
+        Actor.emptyBehavior
+      } else if (shouldRequestMore(exhausted, totalDemand, state, finished, continue)) {
+        if (finished) requestNextFinished(state, resultSet).pipeTo(self)
+        else requestNext(state, resultSet).pipeTo(self)
+        awaiting(resultSet, state, finished)
+      } else {
+        idle(resultSet, state, finished)
+      }
+    }
+  }
 
-  private[this] def shouldComplete(buffer: Vector[MessageType], refreshInterval: Option[FiniteDuration], newState: State, oldState: Option[State] = None) =
-    bufferEmptyAndStateUnchanged(buffer, newState, oldState) && (!refreshInterval.isDefined || completionCondition(newState))
+  private[this] def shouldIdle(availableWithoutFetching: Int, state: State) =
+    availableWithoutFetching > 0 && !completionCondition(state)
 
-  /**
-   * To be implemented by subclasses to define initial state, query, state update when query result
-   * is received and completion condition.
-   */
-  protected def initialState: State
-  protected def query(state: State, max: Long): Props
-  protected def updateBuffer(buf: Vector[MessageType], newBuf: FetchType, state: State): (Vector[MessageType], State)
-  protected def updateState(state: State, replayDone: ReplayDone): State
+  private[this] def shouldFetchMore(
+      availableWithoutFetching: Int,
+      isFullyFetched: Boolean,
+      demand: Long,
+      state: State,
+      finished: Boolean,
+      continue: Boolean) =
+    !isFullyFetched &&
+    (availableWithoutFetching + config.fetchSize <= config.maxBufferSize
+      || availableWithoutFetching == 0) &&
+    !completionCondition(state)
+
+  private[this] def shouldRequestMore(
+      isExhausted: Boolean,
+      demand: Long,
+      state: State,
+      finished: Boolean,
+      continue: Boolean) =
+    (!completionCondition(state) || refreshInterval.isDefined) &&
+    !(finished && !continue) &&
+    isExhausted
+
+  private[this] def shouldComplete(
+      isExhausted: Boolean,
+      refreshInterval: Option[FiniteDuration],
+      state: State,
+      finished: Boolean) =
+    (finished && refreshInterval.isEmpty && isExhausted) || completionCondition(state)
+
+  // ResultSet methods isExhausted(), one() etc. cause blocking database fetch if there aren't
+  // any available items in the ResultSet buffer and it is not the last fetch batch
+  // so we need to avoid calling them unless we know it won't block. See e.g. ArrayBackedResultSet.
+  private[this] def isExhausted(resultSet: ResultSet): Boolean = resultSet.isExhausted
+
+  @tailrec
+  final protected def exhaustFetch(
+      resultSet: ResultSet,
+      state: State,
+      available: Int,
+      count: Long,
+      max: Long): (ResultSet, State) = {
+    if (available == 0 || count == max || completionCondition(state)) {
+      (resultSet, state)
+    } else {
+      val (event, nextState) = updateState(state, resultSet.one())
+      event.fold(())(onNext)
+      exhaustFetch(resultSet, nextState, available - 1, count + 1, max)
+    }
+  }
+
+  protected def initialState: Future[State]
+  protected def initialQuery(initialState: State): Future[Action]
+  protected def requestNext(state: State, resultSet: ResultSet): Future[Action]
+  protected def requestNextFinished(state: State, resultSet: ResultSet): Future[Action]
+  protected def updateState(state: State, row: Row): (Option[MessageType], State)
   protected def completionCondition(state: State): Boolean
 }
