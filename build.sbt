@@ -1,3 +1,10 @@
+import Tests._
+import de.heikoseeberger.sbtheader.HeaderPattern
+import com.typesafe.sbt.SbtScalariform
+import com.typesafe.sbt.SbtScalariform.ScalariformKeys
+
+enablePlugins(AutomateHeaderPlugin)
+
 organization := "com.github.krasserm"
 
 name := "akka-persistence-cassandra"
@@ -51,3 +58,26 @@ publishTo := {
 }
 
 publishMavenStyle := true
+
+headers := headers.value ++ Map(
+  "scala" -> (
+    HeaderPattern.cStyleBlockComment,
+    """|/*
+       | * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+       | */
+       |""".stripMargin
+  )
+)
+
+SbtScalariform.scalariformSettings
+ScalariformKeys.preferences in Compile  := formattingPreferences
+ScalariformKeys.preferences in Test     := formattingPreferences
+
+def formattingPreferences = {
+  import scalariform.formatter.preferences._
+  FormattingPreferences()
+    .setPreference(RewriteArrowSymbols, false)
+    .setPreference(AlignParameters, true)
+    .setPreference(AlignSingleLineCaseStatements, true)
+    .setPreference(SpacesAroundMultiImports, true)
+}

@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.snapshot
 
 import java.lang.{ Long => JLong }
@@ -21,10 +24,11 @@ object CassandraSnapshotStoreConfiguration {
       |cassandra-journal.port = 9142
       |cassandra-snapshot-store.port = 9142
       |cassandra-snapshot-store.max-metadata-result-size = 2
-    """.stripMargin)
+    """.stripMargin
+  )
 }
 
-class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config) with CassandraLifecycle {  
+class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config) with CassandraLifecycle {
 
   val storeConfig = new CassandraSnapshotStoreConfig(system.settings.config.getConfig("cassandra-snapshot-store"))
   val storeStatements = new CassandraStatements { def config = storeConfig }

@@ -1,18 +1,21 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.journal
 
 import java.util.concurrent.Executors
 
-import akka.actor.{ActorRef, ActorSystem, PoisonPill, Props}
+import akka.actor.{ ActorRef, ActorSystem, PoisonPill, Props }
 import akka.persistence._
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraPluginConfig}
-import akka.testkit.{ImplicitSender, TestKit}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig }
+import akka.testkit.{ ImplicitSender, TestKit }
 import com.datastax.driver.core.Session
-import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-import org.scalatest.{MustMatchers, WordSpecLike}
+import com.typesafe.config.{ Config, ConfigFactory, ConfigValueFactory }
+import org.scalatest.{ MustMatchers, WordSpecLike }
 
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.{ Await, ExecutionContext, Future }
+import scala.util.{ Failure, Success, Try }
 
 object CassandraConfigCheckerSpec {
   val config = ConfigFactory.parseString(
@@ -27,7 +30,8 @@ object CassandraConfigCheckerSpec {
       |cassandra-journal.max-result-size = 3
       |cassandra-journal.port = 9142
       |cassandra-snapshot-store.port = 9142
-    """.stripMargin)
+    """.stripMargin
+  )
 
   class DummyActor(val persistenceId: String, receiver: ActorRef) extends PersistentActor {
     def receiveRecover: Receive = {
@@ -42,7 +46,6 @@ object CassandraConfigCheckerSpec {
 
 import akka.persistence.cassandra.journal.CassandraConfigCheckerSpec._
 
-
 class CassandraConfigCheckerSpec extends TestKit(ActorSystem("test", config)) with ImplicitSender with WordSpecLike with MustMatchers with CassandraLifecycle {
 
   implicit val cfg = config.withFallback(system.settings.config).getConfig("cassandra-journal")
@@ -54,7 +57,6 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("test", config)) wi
       waitForPersistenceInitialization()
       val underTest = createCassandraConfigChecker
       underTest.session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
-
 
       val persistentConfig = underTest.initializePersistentConfig
       persistentConfig.get(CassandraJournalConfig.TargetPartitionProperty) must be(defined)
@@ -95,11 +97,12 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("test", config)) wi
       createCassandraConfigChecker.session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
       implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(10))
 
-
-      val resultFuture = Future.sequence((1 to 10).map(i => Future { (i, Try {
-        val underTest = createCassandraConfigChecker(pluginConfig, cfg.withValue("target-partition-size", ConfigValueFactory.fromAnyRef(i.toString)))
-        underTest.initializePersistentConfig
-      }) }))
+      val resultFuture = Future.sequence((1 to 10).map(i => Future {
+        (i, Try {
+          val underTest = createCassandraConfigChecker(pluginConfig, cfg.withValue("target-partition-size", ConfigValueFactory.fromAnyRef(i.toString)))
+          underTest.initializePersistentConfig
+        })
+      }))
 
       val result = Await.result(resultFuture, 5.seconds)
 

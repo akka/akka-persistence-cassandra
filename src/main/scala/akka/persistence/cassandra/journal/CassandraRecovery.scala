@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.journal
 
 import java.lang.{ Long => JLong }
@@ -88,7 +91,8 @@ trait CassandraRecovery extends ActorLogging {
     def find(currentPnr: Long, currentSnr: Long): Long = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
       val next = Option(session.execute(
-        cassandraSession.preparedSelectHighestSequenceNr.bind(persistenceId, currentPnr: JLong)).one())
+        cassandraSession.preparedSelectHighestSequenceNr.bind(persistenceId, currentPnr: JLong)
+      ).one())
         .map(row => (row.getBool("used"), row.getLong("sequence_nr")))
       next match {
         // never been to this partition
@@ -122,12 +126,14 @@ trait CassandraRecovery extends ActorLogging {
 
     def newIter() = {
       session.execute(cassandraSession.preparedSelectMessages.bind(
-        persistenceId, currentPnr: JLong, fromSnr: JLong, toSnr: JLong)).iterator
+        persistenceId, currentPnr: JLong, fromSnr: JLong, toSnr: JLong
+      )).iterator
     }
 
     def inUse: Boolean = {
       val execute: ResultSet = session.execute(
-        cassandraSession.preparedCheckInUse.bind(persistenceId, currentPnr: JLong))
+        cassandraSession.preparedCheckInUse.bind(persistenceId, currentPnr: JLong)
+      )
       if (execute.isExhausted) false
       else execute.one().getBool("used")
     }

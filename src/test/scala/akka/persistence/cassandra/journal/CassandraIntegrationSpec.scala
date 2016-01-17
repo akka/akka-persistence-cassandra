@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.journal
 
 import java.util.UUID
@@ -26,7 +29,8 @@ object CassandraIntegrationSpec {
       |cassandra-journal.max-result-size = 3
       |cassandra-journal.port = 9142
       |cassandra-snapshot-store.port = 9142
-    """.stripMargin)
+    """.stripMargin
+  )
 
   case class DeleteTo(snr: Long)
 

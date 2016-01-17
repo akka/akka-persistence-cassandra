@@ -1,3 +1,6 @@
+/*
+ * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka.persistence.cassandra.journal
 
 import java.lang.{ Long => JLong }
@@ -88,8 +91,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         cassandraSession
       } catch {
         case NonFatal(e) =>
-          log.warning("Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
-            e.getMessage)
+          log.warning(
+            "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
+            e.getMessage
+          )
       }
   }
 
@@ -106,7 +111,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     // missing (delayed) events in the eventByTag query
     val serialized = messages.map(aw => SerializedAtomicWrite(
       aw.payload.head.persistenceId,
-      aw.payload.map(pr => Serialized(pr.sequenceNr, persistentToByteBuffer(pr)))))
+      aw.payload.map(pr => Serialized(pr.sequenceNr, persistentToByteBuffer(pr)))
+    ))
 
     val byPersistenceId = serialized.groupBy(_.persistenceId).values
     val boundStatements = byPersistenceId.map(statementGroup)
@@ -159,7 +165,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
 
     val logicalDelete = session.executeAsync(
-      cassandraSession.preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong))
+      cassandraSession.preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong)
+    )
 
     partitionInfos.map(future => future.flatMap(pi => {
       Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>
@@ -178,7 +185,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
     session.executeAsync(
-      cassandraSession.preparedSelectHighestSequenceNr.bind(persistenceId, partitionNr: JLong))
+      cassandraSession.preparedSelectHighestSequenceNr.bind(persistenceId, partitionNr: JLong)
+    )
       .map(rs => Option(rs.one()))
       .map(row => row.map(s => PartitionInfo(partitionNr, minSequenceNr(partitionNr), min(s.getLong("sequence_nr"), maxSequenceNr)))
         .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
