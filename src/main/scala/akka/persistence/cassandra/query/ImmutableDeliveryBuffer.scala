@@ -8,11 +8,11 @@ import akka.stream.actor.ActorPublisher
 private[query] trait ImmutableDeliveryBuffer[T] { _: ActorPublisher[T] ⇒
 
   def deliverBuf(buf: Vector[T]): Vector[T] =
-    if(buf.nonEmpty && totalDemand > 0) {
-      if(buf.size == 1) {
+    if (buf.nonEmpty && totalDemand > 0) {
+      if (buf.size == 1) {
         onNext(buf.head)
         Vector.empty[T]
-      } else if(totalDemand <= Int.MaxValue) {
+      } else if (totalDemand <= Int.MaxValue) {
         val (use, keep) = buf.splitAt(totalDemand.toInt)
         use.foreach(onNext)
         keep

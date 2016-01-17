@@ -9,7 +9,7 @@ import com.google.common.util.concurrent.ListenableFuture
 
 import scala.concurrent._
 import scala.language.implicitConversions
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 package object cassandra {
   implicit def listenableFutureToFuture[A](lf: ListenableFuture[A])(implicit executionContext: ExecutionContext): Future[A] = {
@@ -20,7 +20,7 @@ package object cassandra {
   def retry[T](n: Int)(fn: => T): T = {
     retry(n, 0)(fn)
   }
-  
+
   @annotation.tailrec
   def retry[T](n: Int, delay: Long)(fn: => T): T = {
     Try { fn } match {

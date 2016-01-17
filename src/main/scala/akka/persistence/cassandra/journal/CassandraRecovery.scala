@@ -9,7 +9,7 @@ import scala.concurrent._
 
 import java.lang.{ Long => JLong }
 
-import akka.actor.{ExtendedActorSystem, ActorLogging}
+import akka.actor.{ ExtendedActorSystem, ActorLogging }
 import akka.persistence.PersistentRepr
 
 import akka.persistence.cassandra.listenableFutureToFuture
@@ -25,13 +25,15 @@ trait CassandraRecovery extends ActorLogging with ImplicitMaterializer {
   private[this] val queries: CassandraReadJournal =
     new CassandraReadJournal(
       extendedActorSystem,
-      context.system.settings.config.getConfig("cassandra-query-journal"))
+      context.system.settings.config.getConfig("cassandra-query-journal")
+    )
 
   override def asyncReplayMessages(
-      persistenceId: String,
-      fromSequenceNr: Long,
-      toSequenceNr: Long,
-      max: Long)(replayCallback: (PersistentRepr) => Unit): Future[Unit] =
+    persistenceId:  String,
+    fromSequenceNr: Long,
+    toSequenceNr:   Long,
+    max:            Long
+  )(replayCallback: (PersistentRepr) => Unit): Future[Unit] =
     queries
       .eventsByPersistenceId(
         persistenceId,
@@ -40,12 +42,13 @@ trait CassandraRecovery extends ActorLogging with ImplicitMaterializer {
         max,
         replayMaxResultSize,
         None,
-        "asyncReplayMessages")
+        "asyncReplayMessages"
+      )
       .runForeach(replayCallback)
 
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] =
     asyncHighestDeletedSequenceNumber(persistenceId)
-      .flatMap{ h =>
+      .flatMap { h =>
         asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h))
       }
 
@@ -55,7 +58,8 @@ trait CassandraRecovery extends ActorLogging with ImplicitMaterializer {
     def find(currentPnr: Long, currentSnr: Long): Future[Long] = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
       listenableFutureToFuture(
-        session.executeAsync(preparedSelectHighestSequenceNr.bind(persistenceId, currentPnr: JLong)))
+        session.executeAsync(preparedSelectHighestSequenceNr.bind(persistenceId, currentPnr: JLong))
+      )
         .map { rs =>
           Option(rs.one()).map { row =>
             (row.getBool("used"), row.getLong("sequence_nr"))
@@ -63,14 +67,14 @@ trait CassandraRecovery extends ActorLogging with ImplicitMaterializer {
         }
         .flatMap {
           // never been to this partition
-          case None => Future.successful(currentSnr)
+          case None                   => Future.successful(currentSnr)
           // don't currently explicitly set false
-          case Some((false, _)) => Future.successful(currentSnr)
+          case Some((false, _))       => Future.successful(currentSnr)
           // everything deleted in this partition, move to the next
-          case Some((true, 0)) => find(currentPnr + 1, currentSnr)
+          case Some((true, 0))        => find(currentPnr + 1, currentSnr)
           case Some((_, nextHighest)) => find(currentPnr + 1, nextHighest)
         }
-      }
+    }
 
     find(partitionNr(fromSequenceNr), fromSequenceNr)
   }

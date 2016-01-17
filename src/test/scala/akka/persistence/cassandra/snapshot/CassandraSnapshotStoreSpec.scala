@@ -25,7 +25,8 @@ object CassandraSnapshotStoreConfiguration {
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.max-metadata-result-size = 2
-    """.stripMargin)
+    """.stripMargin
+  )
 }
 
 class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config) with CassandraLifecycle {

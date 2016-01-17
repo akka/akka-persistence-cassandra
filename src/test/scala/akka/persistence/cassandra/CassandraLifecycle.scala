@@ -25,7 +25,8 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: Suite =>
       cassandraDirectory,
       configResource = toggleSsl(cassandraConfigResource, withSsl),
       clean = true,
-      port = 0)
+      port = 0
+    )
 
     super.beforeAll()
   }

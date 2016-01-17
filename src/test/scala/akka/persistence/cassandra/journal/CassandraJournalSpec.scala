@@ -19,7 +19,8 @@ object CassandraJournalConfiguration {
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.circuit-breaker.call-timeout = 20s
-    """.stripMargin)
+    """.stripMargin
+  )
 }
 
 class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {

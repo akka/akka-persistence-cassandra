@@ -130,7 +130,8 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = for {
     mds <- Future(metadata(persistenceId, criteria).toVector)
     res <- executeBatch(batch => mds.foreach(md => batch.add(
-      cassandraSession.preparedDeleteSnapshot.bind(md.persistenceId, md.sequenceNr: JLong))))
+      cassandraSession.preparedDeleteSnapshot.bind(md.persistenceId, md.sequenceNr: JLong)
+    )))
   } yield res
 
   def executeBatch(body: BatchStatement => Unit): Future[Unit] = {

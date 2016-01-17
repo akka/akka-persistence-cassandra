@@ -96,8 +96,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         cassandraSession
       } catch {
         case NonFatal(e) =>
-          log.warning("Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
-            e.getMessage)
+          log.warning(
+            "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
+            e.getMessage
+          )
       }
   }
 
@@ -125,7 +127,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
             case _ => (pr, Set.empty[String])
           }
           Serialized(pr.sequenceNr, persistentToByteBuffer(pr2), tags)
-        })
+        }
+      )
     }
 
     val byPersistenceId = serialized.groupBy(_.persistenceId).values
@@ -204,7 +207,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
 
     val logicalDelete = session.executeAsync(
-      cassandraSession.preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong))
+      cassandraSession.preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong)
+    )
 
     partitionInfos.map(future => future.flatMap(pi => {
       Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>

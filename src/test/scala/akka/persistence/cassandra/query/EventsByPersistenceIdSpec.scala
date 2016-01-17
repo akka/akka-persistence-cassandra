@@ -3,15 +3,15 @@
  */
 package akka.persistence.cassandra.query
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.query.PersistenceQuery
 import akka.stream.ActorMaterializer
-import akka.testkit.{ImplicitSender, TestKit}
+import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.{ Matchers, WordSpecLike }
 import org.scalatest.concurrent.ScalaFutures
 
 import scala.concurrent.duration._
@@ -48,7 +48,7 @@ class EventsByPersistenceIdSpec
 
   def setup(persistenceId: String, n: Int): ActorRef = {
     val ref = system.actorOf(TestActor.props(persistenceId))
-    for(i <- 1 to n) {
+    for (i <- 1 to n) {
       ref ! s"$persistenceId-$i"
       expectMsg(s"$persistenceId-$i-done")
     }
@@ -154,7 +154,8 @@ class EventsByPersistenceIdSpec
         .expectNext(
           ("h", 1, 1),
           ("h", 2, 2),
-          ("h", 3, 3))
+          ("h", 3, 3)
+        )
         .expectComplete()
     }
 
@@ -294,7 +295,7 @@ class EventsByPersistenceIdSpec
         .expectNextN((1 to 15).map(i => s"q-$i"))
         .expectNoMsg(500.millis)
 
-      for(i <- 16 to 21) {
+      for (i <- 16 to 21) {
         ref ! s"q-$i"
         expectMsg(s"q-$i-done")
       }
@@ -303,7 +304,7 @@ class EventsByPersistenceIdSpec
         .request(6)
         .expectNextN((16 to 21).map(i => s"q-$i"))
 
-      for(i <- 22 to 35) {
+      for (i <- 22 to 35) {
         ref ! s"q-$i"
         expectMsg(s"q-$i-done")
       }

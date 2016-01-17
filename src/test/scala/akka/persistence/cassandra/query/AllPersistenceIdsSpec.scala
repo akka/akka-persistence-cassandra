@@ -7,15 +7,15 @@ import java.util.UUID
 
 import scala.concurrent.duration._
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ ActorRef, ActorSystem }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ImplicitSender, TestKit}
+import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpecLike}
+import org.scalatest.{ BeforeAndAfterEach, Matchers, WordSpecLike }
 import org.scalatest.concurrent.ScalaFutures
 
-import akka.persistence.cassandra.{CassandraPluginConfig, CassandraLifecycle}
+import akka.persistence.cassandra.{ CassandraPluginConfig, CassandraLifecycle }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.query.PersistenceQuery
@@ -68,7 +68,7 @@ class AllPersistenceIdsSpec
 
   private[this] def setup(persistenceId: String, n: Int): ActorRef = {
     val ref = system.actorOf(TestActor.props(persistenceId))
-    for(i <- 1 to n) {
+    for (i <- 1 to n) {
       ref ! s"$persistenceId-$i"
       expectMsg(s"$persistenceId-$i-done")
     }
@@ -100,7 +100,7 @@ class AllPersistenceIdsSpec
     }
 
     "find existing persistence ids in batches if there is more of them than max-result-size-query" in {
-      for(i <- 1 to 1000) {
+      for (i <- 1 to 1000) {
         setup(UUID.randomUUID().toString, 1)
       }
 
@@ -108,7 +108,7 @@ class AllPersistenceIdsSpec
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(1000)
 
-      for(i <- 1 to 1000) {
+      for (i <- 1 to 1000) {
         probe.expectNext()
       }
 

@@ -5,19 +5,19 @@ package akka.persistence.cassandra.query.scaladsl
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-import akka.actor.{Props, ActorSystem}
+import akka.actor.{ Props, ActorSystem }
 import akka.stream.scaladsl.Sink
 import akka.stream.ActorMaterializer
-import akka.testkit.{ImplicitSender, TestKit}
+import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time.{Seconds, Second, Span}
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.time.{ Seconds, Second, Span }
+import org.scalatest.{ Matchers, WordSpecLike }
 
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.TestActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.persistence.journal.{Tagged, WriteEventAdapter}
+import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.PersistenceQuery
 
 object CassandraReadJournalSpec {

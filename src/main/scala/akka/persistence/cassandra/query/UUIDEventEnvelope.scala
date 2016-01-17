@@ -10,7 +10,8 @@ import java.util.UUID
  * `eventsByTag` query, or similar queries.
  */
 final case class UUIDEventEnvelope(
-  offset: UUID,
+  offset:        UUID,
   persistenceId: String,
-  sequenceNr: Long,
-  event: Any)
+  sequenceNr:    Long,
+  event:         Any
+)

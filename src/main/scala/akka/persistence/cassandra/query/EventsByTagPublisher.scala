@@ -36,7 +36,8 @@ private[query] object EventsByTagPublisher {
   private[query] case class ReplayDone(count: Int, seqNumbers: SequenceNumbers, highest: UUID)
     extends DeadLetterSuppression
   private[query] case class ReplayAborted(
-    seqNumbers: SequenceNumbers, persistenceId: String, expectedSeqNr: Long, gotSeqNr: Long)
+    seqNumbers: SequenceNumbers, persistenceId: String, expectedSeqNr: Long, gotSeqNr: Long
+  )
     extends DeadLetterSuppression
   private[query] final case class ReplayFailed(cause: Throwable)
     extends DeadLetterSuppression with NoSerializationVerificationNeeded
@@ -45,7 +46,8 @@ private[query] object EventsByTagPublisher {
 
 private[query] class EventsByTagPublisher(
   tag: String, fromOffset: UUID, toOffset: Option[UUID],
-  settings: CassandraReadJournalConfig, session: Session, preparedSelect: PreparedStatement)
+  settings: CassandraReadJournalConfig, session: Session, preparedSelect: PreparedStatement
+)
   extends ActorPublisher[UUIDEventEnvelope] with DeliveryBuffer[UUIDEventEnvelope] with ActorLogging {
   import akka.persistence.cassandra.query.UUIDComparator.comparator.compare
   import EventsByTagPublisher._
@@ -164,8 +166,10 @@ private[query] class EventsByTagPublisher(
       if (backtracking && abortDeadline.isEmpty) highestOffset
       else UUIDs.endOf(System.currentTimeMillis() - eventualConsistencyDelayMillis)
     if (log.isDebugEnabled)
-      log.debug(s"${if (backtracking) "backtracking " else ""}query for tag [{}] from [{}] [{}] limit [{}]",
-        tag, currTimeBucket, currOffset, limit)
+      log.debug(
+        s"${if (backtracking) "backtracking " else ""}query for tag [{}] from [{}] [{}] limit [{}]",
+        tag, currTimeBucket, currOffset, limit
+      )
     context.actorOf(EventsByTagFetcher.props(tag, currTimeBucket, currOffset, toOffs, limit, backtracking,
       self, session, preparedSelect, seqNumbers, settings))
     context.become(replaying(limit))

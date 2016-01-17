@@ -41,7 +41,8 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
       |port = ${CassandraLauncher.randomPort}
       |max-result-size = 50
       |delete-retries = 4
-    """.stripMargin)
+    """.stripMargin
+  )
 
   val cassandraPluginConfig = new CassandraPluginConfig(defaultConfigs)
 
@@ -83,7 +84,8 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | min_threshold = 10
           | timestamp_resolution = "MICROSECONDS"
           |}
-        """.stripMargin)
+        """.stripMargin
+      )
 
       val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asInstanceOf[DateTieredCompactionStrategy]
 
@@ -112,7 +114,8 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | min_threshold = 10
           | timestamp_resolution = "MICROSECONDS"
           |}
-        """.stripMargin)
+        """.stripMargin
+      )
 
       val cqlExpression =
         s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable1 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
@@ -132,7 +135,8 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | unchecked_tombstone_compaction = false
           | sstable_size_in_mb = 100
           |}
-        """.stripMargin)
+        """.stripMargin
+      )
 
       val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asInstanceOf[LeveledCompactionStrategy]
 
@@ -153,7 +157,8 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | unchecked_tombstone_compaction = false
           | sstable_size_in_mb = 100
           |}
-        """.stripMargin)
+        """.stripMargin
+      )
 
       val cqlExpression =
         s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable2 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
@@ -177,7 +182,8 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | min_threshold = 10
           | min_sstable_size = 100
           |}
-        """.stripMargin)
+        """.stripMargin
+      )
 
       val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asInstanceOf[SizeTieredCompactionStrategy]
 
@@ -206,7 +212,8 @@ class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with Ca
           | min_threshold = 10
           | min_sstable_size = 100
           |}
-        """.stripMargin)
+        """.stripMargin
+      )
 
       val cqlExpression =
         s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable3 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"

@@ -26,9 +26,11 @@ class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(confi
       case entry if entry.getValue.valueType == ConfigValueType.NUMBER =>
         val tag = entry.getKey
         val tagId = entry.getValue.unwrapped.asInstanceOf[Number].intValue
-        require(1 <= tagId && tagId <= 3,
+        require(
+          1 <= tagId && tagId <= 3,
           s"Tag identifer for [$tag] must be a 1, 2, or 3, was [$tagId]. " +
-            s"Max $maxTagsPerEvent tags per event is supported.")
+            s"Max $maxTagsPerEvent tags per event is supported."
+        )
         tag -> tagId
     }(collection.breakOut)
   }

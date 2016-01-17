@@ -14,7 +14,8 @@ private[query] object SequenceNumbers {
 }
 
 private[query] final case class SequenceNumbers(
-  intNumbers: Map[String, Int], longNumbers: Map[String, Long]) {
+  intNumbers: Map[String, Int], longNumbers: Map[String, Long]
+) {
   import SequenceNumbers._
 
   def isNext(persistenceId: String, seqNr: Long): Answer = {
@@ -38,8 +39,10 @@ private[query] final case class SequenceNumbers(
     if (seqNr <= Int.MaxValue)
       copy(intNumbers = intNumbers.updated(persistenceId, seqNr.toInt))
     else if (seqNr == 1L + Int.MaxValue)
-      copy(intNumbers = intNumbers - persistenceId,
-        longNumbers = longNumbers.updated(persistenceId, seqNr))
+      copy(
+        intNumbers = intNumbers - persistenceId,
+        longNumbers = longNumbers.updated(persistenceId, seqNr)
+      )
     else
       copy(longNumbers = longNumbers.updated(persistenceId, seqNr))
 
