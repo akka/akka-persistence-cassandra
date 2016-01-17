@@ -43,7 +43,8 @@ object MultiPluginSpec {
         |cassandra-snapshot-d=$${cassandra-snapshot-store}
         |cassandra-snapshot-d.table=snapshot_d_messages
         |
-    """.stripMargin)
+    """.stripMargin
+  )
 
   trait Processor extends PersistentActor {
 

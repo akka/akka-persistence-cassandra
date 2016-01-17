@@ -3,7 +3,7 @@
  */
 package akka.persistence.cassandra.compaction
 
-import com.typesafe.config.{ConfigFactory, Config}
+import com.typesafe.config.{ ConfigFactory, Config }
 
 /*
  * Based upon https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/AbstractCompactionStrategy.java
@@ -51,7 +51,8 @@ object BaseCompactionStrategy extends CassandraCompactionStrategyConfig[BaseComp
           ConfigFactory.parseString(
             s"""
                |class = "${SizeTieredCompactionStrategy.ClassName}"
-             """.stripMargin.trim)
+             """.stripMargin.trim
+          )
         )
     }
   }

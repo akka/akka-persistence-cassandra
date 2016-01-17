@@ -35,7 +35,8 @@ object CassandraSslSpec {
       |cassandra-snapshot-store.ssl.truststore.password="hbbUtqn3Y1D4Tw"
       |cassandra-snapshot-store.ssl.keystore.path="src/test/resources/security/client_keystore.jks"
       |cassandra-snapshot-store.ssl.keystore.password="5zsGJ0LxnpozNQ"
-    """.stripMargin)
+    """.stripMargin
+  )
 
   class ProcessorA(val persistenceId: String) extends PersistentActor {
     def receiveRecover: Receive = handle
@@ -56,10 +57,10 @@ object CassandraSslSpec {
 
 import CassandraSslSpec._
 
-class CassandraSslSpec extends TestKit(ActorSystem("test", config)) 
-  with ImplicitSender 
-  with WordSpecLike 
-  with Matchers 
+class CassandraSslSpec extends TestKit(ActorSystem("test", config))
+  with ImplicitSender
+  with WordSpecLike
+  with Matchers
   with CassandraLifecycle {
 
   override val withSsl = true

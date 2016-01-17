@@ -6,7 +6,7 @@ package akka.persistence.cassandra
 import java.net.InetSocketAddress
 
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{MustMatchers, WordSpec}
+import org.scalatest.{ MustMatchers, WordSpec }
 import org.scalatest.prop.TableDrivenPropertyChecks._
 
 import scala.util.Random
@@ -35,40 +35,39 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       |port = 9142
       |max-result-size = 50
       |delete-retries = 4
-    """.stripMargin)
-
+    """.stripMargin
+  )
 
   lazy val keyspaceNames = {
     // Generate a key that is the max acceptable length ensuring the first char is alpha
     def maxKey = Random.alphanumeric.dropWhile(_.toString.matches("[^a-zA-Z]")).take(32).mkString
 
-    Table (
+    Table(
       ("Keyspace", "isValid"),
-      ("test",        true),
-      ("_test_123",   false),
-      ("",            false),
-      ("test-space",  false),
-      ("'test'",      false),
-      ("a",           true),
-      ("a_",          true),
-      ("1",           false),
-      ("a1",          true),
-      ("_",           false),
-      ("asdf!",       false),
-      (maxKey,        true),
-      ("\"_asdf\"",   false),
-      ("\"_\"",       false),
-      ("\"a\"",       true),
-      ("\"a_sdf\"",   true),
-      ("\"\"",        false),
-      ("\"valid_with_quotes\"",       true),
-      ("\"missing_trailing_quote",    false),
-      ("missing_leading_quote\"",     false),
-      ('"' + maxKey + '"',            true),
-      (maxKey + "_",                  false)
+      ("test", true),
+      ("_test_123", false),
+      ("", false),
+      ("test-space", false),
+      ("'test'", false),
+      ("a", true),
+      ("a_", true),
+      ("1", false),
+      ("a1", true),
+      ("_", false),
+      ("asdf!", false),
+      (maxKey, true),
+      ("\"_asdf\"", false),
+      ("\"_\"", false),
+      ("\"a\"", true),
+      ("\"a_sdf\"", true),
+      ("\"\"", false),
+      ("\"valid_with_quotes\"", true),
+      ("\"missing_trailing_quote", false),
+      ("missing_leading_quote\"", false),
+      ('"' + maxKey + '"', true),
+      (maxKey + "_", false)
     )
   }
-
 
   "A CassandraPluginConfig" should {
     "set the fetch size to the max result size" in {
@@ -82,7 +81,7 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
     }
 
     "parse config with host:port values as contact points" in {
-      val configWithHostPortPair = ConfigFactory.parseString( """contact-points = ["127.0.0.1:19142", "127.0.0.1:29142"]""").withFallback(defaultConfig)
+      val configWithHostPortPair = ConfigFactory.parseString("""contact-points = ["127.0.0.1:19142", "127.0.0.1:29142"]""").withFallback(defaultConfig)
       val config = new CassandraPluginConfig(configWithHostPortPair)
       config.contactPoints must be(
         List(
@@ -94,7 +93,7 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
     }
 
     "parse config with a list of contact points without port" in {
-      lazy val configWithHosts = ConfigFactory.parseString( """contact-points = ["127.0.0.1", "127.0.0.2"]""").withFallback(defaultConfig)
+      lazy val configWithHosts = ConfigFactory.parseString("""contact-points = ["127.0.0.1", "127.0.0.2"]""").withFallback(defaultConfig)
       val config = new CassandraPluginConfig(configWithHosts)
       config.contactPoints must be(
         List(
@@ -123,7 +122,8 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
         """
           |replication-strategy = "NetworkTopologyStrategy"
           |data-center-replication-factors = ["dc1:3", "dc2:2"]
-        """.stripMargin).withFallback(defaultConfig)
+        """.stripMargin
+      ).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }
@@ -148,7 +148,7 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
 
     "validate keyspace parameter" in {
       forAll(keyspaceNames) { (keyspace, isValid) =>
-        if(isValid) CassandraPluginConfig.validateKeyspaceName(keyspace) must be(keyspace)
+        if (isValid) CassandraPluginConfig.validateKeyspaceName(keyspace) must be(keyspace)
         else intercept[IllegalArgumentException] {
           CassandraPluginConfig.validateKeyspaceName(keyspace)
         }
@@ -157,16 +157,15 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
 
     "validate table name parameter" in {
       forAll(keyspaceNames) { (tableName, isValid) =>
-        if(isValid) CassandraPluginConfig.validateKeyspaceName(tableName) must be(tableName)
+        if (isValid) CassandraPluginConfig.validateKeyspaceName(tableName) must be(tableName)
         else intercept[IllegalArgumentException] {
           CassandraPluginConfig.validateKeyspaceName(tableName)
         }
       }
     }
 
-
     "parse keyspace-autocreate parameter" in {
-      val configWithFalseKeyspaceAutocreate = ConfigFactory.parseString( """keyspace-autocreate = false""").withFallback(defaultConfig)
+      val configWithFalseKeyspaceAutocreate = ConfigFactory.parseString("""keyspace-autocreate = false""").withFallback(defaultConfig)
 
       val config = new CassandraPluginConfig(configWithFalseKeyspaceAutocreate)
       config.keyspaceAutoCreate must be(false)

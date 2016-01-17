@@ -23,7 +23,8 @@ object CassandraLoadSpec {
       |cassandra-snapshot-store.port = 9142
       |cassandra-journal.replication-strategy = NetworkTopologyStrategy
       |cassandra-journal.data-center-replication-factors = ["dc1:1"]
-    """.stripMargin)
+    """.stripMargin
+  )
 
   trait Measure extends { this: Actor ⇒
     val NanoToSecond = 1000.0 * 1000 * 1000

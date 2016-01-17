@@ -79,8 +79,10 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
         cassandraSession
       } catch {
         case NonFatal(e) =>
-          log.warning("Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
-            e.getMessage)
+          log.warning(
+            "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
+            e.getMessage
+          )
       }
   }
 
@@ -110,20 +112,23 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
   def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
     val stmt = cassandraSession.preparedWriteSnapshot.bind(
-      metadata.persistenceId, metadata.sequenceNr: JLong, metadata.timestamp: JLong, serialize(Snapshot(snapshot)))
+      metadata.persistenceId, metadata.sequenceNr: JLong, metadata.timestamp: JLong, serialize(Snapshot(snapshot))
+    )
     session.executeAsync(stmt).map(_ => ())
   }
 
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
     val stmt = cassandraSession.preparedDeleteSnapshot.bind(
-      metadata.persistenceId, metadata.sequenceNr: JLong)
+      metadata.persistenceId, metadata.sequenceNr: JLong
+    )
     session.executeAsync(stmt).map(_ => ())
   }
 
   def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = for {
     mds <- Future(metadata(persistenceId, criteria).toVector)
     res <- executeBatch(batch => mds.foreach(md => batch.add(
-      cassandraSession.preparedDeleteSnapshot.bind(md.persistenceId, md.sequenceNr: JLong))))
+      cassandraSession.preparedDeleteSnapshot.bind(md.persistenceId, md.sequenceNr: JLong)
+    )))
   } yield res
 
   def executeBatch(body: BatchStatement ⇒ Unit): Future[Unit] = {

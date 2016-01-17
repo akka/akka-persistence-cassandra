@@ -18,7 +18,8 @@ object CassandraJournalConfiguration {
       |cassandra-journal.port = 9142
       |cassandra-snapshot-store.port = 9142
       |cassandra-journal.circuit-breaker.call-timeout = 20s
-    """.stripMargin)
+    """.stripMargin
+  )
 }
 
 class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
@@ -26,8 +27,8 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
 }
 
 class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
-  
+
   override def awaitDurationMillis: Long = 20.seconds.toMillis
-  
+
   override def supportsRejectingNonSerializableObjects = false
 }

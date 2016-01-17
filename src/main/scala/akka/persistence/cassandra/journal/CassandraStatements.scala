@@ -91,7 +91,7 @@ trait CassandraStatements {
        INSERT INTO ${tableName} (persistence_id, partition_nr, used)
        VALUES(?, ?, true)
      """
-  
+
   private def tableName = s"${config.keyspace}.${config.table}"
   private def configTableName = s"${config.keyspace}.${config.configTable}"
   private def metadataTableName = s"${config.keyspace}.${config.metadataTable}"
