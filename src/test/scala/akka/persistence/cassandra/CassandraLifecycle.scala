@@ -6,21 +6,16 @@ import java.io.File
 import akka.persistence.cassandra.testkit.CassandraLauncher
 
 trait CassandraLifecycle extends BeforeAndAfterAll { this: Suite =>
-  def withSsl: Boolean = false
 
   def systemName: String
 
   def cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource
 
-  private def toggleSsl(path: String, toggle: Boolean): String =
-    if (toggle) path.dropRight(5) + "-ssl" + path.takeRight(5)
-    else path
-
   override protected def beforeAll(): Unit = {
     val cassandraDirectory = new File("target/" + systemName)
     CassandraLauncher.start(
       cassandraDirectory,
-      configResource = toggleSsl(cassandraConfigResource, withSsl),
+      configResource = cassandraConfigResource,
       clean = true,
       port = 0)
 

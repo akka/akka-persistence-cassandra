@@ -10,6 +10,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import com.datastax.driver.core.JdkSSLOptions
 
+case class StorePathPasswordConfig( path: String, password: String )
 
 class CassandraPluginConfig(config: Config) {
 
@@ -56,16 +57,22 @@ class CassandraPluginConfig(config: Config) {
   }
 
   if (config.hasPath("ssl")) {
-    val trustStorePath: String = config.getString("ssl.truststore.path")
-    val trustStorePW: String = config.getString("ssl.truststore.password")
-    val keyStorePath: String = config.getString("ssl.keystore.path")
-    val keyStorePW: String = config.getString("ssl.keystore.password")
+    val trustStore = StorePathPasswordConfig( 
+        config.getString("ssl.truststore.path"), 
+        config.getString("ssl.truststore.password") 
+      )
 
-    val context = SSLSetup.constructContext(
-      trustStorePath,
-      trustStorePW,
-      keyStorePath,
-      keyStorePW)
+    val keyStore:Option[StorePathPasswordConfig] = 
+      if(config.hasPath("ssl.keystore")) {
+        val keyStore = StorePathPasswordConfig(
+          config.getString("ssl.keystore.path"),
+          config.getString("ssl.keystore.password")
+        )
+        Some(keyStore)
+      } else None
+
+
+    val context = SSLSetup.constructContext(trustStore, keyStore)
 
     // FIXME there is also a NettySSLOptions? what about SSLOptions?
     clusterBuilder.withSSL(JdkSSLOptions.builder.withSSLContext(context).build())
@@ -74,7 +81,7 @@ class CassandraPluginConfig(config: Config) {
 
 object CassandraPluginConfig {
 
-  val keyspaceNameRegex = """^("[a-zA-Z]{1}[\w]{0,31}"|[a-zA-Z]{1}[\w]{0,31})$"""
+  val keyspaceNameRegex = """^("[a-zA-Z]{1}[\w]{0,47}"|[a-zA-Z]{1}[\w]{0,47})$"""
 
   /**
    * Builds list of InetSocketAddress out of host:port pairs or host entries + given port parameter.

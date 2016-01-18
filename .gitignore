@@ -5,9 +5,10 @@
 target/
 /.target/
 .DS_Store
-.cache
+.cache*
 .classpath
 .project
 .settings
-
+*.sublime-project
 /bin/
+ext-lib-src/
