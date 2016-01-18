@@ -5,27 +5,35 @@ package akka.persistence.cassandra
 
 import java.io.{ File, FileInputStream, InputStream }
 import java.security.{ KeyStore, SecureRandom }
-import javax.net.ssl.{ KeyManagerFactory, SSLContext, TrustManagerFactory }
+import javax.net.ssl.{ KeyManagerFactory, SSLContext, TrustManagerFactory, TrustManager, KeyManager }
 
 private[cassandra] object SSLSetup {
   /**
    * creates a new SSLContext
    */
   def constructContext(
-    trustStorePath: String,
-    trustStorePW:   String,
-    keyStorePath:   String,
-    keyStorePW:     String
+    trustStore: StorePathPasswordConfig,
+    keyStore:   Option[StorePathPasswordConfig]
   ): SSLContext = {
 
-    val tmf = loadTrustManagerFactory(trustStorePath, trustStorePW)
-    val kmf = loadKeyManagerFactory(keyStorePath, keyStorePW)
+    val tmf = loadTrustManagerFactory(
+      trustStore.path,
+      trustStore.password
+    )
+
+    val trustManagers: Array[TrustManager] = tmf.getTrustManagers
+
+    val keyManagers: Array[KeyManager] = keyStore.map {
+      case StorePathPasswordConfig(path, password) =>
+        val kmf = loadKeyManagerFactory(path, password)
+        kmf.getKeyManagers
+    }.getOrElse(Array.empty[KeyManager])
 
     val ctx = SSLContext.getInstance("SSL")
 
     ctx.init(
-      kmf.getKeyManagers,
-      tmf.getTrustManagers,
+      keyManagers,
+      trustManagers,
       new SecureRandom()
     )
 
@@ -66,7 +74,8 @@ private[cassandra] object SSLSetup {
 
     val ks = loadKeyStore(keyStorePath, keyStorePassword)
     val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm)
-    kmf.init(ks, keyStorePassword.toCharArray)
+    val keyPassword = keyStorePassword.toCharArray
+    kmf.init(ks, keyPassword)
     kmf
   }
 }

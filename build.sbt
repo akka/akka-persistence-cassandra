@@ -56,7 +56,7 @@ parallelExecution in Test := false
 val AkkaVersion = "2.4.1"
 
 libraryDependencies ++= Seq(
-  "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.0.0-beta1",
+  "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.0.0-rc1",
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query-experimental" % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion      % "test",
