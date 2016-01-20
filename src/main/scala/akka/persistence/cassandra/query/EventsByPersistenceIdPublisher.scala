@@ -5,20 +5,18 @@ package akka.persistence.cassandra.query
 
 import java.nio.ByteBuffer
 import java.lang.{ Long => JLong }
-
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-
 import akka.actor.Props
 import akka.persistence.PersistentRepr
 import akka.serialization.{ SerializationExtension, Serialization }
 import com.datastax.driver.core.utils.Bytes
 import com.datastax.driver.core.{ ResultSet, Row, PreparedStatement, Session }
-
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.QueryActorPublisher._
 import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher._
+import akka.persistence.cassandra.journal.CassandraJournal
 
 private[query] object EventsByPersistenceIdPublisher {
   private[query] final case class EventsByPersistenceIdSession(
@@ -52,6 +50,7 @@ private[query] class EventsByPersistenceIdPublisher(
 )
   extends QueryActorPublisher[PersistentRepr, EventsByPersistenceIdState](refreshInterval, config) {
 
+  import CassandraJournal.deserializeEvent
   import context.dispatcher
 
   private[this] val serialization = SerializationExtension(context.system)
@@ -81,7 +80,21 @@ private[query] class EventsByPersistenceIdPublisher(
   }
 
   private[this] def extractEvent(row: Row): PersistentRepr =
-    persistentFromByteBuffer(serialization, row.getBytes("message"))
+    row.getBytes("message") match {
+      case null =>
+        PersistentRepr(
+          payload = deserializeEvent(serialization, row),
+          sequenceNr = row.getLong("sequence_nr"),
+          persistenceId = row.getString("persistence_id"),
+          manifest = row.getString("event_manifest"),
+          deleted = false,
+          sender = null,
+          writerUuid = row.getString("writer_uuid")
+        )
+      case b =>
+        // for backwards compatibility
+        persistentFromByteBuffer(serialization, b)
+    }
 
   private[this] def persistentFromByteBuffer(
     serialization: Serialization,
