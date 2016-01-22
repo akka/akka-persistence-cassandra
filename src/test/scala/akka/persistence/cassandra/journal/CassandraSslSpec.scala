@@ -5,15 +5,15 @@ package akka.persistence.cassandra.journal
 
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import scala.concurrent.duration._
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.testkit._
-
 import com.typesafe.config.ConfigFactory
-
 import org.scalatest._
+import CassandraSslSpec._
+import java.util.Locale
+import javax.crypto.Cipher
 
 object CassandraSslSpec {
   def config(keyStore: Boolean) = {
@@ -63,22 +63,43 @@ object CassandraSslSpec {
         sender ! recoveryRunning
     }
   }
+
 }
 
-import CassandraSslSpec._
+trait CassandraSslSpec extends WordSpecLike {
+
+  def hasJCESupport: Boolean = {
+    Cipher.getMaxAllowedKeyLength("AES") == Int.MaxValue
+  }
+
+  def skipIfNoJCESupport(): Unit =
+    if (!hasJCESupport) {
+      info("Skipping test because Java Cryptography Extensions (JCE) not installed")
+      pending
+    }
+
+}
 
 class CassandraSslSpecWithClientAuth extends TestKit(ActorSystem("CassandraSslSpecWithClientAuth", config(true)))
   with ImplicitSender
   with WordSpecLike
   with Matchers
-  with CassandraLifecycle {
+  with CassandraLifecycle
+  with CassandraSslSpec {
 
   override def cassandraConfigResource: String = "test-embedded-cassandra-ssl-server-client.yaml"
 
   override def systemName: String = "CassandraSslSpec"
 
+  override protected def beforeAll(): Unit = {
+    if (hasJCESupport)
+      super.beforeAll()
+  }
+
   "A Cassandra journal with 2-way SSL setup" must {
+
     "write messages over SSL" in {
+      skipIfNoJCESupport()
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
       1L to 16L foreach { i =>
         processor1 ! s"a-${i}"
@@ -92,14 +113,21 @@ class CassandraSslSpecWithoutClientAuth extends TestKit(ActorSystem("CassandraSs
   with ImplicitSender
   with WordSpecLike
   with Matchers
-  with CassandraLifecycle {
+  with CassandraLifecycle
+  with CassandraSslSpec {
 
   override def cassandraConfigResource: String = "test-embedded-cassandra-ssl-server.yaml"
 
   override def systemName: String = "CassandraSslSpec"
 
+  override protected def beforeAll(): Unit = {
+    if (hasJCESupport)
+      super.beforeAll()
+  }
+
   "A Cassandra journal with 1-way SSL setup" must {
     "write messages over SSL" in {
+      skipIfNoJCESupport()
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
       1L to 16L foreach { i =>
         processor1 ! s"a-${i}"

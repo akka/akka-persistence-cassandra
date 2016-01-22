@@ -4,9 +4,7 @@
 package akka.persistence.cassandra
 
 import java.io.File
-
 import scala.concurrent.duration._
-
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.persistence.PersistentActor
@@ -14,6 +12,7 @@ import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.testkit.TestKitBase
 import akka.testkit.TestProbe
 import org.scalatest._
+import java.util.Locale
 
 object CassandraLifecycle {
   def awaitPersistenceInit(system: ActorSystem): Unit = {
@@ -67,4 +66,5 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suit
     CassandraLauncher.stop()
     super.afterAll()
   }
+
 }
