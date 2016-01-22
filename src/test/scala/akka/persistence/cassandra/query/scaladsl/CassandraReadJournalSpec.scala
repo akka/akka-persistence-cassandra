@@ -3,8 +3,7 @@
  */
 package akka.persistence.cassandra.query.scaladsl
 
-import scala.concurrent.ExecutionContext.Implicits.global
-
+import scala.concurrent.duration._
 import akka.actor.{ Props, ActorSystem }
 import akka.stream.scaladsl.Sink
 import akka.stream.ActorMaterializer
@@ -13,12 +12,12 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Seconds, Second, Span }
 import org.scalatest.{ Matchers, WordSpecLike }
-
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.TestActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.PersistenceQuery
+import akka.stream.testkit.scaladsl.TestSink
 
 object CassandraReadJournalSpec {
   val config = s"""
@@ -28,6 +27,7 @@ object CassandraReadJournalSpec {
     cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
+    cassandra-query-journal.eventual-consistency-delay = 1s
     cassandra-journal.event-adapters {
       test-tagger = akka.persistence.cassandra.query.scaladsl.TestTagger
     }
@@ -39,7 +39,10 @@ object CassandraReadJournalSpec {
 
 class TestTagger extends WriteEventAdapter {
   override def manifest(event: Any): String = ""
-  override def toJournal(event: Any): Any = Tagged(event, Set("a"))
+  override def toJournal(event: Any): Any = event match {
+    case s: String if s.startsWith("a") => Tagged(event, Set("a"))
+    case _                              => event
+  }
 }
 
 class CassandraReadJournalSpec
@@ -66,7 +69,10 @@ class CassandraReadJournalSpec
       expectMsg("a-1-done")
 
       val src = queries.eventsByPersistenceId("a", 0L, Long.MaxValue)
-      src.runWith(Sink.head).map(_.persistenceId).futureValue.shouldEqual("a")
+      src.map(_.persistenceId).runWith(TestSink.probe[Any])
+        .request(10)
+        .expectNext("a")
+        .cancel()
     }
 
     "start current eventsByPersistenceId query" in {
@@ -75,17 +81,27 @@ class CassandraReadJournalSpec
       expectMsg("b-1-done")
 
       val src = queries.currentEventsByPersistenceId("b", 0L, Long.MaxValue)
-      src.runWith(Sink.head).map(_.persistenceId).futureValue.shouldEqual("b")
+      src.map(_.persistenceId).runWith(TestSink.probe[Any])
+        .request(10)
+        .expectNext("b")
+        .expectComplete()
     }
 
     "start eventsByTag query" in {
       val src = queries.eventsByTag("a", 0L)
-      src.runWith(Sink.head).map(_.persistenceId).futureValue.shouldEqual("a")
+      src.map(_.persistenceId).runWith(TestSink.probe[Any])
+        .request(10)
+        .expectNext("a")
+        .expectNoMsg(100.millis)
+        .cancel()
     }
 
     "start current eventsByTag query" in {
       val src = queries.currentEventsByTag("a", 0L)
-      src.runWith(Sink.head).map(_.persistenceId).futureValue.shouldEqual("a")
+      src.map(_.persistenceId).runWith(TestSink.probe[Any])
+        .request(10)
+        .expectNext("a")
+        .expectComplete()
     }
   }
 }
