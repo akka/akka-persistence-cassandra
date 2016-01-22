@@ -92,6 +92,9 @@ class MultiPluginSpec
   var cluster: Cluster = _
   var session: Session = _
 
+  // default journal plugin is not configured for this test
+  override def awaitPersistenceInit(): Unit = ()
+
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
