@@ -5,20 +5,20 @@ package akka.persistence.cassandra.query
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
-
 import akka.actor.Props
 import com.datastax.driver.core.{ Row, ResultSet, Session, PreparedStatement }
-
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher._
 import akka.persistence.cassandra.query.QueryActorPublisher._
+import akka.actor.NoSerializationVerificationNeeded
 
 private[query] object AllPersistenceIdsPublisher {
   private[query] final case class AllPersistenceIdsSession(
     selectDistinctPersistenceIds: PreparedStatement,
     session:                      Session
-  )
+  ) extends NoSerializationVerificationNeeded
   private[query] final case class ReplayDone(resultSet: Option[ResultSet])
+    extends NoSerializationVerificationNeeded
   private[query] final case class AllPersistenceIdsState(knownPersistenceIds: Set[String])
 
   def props(

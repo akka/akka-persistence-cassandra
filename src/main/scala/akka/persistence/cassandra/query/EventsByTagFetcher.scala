@@ -21,10 +21,12 @@ import akka.actor.ActorLogging
 import scala.annotation.tailrec
 import akka.actor.DeadLetterSuppression
 import akka.persistence.cassandra.journal.TimeBucket
+import akka.actor.NoSerializationVerificationNeeded
 
 private[query] object EventsByTagFetcher {
 
-  private final case class InitResultSet(rs: ResultSet) extends DeadLetterSuppression
+  private final case class InitResultSet(rs: ResultSet)
+    extends DeadLetterSuppression with NoSerializationVerificationNeeded
   private case object Fetched extends DeadLetterSuppression
 
   def props(tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int,
