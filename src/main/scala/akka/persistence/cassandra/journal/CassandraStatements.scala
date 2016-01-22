@@ -124,6 +124,8 @@ trait CassandraStatements {
    * when write and read-side plugins are started at the same time.
    * Those statements are retried, because that could happen across different
    * nodes also but synchronizing those statements gives a better "experience".
+   *
+   * The materialized view for eventsByTag query is not created if `maxTagId` is 0.
    */
   def executeCreateKeyspaceAndTables(session: Session, keyspaceAutoCreate: Boolean, maxTagId: Int): Unit =
     CassandraStatements.createKeyspaceAndTablesLock.synchronized {

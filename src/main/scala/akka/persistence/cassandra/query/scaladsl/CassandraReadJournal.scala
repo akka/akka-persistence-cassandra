@@ -238,12 +238,15 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    */
   def eventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, Unit] =
     try {
-      import queryPluginConfig._
-      Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
-        None, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
-        .mapMaterializedValue(_ => ())
-        .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
-        .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
+      if (writePluginConfig.enableEventsByTagQuery) {
+        import queryPluginConfig._
+        Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
+          None, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
+          .mapMaterializedValue(_ => ())
+          .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+          .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
+      } else
+        Source.failed(new UnsupportedOperationException("eventsByTag query is disabled"))
     } catch {
       case NonFatal(e) =>
         // e.g. from cassandraSession, or selectStatement
@@ -282,13 +285,16 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    */
   def currentEventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, Unit] =
     try {
-      import queryPluginConfig._
-      val toOffset = Some(offsetUuid(System.currentTimeMillis()))
-      Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
-        toOffset, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
-        .mapMaterializedValue(_ => ())
-        .named("currentEventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
-        .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
+      if (writePluginConfig.enableEventsByTagQuery) {
+        import queryPluginConfig._
+        val toOffset = Some(offsetUuid(System.currentTimeMillis()))
+        Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
+          toOffset, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
+          .mapMaterializedValue(_ => ())
+          .named("currentEventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+          .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
+      } else
+        Source.failed(new UnsupportedOperationException("eventsByTag query is disabled"))
     } catch {
       case NonFatal(e) =>
         // e.g. from cassandraSession, or selectStatement
