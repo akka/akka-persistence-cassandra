@@ -27,17 +27,19 @@ scalacOptions ++= Seq(
 )
 
 // group tests, a single test per group
-def singleTests(tests: Seq[TestDefinition]) =
+def singleTests(tests: Seq[TestDefinition]) = {
   // We could group non Cassandra tests into another group
   // to avoid new JVM for each test, see http://www.scala-sbt.org/release/docs/Testing.html
+  val javaOptions = Seq("-Xms512M", "-Xmx1G", "-XX:+PrintGCDetails", "-XX:+PrintGCTimeStamps")
   tests map { test =>
     new Group(
       name = test.name,
       tests = Seq(test),
-      runPolicy = SubProcess(javaOptions = Seq.empty[String]))
+      runPolicy = SubProcess(javaOptions))
   }
+}
 
-javaOptions in Test += "-Xmx2500M"
+javaOptions in Test ++= Seq("-Xms512M", "-Xmx1G", "-XX:+PrintGCDetails", "-XX:+PrintGCTimeStamps")
 
 fork in Test := true // for Cassandra tests
 

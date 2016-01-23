@@ -3,15 +3,34 @@
  */
 package akka.persistence.cassandra.compaction
 
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import java.util.concurrent.TimeUnit
 
+import akka.actor.ActorSystem
 import akka.persistence.cassandra.{ CassandraPluginConfig, CassandraLifecycle }
+
+import akka.persistence.cassandra.testkit.CassandraLauncher
+import akka.testkit.TestKit
 import com.datastax.driver.core.{ Session, Cluster }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ MustMatchers, WordSpec }
+import org.scalatest.MustMatchers
+import org.scalatest.WordSpecLike
 
-class CassandraCompactionStrategySpec extends WordSpec with MustMatchers with CassandraLifecycle {
+object CassandraCompactionStrategySpec {
+  lazy val config = ConfigFactory.parseString(
+    s"""
+      |akka.persistence.journal.plugin = "cassandra-journal"
+      |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
+      |cassandra-journal.port = ${CassandraLauncher.randomPort}
+      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
+    """.stripMargin
+  )
+}
+
+class CassandraCompactionStrategySpec extends TestKit(
+  ActorSystem("CassandraCompactionStrategySpec", CassandraCompactionStrategySpec.config)
+)
+  with WordSpecLike with MustMatchers with CassandraLifecycle {
+
   val defaultConfigs = ConfigFactory.parseString(
     s"""keyspace-autocreate = true
       |keyspace = test-keyspace

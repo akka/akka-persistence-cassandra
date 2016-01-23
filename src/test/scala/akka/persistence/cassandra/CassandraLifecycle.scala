@@ -3,12 +3,42 @@
  */
 package akka.persistence.cassandra
 
-import scala.concurrent.duration._
-import org.scalatest._
 import java.io.File
+import scala.concurrent.duration._
+import akka.actor.ActorSystem
+import akka.actor.Props
+import akka.persistence.PersistentActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
+import akka.testkit.TestKitBase
+import akka.testkit.TestProbe
+import org.scalatest._
+import java.util.Locale
 
-trait CassandraLifecycle extends BeforeAndAfterAll { this: Suite =>
+object CassandraLifecycle {
+  def awaitPersistenceInit(system: ActorSystem): Unit = {
+    val probe = TestProbe()(system)
+    system.actorOf(Props[AwaitPersistenceInit]).tell("hello", probe.ref)
+    probe.expectMsg(25.seconds, "hello")
+  }
+
+  class AwaitPersistenceInit extends PersistentActor {
+    def persistenceId: String = "persistenceInit"
+
+    def receiveRecover: Receive = {
+      case _ =>
+    }
+
+    def receiveCommand: Receive = {
+      case msg =>
+        persist(msg) { _ =>
+          sender() ! msg
+          context.stop(self)
+        }
+    }
+  }
+}
+
+trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suite =>
 
   def systemName: String
 
@@ -23,11 +53,18 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: Suite =>
       port = 0
     )
 
+    awaitPersistenceInit()
+
     super.beforeAll()
+  }
+
+  def awaitPersistenceInit(): Unit = {
+    CassandraLifecycle.awaitPersistenceInit(system)
   }
 
   override protected def afterAll(): Unit = {
     CassandraLauncher.stop()
     super.afterAll()
   }
+
 }
