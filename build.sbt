@@ -5,11 +5,13 @@ import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 
 enablePlugins(AutomateHeaderPlugin)
 
-organization := "com.github.krasserm"
+organization := "com.typesafe.akka"
+organizationName := "Typesafe Inc."
+organizationHomepage := Some(url("http://www.typesafe.com"))
 
-name := "akka-persistence-cassandra-3x"
+name := "akka-persistence-cassandra"
 
-version := "0.7-SNAPSHOT"
+licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licenses/LICENSE-2.0")))
 
 scalaVersion := "2.11.7"
 
@@ -65,25 +67,8 @@ libraryDependencies ++= Seq(
   "org.scalatest"          %% "scalatest"                           % "2.1.4"      % "test",
   "com.typesafe.akka"      %% "akka-stream-testkit-experimental"    % "1.0"        % "test",
   // cassandra-all for testkit.CassandraLauncher, app should define it as test dependency if needed
-  "org.apache.cassandra"    % "cassandra-all"                       % "3.0.1"      % "optional"
+  "org.apache.cassandra"    % "cassandra-all"                       % "3.0.2"      % "optional"
 )
-
-credentials += Credentials(
-  "Artifactory Realm",
-  "oss.jfrog.org",
-  sys.env.getOrElse("OSS_JFROG_USER", ""),
-  sys.env.getOrElse("OSS_JFROG_PASS", "")
-)
-
-publishTo := {
-  val jfrog = "https://oss.jfrog.org/artifactory/"
-  if (isSnapshot.value)
-    Some("OJO Snapshots" at jfrog + "oss-snapshot-local")
-  else
-    Some("OJO Releases" at jfrog + "oss-release-local")
-}
-
-publishMavenStyle := true
 
 headers := headers.value ++ Map(
   "scala" -> (
