@@ -80,31 +80,35 @@ class CassandraPluginConfig(config: Config) {
     .withPoolingOptions(poolingOptions)
     .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
 
-  if (config.hasPath("authentication")) {
+  private val username = config.getString("authentication.username")
+  if (username != "") {
     clusterBuilder.withCredentials(
-      config.getString("authentication.username"),
+      username,
       config.getString("authentication.password")
     )
   }
 
-  if (config.hasPath("local-datacenter")) {
+  private val localDatacenter = config.getString("local-datacenter")
+  if (localDatacenter != "") {
     clusterBuilder.withLoadBalancingPolicy(
       new TokenAwarePolicy(
-        DCAwareRoundRobinPolicy.builder.withLocalDc(config.getString("local-datacenter")).build()
+        DCAwareRoundRobinPolicy.builder.withLocalDc(localDatacenter).build()
       )
     )
   }
 
-  if (config.hasPath("ssl")) {
+  private val truststorePath = config.getString("ssl.truststore.path")
+  if (truststorePath != "") {
     val trustStore = StorePathPasswordConfig(
-      config.getString("ssl.truststore.path"),
+      truststorePath,
       config.getString("ssl.truststore.password")
     )
 
+    val keystorePath = config.getString("ssl.keystore.path")
     val keyStore: Option[StorePathPasswordConfig] =
-      if (config.hasPath("ssl.keystore")) {
+      if (keystorePath != "") {
         val keyStore = StorePathPasswordConfig(
-          config.getString("ssl.keystore.path"),
+          keystorePath,
           config.getString("ssl.keystore.password")
         )
         Some(keyStore)
@@ -112,7 +116,6 @@ class CassandraPluginConfig(config: Config) {
 
     val context = SSLSetup.constructContext(trustStore, keyStore)
 
-    // FIXME there is also a NettySSLOptions? what about SSLOptions?
     clusterBuilder.withSSL(JdkSSLOptions.builder.withSSLContext(context).build())
   }
 }

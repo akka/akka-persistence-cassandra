@@ -15,38 +15,7 @@ import scala.util.Random
  *
  */
 class CassandraPluginConfigTest extends WordSpec with MustMatchers {
-  lazy val defaultConfig = ConfigFactory.parseString(
-    """
-      |keyspace-autocreate = true
-      |keyspace = test-keyspace
-      |connect-retries = 3
-      |connect-retry-delay = 5s
-      |connection-pool {
-      |  new-connection-threshold-local = 100
-      |  new-connection-threshold-remote = 100
-      |  connections-per-host-core-local = 1
-      |  connections-per-host-max-local = 1
-      |  connections-per-host-core-remote = 1
-      |  connections-per-host-max-remote = 1
-      |  max-requests-per-connection-local = 32768
-      |  max-requests-per-connection-remote = 2000
-      |  pool-timeout-millis = 0
-      |}
-      |table = test-table
-      |table-compaction-strategy { class = "SizeTieredCompactionStrategy" }
-      |metadata-table = test-metadata-table
-      |config-table = config
-      |replication-strategy = "SimpleStrategy"
-      |replication-factor = 1
-      |data-center-replication-factors = []
-      |read-consistency = QUORUM
-      |write-consistency = QUORUM
-      |contact-points = ["127.0.0.1"]
-      |port = 9142
-      |max-result-size = 50
-      |delete-retries = 4
-    """.stripMargin
-  )
+  lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-journal")
 
   lazy val keyspaceNames = {
     // Generate a key that is the max acceptable length ensuring the first char is alpha
@@ -82,12 +51,12 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
   "A CassandraPluginConfig" should {
     "set the fetch size to the max result size" in {
       val config = new CassandraPluginConfig(defaultConfig)
-      config.fetchSize must be(50)
+      config.fetchSize must be(50001)
     }
 
     "set the metadata table" in {
       val config = new CassandraPluginConfig(defaultConfig)
-      config.metadataTable must be("test-metadata-table")
+      config.metadataTable must be("metadata")
     }
 
     "parse config with host:port values as contact points" in {
@@ -107,8 +76,8 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       val config = new CassandraPluginConfig(configWithHosts)
       config.contactPoints must be(
         List(
-          new InetSocketAddress("127.0.0.1", 9142),
-          new InetSocketAddress("127.0.0.2", 9142)
+          new InetSocketAddress("127.0.0.1", 9042),
+          new InetSocketAddress("127.0.0.2", 9042)
         )
       )
     }
