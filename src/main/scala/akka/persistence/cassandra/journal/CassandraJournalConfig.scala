@@ -17,6 +17,7 @@ class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(confi
   val maxMessageBatchSize = config.getInt("max-message-batch-size")
   val deleteRetries: Int = config.getInt("delete-retries")
   val writeRetries: Int = config.getInt("write-retries")
+  val enableEventsByTagQuery = config.getBoolean("enable-events-by-tag-query")
   val eventsByTagView: String = config.getString("events-by-tag-view")
 
   val maxTagsPerEvent: Int = 3
@@ -35,7 +36,12 @@ class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(confi
     }(collection.breakOut)
   }
 
-  def maxTagId: Int = if (tags.isEmpty) 1 else tags.values.max
+  /**
+   * Will be 0 if [[#enableEventsByTagQuery]] is disabled,
+   * will be 1 if [[#tags]] is empty, otherwise the number of configured
+   * distinct tag identifiers.
+   */
+  def maxTagId: Int = if (!enableEventsByTagQuery) 0 else if (tags.isEmpty) 1 else tags.values.max
 }
 
 object CassandraJournalConfig {
