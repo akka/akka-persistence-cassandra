@@ -21,6 +21,12 @@ object CassandraJournalConfiguration {
       |cassandra-journal.circuit-breaker.call-timeout = 20s
     """.stripMargin
   )
+
+  lazy val perfConfig = ConfigFactory.parseString(
+    """
+    akka.actor.serialize-messages=off
+    """
+  ).withFallback(config)
 }
 
 class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
@@ -29,7 +35,7 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
   override def supportsRejectingNonSerializableObjects = false
 }
 
-class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
+class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfiguration.perfConfig) with CassandraLifecycle {
   override def systemName: String = "CassandraJournalPerfSpec"
 
   override def awaitDurationMillis: Long = 20.seconds.toMillis

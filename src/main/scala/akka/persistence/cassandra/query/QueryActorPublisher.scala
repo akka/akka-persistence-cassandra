@@ -21,10 +21,12 @@ object QueryActorPublisher {
   private[query] final case class ReplayFailed(cause: Throwable)
     extends DeadLetterSuppression with NoSerializationVerificationNeeded
 
-  sealed trait Action
+  sealed trait Action extends NoSerializationVerificationNeeded
   final case class NewResultSet(rs: ResultSet) extends Action
   final case class FetchedResultSet(rs: ResultSet) extends Action
   final case class Finished(resultSet: ResultSet) extends Action
+
+  private case object Continue
 }
 
 //TODO: Handle database timeout, retry and failure handling.
@@ -47,11 +49,9 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
   extends ActorPublisher[MessageType]
   with ActorLogging {
 
-  private[this] sealed trait InitialAction
+  private[this] sealed trait InitialAction extends NoSerializationVerificationNeeded
   private[this] case class InitialNewResultSet(s: State, rs: ResultSet) extends InitialAction
   private[this] case class InitialFinished(s: State, rs: ResultSet) extends InitialAction
-
-  private[this] case object Continue
 
   import context.dispatcher
 
