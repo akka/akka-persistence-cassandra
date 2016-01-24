@@ -49,6 +49,7 @@ object EventsByTagSpec {
     cassandra-journal {
       #target-partition-size = 5
       port = ${CassandraLauncher.randomPort}
+      keyspace=EventsByTagSpec
       event-adapters {
         color-tagger  = akka.persistence.cassandra.query.ColorFruitTagger
       }

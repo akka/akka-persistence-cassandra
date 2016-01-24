@@ -17,7 +17,8 @@ class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(confi
   val maxMessageBatchSize = config.getInt("max-message-batch-size")
   val deleteRetries: Int = config.getInt("delete-retries")
   val writeRetries: Int = config.getInt("write-retries")
-  val enableEventsByTagQuery = config.getBoolean("enable-events-by-tag-query")
+  val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
+  val enableEventsByTagQuery: Boolean = !cassandra2xCompat && config.getBoolean("enable-events-by-tag-query")
   val eventsByTagView: String = config.getString("events-by-tag-view")
 
   val maxTagsPerEvent: Int = 3

@@ -29,6 +29,8 @@ object CassandraSslSpec {
         |cassandra-journal.max-result-size = 3
         |cassandra-journal.port = ${CassandraLauncher.randomPort}
         |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
+        |cassandra-journal.keyspace=CassandraSslSpec${if (keyStore) 1 else 2}
+        |cassandra-snapshot-store.keyspace=CassandraLoadSpec${if (keyStore) 1 else 2}Snapshot
         |cassandra-journal.circuit-breaker.call-timeout = 20s
         |cassandra-snapshot-store.ssl.truststore.path="src/test/resources/security/cts_truststore.jks"
         |cassandra-snapshot-store.ssl.truststore.password="hbbUtqn3Y1D4Tw"

@@ -42,7 +42,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     executeCreateKeyspaceAndTables(underlying, config.keyspaceAutoCreate, maxTagId)
 
     val preparedWriteMessage = underlying.prepare(writeMessage)
-    val preparedDeletePermanent = underlying.prepare(deleteMessage)
+    val preparedDeleteMessages = underlying.prepare(deleteMessages)
     val preparedSelectMessages = underlying.prepare(selectMessages).setConsistencyLevel(readConsistency)
     val preparedCheckInUse = underlying.prepare(selectInUse).setConsistencyLevel(readConsistency)
     val preparedWriteInUse = underlying.prepare(writeInUse)
@@ -199,7 +199,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   }
 
   def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
-
     val fromSequenceNr = readLowestSequenceNr(persistenceId, 1L)
     val lowestPartition = partitionNr(fromSequenceNr)
     val toSeqNr = math.min(toSequenceNr, readHighestSequenceNr(persistenceId, fromSequenceNr))
@@ -210,17 +209,38 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       cassandraSession.preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong)
     )
 
-    partitionInfos.map(future => future.flatMap(pi => {
-      Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>
-        {
-          val delete = asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
-          delete.onFailure {
-            case e => log.warning(s"Unable to complete deletes for persistence id ${persistenceId}, toSequenceNr ${toSequenceNr}. The plugin will continue to function correctly but you will need to manually delete the old messages.", e)
-          }
-          delete
+    if (config.cassandra2xCompat) {
+      def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = executeBatch({ batch =>
+        messageIds.foreach { mid =>
+          batch.add(cassandraSession.preparedDeleteMessages
+            .bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong))
         }
-      })
-    }))
+      }, deleteRetryPolicy)
+
+      partitionInfos.map(future => future.flatMap(pi => {
+        Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>
+          {
+            val delete = asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
+            delete.onFailure {
+              case e => log.warning(s"Unable to complete deletes for persistence id ${persistenceId}, toSequenceNr ${toSequenceNr}. The plugin will continue to function correctly but you will need to manually delete the old messages.", e)
+            }
+            delete
+          }
+        })
+      }))
+
+    } else {
+      Future.sequence(partitionInfos.map(future => future.flatMap { pi =>
+        execute(
+          cassandraSession.preparedDeleteMessages.bind(persistenceId, pi.partitionNr: JLong, toSeqNr: JLong),
+          deleteRetryPolicy
+        )
+      })).onFailure {
+        case e => log.warning(s"Unable to complete deletes for persistence id ${persistenceId}, " +
+          s"toSequenceNr ${toSequenceNr}. The plugin will continue to " +
+          "function correctly but you will need to manually delete the old messages.", e)
+      }
+    }
 
     logicalDelete.map(_ => ())
   }
@@ -235,13 +255,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       .map(row => row.map(s => PartitionInfo(partitionNr, minSequenceNr(partitionNr), min(s.getLong("sequence_nr"), maxSequenceNr)))
         .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
   }
-
-  private def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = executeBatch({ batch =>
-    messageIds.foreach { mid =>
-      batch.add(cassandraSession.preparedDeletePermanent
-        .bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong))
-    }
-  }, deleteRetryPolicy)
 
   private def executeBatch(body: BatchStatement ⇒ Unit, retryPolicy: RetryPolicy): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy).asInstanceOf[BatchStatement]

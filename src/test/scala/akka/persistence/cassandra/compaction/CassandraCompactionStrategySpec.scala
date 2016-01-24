@@ -22,6 +22,8 @@ object CassandraCompactionStrategySpec {
       |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
+      |cassandra-journal.keyspace=CassandraCompactionStrategySpec
+      |cassandra-snapshot-store.keyspace=CassandraCompactionStrategySpecSnapshot
     """.stripMargin
   )
 }

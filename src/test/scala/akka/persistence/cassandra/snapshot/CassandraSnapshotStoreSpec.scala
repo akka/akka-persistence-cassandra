@@ -24,6 +24,8 @@ object CassandraSnapshotStoreConfiguration {
       |akka.test.single-expect-default = 10s
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
+      |cassandra-journal.keyspace=CassandraSnapshotStoreSpec
+      |cassandra-snapshot-store.keyspace=CassandraSnapshotStoreSpecSnapshot
       |cassandra-snapshot-store.max-metadata-result-size = 2
     """.stripMargin
   )

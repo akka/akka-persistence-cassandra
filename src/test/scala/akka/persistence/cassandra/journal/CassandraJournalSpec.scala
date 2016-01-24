@@ -18,6 +18,8 @@ object CassandraJournalConfiguration {
       |akka.test.single-expect-default = 20s
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
+      |cassandra-journal.keyspace=CassandraJournalSpec
+      |cassandra-snapshot-store.keyspace=CassandraJournalSpecSnapshot
       |cassandra-journal.circuit-breaker.call-timeout = 20s
     """.stripMargin
   )
@@ -25,6 +27,8 @@ object CassandraJournalConfiguration {
   lazy val perfConfig = ConfigFactory.parseString(
     """
     akka.actor.serialize-messages=off
+    cassandra-journal.keyspace=CassandraJournalPerfSpec
+    cassandra-snapshot-store.keyspace=CassandraJournalPerfSpecSnapshot
     """
   ).withFallback(config)
 }

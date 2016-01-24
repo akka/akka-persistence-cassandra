@@ -68,6 +68,23 @@ trait CassandraStatements {
         sequence_nr = ?
     """
 
+  def deleteMessages = {
+    if (config.cassandra2xCompat)
+      s"""
+      DELETE FROM ${tableName} WHERE
+        persistence_id = ? AND
+        partition_nr = ? AND
+        sequence_nr = ?
+    """
+    else
+      s"""
+      DELETE FROM ${tableName} WHERE
+        persistence_id = ? AND
+        partition_nr = ? AND
+        sequence_nr <= ?
+    """
+  }
+
   def selectMessages = s"""
       SELECT * FROM ${tableName} WHERE
         persistence_id = ? AND

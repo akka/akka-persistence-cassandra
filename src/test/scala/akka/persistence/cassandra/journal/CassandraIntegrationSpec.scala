@@ -30,6 +30,8 @@ object CassandraIntegrationSpec {
       |cassandra-journal.max-result-size = 3
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
+      |cassandra-journal.keyspace=CassandraIntegrationSpec
+      |cassandra-snapshot-store.keyspace=CassandraIntegrationSpecSnapshot
       |cassandra-journal.circuit-breaker.call-timeout = 20s
     """.stripMargin
   )
