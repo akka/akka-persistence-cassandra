@@ -15,6 +15,7 @@ licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licen
 homepage := Some(url("http://akka.io/"))
 
 scalaVersion := "2.11.7"
+crossVersion := CrossVersion.binary
 
 scalacOptions ++= Seq(
   "-encoding", "UTF-8",
