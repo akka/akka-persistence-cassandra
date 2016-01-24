@@ -30,6 +30,14 @@ object Publish extends AutoPlugin {
       <url>git@github.com:akka/akka-persistence-cassandra.git</url>
       <connection>scm:git:git@github.com:akka/akka-persistence-cassandra.git</connection>
     </scm>
+    <developers>
+      <developer>
+        <id>contributors</id>
+        <name>Contributors</name>
+        <email>akka-dev@googlegroups.com</email>
+        <url>https://github.com/akka/akka-persistence-cassandra/graphs/contributors</url>
+      </developer>
+    </developers>
   }
 
   private def akkaPublishTo = Def.setting {
