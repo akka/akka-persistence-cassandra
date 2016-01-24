@@ -25,6 +25,8 @@ object CassandraLoadSpec {
       |cassandra-journal.replication-strategy = NetworkTopologyStrategy
       |cassandra-journal.data-center-replication-factors = ["dc1:1"]
       |cassandra-journal.circuit-breaker.call-timeout = 20s
+      |cassandra-journal.keyspace=CassandraLoadSpec
+      |cassandra-snapshot-store.keyspace=CassandraLoadSpecSnapshot
       |akka.actor.serialize-messages=off
     """.stripMargin
   )

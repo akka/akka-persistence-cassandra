@@ -24,6 +24,7 @@ object EventsByPersistenceIdSpec {
     akka.test.single-expect-default = 10s
     akka.persistence.journal.plugin = "cassandra-journal"
     cassandra-journal.port = ${CassandraLauncher.randomPort}
+    cassandra-journal.keyspace=EventsByPersistenceIdSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 2
