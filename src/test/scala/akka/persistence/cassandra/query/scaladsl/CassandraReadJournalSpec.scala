@@ -22,10 +22,11 @@ import akka.stream.testkit.scaladsl.TestSink
 object CassandraReadJournalSpec {
   val config = s"""
     akka.loglevel = INFO
-    akka.test.single-expect-default = 10s
+    akka.test.single-expect-default = 20s
     akka.persistence.journal.plugin = "cassandra-journal"
     cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-journal.keyspace=ScaladslCassandraReadJournalSpec
+    cassandra-journal.circuit-breaker.call-timeout = 30s
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.eventual-consistency-delay = 1s

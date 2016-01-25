@@ -4,6 +4,8 @@
 package akka.persistence.cassandra.journal
 
 import scala.collection.immutable.Seq
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
 import scala.concurrent._
 import scala.math.min
 import scala.util.control.NonFatal
@@ -12,6 +14,7 @@ import scala.util.Success
 import scala.util.Try
 import java.nio.ByteBuffer
 import java.lang.{ Long => JLong }
+import java.util.concurrent.TimeUnit
 
 import com.datastax.driver.core._
 import com.datastax.driver.core.exceptions.DriverException
@@ -22,6 +25,9 @@ import com.datastax.driver.core.utils.Bytes
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
 
+import akka.actor.Props
+import akka.cluster.pubsub.DistributedPubSub
+import akka.cluster.pubsub.DistributedPubSubMediator
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.journal.AsyncWriteJournal
@@ -34,6 +40,22 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   val serialization = SerializationExtension(context.system)
 
   import config._
+
+  // Announce written changes to DistributedPubSub if pubsub-minimum-interval is defined in config
+  val pubsub = pubsubMinimumInterval match {
+    case interval: FiniteDuration =>
+      // PubSub will be ignored when clustering is unavailable
+      Try {
+        DistributedPubSub(context.system)
+      }.toOption flatMap { extension =>
+        if (extension.isTerminated)
+          None
+        else
+          Some(context.actorOf(Props(new PubSubThrottler(extension.mediator, interval))))
+      }
+
+    case _ => None
+  }
 
   case class MessageId(persistenceId: String, sequenceNr: Long)
 
@@ -144,8 +166,17 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val promise = Promise[Seq[Try[Unit]]]()
 
     Future.sequence(batchStatements).onComplete {
-      case Success(_) => promise.complete(Success(Nil)) // Nil == all good
-      case Failure(e) => promise.failure(e)
+      case Success(_) =>
+        for (
+          p <- pubsub;
+          tag: String <- serialized.map(_.payload.map(_.tags).flatten).flatten.toSet
+        ) {
+          p ! DistributedPubSubMediator.Publish("akka.persistence.cassandra.journal.tag", tag)
+        }
+        promise.complete(Success(Nil)) // Nil == all good
+
+      case Failure(e) =>
+        promise.failure(e)
     }
 
     promise.future
