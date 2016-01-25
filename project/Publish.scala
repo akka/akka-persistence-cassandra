@@ -6,6 +6,8 @@ package akka
 import sbt._
 import sbt.Keys._
 import java.io.File
+import sbtrelease.ReleasePlugin.autoImport.releasePublishArtifactsAction
+import com.typesafe.sbt.pgp.PgpKeys
 
 object Publish extends AutoPlugin {
 
@@ -22,7 +24,8 @@ object Publish extends AutoPlugin {
     organizationHomepage := Some(url("http://www.typesafe.com")),
     publishMavenStyle := true,
     pomIncludeRepository := { x => false },
-    defaultPublishTo := crossTarget.value / "repository"
+    defaultPublishTo := crossTarget.value / "repository",
+    releasePublishArtifactsAction := PgpKeys.publishSigned.value
   )
 
   def akkaPomExtra = {
