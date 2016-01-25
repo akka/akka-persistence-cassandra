@@ -25,4 +25,5 @@ private[query] class CassandraReadJournalConfig(config: Config, writePluginConfi
   val keyspace: String = writePluginConfig.keyspace
   val targetPartitionSize: Int = writePluginConfig.targetPartitionSize
   val table: String = writePluginConfig.table
+  val pubsubMinimumInterval: Duration = writePluginConfig.pubsubMinimumInterval
 }

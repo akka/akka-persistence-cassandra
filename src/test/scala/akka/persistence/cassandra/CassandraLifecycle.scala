@@ -18,7 +18,7 @@ object CassandraLifecycle {
   def awaitPersistenceInit(system: ActorSystem): Unit = {
     val probe = TestProbe()(system)
     system.actorOf(Props[AwaitPersistenceInit]).tell("hello", probe.ref)
-    probe.expectMsg(25.seconds, "hello")
+    probe.expectMsg(35.seconds, "hello")
   }
 
   class AwaitPersistenceInit extends PersistentActor {

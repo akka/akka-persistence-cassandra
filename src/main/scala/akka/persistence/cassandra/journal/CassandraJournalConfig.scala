@@ -3,10 +3,15 @@
  */
 package akka.persistence.cassandra.journal
 
-import com.typesafe.config.Config
-import akka.persistence.cassandra.CassandraPluginConfig
-import com.typesafe.config.ConfigValueType
+import java.util.Locale
+
 import scala.collection.immutable.HashMap
+import scala.concurrent.duration.Duration
+
+import com.typesafe.config.{ Config, ConfigValueType }
+
+import akka.persistence.cassandra.CassandraPluginConfig
+import akka.util.Helpers.{ ConfigOps, Requiring }
 
 class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(config) {
   val replayDispatcherId: String = config.getString("replay-dispatcher")
@@ -20,6 +25,13 @@ class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(confi
   val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
   val enableEventsByTagQuery: Boolean = !cassandra2xCompat && config.getBoolean("enable-events-by-tag-query")
   val eventsByTagView: String = config.getString("events-by-tag-view")
+  val pubsubMinimumInterval: Duration = {
+    val key = "pubsub-minimum-interval"
+    config.getString(key).toLowerCase(Locale.ROOT) match {
+      case "off" ⇒ Duration.Undefined
+      case _     ⇒ config.getMillisDuration(key) requiring (_ > Duration.Zero, key + " > 0s, or off")
+    }
+  }
 
   val maxTagsPerEvent: Int = 3
   val tags: HashMap[String, Int] = {

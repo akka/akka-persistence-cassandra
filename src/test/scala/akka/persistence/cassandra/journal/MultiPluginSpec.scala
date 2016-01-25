@@ -19,11 +19,12 @@ object MultiPluginSpec {
   val cassandraPort = CassandraLauncher.randomPort
   val config = ConfigFactory.parseString(
     s"""
-        |akka.test.single-expect-default = 10s
+        |akka.test.single-expect-default = 20s
         |
         |cassandra-journal.keyspace = $journalKeyspace
         |cassandra-journal.port=$cassandraPort
         |cassandra-journal.keyspace-autocreate=false
+        |cassandra-journal.circuit-breaker.call-timeout = 30s
         |cassandra-snapshot-store.keyspace=$snapshotKeyspace
         |cassandra-snapshot-store.port=$cassandraPort
         |cassandra-snapshot-store.keyspace-autocreate=false

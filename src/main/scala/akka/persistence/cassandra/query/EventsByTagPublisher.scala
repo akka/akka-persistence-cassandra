@@ -9,6 +9,7 @@ import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import scala.concurrent.duration._
+import scala.util.Try
 import akka.actor.ActorLogging
 import akka.actor.DeadLetterSuppression
 import akka.actor.NoSerializationVerificationNeeded
@@ -22,6 +23,8 @@ import com.datastax.driver.core.PreparedStatement
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.UUIDs
 import akka.persistence.cassandra.journal.TimeBucket
+import akka.cluster.pubsub.DistributedPubSub
+import akka.cluster.pubsub.DistributedPubSubMediator
 
 private[query] object EventsByTagPublisher {
 
@@ -53,11 +56,20 @@ private[query] class EventsByTagPublisher(
   import EventsByTagPublisher._
   import settings.maxBufferSize
   import settings.refreshInterval
+  import context.dispatcher
 
   val eventualConsistencyDelayMillis = settings.eventualConsistencyDelay.toMillis
   val toOffsetTimestamp = toOffset match {
     case Some(uuid) => UUIDs.unixTimestamp(uuid) + eventualConsistencyDelayMillis
     case None       => Long.MaxValue
+  }
+
+  // Subscribe to DistributedPubSub so we can receive immediate notifications when the journal has written something.
+  if (settings.pubsubMinimumInterval.isFinite) {
+    Try { // Ignore pubsub when clustering unavailable 
+      DistributedPubSub(context.system).mediator !
+        DistributedPubSubMediator.Subscribe("akka.persistence.cassandra.journal.tag", self)
+    }
   }
 
   var currTimeBucket: TimeBucket = TimeBucket(fromOffset)
@@ -78,6 +90,13 @@ private[query] class EventsByTagPublisher(
 
   override def postStop(): Unit =
     tickTask.cancel()
+
+  override def unhandled(msg: Any): Unit = msg match {
+    case _: String =>
+    // These are published to the pubsub topic, and can be safely ignored if not specifically handled.
+    case _ =>
+      super.unhandled(msg)
+  }
 
   def nextTimeBucket(): Unit =
     currTimeBucket = currTimeBucket.next()
@@ -135,6 +154,12 @@ private[query] class EventsByTagPublisher(
 
     case Cancel =>
       context.stop(self)
+
+    case tagWritten: String if tagWritten == tag =>
+      if (eventualConsistencyDelayMillis == 0) 
+        self ! Continue
+      else 
+        context.system.scheduler.scheduleOnce(settings.eventualConsistencyDelay, self, Continue)
   }
 
   def timeForReplay: Boolean =

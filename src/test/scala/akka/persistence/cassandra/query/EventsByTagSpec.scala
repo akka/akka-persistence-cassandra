@@ -47,6 +47,9 @@ object EventsByTagSpec {
     akka.test.single-expect-default = 10s
     akka.persistence.journal.plugin = "cassandra-journal"
     cassandra-journal {
+      circuit-breaker {
+        call-timeout = 30s       # bringing up cassandra's unit test system can take a bit of time.
+      }
       #target-partition-size = 5
       port = ${CassandraLauncher.randomPort}
       keyspace=EventsByTagSpec
