@@ -3,24 +3,24 @@
  */
 package akka.persistence.cassandra.journal
 
-import akka.stream.scaladsl.ImplicitMaterializer
-
 import scala.concurrent._
 
 import java.lang.{ Long => JLong }
 
 import akka.actor.{ ExtendedActorSystem, ActorLogging }
 import akka.persistence.PersistentRepr
+import akka.stream.ActorMaterializer
 
 import akka.persistence.cassandra.listenableFutureToFuture
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 
-trait CassandraRecovery extends ActorLogging with ImplicitMaterializer {
+trait CassandraRecovery extends ActorLogging {
   this: CassandraJournal =>
   import config._
 
   implicit lazy val replayDispatcher = context.system.dispatchers.lookup(replayDispatcherId)
   private[this] val extendedActorSystem = context.system.asInstanceOf[ExtendedActorSystem]
+  private implicit val materializer = ActorMaterializer()
 
   private[this] val queries: CassandraReadJournal =
     new CassandraReadJournal(
@@ -45,6 +45,7 @@ trait CassandraRecovery extends ActorLogging with ImplicitMaterializer {
         "asyncReplayMessages"
       )
       .runForeach(replayCallback)
+      .map(_ => ())
 
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] =
     asyncHighestDeletedSequenceNumber(persistenceId)

@@ -156,9 +156,9 @@ private[query] class EventsByTagPublisher(
       context.stop(self)
 
     case tagWritten: String if tagWritten == tag =>
-      if (eventualConsistencyDelayMillis == 0) 
+      if (eventualConsistencyDelayMillis == 0)
         self ! Continue
-      else 
+      else
         context.system.scheduler.scheduleOnce(settings.eventualConsistencyDelay, self, Continue)
   }
 
