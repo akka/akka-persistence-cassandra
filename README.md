@@ -3,7 +3,7 @@ Cassandra Plugins for Akka Persistence
 
 [![Join the chat at https://gitter.im/akka/akka-persistence-cassandra](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/akka/akka-persistence-cassandra?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.4.1/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](http://cassandra.apache.org/).
+Replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.4.2-RC1/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](http://cassandra.apache.org/).
 
 [![Build Status](https://travis-ci.org/akka/akka-persistence-cassandra.svg?branch=master)](https://travis-ci.org/akka/akka-persistence-cassandra)
 
@@ -14,13 +14,13 @@ Dependencies
 
 To include the latest release of the Cassandra plugins into your `sbt` project, add the following lines to your `build.sbt` file:
 
-    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.7"
+    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.8"
 
-This version of `akka-persistence-cassandra` depends on Akka 2.4.1 and Scala 2.11.6. 
+This version of `akka-persistence-cassandra` depends on Akka 2.4.2-RC1 and Scala 2.11.6. 
 
 It is compatible with Cassandra 3.0.0 or higher, and it is also compatible with Cassandra 2.1.6 or higher (versions < 2.1.6 have a static column bug) if you configure `cassandra-journal.cassandra-2x-compat=on` in your `application.conf`. With Cassandra 2.x compatibility some features will not be enabled, e.g. `eventsByTag`.
 
-It implements the following [Persistence Queries](http://doc.akka.io/docs/akka/2.4.1/scala/persistence-query.html):
+It implements the following [Persistence Queries](http://doc.akka.io/docs/akka/2.4.2-RC1/scala/persistence-query.html):
 
 * allPersistenceIds, currentPersistenceIds
 * eventsByPersistenceId, currentEventsByPersistenceId
@@ -29,21 +29,21 @@ It implements the following [Persistence Queries](http://doc.akka.io/docs/akka/2
 Migrations from 0.6 to 0.7
 --------------------------
 
-Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.7/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
+Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.8/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
 
 Migrating from 0.3.x (Akka 2.3.x)
 ---------------------------------
 
-Schema and property changes mean that you can't currently upgrade from 0.3 to 0.4 SNAPSHOT and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.7/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala).
+Schema and property changes mean that you can't currently upgrade from 0.3 to 0.4 SNAPSHOT and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.8/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala).
 
 Journal plugin
 --------------
 
 ### Features
 
-- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.4.1/scala/persistence.html#journal-plugin-api) are fully supported.
+- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.4.2-RC1/scala/persistence.html#journal-plugin-api) are fully supported.
 - The plugin uses Cassandra in a pure log-oriented way i.e. data are only ever inserted but never updated (deletions are made on user request only).
-- Writes of messages are batched to optimize throughput for `persistAsync`. See [batch writes](http://doc.akka.io/docs/akka/2.4.1/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
+- Writes of messages are batched to optimize throughput for `persistAsync`. See [batch writes](http://doc.akka.io/docs/akka/2.4.2-RC1/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
 - Messages written by a single persistent actor are partitioned across the cluster to achieve scalability with data volume by adding nodes.
 
 ### Configuration
@@ -52,7 +52,7 @@ To activate the journal plugin, add the following line to your Akka `application
 
     akka.persistence.journal.plugin = "cassandra-journal"
 
-This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.7/src/main/resources/reference.conf):
+This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.8/src/main/resources/reference.conf):
 
 ### Caveats
 
@@ -67,7 +67,7 @@ Snapshot store plugin
 
 ### Features
 
-- Implements the Akka Persistence [snapshot store plugin API](http://doc.akka.io/docs/akka/2.4.1/scala/persistence.html#snapshot-store-plugin-api).
+- Implements the Akka Persistence [snapshot store plugin API](http://doc.akka.io/docs/akka/2.4.2-RC1/scala/persistence.html#snapshot-store-plugin-api).
 
 ### Configuration
 
@@ -75,6 +75,6 @@ To activate the snapshot-store plugin, add the following line to your Akka `appl
 
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
 
-This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.7/src/main/resources/reference.conf):
+This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.8/src/main/resources/reference.conf):
 
 
