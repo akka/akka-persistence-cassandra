@@ -59,16 +59,16 @@ testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a")
 // disable parallel tests
 parallelExecution in Test := false
 
-val AkkaVersion = "2.4.1"
+val AkkaVersion = "2.4.2-RC1"
 
 libraryDependencies ++= Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.0.0-rc1",
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query-experimental" % AkkaVersion,
-  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion      % "test",
-  "org.scalatest"          %% "scalatest"                           % "2.1.4"      % "test",
-  "com.typesafe.akka"      %% "akka-stream-testkit-experimental"    % "1.0"        % "test",
+  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion   % "test",
+  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion   % "test",
+  "org.scalatest"          %% "scalatest"                           % "2.1.4"       % "test",
   // cassandra-all for testkit.CassandraLauncher, app should define it as test dependency if needed
   "org.apache.cassandra"    % "cassandra-all"                       % "3.0.2"      % "optional"
 )

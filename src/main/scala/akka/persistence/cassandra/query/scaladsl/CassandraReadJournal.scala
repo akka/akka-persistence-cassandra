@@ -5,10 +5,8 @@ package akka.persistence.cassandra.query.scaladsl
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
-
 import java.net.URLEncoder
 import java.util.UUID
-
 import akka.actor.ExtendedActorSystem
 import akka.event.Logging
 import akka.persistence.PersistentRepr
@@ -21,13 +19,13 @@ import com.datastax.driver.core.PreparedStatement
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
-
 import akka.persistence.cassandra.journal.CassandraJournalConfig
 import akka.persistence.cassandra.journal.CassandraStatements
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
 import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByPersistenceIdSession
 import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.retry
+import akka.NotUsed
 
 object CassandraReadJournal {
   /**
@@ -215,7 +213,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * The stream is completed with failure if there is a failure in executing the query in the
    * backend journal.
    */
-  override def eventsByTag(tag: String, offset: Long): Source[EventEnvelope, Unit] = {
+  override def eventsByTag(tag: String, offset: Long): Source[EventEnvelope, NotUsed] = {
     eventsByTag(tag, offsetUuid(offset))
       .map(env => EventEnvelope(
         offset = UUIDs.unixTimestamp(env.offset),
@@ -236,13 +234,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * The `offset` is exclusive, i.e. the event with the exact same UUID will not be included
    * in the returned stream.
    */
-  def eventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, Unit] =
+  def eventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
     try {
       if (writePluginConfig.enableEventsByTagQuery) {
         import queryPluginConfig._
         Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
           None, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
-          .mapMaterializedValue(_ => ())
+          .mapMaterializedValue(_ => NotUsed)
           .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
           .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
       } else
@@ -262,7 +260,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * The `offset` is inclusive, i.e. the events with the exact same timestamp will be included
    * in the returned stream.
    */
-  override def currentEventsByTag(tag: String, offset: Long): Source[EventEnvelope, Unit] = {
+  override def currentEventsByTag(tag: String, offset: Long): Source[EventEnvelope, NotUsed] = {
     currentEventsByTag(tag, offsetUuid(offset))
       .map(env => EventEnvelope(
         offset = UUIDs.unixTimestamp(env.offset),
@@ -283,14 +281,14 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * The `offset` is exclusive, i.e. the event with the exact same UUID will not be included
    * in the returned stream.
    */
-  def currentEventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, Unit] =
+  def currentEventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
     try {
       if (writePluginConfig.enableEventsByTagQuery) {
         import queryPluginConfig._
         val toOffset = Some(offsetUuid(System.currentTimeMillis()))
         Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
           toOffset, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
-          .mapMaterializedValue(_ => ())
+          .mapMaterializedValue(_ => NotUsed)
           .named("currentEventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
           .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
       } else
@@ -329,7 +327,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     persistenceId:  String,
     fromSequenceNr: Long,
     toSequenceNr:   Long
-  ): Source[EventEnvelope, Unit] =
+  ): Source[EventEnvelope, NotUsed] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -350,7 +348,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     persistenceId:  String,
     fromSequenceNr: Long,
     toSequenceNr:   Long
-  ): Source[EventEnvelope, Unit] =
+  ): Source[EventEnvelope, NotUsed] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -390,7 +388,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       )
     )
       .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
-      .mapMaterializedValue(_ => ())
+      .mapMaterializedValue(_ => NotUsed)
       .named(name)
   }
 
@@ -417,7 +415,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * More importantly the live query has to repeatedly execute the query each `refresh-interval`,
    * because order is not defined and new `persistenceId`s may appear anywhere in the query results.
    */
-  def allPersistenceIds(): Source[String, Unit] =
+  def allPersistenceIds(): Source[String, NotUsed] =
     persistenceIds(Some(queryPluginConfig.refreshInterval), "allPersistenceIds")
 
   /**
@@ -425,13 +423,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * is completed immediately when it reaches the end of the "result set". Events that are
    * stored after the query is completed are not included in the event stream.
    */
-  def currentPersistenceIds(): Source[String, Unit] =
+  def currentPersistenceIds(): Source[String, NotUsed] =
     persistenceIds(None, "currentPersistenceIds")
 
   private[this] def persistenceIds(
     refreshInterval: Option[FiniteDuration],
     name:            String
-  ): Source[String, Unit] =
+  ): Source[String, NotUsed] =
     Source.actorPublisher[String](
       AllPersistenceIdsPublisher.props(
         refreshInterval,
@@ -443,6 +441,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       )
     )
       .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
-      .mapMaterializedValue(_ => ())
+      .mapMaterializedValue(_ => NotUsed)
       .named(name)
 }

@@ -5,11 +5,11 @@ package akka.persistence.cassandra.query.javadsl
 
 import java.util.UUID
 
+import akka.NotUsed
+import akka.persistence.cassandra.query.UUIDEventEnvelope
 import akka.persistence.query.EventEnvelope
 import akka.persistence.query.javadsl._
 import akka.stream.javadsl.Source
-
-import akka.persistence.cassandra.query.UUIDEventEnvelope
 
 object CassandraReadJournal {
   /**
@@ -112,7 +112,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * The stream is completed with failure if there is a failure in executing the query in the
    * backend journal.
    */
-  override def eventsByTag(tag: String, offset: Long): Source[EventEnvelope, Unit] =
+  override def eventsByTag(tag: String, offset: Long): Source[EventEnvelope, NotUsed] =
     scaladslReadJournal.eventsByTag(tag, offset).asJava
 
   /**
@@ -126,7 +126,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * The `offset` is exclusive, i.e. the event with the exact same UUID will not be included
    * in the returned stream.
    */
-  def eventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, Unit] =
+  def eventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
     scaladslReadJournal.eventsByTag(tag, offset).asJava
 
   /**
@@ -137,7 +137,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * The `offset` is inclusive, i.e. the events with the exact same timestamp will be included
    * in the returned stream.
    */
-  override def currentEventsByTag(tag: String, offset: Long): Source[EventEnvelope, Unit] =
+  override def currentEventsByTag(tag: String, offset: Long): Source[EventEnvelope, NotUsed] =
     scaladslReadJournal.currentEventsByTag(tag, offset).asJava
 
   /**
@@ -151,7 +151,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * The `offset` is exclusive, i.e. the event with the exact same UUID will not be included
    * in the returned stream.
    */
-  def currentEventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, Unit] =
+  def currentEventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
     scaladslReadJournal.currentEventsByTag(tag, offset).asJava
 
   /**
@@ -181,7 +181,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
     persistenceId:  String,
     fromSequenceNr: Long,
     toSequenceNr:   Long
-  ): Source[EventEnvelope, Unit] =
+  ): Source[EventEnvelope, NotUsed] =
     scaladslReadJournal.eventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr).asJava
 
   /**
@@ -193,7 +193,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
     persistenceId:  String,
     fromSequenceNr: Long,
     toSequenceNr:   Long
-  ): Source[EventEnvelope, Unit] =
+  ): Source[EventEnvelope, NotUsed] =
     scaladslReadJournal
       .currentEventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr)
       .asJava
@@ -218,13 +218,13 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * More importantly the live query has to repeatedly execute the query each `refresh-interval`,
    * because order is not defined and new `persistenceId`s may appear anywhere in the query results.
    */
-  def allPersistenceIds(): Source[String, Unit] = scaladslReadJournal.allPersistenceIds().asJava
+  def allPersistenceIds(): Source[String, NotUsed] = scaladslReadJournal.allPersistenceIds().asJava
 
   /**
    * Same type of query as `allPersistenceIds` but the event stream
    * is completed immediately when it reaches the end of the "result set". Events that are
    * stored after the query is completed are not included in the event stream.
    */
-  def currentPersistenceIds(): Source[String, Unit] =
+  def currentPersistenceIds(): Source[String, NotUsed] =
     scaladslReadJournal.currentPersistenceIds().asJava
 }
