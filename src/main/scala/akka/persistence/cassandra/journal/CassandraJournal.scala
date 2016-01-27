@@ -71,6 +71,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val preparedSelectHighestSequenceNr = underlying.prepare(selectHighestSequenceNr).setConsistencyLevel(readConsistency)
     val preparedSelectDeletedTo = underlying.prepare(selectDeletedTo).setConsistencyLevel(readConsistency)
     val preparedInsertDeletedTo = underlying.prepare(insertDeletedTo).setConsistencyLevel(writeConsistency)
+
+    def protocolVersion: ProtocolVersion =
+      underlying.getCluster.getConfiguration.getProtocolOptions.getProtocolVersion
   }
 
   private var sessionUsed = false
@@ -204,6 +207,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       bs.setLong("sequence_nr", m.sequenceNr)
       bs.setUUID("timestamp", nowUuid)
       bs.setString("timebucket", TimeBucket(now).key)
+      if (cassandraSession.protocolVersion.compareTo(ProtocolVersion.V4) < 0) {
+        (1 to maxTagsPerEvent).foreach(tagId => bs.setToNull("tag" + tagId))
+      }
       if (m.tags.nonEmpty) {
         var tagCounts = Array.ofDim[Int](maxTagsPerEvent)
         m.tags.foreach { tag =>

@@ -41,6 +41,10 @@ class CassandraPluginConfig(config: Config) {
   val port: Int = config.getInt("port")
   val contactPoints = getContactPoints(config.getStringList("contact-points").asScala, port)
   val fetchSize = config.getInt("max-result-size")
+  val protocolVersion: Option[ProtocolVersion] = config.getString("protocol-version") match {
+    case "" => None
+    case _  => Some(ProtocolVersion.fromInt(config.getInt("protocol-version")))
+  }
 
   private[this] val connectionPoolConfig = config.getConfig("connection-pool")
 
@@ -75,10 +79,16 @@ class CassandraPluginConfig(config: Config) {
       connectionPoolConfig.getInt("pool-timeout-millis")
     )
 
-  val clusterBuilder: Cluster.Builder = Cluster.builder
-    .addContactPointsWithPorts(contactPoints.asJava)
-    .withPoolingOptions(poolingOptions)
-    .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
+  val clusterBuilder: Cluster.Builder = {
+    val b = Cluster.builder
+      .addContactPointsWithPorts(contactPoints.asJava)
+      .withPoolingOptions(poolingOptions)
+      .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
+    protocolVersion match {
+      case None    => b
+      case Some(v) => b.withProtocolVersion(v)
+    }
+  }
 
   private val username = config.getString("authentication.username")
   if (username != "") {
