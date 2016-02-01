@@ -44,7 +44,7 @@ object EventsByTagPubsubSpec {
   val config = ConfigFactory.parseString(s"""
     akka.actor.provider = "akka.cluster.ClusterActorRefProvider"
     cassandra-journal {
-      pubsub-minimum-interval = 1 millisecond      
+      pubsub-minimum-interval = 1 millisecond
     }
     cassandra-query-journal {
       refresh-interval = 10s
@@ -84,9 +84,10 @@ class EventsByTagPubsubSpec extends TestKit(ActorSystem("EventsByTagPubsubSpec",
       val blackSrc = queries.eventsByTag(tag = "black", offset = 0L)
       val probe = blackSrc.runWith(TestSink.probe[Any])
       probe.request(2)
+      probe.expectNoMsg(300.millis)
 
       actor ! "a black car"
-      probe.within(2.seconds) { // long before refresh-interval, which is 10s
+      probe.within(5.seconds) { // long before refresh-interval, which is 10s
         probe.expectNextPF { case e @ EventEnvelope(_, _, _, "a black car") => e }
       }
     }

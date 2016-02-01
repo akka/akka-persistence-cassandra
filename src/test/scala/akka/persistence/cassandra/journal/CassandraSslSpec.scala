@@ -19,19 +19,15 @@ object CassandraSslSpec {
   def config(keyStore: Boolean) = {
     val trustStoreConfig =
       s"""
-        |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
-        |akka.persistence.journal.plugin = "cassandra-journal"
         |akka.persistence.journal.max-deletion-batch-size = 3
         |akka.persistence.publish-confirmations = on
         |akka.persistence.publish-plugin-commands = on
-        |akka.test.single-expect-default = 20s
         |cassandra-journal.target-partition-size = 5
         |cassandra-journal.max-result-size = 3
         |cassandra-journal.port = ${CassandraLauncher.randomPort}
         |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
         |cassandra-journal.keyspace=CassandraSslSpec${if (keyStore) 1 else 2}
         |cassandra-snapshot-store.keyspace=CassandraLoadSpec${if (keyStore) 1 else 2}Snapshot
-        |cassandra-journal.circuit-breaker.call-timeout = 20s
         |cassandra-snapshot-store.ssl.truststore.path="src/test/resources/security/cts_truststore.jks"
         |cassandra-snapshot-store.ssl.truststore.password="hbbUtqn3Y1D4Tw"
         |cassandra-journal.ssl.truststore.path="src/test/resources/security/cts_truststore.jks"
@@ -47,7 +43,7 @@ object CassandraSslSpec {
       """.stripMargin
     } else ""
 
-    ConfigFactory.parseString(trustStoreConfig + keyStoreConfig)
+    ConfigFactory.parseString(trustStoreConfig + keyStoreConfig).withFallback(CassandraLifecycle.config)
   }
 
   class ProcessorA(val persistenceId: String) extends PersistentActor {

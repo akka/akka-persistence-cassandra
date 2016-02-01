@@ -18,14 +18,12 @@ import org.scalatest.WordSpecLike
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(
     s"""
-      |akka.persistence.journal.plugin = "cassandra-journal"
-      |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.keyspace=CassandraCompactionStrategySpec
       |cassandra-snapshot-store.keyspace=CassandraCompactionStrategySpecSnapshot
     """.stripMargin
-  )
+  ).withFallback(CassandraLifecycle.config)
 }
 
 class CassandraCompactionStrategySpec extends TestKit(

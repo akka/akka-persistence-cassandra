@@ -13,8 +13,18 @@ import akka.testkit.TestKitBase
 import akka.testkit.TestProbe
 import org.scalatest._
 import java.util.Locale
+import com.typesafe.config.ConfigFactory
 
 object CassandraLifecycle {
+
+  val config = ConfigFactory.parseString("""
+    akka.persistence.journal.plugin = "cassandra-journal"
+    akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
+    cassandra-journal.circuit-breaker.call-timeout = 30s
+    akka.test.single-expect-default = 20s
+    akka.actor.serialize-messages=on
+    """)
+
   def awaitPersistenceInit(system: ActorSystem): Unit = {
     val probe = TestProbe()(system)
     system.actorOf(Props[AwaitPersistenceInit]).tell("hello", probe.ref)

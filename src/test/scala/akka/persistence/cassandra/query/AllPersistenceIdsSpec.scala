@@ -23,22 +23,19 @@ import akka.persistence.query.PersistenceQuery
 import scala.util.Try
 
 object AllPersistenceIdsSpec {
-  val config = s"""
+  val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
-    akka.test.single-expect-default = 20s
-    akka.persistence.journal.plugin = "cassandra-journal"
     cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-journal.keyspace=AllPersistenceIdsSpec
-    cassandra-journal.circuit-breaker.call-timeout = 30s
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 10
     cassandra-journal.target-partition-size = 15
-               """
+    """).withFallback(CassandraLifecycle.config)
 }
 
 class AllPersistenceIdsSpec
-  extends TestKit(ActorSystem("AllPersistenceIdsSpec", ConfigFactory.parseString(AllPersistenceIdsSpec.config)))
+  extends TestKit(ActorSystem("AllPersistenceIdsSpec", AllPersistenceIdsSpec.config))
   with ScalaFutures
   with ImplicitSender
   with WordSpecLike
@@ -48,7 +45,7 @@ class AllPersistenceIdsSpec
 
   override def systemName: String = "AllPersistenceIdsSpec"
 
-  val cfg = ConfigFactory.parseString(AllPersistenceIdsSpec.config)
+  val cfg = AllPersistenceIdsSpec.config
     .withFallback(system.settings.config)
     .getConfig("cassandra-journal")
   val pluginConfig = new CassandraPluginConfig(cfg)

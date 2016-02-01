@@ -19,22 +19,19 @@ import scala.concurrent.duration._
 import akka.stream.testkit.scaladsl.TestSink
 
 object EventsByPersistenceIdSpec {
-  val config = s"""
-    akka.loglevel = DEBUG
-    akka.test.single-expect-default = 20s
-    akka.persistence.journal.plugin = "cassandra-journal"
+  val config = ConfigFactory.parseString(s"""
+    akka.loglevel = INFO
     cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-journal.keyspace=EventsByPersistenceIdSpec
-    cassandra-journal.circuit-breaker.call-timeout = 30s
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 2
     cassandra-journal.target-partition-size = 15
-               """
+    """).withFallback(CassandraLifecycle.config)
 }
 
 class EventsByPersistenceIdSpec
-  extends TestKit(ActorSystem("EventsByPersistenceIdSpec", ConfigFactory.parseString(EventsByPersistenceIdSpec.config)))
+  extends TestKit(ActorSystem("EventsByPersistenceIdSpec", EventsByPersistenceIdSpec.config))
   with ScalaFutures
   with ImplicitSender
   with WordSpecLike

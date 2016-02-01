@@ -27,7 +27,7 @@ class PubSubThrottlerSpec extends TestKit(ActorSystem("CassandraConfigCheckerSpe
       delegate.expectNoMsg(2.seconds)
 
       // Eventually, the interval will roll over and forward ONE further hello.
-      delegate.expectMsg("hello")
+      delegate.expectMsg(10.seconds, "hello")
       delegate.expectNoMsg(2.seconds)
 
       throttler ! "hello"

@@ -20,13 +20,10 @@ import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.stream.testkit.scaladsl.TestSink
 
 object CassandraReadJournalSpec {
-  val config = s"""
+  val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
-    akka.test.single-expect-default = 20s
-    akka.persistence.journal.plugin = "cassandra-journal"
     cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-journal.keyspace=JavadslCassandraReadJournalSpec
-    cassandra-journal.circuit-breaker.call-timeout = 30s
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.eventual-consistency-delay = 1s
@@ -36,7 +33,7 @@ object CassandraReadJournalSpec {
     cassandra-journal.event-adapter-bindings = {
       "java.lang.String" = test-tagger
     }
-               """
+    """).withFallback(CassandraLifecycle.config)
 }
 
 class TestTagger extends WriteEventAdapter {
@@ -48,7 +45,7 @@ class TestTagger extends WriteEventAdapter {
 }
 
 class CassandraReadJournalSpec
-  extends TestKit(ActorSystem("JavaCassandraReadJournalSpec", ConfigFactory.parseString(CassandraReadJournalSpec.config)))
+  extends TestKit(ActorSystem("JavaCassandraReadJournalSpec", CassandraReadJournalSpec.config))
   with ScalaFutures
   with ImplicitSender
   with WordSpecLike
