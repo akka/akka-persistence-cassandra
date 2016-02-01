@@ -17,19 +17,15 @@ import scala.language.postfixOps
 object CassandraLoadSpec {
   val config = ConfigFactory.parseString(
     s"""
-      |akka.persistence.journal.plugin = "cassandra-journal"
-      |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
-      |akka.test.single-expect-default = 20s
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.replication-strategy = NetworkTopologyStrategy
       |cassandra-journal.data-center-replication-factors = ["dc1:1"]
-      |cassandra-journal.circuit-breaker.call-timeout = 20s
       |cassandra-journal.keyspace=CassandraLoadSpec
       |cassandra-snapshot-store.keyspace=CassandraLoadSpecSnapshot
       |akka.actor.serialize-messages=off
     """.stripMargin
-  )
+  ).withFallback(CassandraLifecycle.config)
 
   trait Measure extends { this: Actor =>
     val NanoToSecond = 1000.0 * 1000 * 1000

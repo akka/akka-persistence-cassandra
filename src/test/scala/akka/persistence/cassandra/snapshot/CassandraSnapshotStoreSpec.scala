@@ -19,16 +19,13 @@ import com.typesafe.config.ConfigFactory
 object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(
     s"""
-      |akka.persistence.journal.plugin = "cassandra-journal"
-      |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
-      |akka.test.single-expect-default = 10s
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.keyspace=CassandraSnapshotStoreSpec
       |cassandra-snapshot-store.keyspace=CassandraSnapshotStoreSpecSnapshot
       |cassandra-snapshot-store.max-metadata-result-size = 2
     """.stripMargin
-  )
+  ).withFallback(CassandraLifecycle.config)
 
   lazy val protocolV3Config = ConfigFactory.parseString(
     s"""

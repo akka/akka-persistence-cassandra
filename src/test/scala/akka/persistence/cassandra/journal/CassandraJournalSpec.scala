@@ -13,16 +13,12 @@ import com.typesafe.config.ConfigFactory
 object CassandraJournalConfiguration {
   lazy val config = ConfigFactory.parseString(
     s"""
-      |akka.persistence.journal.plugin = "cassandra-journal"
-      |akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
-      |akka.test.single-expect-default = 20s
       |cassandra-journal.port = ${CassandraLauncher.randomPort}
       |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.keyspace=CassandraJournalSpec
       |cassandra-snapshot-store.keyspace=CassandraJournalSpecSnapshot
-      |cassandra-journal.circuit-breaker.call-timeout = 20s
     """.stripMargin
-  )
+  ).withFallback(CassandraLifecycle.config)
 
   lazy val perfConfig = ConfigFactory.parseString(
     """
