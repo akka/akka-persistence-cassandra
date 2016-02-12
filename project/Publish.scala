@@ -14,6 +14,7 @@ object Publish extends AutoPlugin {
   val defaultPublishTo = settingKey[File]("Default publish directory")
 
   override def trigger = allRequirements
+  override def requires = sbtrelease.ReleasePlugin
 
   override lazy val projectSettings = Seq(
     crossPaths := false,
@@ -22,6 +23,7 @@ object Publish extends AutoPlugin {
     credentials ++= akkaCredentials,
     organizationName := "Typesafe Inc.",
     organizationHomepage := Some(url("http://www.typesafe.com")),
+    homepage := Some(url("https://github.com/akka/akka-persistence-cassandra")),
     publishMavenStyle := true,
     pomIncludeRepository := { x => false },
     defaultPublishTo := crossTarget.value / "repository",

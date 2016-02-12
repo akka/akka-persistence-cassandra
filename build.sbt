@@ -7,12 +7,10 @@ enablePlugins(AutomateHeaderPlugin)
 
 organization := "com.typesafe.akka"
 organizationName := "Typesafe Inc."
-organizationHomepage := Some(url("http://www.typesafe.com"))
 
 name := "akka-persistence-cassandra"
 
 licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licenses/LICENSE-2.0")))
-homepage := Some(url("http://akka.io/"))
 
 scalaVersion := "2.11.7"
 crossVersion := CrossVersion.binary
