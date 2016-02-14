@@ -3,6 +3,7 @@
  */
 package akka.persistence.cassandra.journal
 
+import java.util.{ HashMap => JHMap, Map => JMap }
 import scala.collection.immutable.Seq
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
@@ -32,6 +33,8 @@ import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.journal.Tagged
 import akka.serialization.SerializationExtension
 import akka.actor.ActorRef
+import akka.Done
+import akka.actor.NoSerializationVerificationNeeded
 
 class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
 
@@ -39,9 +42,16 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   val serialization = SerializationExtension(context.system)
 
   import config._
+  import CassandraJournal._
+
+  // readHighestSequence must be performed after pending write for a persistenceId
+  // when the persistent actor is restarted.
+  // It seems like C* doesn't support session consistency so we handle it ourselves.
+  // https://aphyr.com/posts/299-the-trouble-with-timestamps
+  private val writeInProgress: JMap[String, Future[Done]] = new JHMap
 
   // Announce written changes to DistributedPubSub if pubsub-minimum-interval is defined in config
-  val pubsub = pubsubMinimumInterval match {
+  private val pubsub = pubsubMinimumInterval match {
     case interval: FiniteDuration =>
       // PubSub will be ignored when clustering is unavailable
       Try {
@@ -115,6 +125,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   }
 
   override def receivePluginInternal: Receive = {
+    case WriteFinished(persistenceId, f) =>
+      writeInProgress.remove(persistenceId, f)
     case CassandraJournal.Init =>
       try {
         cassandraSession
@@ -122,7 +134,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         case NonFatal(e) =>
           log.warning(
             "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
-            e.getMessage)
+            e.getMessage
+          )
       }
   }
 
@@ -155,7 +168,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
             case _ => (pr, Set.empty[String])
           }
           Serialized(pr.sequenceNr, persistentToByteBuffer(pr2), tags)
-        })
+        }
+      )
 
     def publishTagNotification(serialized: Seq[SerializedAtomicWrite], result: Future[_]): Unit = {
       if (pubsub.isDefined) {
@@ -169,6 +183,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         }
       }
     }
+
+    val p = Promise[Done]
+    val pid = messages.head.persistenceId
+    writeInProgress.put(pid, p.future)
 
     val serialized = messages.map(serialize)
 
@@ -187,6 +205,11 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
           }
         rec(groups, Nil)
       }
+
+    result.onComplete { _ =>
+      self ! WriteFinished(pid, p.future)
+      p.success(Done)
+    }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
 
     publishTagNotification(serialized, result)
     // Nil == all good
@@ -252,6 +275,12 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   }
 
+  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] =
+    writeInProgress.get(persistenceId) match {
+      case null => super.asyncReadHighestSequenceNr(persistenceId, fromSequenceNr)
+      case f    => f.flatMap(_ => super.asyncReadHighestSequenceNr(persistenceId, fromSequenceNr))
+    }
+
   def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
     val fromSequenceNr = readLowestSequenceNr(persistenceId, 1L)
     val lowestPartition = partitionNr(fromSequenceNr)
@@ -260,7 +289,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
 
     val logicalDelete = session.executeAsync(
-      cassandraSession.preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong))
+      cassandraSession.preparedInsertDeletedTo.bind(persistenceId, toSeqNr: JLong)
+    )
 
     if (config.cassandra2xCompat) {
       def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = executeBatch({ batch =>
@@ -286,7 +316,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       Future.sequence(partitionInfos.map(future => future.flatMap { pi =>
         execute(
           cassandraSession.preparedDeleteMessages.bind(persistenceId, pi.partitionNr: JLong, toSeqNr: JLong),
-          deleteRetryPolicy)
+          deleteRetryPolicy
+        )
       })).onFailure {
         case e => log.warning(s"Unable to complete deletes for persistence id ${persistenceId}, " +
           s"toSequenceNr ${toSequenceNr}. The plugin will continue to " +
@@ -471,6 +502,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
 private[journal] object CassandraJournal {
   private case object Init
+
+  private case class WriteFinished(pid: String, f: Future[Done]) extends NoSerializationVerificationNeeded
 }
 
 class FixedRetryPolicy(number: Int) extends RetryPolicy {

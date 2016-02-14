@@ -4,9 +4,7 @@
 package akka.persistence.cassandra.query
 
 import java.util.UUID
-
 import scala.concurrent.duration._
-
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
@@ -14,13 +12,12 @@ import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterEach, Matchers, WordSpecLike }
 import org.scalatest.concurrent.ScalaFutures
-
 import akka.persistence.cassandra.{ CassandraPluginConfig, CassandraLifecycle }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.query.PersistenceQuery
-
 import scala.util.Try
+import com.datastax.driver.core.Session
 
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
@@ -50,6 +47,18 @@ class AllPersistenceIdsSpec
     .getConfig("cassandra-journal")
   val pluginConfig = new CassandraPluginConfig(cfg)
 
+  var session: Session = _
+
+  override protected def beforeAll(): Unit = {
+    super.beforeAll()
+    session = pluginConfig.clusterBuilder.build.connect()
+  }
+
+  override protected def afterAll(): Unit = {
+    session.close()
+    super.afterAll()
+  }
+
   override protected def beforeEach() = {
     super.beforeEach()
     deleteAllEvents()
@@ -61,8 +70,7 @@ class AllPersistenceIdsSpec
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   private[this] def deleteAllEvents(): Unit = {
-    val session = pluginConfig.clusterBuilder.build.connect()
-    Try(session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.table}"))
+    session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.table}")
   }
 
   private[this] def setup(persistenceId: String, n: Int): ActorRef = {
