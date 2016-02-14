@@ -41,6 +41,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   val config = new CassandraJournalConfig(cfg)
   val serialization = SerializationExtension(context.system)
 
+  import context.dispatcher
   import config._
   import CassandraJournal._
 
@@ -60,7 +61,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         if (extension.isTerminated)
           None
         else
-          Some(context.actorOf(Props(new PubSubThrottler(extension.mediator, interval))))
+          Some(context.actorOf(PubSubThrottler.props(extension.mediator, interval)
+            .withDispatcher(context.props.dispatcher)))
       }
 
     case _ => None
@@ -188,32 +190,32 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     val pid = messages.head.persistenceId
     writeInProgress.put(pid, p.future)
 
-    val serialized = messages.map(serialize)
+    Future(messages.map(serialize)).flatMap { serialized =>
+      val result =
+        if (messages.size <= config.maxMessageBatchSize) {
+          // optimize for the common case
+          writeMessages(serialized)
+        } else {
+          val groups: List[Seq[SerializedAtomicWrite]] = serialized.grouped(config.maxMessageBatchSize).toList
 
-    val result =
-      if (messages.size <= config.maxMessageBatchSize) {
-        // optimize for the common case
-        writeMessages(serialized)
-      } else {
-        val groups: List[Seq[SerializedAtomicWrite]] = serialized.grouped(config.maxMessageBatchSize).toList
+          // execute the groups in sequence
+          def rec(todo: List[Seq[SerializedAtomicWrite]], acc: List[Unit]): Future[List[Unit]] =
+            todo match {
+              case write :: remainder => writeMessages(write).flatMap(result => rec(remainder, result :: acc))
+              case Nil                => Future.successful(acc.reverse)
+            }
+          rec(groups, Nil)
+        }
 
-        // execute the groups in sequence
-        def rec(todo: List[Seq[SerializedAtomicWrite]], acc: List[Unit]): Future[List[Unit]] =
-          todo match {
-            case write :: remainder => writeMessages(write).flatMap(result => rec(remainder, result :: acc))
-            case Nil                => Future.successful(acc.reverse)
-          }
-        rec(groups, Nil)
-      }
+      result.onComplete { _ =>
+        self ! WriteFinished(pid, p.future)
+        p.success(Done)
+      }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
 
-    result.onComplete { _ =>
-      self ! WriteFinished(pid, p.future)
-      p.success(Done)
-    }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
-
-    publishTagNotification(serialized, result)
-    // Nil == all good
-    result.map(_ => Nil)(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
+      publishTagNotification(serialized, result)
+      // Nil == all good
+      result.map(_ => Nil)(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
+    }
   }
 
   private def writeMessages(atomicWrites: Seq[SerializedAtomicWrite]): Future[Unit] = {
@@ -275,13 +277,15 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   }
 
-  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] =
+  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
     writeInProgress.get(persistenceId) match {
       case null => super.asyncReadHighestSequenceNr(persistenceId, fromSequenceNr)
       case f    => f.flatMap(_ => super.asyncReadHighestSequenceNr(persistenceId, fromSequenceNr))
     }
+  }
 
   def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
+    // TODO issue #6: use async api
     val fromSequenceNr = readLowestSequenceNr(persistenceId, 1L)
     val lowestPartition = partitionNr(fromSequenceNr)
     val toSeqNr = math.min(toSequenceNr, readHighestSequenceNr(persistenceId, fromSequenceNr))

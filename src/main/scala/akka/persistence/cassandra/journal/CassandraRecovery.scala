@@ -17,8 +17,8 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 trait CassandraRecovery extends ActorLogging {
   this: CassandraJournal =>
   import config._
+  import context.dispatcher
 
-  implicit lazy val replayDispatcher = context.system.dispatchers.lookup(replayDispatcherId)
   private[this] val extendedActorSystem = context.system.asInstanceOf[ExtendedActorSystem]
   private implicit val materializer = ActorMaterializer()
 
@@ -48,10 +48,9 @@ trait CassandraRecovery extends ActorLogging {
       .map(_ => ())
 
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] =
-    asyncHighestDeletedSequenceNumber(persistenceId)
-      .flatMap { h =>
-        asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h))
-      }
+    asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
+      asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h))
+    }
 
   private def asyncFindHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
     import cassandraSession._

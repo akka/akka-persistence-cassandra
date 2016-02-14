@@ -14,7 +14,6 @@ import akka.persistence.cassandra.CassandraPluginConfig
 import akka.util.Helpers.{ ConfigOps, Requiring }
 
 class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(config) {
-  val replayDispatcherId: String = config.getString("replay-dispatcher")
   val targetPartitionSize: Int = config.getInt(CassandraJournalConfig.TargetPartitionProperty)
   val maxResultSize: Int = config.getInt("max-result-size")
   val replayMaxResultSize: Int = config.getInt("max-result-size-replay")

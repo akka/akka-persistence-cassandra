@@ -117,9 +117,11 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   }
 
   def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
-    val stmt = cassandraSession.preparedWriteSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong,
-      metadata.timestamp: JLong, serialize(Snapshot(snapshot)))
-    session.executeAsync(stmt).map(_ => ())
+    Future(serialize(Snapshot(snapshot))).flatMap { serialized =>
+      val stmt = cassandraSession.preparedWriteSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong,
+        metadata.timestamp: JLong, serialized)
+      session.executeAsync(stmt).map(_ => ())
+    }
   }
 
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
