@@ -4,8 +4,8 @@
 package akka.persistence.cassandra.journal
 
 import scala.concurrent.duration.FiniteDuration
-
 import akka.actor.{ Actor, ActorRef }
+import akka.actor.Props
 
 /**
  * Proxies messages to another actor, only allowing identical messages through once every [interval].
@@ -50,6 +50,10 @@ private[journal] class PubSubThrottler(delegate: ActorRef, interval: FiniteDurat
 }
 
 private[journal] object PubSubThrottler {
+
+  def props(delegate: ActorRef, interval: FiniteDuration): Props =
+    Props(new PubSubThrottler(delegate, interval))
+
   private case object Tick
 
 }
