@@ -12,7 +12,7 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Seconds, Second, Span }
 import org.scalatest.{ Matchers, WordSpecLike }
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.{ CassandraMetricsRegistry, CassandraLifecycle }
 import akka.persistence.cassandra.query.TestActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
@@ -101,6 +101,12 @@ class CassandraReadJournalSpec
         .request(10)
         .expectNext("a")
         .expectComplete()
+    }
+
+    "insert Cassandra metrics to Cassandra Metrics Registry" in {
+      val registry = CassandraMetricsRegistry(system).getRegistry
+      val snapshots = registry.getNames.toArray().filter(value => value.toString.startsWith(s"${CassandraReadJournal.Identifier}"))
+      snapshots.length should be > 0
     }
   }
 }

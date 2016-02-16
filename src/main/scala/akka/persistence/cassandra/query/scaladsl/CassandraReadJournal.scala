@@ -3,8 +3,7 @@
  */
 package akka.persistence.cassandra.query.scaladsl
 
-import akka.persistence.journal.EventSeq
-
+import java.util.concurrent.atomic.AtomicLong
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable
 import scala.util.control.NonFatal
@@ -27,10 +26,13 @@ import akka.persistence.cassandra.journal.CassandraStatements
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
 import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByPersistenceIdSession
 import akka.persistence.cassandra.query._
-import akka.persistence.cassandra.retry
+import akka.persistence.cassandra.{ CassandraMetricsRegistry, retry }
 import akka.NotUsed
 
 object CassandraReadJournal {
+  //temporary counter for keeping Read Journal metrics unique
+  // TODO: remove after akka/akka#19822 is fixed
+  private val InstanceUID = new AtomicLong(-1)
   /**
    * The default identifier for [[CassandraReadJournal]] to be used with
    * `akka.persistence.query.PersistenceQuery#readJournalFor`.
@@ -111,9 +113,21 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
 
   @volatile private var sessionUsed = false
 
+  // TODO: change categoryUid to unique config path after akka/akka#19822 is fixed
+  private val metricsCategory = {
+    val categoryUid =
+      CassandraReadJournal.InstanceUID.incrementAndGet() match {
+        case 0     => ""
+        case other => other
+      }
+    s"${CassandraReadJournal.Identifier}$categoryUid"
+  }
+
   private lazy val cassandraSession: CassandraSession = {
     retry(writePluginConfig.connectionRetries + 1, writePluginConfig.connectionRetryDelay.toMillis) {
       val underlying: Session = writePluginConfig.clusterBuilder.build.connect()
+
+      CassandraMetricsRegistry(system).addMetrics(metricsCategory, underlying.getCluster.getMetrics.getRegistry)
       try {
         val s = new CassandraSession(underlying)
         log.debug("initialized CassandraSession successfully")
@@ -138,6 +152,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   private def closeSession(session: Session): Unit = try {
     session.close()
     session.getCluster().close()
+    CassandraMetricsRegistry(system).removeMetrics(metricsCategory)
   } catch {
     case NonFatal(_) => // nothing we can do
   }

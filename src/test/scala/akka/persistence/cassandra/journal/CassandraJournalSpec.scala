@@ -6,7 +6,7 @@ package akka.persistence.cassandra.journal
 import scala.concurrent.duration._
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.journal._
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.{ CassandraMetricsRegistry, CassandraLifecycle }
 
 import com.typesafe.config.ConfigFactory
 
@@ -41,6 +41,14 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
   override def systemName: String = "CassandraJournalSpec"
 
   override def supportsRejectingNonSerializableObjects = false
+  "A Cassandra Journal" must {
+    "insert Cassandra metrics to Cassandra Metrics Registry" in {
+      val registry = CassandraMetricsRegistry(system).getRegistry
+      val snapshots = registry.getNames.toArray()
+      snapshots.length should be > 0
+
+    }
+  }
 }
 
 /**

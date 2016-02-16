@@ -12,7 +12,6 @@ import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.testkit.TestKitBase
 import akka.testkit.TestProbe
 import org.scalatest._
-import java.util.Locale
 import com.typesafe.config.ConfigFactory
 
 object CassandraLifecycle {
@@ -64,7 +63,6 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suit
     )
 
     awaitPersistenceInit()
-
     super.beforeAll()
   }
 
