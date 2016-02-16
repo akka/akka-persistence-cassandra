@@ -5,7 +5,6 @@ package akka.persistence.cassandra.snapshot
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
@@ -16,16 +15,18 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.exceptions.NoHostAvailableException
 import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
-
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 import scala.util.control.NonFatal
+import akka.serialization.Serialization
+import akka.serialization.SerializerWithStringManifest
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
   val config = new CassandraSnapshotStoreConfig(cfg)
   val serialization = SerializationExtension(context.system)
 
+  import CassandraSnapshotStore._
   import config._
   import context.dispatcher
 
@@ -113,14 +114,34 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
   def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
     val stmt = cassandraSession.preparedSelectSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong)
-    session.executeAsync(stmt).map(rs => deserialize(rs.one().getBytes("snapshot")))
+    session.executeAsync(stmt).map { rs =>
+      val row = rs.one()
+      row.getBytes("snapshot") match {
+        case null =>
+          Snapshot(serialization.deserialize(
+            row.getBytes("snapshot_data").array,
+            row.getInt("ser_id"),
+            row.getString("ser_manifest")
+          ).get)
+        case bytes =>
+          // for backwards compatibility
+          serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get
+      }
+    }
   }
 
   def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
-    Future(serialize(Snapshot(snapshot))).flatMap { serialized =>
-      val stmt = cassandraSession.preparedWriteSnapshot.bind(metadata.persistenceId, metadata.sequenceNr: JLong,
-        metadata.timestamp: JLong, serialized)
-      session.executeAsync(stmt).map(_ => ())
+    Future(serialize(snapshot)).flatMap { ser =>
+      val bs = cassandraSession.preparedWriteSnapshot.bind()
+      bs.setString("persistence_id", metadata.persistenceId)
+      bs.setLong("sequence_nr", metadata.sequenceNr)
+      bs.setLong("timestamp", metadata.timestamp)
+      bs.setInt("ser_id", ser.serId)
+      bs.setString("ser_manifest", ser.serManifest)
+      bs.setBytes("snapshot_data", ser.serialized)
+      // for backwards compatibility
+      bs.setToNull("snapshot")
+      session.executeAsync(bs).map(_ => ())
     }
   }
 
@@ -142,11 +163,33 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     session.executeAsync(batch).map(_ => ())
   }
 
-  private def serialize(snapshot: Snapshot): ByteBuffer =
-    ByteBuffer.wrap(serialization.findSerializerFor(snapshot).toBinary(snapshot))
+  private lazy val transportInformation: Option[Serialization.Information] = {
+    val address = context.system.asInstanceOf[ExtendedActorSystem].provider.getDefaultAddress
+    if (address.hasLocalScope) None
+    else Some(Serialization.Information(address, context.system))
+  }
 
-  private def deserialize(bytes: ByteBuffer): Snapshot =
-    serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get
+  private def serialize(payload: Any): Serialized = {
+    def doSerializeSnapshot(): Serialized = {
+      val p: AnyRef = payload.asInstanceOf[AnyRef]
+      val serializer = serialization.findSerializerFor(p)
+      val serManifest = serializer match {
+        case ser2: SerializerWithStringManifest ⇒
+          ser2.manifest(p)
+        case _ ⇒
+          if (serializer.includeManifest) p.getClass.getName
+          else PersistentRepr.Undefined
+      }
+      val serPayload = ByteBuffer.wrap(serialization.serialize(p).get)
+      Serialized(serPayload, serManifest, serializer.identifier)
+    }
+
+    // serialize actor references with full address information (defaultAddress)
+    transportInformation match {
+      case Some(ti) ⇒ Serialization.currentTransportInformation.withValue(ti) { doSerializeSnapshot() }
+      case None     ⇒ doSerializeSnapshot()
+    }
+  }
 
   private def metadata(persistenceId: String, criteria: SnapshotSelectionCriteria): Iterator[SnapshotMetadata] =
     new RowIterator(persistenceId, criteria.maxSequenceNr).map { row =>
@@ -185,4 +228,6 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
 private[snapshot] object CassandraSnapshotStore {
   private case object Init
+
+  private case class Serialized(serialized: ByteBuffer, serManifest: String, serId: Int)
 }

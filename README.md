@@ -26,13 +26,28 @@ It implements the following [Persistence Queries](http://doc.akka.io/docs/akka/2
 * eventsByPersistenceId, currentEventsByPersistenceId
 * eventsByTag, currentEventsByTag (only for Cassandra 3.x)
 
-Migrations from 0.6 to 0.7
---------------------------
+Migrations
+----------
+
+### Migrations from 0.9 to 0.10
+
+The event data, snapshot data and meta data are stored in a separate columns instead of being wrapped in blob. Run the following statements in `cqlsh`:
+
+    drop materialized view akka.eventsbytag;
+    alter table akka.messages add writer_uuid text;
+    alter table akka.messages add ser_id int;
+    alter table akka.messages add ser_manifest text;
+    alter table akka.messages add event_manifest text;
+    alter table akka.messages add event blob;
+    alter table akka_snapshot.snapshots add ser_id int;
+    alter table akka_snapshot.snapshots add ser_manifest text;
+    alter table akka_snapshot.snapshots add snapshot_data blob;
+
+### Migrations from 0.6 to 0.7
 
 Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.9/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
 
-Migrating from 0.3.x (Akka 2.3.x)
----------------------------------
+### Migrating from 0.3.x (Akka 2.3.x)
 
 Schema and property changes mean that you can't currently upgrade from 0.3 to 0.4 SNAPSHOT and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.9/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala).
 

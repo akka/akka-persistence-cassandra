@@ -16,6 +16,9 @@ trait CassandraStatements {
         persistence_id text,
         sequence_nr bigint,
         timestamp bigint,
+        ser_id int,
+        ser_manifest text,
+        snapshot_data blob,
         snapshot blob,
         PRIMARY KEY (persistence_id, sequence_nr))
         WITH CLUSTERING ORDER BY (sequence_nr DESC)
@@ -23,8 +26,8 @@ trait CassandraStatements {
     """
 
   def writeSnapshot = s"""
-      INSERT INTO ${tableName} (persistence_id, sequence_nr, timestamp, snapshot)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO ${tableName} (persistence_id, sequence_nr, timestamp, ser_manifest, ser_id, snapshot_data, snapshot)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     """
 
   def deleteSnapshot = s"""

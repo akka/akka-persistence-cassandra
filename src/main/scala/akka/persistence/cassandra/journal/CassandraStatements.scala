@@ -22,6 +22,8 @@ trait CassandraStatements {
         property text primary key, value text)
      """
 
+  // message is the serialized PersistentRepr that was used in v0.6 and earlier
+  // event is the serialized application event that is used in v0.7 and later
   def createTable = s"""
       CREATE TABLE IF NOT EXISTS ${tableName} (
         used boolean static,
@@ -30,10 +32,15 @@ trait CassandraStatements {
         sequence_nr bigint,
         timestamp timeuuid,
         timebucket text,
-        message blob,
+        writer_uuid text,
+        ser_id int,
+        ser_manifest text,
+        event_manifest text,
+        event blob,
         tag1 text,
         tag2 text,
         tag3 text,
+        message blob,
         PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
         WITH gc_grace_seconds =${config.gc_grace_seconds}
         AND compaction = ${config.tableCompactionStrategy.asCQL}
@@ -48,7 +55,7 @@ trait CassandraStatements {
 
   def createEventsByTagMaterializedView(tagId: Int) = s"""
       CREATE MATERIALIZED VIEW IF NOT EXISTS $eventsByTagViewName$tagId AS
-         SELECT tag$tagId, timebucket, timestamp, persistence_id, partition_nr, sequence_nr, message
+         SELECT tag$tagId, timebucket, timestamp, persistence_id, partition_nr, sequence_nr, writer_uuid, ser_id, ser_manifest, event_manifest, event, message
          FROM $tableName
          WHERE persistence_id IS NOT NULL AND partition_nr IS NOT NULL AND sequence_nr IS NOT NULL
            AND tag$tagId IS NOT NULL AND timestamp IS NOT NULL AND timebucket IS NOT NULL
@@ -57,8 +64,8 @@ trait CassandraStatements {
       """
 
   def writeMessage = s"""
-      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, tag1, tag2, tag3, message, used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true)
+      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event, tag1, tag2, tag3, message, used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , true)
     """
 
   def deleteMessage = s"""

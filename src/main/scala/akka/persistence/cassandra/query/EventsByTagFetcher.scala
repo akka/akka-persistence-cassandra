@@ -22,6 +22,8 @@ import scala.annotation.tailrec
 import akka.actor.DeadLetterSuppression
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.actor.NoSerializationVerificationNeeded
+import com.datastax.driver.core.Row
+import akka.persistence.cassandra.journal.CassandraJournal
 
 private[query] object EventsByTagFetcher {
 
@@ -50,6 +52,7 @@ private[query] class EventsByTagFetcher(
   import akka.persistence.cassandra.query.UUIDComparator.comparator.compare
   import EventsByTagFetcher._
   import EventsByTagPublisher._
+  import CassandraJournal.deserializeEvent
 
   val serialization = SerializationExtension(context.system)
 
@@ -111,7 +114,22 @@ private[query] class EventsByTagFetcher(
           seqNumbers.isNext(pid, seqNr) match {
             case SequenceNumbers.Yes | SequenceNumbers.PossiblyFirst =>
               seqNumbers = seqNumbers.updated(pid, seqNr)
-              val m = persistentFromByteBuffer(row.getBytes("message"))
+              val m = row.getBytes("message") match {
+                case null =>
+                  PersistentRepr(
+                    payload = deserializeEvent(serialization, row),
+                    sequenceNr = row.getLong("sequence_nr"),
+                    persistenceId = row.getString("persistence_id"),
+                    manifest = row.getString("event_manifest"),
+                    deleted = false,
+                    sender = null,
+                    writerUuid = row.getString("writer_uuid")
+                  )
+                case b =>
+                  // for backwards compatibility
+                  persistentFromByteBuffer(b)
+              }
+
               val eventEnvelope = UUIDEventEnvelope(
                 offset = offs,
                 persistenceId = pid,
