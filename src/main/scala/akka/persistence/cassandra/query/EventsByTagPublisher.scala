@@ -8,6 +8,8 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import akka.persistence.journal.EventAdapters
+
 import scala.concurrent.duration._
 import scala.util.Try
 import akka.actor.ActorLogging
@@ -51,7 +53,7 @@ private[query] class EventsByTagPublisher(
   tag: String, fromOffset: UUID, toOffset: Option[UUID],
   settings: CassandraReadJournalConfig, session: Session, preparedSelect: PreparedStatement
 )
-  extends ActorPublisher[UUIDEventEnvelope] with DeliveryBuffer[UUIDEventEnvelope] with ActorLogging {
+  extends ActorPublisher[UUIDPersistentRepr] with DeliveryBuffer[UUIDPersistentRepr] with ActorLogging {
   import akka.persistence.cassandra.query.UUIDComparator.comparator.compare
   import EventsByTagPublisher._
   import settings.maxBufferSize
@@ -201,7 +203,7 @@ private[query] class EventsByTagPublisher(
   }
 
   def replaying(limit: Int): Receive = {
-    case env @ UUIDEventEnvelope(offs, _, _, _) =>
+    case env @ UUIDPersistentRepr(offs, _) =>
       currOffset = offs
       if (compare(currOffset, highestOffset) > 0)
         highestOffset = currOffset

@@ -5,6 +5,8 @@ package akka.persistence.cassandra.query
 
 import java.nio.ByteBuffer
 import java.util.UUID
+import akka.persistence.journal.EventAdapters
+
 import scala.concurrent.Future
 import akka.actor.Actor
 import akka.actor.ActorRef
@@ -114,29 +116,8 @@ private[query] class EventsByTagFetcher(
           seqNumbers.isNext(pid, seqNr) match {
             case SequenceNumbers.Yes | SequenceNumbers.PossiblyFirst =>
               seqNumbers = seqNumbers.updated(pid, seqNr)
-              val m = row.getBytes("message") match {
-                case null =>
-                  PersistentRepr(
-                    payload = deserializeEvent(serialization, row),
-                    sequenceNr = row.getLong("sequence_nr"),
-                    persistenceId = row.getString("persistence_id"),
-                    manifest = row.getString("event_manifest"),
-                    deleted = false,
-                    sender = null,
-                    writerUuid = row.getString("writer_uuid")
-                  )
-                case b =>
-                  // for backwards compatibility
-                  persistentFromByteBuffer(b)
-              }
+              replyTo ! UUIDPersistentRepr(offs, toPersistentRepr(row, pid, seqNr))
 
-              val eventEnvelope = UUIDEventEnvelope(
-                offset = offs,
-                persistenceId = pid,
-                sequenceNr = row.getLong("sequence_nr"),
-                event = m.payload
-              )
-              replyTo ! eventEnvelope
               loop(n - 1)
 
             case SequenceNumbers.After =>
@@ -157,5 +138,22 @@ private[query] class EventsByTagFetcher(
 
     }
   }
+
+  private def toPersistentRepr(row: Row, persistenceId: String, sequenceNr: Long): PersistentRepr =
+    row.getBytes("message") match {
+      case null =>
+        PersistentRepr(
+          payload = deserializeEvent(serialization, row),
+          sequenceNr = sequenceNr,
+          persistenceId = persistenceId,
+          manifest = row.getString("event_manifest"),
+          deleted = false,
+          sender = null,
+          writerUuid = row.getString("writer_uuid")
+        )
+      case b =>
+        // for backwards compatibility
+        persistentFromByteBuffer(b)
+    }
 
 }
