@@ -42,7 +42,7 @@ import akka.serialization.SerializerWithStringManifest
 class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
 
   import CassandraJournal._
-  val config = new CassandraJournalConfig(cfg)
+  val config = new CassandraJournalConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
 
   import context.dispatcher
@@ -94,7 +94,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   private[journal] lazy val cassandraSession: CassandraSession = {
     retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis) {
-      val underlying: Session = clusterBuilder.build().connect()
+      // FIXME Await until we have fixed blocking in initialization, issue #6
+      val underlying: Session = Await.result(config.sessionProvider.connect(), clusterBuilderTimeout)
       CassandraMetricsRegistry(context.system).addMetrics(metricsCategory, underlying.getCluster.getMetrics.getRegistry)
       try {
         val s = new CassandraSession(underlying)

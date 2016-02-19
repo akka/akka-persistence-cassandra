@@ -28,6 +28,7 @@ class TestEventAdapter(system: ExtendedActorSystem) extends EventAdapter {
       case "dropped" :: _ :: Nil            => EventSeq.empty
       case "duplicated" :: x :: Nil         => EventSeq(x, x)
       case "prefixed" :: prefix :: x :: Nil => EventSeq.single(s"$prefix-$x")
+      case _                                => throw new IllegalArgumentException(e)
     }
     case _ => EventSeq.single(event)
   }

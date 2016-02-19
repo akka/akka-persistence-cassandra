@@ -10,10 +10,8 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
-
 import scala.concurrent.duration._
 import scala.util.Try
-
 import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.CassandraLifecycle
@@ -38,6 +36,7 @@ import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
 import org.scalatest.Matchers
 import org.scalatest.WordSpecLike
+import scala.concurrent.Await
 
 object EventsByTagSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
@@ -115,11 +114,11 @@ class EventsByTagSpec extends TestKit(ActorSystem("EventsByTagSpec", EventsByTag
   lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   val serialization = SerializationExtension(system)
-  val writePluginConfig = new CassandraJournalConfig(system.settings.config.getConfig("cassandra-journal"))
+  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
 
   lazy val session = {
-    val cluster = writePluginConfig.clusterBuilder.build
-    cluster.connect()
+    import system.dispatcher
+    Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
   }
 
   lazy val preparedWriteMessage = {

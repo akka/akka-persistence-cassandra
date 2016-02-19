@@ -47,7 +47,7 @@ import akka.persistence.cassandra.journal.CassandraConfigCheckerSpec._
 class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigCheckerSpec", config)) with ImplicitSender with WordSpecLike with MustMatchers with CassandraLifecycle {
 
   implicit val cfg = config.withFallback(system.settings.config).getConfig("cassandra-journal")
-  implicit val pluginConfig = new CassandraPluginConfig(cfg)
+  implicit val pluginConfig = new CassandraPluginConfig(system, cfg)
 
   override def systemName: String = "CassandraConfigCheckerSpec"
 
@@ -122,11 +122,14 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigChe
 
   def createCassandraConfigChecker(implicit pluginConfig: CassandraPluginConfig, cfg: Config): CassandraConfigChecker = {
 
-    val clusterSession = pluginConfig.clusterBuilder.build.connect()
+    val clusterSession = {
+      import system.dispatcher
+      Await.result(pluginConfig.sessionProvider.connect(), 5.seconds)
+    }
 
     new CassandraConfigChecker {
       override def session: Session = clusterSession
-      override def config: CassandraJournalConfig = new CassandraJournalConfig(cfg)
+      override def config: CassandraJournalConfig = new CassandraJournalConfig(system, cfg)
     }
   }
 

@@ -3,19 +3,19 @@
  */
 package akka.persistence.cassandra.snapshot
 
+import scala.concurrent.duration._
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import java.lang.{ Long => JLong }
 import java.lang.{ Integer => JInteger }
 import java.nio.ByteBuffer
-
 import akka.persistence._
 import akka.persistence.SnapshotProtocol._
 import akka.persistence.cassandra.{ CassandraMetricsRegistry, CassandraLifecycle }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
-
 import com.datastax.driver.core._
 import com.typesafe.config.ConfigFactory
+import scala.concurrent.Await
 
 object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(
@@ -39,10 +39,9 @@ object CassandraSnapshotStoreConfiguration {
 
 class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config) with CassandraLifecycle {
 
-  val storeConfig = new CassandraSnapshotStoreConfig(system.settings.config.getConfig("cassandra-snapshot-store"))
+  val storeConfig = new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-snapshot-store"))
   val storeStatements = new CassandraStatements { def config = storeConfig }
 
-  var cluster: Cluster = _
   var session: Session = _
 
   import storeConfig._
@@ -52,13 +51,13 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStor
 
   override def beforeAll(): Unit = {
     super.beforeAll()
-    cluster = clusterBuilder.build()
-    session = cluster.connect()
+    import system.dispatcher
+    session = Await.result(storeConfig.sessionProvider.connect(), 5.seconds)
   }
 
   override def afterAll(): Unit = {
     session.close()
-    cluster.close()
+    session.getCluster.close()
     super.afterAll()
   }
 

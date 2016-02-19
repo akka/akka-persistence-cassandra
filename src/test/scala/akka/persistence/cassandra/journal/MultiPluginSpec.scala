@@ -3,6 +3,7 @@
  */
 package akka.persistence.cassandra.journal
 
+import scala.concurrent.duration._
 import akka.actor.{ ActorSystem, Props }
 import akka.persistence.{ SaveSnapshotSuccess, PersistentActor }
 import akka.persistence.cassandra.{ CassandraPluginConfig, CassandraLifecycle }
@@ -12,6 +13,9 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
 import scala.collection.JavaConverters._
 import akka.persistence.cassandra.testkit.CassandraLauncher
+
+import akka.persistence.cassandra.journal.MultiPluginSpec._
+import scala.concurrent.Await
 
 object MultiPluginSpec {
   val journalKeyspace = "multiplugin_spec_journal"
@@ -78,19 +82,16 @@ object MultiPluginSpec {
 
 }
 
-import akka.persistence.cassandra.journal.MultiPluginSpec._
-
 class MultiPluginSpec
   extends TestKit(ActorSystem("MultiPluginSpec", config.withFallback(ConfigFactory.load("reference.conf")).resolve()))
   with ImplicitSender
   with WordSpecLike
   with CassandraLifecycle {
-  val clusterBuilder: Cluster.Builder = Cluster.builder
-    .addContactPointsWithPorts(CassandraPluginConfig.getContactPoints(List("127.0.0.1"), MultiPluginSpec.cassandraPort).asJava)
 
   override def systemName: String = "MultiPluginSpec"
 
-  var cluster: Cluster = _
+  val cassandraPluginConfig = new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-journal"))
+
   var session: Session = _
 
   // default journal plugin is not configured for this test
@@ -99,8 +100,8 @@ class MultiPluginSpec
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    cluster = clusterBuilder.build()
-    session = cluster.connect()
+    import system.dispatcher
+    session = Await.result(cassandraPluginConfig.sessionProvider.connect(), 25.seconds)
 
     session.execute(s"CREATE KEYSPACE IF NOT EXISTS $journalKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
     session.execute(s"CREATE KEYSPACE IF NOT EXISTS $snapshotKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
@@ -108,7 +109,7 @@ class MultiPluginSpec
 
   override protected def afterAll(): Unit = {
     session.close()
-    cluster.close()
+    session.getCluster.close()
 
     super.afterAll()
   }

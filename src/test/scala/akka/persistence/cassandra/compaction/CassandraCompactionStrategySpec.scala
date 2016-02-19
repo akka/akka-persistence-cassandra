@@ -3,17 +3,17 @@
  */
 package akka.persistence.cassandra.compaction
 
+import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
-
 import akka.actor.ActorSystem
 import akka.persistence.cassandra.{ CassandraPluginConfig, CassandraLifecycle }
-
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.testkit.TestKit
 import com.datastax.driver.core.{ Session, Cluster }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.MustMatchers
 import org.scalatest.WordSpecLike
+import scala.concurrent.Await
 
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(
@@ -31,11 +31,12 @@ class CassandraCompactionStrategySpec extends TestKit(
 )
   with WordSpecLike with MustMatchers with CassandraLifecycle {
 
+  import system.dispatcher
+
   val defaultConfigs = system.settings.config.getConfig("cassandra-journal")
 
-  val cassandraPluginConfig = new CassandraPluginConfig(defaultConfigs)
+  val cassandraPluginConfig = new CassandraPluginConfig(system, defaultConfigs)
 
-  var cluster: Cluster = _
   var session: Session = _
 
   import cassandraPluginConfig._
@@ -45,15 +46,14 @@ class CassandraCompactionStrategySpec extends TestKit(
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    cluster = clusterBuilder.build()
-    session = cluster.connect()
+    session = Await.result(cassandraPluginConfig.sessionProvider.connect(), 5.seconds)
 
     session.execute("CREATE KEYSPACE IF NOT EXISTS testKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
   }
 
   override protected def afterAll(): Unit = {
     session.close()
-    cluster.close()
+    session.getCluster.close()
 
     super.afterAll()
   }
