@@ -4,12 +4,13 @@
 package akka.persistence.cassandra.query.scaladsl
 
 import scala.concurrent.duration.FiniteDuration
+import scala.collection.immutable
 import scala.util.control.NonFatal
 import java.net.URLEncoder
 import java.util.UUID
 import akka.actor.ExtendedActorSystem
 import akka.event.Logging
-import akka.persistence.PersistentRepr
+import akka.persistence.{ Persistence, PersistentRepr }
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.stream.ActorAttributes
@@ -62,8 +63,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   with CurrentEventsByTagQuery {
 
   private val log = Logging.getLogger(system, getClass)
-  private val writePluginConfig = new CassandraJournalConfig(system.settings.config.getConfig(config.getString("write-plugin")))
+  private val writePluginId = config.getString("write-plugin")
+  private val writePluginConfig = new CassandraJournalConfig(system.settings.config.getConfig(writePluginId))
   private val queryPluginConfig = new CassandraReadJournalConfig(config, writePluginConfig)
+  private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
 
   private class CassandraSession(val underlying: Session) {
 
@@ -239,7 +242,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       if (writePluginConfig.enableEventsByTagQuery) {
         import queryPluginConfig._
         Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
-          None, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
+          None, queryPluginConfig, cassandraSession.underlying, selectStatement(tag),
+          eventAdapters))
           .mapMaterializedValue(_ => NotUsed)
           .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
           .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
@@ -287,7 +291,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         import queryPluginConfig._
         val toOffset = Some(offsetUuid(System.currentTimeMillis()))
         Source.actorPublisher[UUIDEventEnvelope](EventsByTagPublisher.props(tag, offset,
-          toOffset, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
+          toOffset, queryPluginConfig, cassandraSession.underlying, selectStatement(tag),
+          eventAdapters))
           .mapMaterializedValue(_ => NotUsed)
           .named("currentEventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
           .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
@@ -337,7 +342,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId"
     )
-      .map(r => toEventEnvelope(r, r.sequenceNr))
+      .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
    * Same type of query as `eventsByPersistenceId` but the event stream
@@ -358,7 +363,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       None,
       s"currentEventsByPersistenceId-$persistenceId"
     )
-      .map(r => toEventEnvelope(r, r.sequenceNr))
+      .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   private[cassandra] def eventsByPersistenceId(
     persistenceId:   String,
@@ -392,8 +397,15 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       .named(name)
   }
 
-  private[this] def toEventEnvelope(persistentRepr: PersistentRepr, offset: Long): EventEnvelope =
-    EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, persistentRepr.payload)
+  private[this] def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Seq[EventEnvelope] = {
+    val eventAdapter = eventAdapters.get(persistentRepr.payload.getClass)
+    val eventSeq = eventAdapter.fromJournal(persistentRepr.payload, persistentRepr.manifest)
+
+    eventSeq.events.map { payload =>
+      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
+    }
+
+  }
 
   /**
    * `allPersistenceIds` is used to retrieve a stream of `persistenceId`s.

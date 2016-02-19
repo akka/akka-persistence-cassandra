@@ -5,6 +5,8 @@ package akka.persistence.cassandra.query
 
 import java.nio.ByteBuffer
 import java.util.UUID
+import akka.persistence.journal.EventAdapters
+
 import scala.concurrent.Future
 import akka.actor.Actor
 import akka.actor.ActorRef
@@ -34,16 +36,16 @@ private[query] object EventsByTagFetcher {
   def props(tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int,
             backtracking: Boolean, replyTo: ActorRef,
             session: Session, preparedSelect: PreparedStatement, seqNumbers: SequenceNumbers,
-            settings: CassandraReadJournalConfig): Props =
+            settings: CassandraReadJournalConfig, eventAdapters: EventAdapters): Props =
     Props(new EventsByTagFetcher(tag, timeBucket, fromOffset, toOffset, limit, backtracking,
-      replyTo, session, preparedSelect, seqNumbers, settings)).withDispatcher(settings.pluginDispatcher)
+      replyTo, session, preparedSelect, seqNumbers, settings, eventAdapters)).withDispatcher(settings.pluginDispatcher)
 
 }
 
 private[query] class EventsByTagFetcher(
   tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int, backtracking: Boolean,
   replyTo: ActorRef, session: Session, preparedSelect: PreparedStatement,
-  seqN: SequenceNumbers, settings: CassandraReadJournalConfig
+  seqN: SequenceNumbers, settings: CassandraReadJournalConfig, eventAdapters: EventAdapters
 )
   extends Actor with ActorLogging {
 
@@ -130,13 +132,8 @@ private[query] class EventsByTagFetcher(
                   persistentFromByteBuffer(b)
               }
 
-              val eventEnvelope = UUIDEventEnvelope(
-                offset = offs,
-                persistenceId = pid,
-                sequenceNr = row.getLong("sequence_nr"),
-                event = m.payload
-              )
-              replyTo ! eventEnvelope
+              toUUIDEventEnvelopes(m, offs).foreach(ee => replyTo ! ee)
+
               loop(n - 1)
 
             case SequenceNumbers.After =>
@@ -155,6 +152,21 @@ private[query] class EventsByTagFetcher(
 
       loop(resultSet.getAvailableWithoutFetching)
 
+    }
+  }
+
+  private def toUUIDEventEnvelopes(pr: PersistentRepr, offset: UUID): TraversableOnce[UUIDEventEnvelope] = {
+
+    val eventAdapter = eventAdapters.get(pr.payload.getClass)
+    val events = eventAdapter.fromJournal(pr.payload, pr.manifest).events
+
+    events.map { payload =>
+      UUIDEventEnvelope(
+        offset = offset,
+        persistenceId = pr.persistenceId,
+        sequenceNr = pr.sequenceNr,
+        event = payload
+      )
     }
   }
 
