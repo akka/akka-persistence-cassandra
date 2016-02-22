@@ -90,10 +90,12 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   }
 
   private var sessionUsed = false
+  private val metricsCategory = s"${self.path.name}"
 
   private[journal] lazy val cassandraSession: CassandraSession = {
     retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis) {
       val underlying: Session = clusterBuilder.build().connect()
+      CassandraMetricsRegistry(context.system).addMetrics(metricsCategory, underlying.getCluster.getMetrics.getRegistry)
       try {
         val s = new CassandraSession(underlying)
         new CassandraConfigChecker {
@@ -119,6 +121,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   private def closeSession(session: Session): Unit = try {
     session.close()
     session.getCluster().close()
+    CassandraMetricsRegistry(context.system).removeMetrics(metricsCategory)
   } catch {
     case NonFatal(_) => // nothing we can do
   }

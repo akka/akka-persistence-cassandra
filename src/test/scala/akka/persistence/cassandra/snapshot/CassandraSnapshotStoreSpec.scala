@@ -10,7 +10,7 @@ import java.nio.ByteBuffer
 
 import akka.persistence._
 import akka.persistence.SnapshotProtocol._
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.{ CassandraMetricsRegistry, CassandraLifecycle }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
 
@@ -66,6 +66,11 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStor
   val serId: JInteger = 4
 
   "A Cassandra snapshot store" must {
+    "insert Cassandra metrics to Cassandra Metrics Registry" in {
+      val registry = CassandraMetricsRegistry(system).getRegistry
+      val snapshots = registry.getNames.toArray()
+      snapshots.length should be > 0
+    }
     "make up to 3 snapshot loading attempts" in {
       val probe = TestProbe()
 
