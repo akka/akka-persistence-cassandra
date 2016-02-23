@@ -35,7 +35,7 @@ private[query] object EventsByTagFetcher {
 
   def props(tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int,
             backtracking: Boolean, replyTo: ActorRef,
-            session: Session, preparedSelect: PreparedStatement, seqNumbers: SequenceNumbers,
+            session: Session, preparedSelect: PreparedStatement, seqNumbers: Option[SequenceNumbers],
             settings: CassandraReadJournalConfig): Props =
     Props(new EventsByTagFetcher(tag, timeBucket, fromOffset, toOffset, limit, backtracking,
       replyTo, session, preparedSelect, seqNumbers, settings)).withDispatcher(settings.pluginDispatcher)
@@ -45,7 +45,7 @@ private[query] object EventsByTagFetcher {
 private[query] class EventsByTagFetcher(
   tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int, backtracking: Boolean,
   replyTo: ActorRef, session: Session, preparedSelect: PreparedStatement,
-  seqN: SequenceNumbers, settings: CassandraReadJournalConfig
+  seqN: Option[SequenceNumbers], settings: CassandraReadJournalConfig
 )
   extends Actor with ActorLogging {
 
@@ -113,23 +113,29 @@ private[query] class EventsByTagFetcher(
           else
             highestOffset = offs
 
-          seqNumbers.isNext(pid, seqNr) match {
-            case SequenceNumbers.Yes | SequenceNumbers.PossiblyFirst =>
-              seqNumbers = seqNumbers.updated(pid, seqNr)
+          seqNumbers match {
+            case None =>
               replyTo ! UUIDPersistentRepr(offs, toPersistentRepr(row, pid, seqNr))
-
               loop(n - 1)
 
-            case SequenceNumbers.After =>
-              replyTo ! ReplayAborted(seqNumbers, pid, seqNumbers.get(pid) + 1, seqNr)
-            // end loop
+            case Some(s) =>
+              s.isNext(pid, seqNr) match {
+                case SequenceNumbers.Yes | SequenceNumbers.PossiblyFirst =>
+                  seqNumbers = Some(s.updated(pid, seqNr))
+                  replyTo ! UUIDPersistentRepr(offs, toPersistentRepr(row, pid, seqNr))
+                  loop(n - 1)
 
-            case SequenceNumbers.Before =>
-              // duplicate, discard
-              if (!backtracking)
-                log.debug(s"Discarding duplicate. Got sequence number [$seqNr] for [$pid], " +
-                  s"but current sequence number is [${seqNumbers.get(pid)}]")
-              loop(n - 1)
+                case SequenceNumbers.After =>
+                  replyTo ! ReplayAborted(seqNumbers, pid, s.get(pid) + 1, seqNr)
+                // end loop
+
+                case SequenceNumbers.Before =>
+                  // duplicate, discard
+                  if (!backtracking)
+                    log.debug(s"Discarding duplicate. Got sequence number [$seqNr] for [$pid], " +
+                      s"but current sequence number is [${s.get(pid)}]")
+                  loop(n - 1)
+              }
           }
         }
       }

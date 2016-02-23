@@ -45,7 +45,6 @@ object EventAdaptersReadSpec {
       max-buffer-size = 50
       first-time-bucket = ${TimeBucket(today.minusDays(5)).key}
       eventual-consistency-delay = 2s
-      delayed-event-timeout = 3s
     }
     """).withFallback(CassandraLifecycle.config)
 }

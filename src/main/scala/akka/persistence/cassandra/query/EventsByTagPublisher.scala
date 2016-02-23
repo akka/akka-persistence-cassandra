@@ -38,10 +38,10 @@ private[query] object EventsByTagPublisher {
 
   private[query] case object Continue extends DeadLetterSuppression
 
-  private[query] case class ReplayDone(count: Int, seqNumbers: SequenceNumbers, highest: UUID)
+  private[query] case class ReplayDone(count: Int, seqNumbers: Option[SequenceNumbers], highest: UUID)
     extends DeadLetterSuppression
   private[query] case class ReplayAborted(
-    seqNumbers: SequenceNumbers, persistenceId: String, expectedSeqNr: Long, gotSeqNr: Long
+    seqNumbers: Option[SequenceNumbers], persistenceId: String, expectedSeqNr: Long, gotSeqNr: Long
   )
     extends DeadLetterSuppression
   private[query] final case class ReplayFailed(cause: Throwable)
@@ -68,7 +68,7 @@ private[query] class EventsByTagPublisher(
 
   // Subscribe to DistributedPubSub so we can receive immediate notifications when the journal has written something.
   if (settings.pubsubMinimumInterval.isFinite) {
-    Try { // Ignore pubsub when clustering unavailable 
+    Try { // Ignore pubsub when clustering unavailable
       DistributedPubSub(context.system).mediator !
         DistributedPubSubMediator.Subscribe("akka.persistence.cassandra.journal.tag", self)
     }
@@ -77,7 +77,10 @@ private[query] class EventsByTagPublisher(
   var currTimeBucket: TimeBucket = TimeBucket(fromOffset)
   var currOffset: UUID = fromOffset
   var highestOffset: UUID = fromOffset
-  var seqNumbers = SequenceNumbers.empty
+  val strictBySeqNumber = settings.delayedEventTimeout > Duration.Zero
+  var seqNumbers: Option[SequenceNumbers] =
+    if (strictBySeqNumber) Some(SequenceNumbers.empty)
+    else None
   var abortDeadline: Option[Deadline] = None
   var lookForMissingDeadline: Deadline = nextLookForMissingDeadline()
 
@@ -142,7 +145,7 @@ private[query] class EventsByTagPublisher(
 
   def idle: Receive = {
     case Continue =>
-      if (!isBacktracking && lookForMissingDeadline.isOverdue()) {
+      if (strictBySeqNumber && !isBacktracking && lookForMissingDeadline.isOverdue()) {
         // look for delayed events
         goBack()
         lookForMissingDeadline = nextLookForMissingDeadline()
@@ -236,6 +239,7 @@ private[query] class EventsByTagPublisher(
       context.become(idle)
 
     case ReplayAborted(seqN, pid, expectedSeqNr, gotSeqNr) =>
+      // this will only happen when delayedEventTimeout is > 0s
       seqNumbers = seqN
       def logMsg = s"query chunk aborted for tag [$tag], timBucket [$currTimeBucket], " +
         s" expected sequence number [$expectedSeqNr] for [$pid], but got [$gotSeqNr]"
