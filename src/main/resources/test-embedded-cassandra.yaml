@@ -1,4 +1,5 @@
 # Cassandra storage config YAML
+# Reference: http://docs.datastax.com/en/cassandra/3.x/cassandra/configuration/configCassandra_yaml.html
 
 # NOTE:
 #   See http://wiki.apache.org/cassandra/StorageConfiguration for
@@ -45,3 +46,16 @@ seed_provider:
     - class_name: org.apache.cassandra.locator.SimpleSeedProvider
       parameters:
           - seeds: "127.0.0.1"
+
+
+# The following settings were inspired by
+# http://opensourceconnections.com/blog/2013/08/31/building-the-perfect-cassandra-test-environment/
+rpc_server_type: hsha
+concurrent_reads: 2
+concurrent_writes: 2
+rpc_min_threads: 1
+rpc_max_threads: 1
+concurrent_compactors: 1
+compaction_throughput_mb_per_sec: 0
+key_cache_size_in_mb: 0
+hinted_handoff_enabled: false

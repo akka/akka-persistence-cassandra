@@ -4,6 +4,7 @@
 #   See http://wiki.apache.org/cassandra/StorageConfiguration for
 #   full explanations of configuration directives
 # /NOTE
+# Reference: http://docs.datastax.com/en/cassandra/3.x/cassandra/configuration/configCassandra_yaml.html
 
 # The name of the cluster. This is mainly used to prevent machines in
 # one logical cluster from joining another.
@@ -62,4 +63,15 @@ client_encryption_options:
    truststore: src/test/resources/security/stc_truststore.jks
    truststore_password: "erZHDS9Eo0CcNo"
 
+# The following settings were inspired by
+# http://opensourceconnections.com/blog/2013/08/31/building-the-perfect-cassandra-test-environment/
+rpc_server_type: hsha
+concurrent_reads: 2
+concurrent_writes: 2
+rpc_min_threads: 1
+rpc_max_threads: 1
+concurrent_compactors: 1
+compaction_throughput_mb_per_sec: 0
+key_cache_size_in_mb: 0
+hinted_handoff_enabled: false
 
