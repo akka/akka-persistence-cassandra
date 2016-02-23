@@ -102,6 +102,17 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * `delayed-event-timeout` and if the expected event is still not found
    * the stream is completed with failure.
    *
+   * If you use the same tag for all events for a `persistenceId` it is possible to get
+   * a more strict delivery order than otherwise. This can be useful when all events of
+   * a PersistentActor class (all events of all instances of that PersistentActor class)
+   * are tagged with the same tag. Then the events for each `persistenceId` can be delivered
+   * strictly by sequence number. If a sequence number is missing the query is delayed up
+   * to the configured `delayed-event-timeout` and if the expected event is still not
+   * found the stream is completed with failure. This means that there must not be any
+   * holes in the sequence numbers for a given tag, i.e. all events must be tagged
+   * with the same tag. Set `delayed-event-timeout` to for example 30s to enable this
+   * feature. It is disabled by default.
+   *
    * Deleted events are also deleted from the tagged event stream.
    *
    * The stream is not completed when it reaches the end of the currently stored events,

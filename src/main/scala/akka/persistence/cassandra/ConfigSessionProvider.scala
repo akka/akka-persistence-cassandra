@@ -53,26 +53,33 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   val poolingOptions = new PoolingOptions()
     .setNewConnectionThreshold(
       HostDistance.LOCAL,
-      connectionPoolConfig.getInt("new-connection-threshold-local"))
+      connectionPoolConfig.getInt("new-connection-threshold-local")
+    )
     .setNewConnectionThreshold(
       HostDistance.REMOTE,
-      connectionPoolConfig.getInt("new-connection-threshold-remote"))
+      connectionPoolConfig.getInt("new-connection-threshold-remote")
+    )
     .setMaxRequestsPerConnection(
       HostDistance.LOCAL,
-      connectionPoolConfig.getInt("max-requests-per-connection-local"))
+      connectionPoolConfig.getInt("max-requests-per-connection-local")
+    )
     .setMaxRequestsPerConnection(
       HostDistance.REMOTE,
-      connectionPoolConfig.getInt("max-requests-per-connection-remote"))
+      connectionPoolConfig.getInt("max-requests-per-connection-remote")
+    )
     .setConnectionsPerHost(
       HostDistance.LOCAL,
       connectionPoolConfig.getInt("connections-per-host-core-local"),
-      connectionPoolConfig.getInt("connections-per-host-max-local"))
+      connectionPoolConfig.getInt("connections-per-host-max-local")
+    )
     .setConnectionsPerHost(
       HostDistance.REMOTE,
       connectionPoolConfig.getInt("connections-per-host-core-remote"),
-      connectionPoolConfig.getInt("connections-per-host-max-remote"))
+      connectionPoolConfig.getInt("connections-per-host-max-remote")
+    )
     .setPoolTimeoutMillis(
-      connectionPoolConfig.getInt("pool-timeout-millis"))
+      connectionPoolConfig.getInt("pool-timeout-millis")
+    )
 
   def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
@@ -89,28 +96,33 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
       if (username != "") {
         b.withCredentials(
           username,
-          config.getString("authentication.password"))
+          config.getString("authentication.password")
+        )
       }
 
       val localDatacenter = config.getString("local-datacenter")
       if (localDatacenter != "") {
         b.withLoadBalancingPolicy(
           new TokenAwarePolicy(
-            DCAwareRoundRobinPolicy.builder.withLocalDc(localDatacenter).build()))
+            DCAwareRoundRobinPolicy.builder.withLocalDc(localDatacenter).build()
+          )
+        )
       }
 
       val truststorePath = config.getString("ssl.truststore.path")
       if (truststorePath != "") {
         val trustStore = StorePathPasswordConfig(
           truststorePath,
-          config.getString("ssl.truststore.password"))
+          config.getString("ssl.truststore.password")
+        )
 
         val keystorePath = config.getString("ssl.keystore.path")
         val keyStore: Option[StorePathPasswordConfig] =
           if (keystorePath != "") {
             val keyStore = StorePathPasswordConfig(
               keystorePath,
-              config.getString("ssl.keystore.password"))
+              config.getString("ssl.keystore.password")
+            )
             Some(keyStore)
           } else None
 

@@ -224,10 +224,16 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * or other things that may delay the updates of the Materialized View the events may be
    * delivered in different order (not strictly by their timestamp).
    *
-   * For each `persistenceId` the events are delivered strictly by sequence number. If
-   * a sequence number is missing the query is delayed up to the configured
-   * `delayed-event-timeout` and if the expected event is still not found
-   * the stream is completed with failure.
+   * If you use the same tag for all events for a `persistenceId` it is possible to get
+   * a more strict delivery order than otherwise. This can be useful when all events of
+   * a PersistentActor class (all events of all instances of that PersistentActor class)
+   * are tagged with the same tag. Then the events for each `persistenceId` can be delivered
+   * strictly by sequence number. If a sequence number is missing the query is delayed up
+   * to the configured `delayed-event-timeout` and if the expected event is still not
+   * found the stream is completed with failure. This means that there must not be any
+   * holes in the sequence numbers for a given tag, i.e. all events must be tagged
+   * with the same tag. Set `delayed-event-timeout` to for example 30s to enable this
+   * feature. It is disabled by default.
    *
    * Deleted events are also deleted from the tagged event stream.
    *
@@ -263,6 +269,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   def eventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
     try {
       if (writePluginConfig.enableEventsByTagQuery) {
+        require(tag != null && tag != "", "tag must not be null or empty")
         import queryPluginConfig._
         Source.actorPublisher[UUIDPersistentRepr](EventsByTagPublisher.props(tag, offset,
           None, queryPluginConfig, cassandraSession.underlying, selectStatement(tag)))
@@ -311,6 +318,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   def currentEventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
     try {
       if (writePluginConfig.enableEventsByTagQuery) {
+        require(tag != null && tag != "", "tag must not be null or empty")
         import queryPluginConfig._
         val toOffset = Some(offsetUuid(System.currentTimeMillis()))
         Source.actorPublisher[UUIDPersistentRepr](EventsByTagPublisher.props(tag, offset,
@@ -403,7 +411,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     fetchSize:       Int,
     refreshInterval: Option[FiniteDuration],
     name:            String
-  ) = {
+  ): Source[PersistentRepr, NotUsed] = {
 
     Source.actorPublisher[PersistentRepr](
       EventsByPersistenceIdPublisher.props(
