@@ -3,18 +3,36 @@
  */
 package akka.persistence.cassandra
 
+import scala.collection.immutable
+import scala.concurrent.duration._
 import java.net.InetSocketAddress
-
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ MustMatchers, WordSpec }
+import org.scalatest.MustMatchers
 import org.scalatest.prop.TableDrivenPropertyChecks._
-
 import scala.util.Random
+import org.scalatest.WordSpecLike
+import akka.testkit.TestKit
+import akka.actor.ActorSystem
+import scala.concurrent.Await
+import scala.concurrent.Future
+import com.typesafe.config.Config
+import scala.concurrent.ExecutionContext
 
-/**
- *
- */
-class CassandraPluginConfigTest extends WordSpec with MustMatchers {
+object CassandraPluginConfigTest {
+  class TestContactPointsProvider(system: ActorSystem, config: Config) extends ConfigSessionProvider(system, config) {
+    override def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
+      if (clusterId == "cluster1")
+        Future.successful(List(new InetSocketAddress("host1", 9041)))
+      else
+        Future.successful(List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042)))
+    }
+
+  }
+}
+
+class CassandraPluginConfigTest extends TestKit(ActorSystem("CassandraPluginConfigTest")) with WordSpecLike with MustMatchers {
+  import CassandraPluginConfigTest._
+  import system.dispatcher
   lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-journal")
 
   lazy val keyspaceNames = {
@@ -49,20 +67,26 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
   }
 
   "A CassandraPluginConfig" should {
+    "use ConfigSessionProvider by default" in {
+      val config = new CassandraPluginConfig(system, defaultConfig)
+      config.sessionProvider.getClass must be(classOf[ConfigSessionProvider])
+    }
+
     "set the fetch size to the max result size" in {
-      val config = new CassandraPluginConfig(defaultConfig)
-      config.fetchSize must be(50001)
+      val config = new CassandraPluginConfig(system, defaultConfig)
+      config.sessionProvider.asInstanceOf[ConfigSessionProvider].fetchSize must be(50001)
     }
 
     "set the metadata table" in {
-      val config = new CassandraPluginConfig(defaultConfig)
+      val config = new CassandraPluginConfig(system, defaultConfig)
       config.metadataTable must be("metadata")
     }
 
     "parse config with host:port values as contact points" in {
       val configWithHostPortPair = ConfigFactory.parseString("""contact-points = ["127.0.0.1:19142", "127.0.0.1:29142"]""").withFallback(defaultConfig)
-      val config = new CassandraPluginConfig(configWithHostPortPair)
-      config.contactPoints must be(
+      val config = new CassandraPluginConfig(system, configWithHostPortPair)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
         List(
           new InetSocketAddress("127.0.0.1", 19142),
           new InetSocketAddress("127.0.0.1", 29142)
@@ -73,8 +97,9 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
 
     "parse config with a list of contact points without port" in {
       lazy val configWithHosts = ConfigFactory.parseString("""contact-points = ["127.0.0.1", "127.0.0.2"]""").withFallback(defaultConfig)
-      val config = new CassandraPluginConfig(configWithHosts)
-      config.contactPoints must be(
+      val config = new CassandraPluginConfig(system, configWithHosts)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
         List(
           new InetSocketAddress("127.0.0.1", 9042),
           new InetSocketAddress("127.0.0.2", 9042)
@@ -82,17 +107,40 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
       )
     }
 
+    "use custom ConfigSessionProvider for cluster1" in {
+      val configWithContactPointsProvider = ConfigFactory.parseString(s"""
+        session-provider = "${classOf[TestContactPointsProvider].getName}"
+        cluster-id = cluster1
+      """).withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, configWithContactPointsProvider)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      Await.result(sessionProvider.lookupContactPoints("cluster1"), 3.seconds) must be(
+        List(new InetSocketAddress("host1", 9041))
+      )
+    }
+
+    "use custom ConfigSessionProvider for cluster2" in {
+      val configWithContactPointsProvider = ConfigFactory.parseString(s"""
+        session-provider = "${classOf[TestContactPointsProvider].getName}"
+        cluster-id = cluster2
+      """).withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, configWithContactPointsProvider)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      Await.result(sessionProvider.lookupContactPoints("cluster2"), 3.seconds) must be(
+        List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042))
+      )
+    }
+
     "throw an exception when contact point list is empty" in {
+      val cfg = ConfigFactory.parseString("""contact-points = []""").withFallback(defaultConfig)
       intercept[IllegalArgumentException] {
-        CassandraPluginConfig.getContactPoints(List.empty, 0)
-      }
-      intercept[IllegalArgumentException] {
-        CassandraPluginConfig.getContactPoints(null, 0)
+        val config = new CassandraPluginConfig(system, cfg)
+        Await.result(config.sessionProvider.connect(), 3.seconds)
       }
     }
 
     "parse config with SimpleStrategy as default for replication-strategy" in {
-      val config = new CassandraPluginConfig(defaultConfig)
+      val config = new CassandraPluginConfig(system, defaultConfig)
       config.replicationStrategy must be("'SimpleStrategy','replication_factor':1")
     }
 
@@ -103,7 +151,7 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
           |data-center-replication-factors = ["dc1:3", "dc2:2"]
         """.stripMargin
       ).withFallback(defaultConfig)
-      val config = new CassandraPluginConfig(configWithNetworkStrategy)
+      val config = new CassandraPluginConfig(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }
 
@@ -146,7 +194,7 @@ class CassandraPluginConfigTest extends WordSpec with MustMatchers {
     "parse keyspace-autocreate parameter" in {
       val configWithFalseKeyspaceAutocreate = ConfigFactory.parseString("""keyspace-autocreate = false""").withFallback(defaultConfig)
 
-      val config = new CassandraPluginConfig(configWithFalseKeyspaceAutocreate)
+      val config = new CassandraPluginConfig(system, configWithFalseKeyspaceAutocreate)
       config.keyspaceAutoCreate must be(false)
     }
   }

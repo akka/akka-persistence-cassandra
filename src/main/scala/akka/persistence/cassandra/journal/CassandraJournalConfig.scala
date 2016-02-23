@@ -4,16 +4,14 @@
 package akka.persistence.cassandra.journal
 
 import java.util.Locale
-
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration.Duration
-
 import com.typesafe.config.{ Config, ConfigValueType }
-
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.util.Helpers.{ ConfigOps, Requiring }
+import akka.actor.ActorSystem
 
-class CassandraJournalConfig(config: Config) extends CassandraPluginConfig(config) {
+class CassandraJournalConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
   val targetPartitionSize: Int = config.getInt(CassandraJournalConfig.TargetPartitionProperty)
   val maxResultSize: Int = config.getInt("max-result-size")
   val replayMaxResultSize: Int = config.getInt("max-result-size-replay")

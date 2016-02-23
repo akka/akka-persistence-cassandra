@@ -3,6 +3,7 @@
  */
 package akka.persistence.cassandra
 
+import scala.collection.immutable
 import java.util.concurrent.TimeUnit
 import java.net.InetSocketAddress
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
@@ -11,10 +12,14 @@ import com.datastax.driver.core._
 import com.typesafe.config.Config
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
+import akka.actor.ActorSystem
+import akka.actor.ExtendedActorSystem
+import scala.util.Failure
+import scala.concurrent.Future
 
 case class StorePathPasswordConfig(path: String, password: String)
 
-class CassandraPluginConfig(config: Config) {
+class CassandraPluginConfig(system: ActorSystem, config: Config) {
 
   import akka.persistence.cassandra.CassandraPluginConfig._
 
@@ -38,118 +43,31 @@ class CassandraPluginConfig(config: Config) {
 
   val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))
   val writeConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("write-consistency"))
-  val port: Int = config.getInt("port")
-  val contactPoints = getContactPoints(config.getStringList("contact-points").asScala, port)
-  val fetchSize = config.getInt("max-result-size")
-  val protocolVersion: Option[ProtocolVersion] = config.getString("protocol-version") match {
-    case "" => None
-    case _  => Some(ProtocolVersion.fromInt(config.getInt("protocol-version")))
+
+  val sessionProvider: SessionProvider = {
+    val className = config.getString("session-provider")
+    val dynamicAccess = system.asInstanceOf[ExtendedActorSystem].dynamicAccess
+    val clazz = dynamicAccess.getClassFor[SessionProvider](className).get
+
+    def instantiate(args: immutable.Seq[(Class[_], AnyRef)]) =
+      dynamicAccess.createInstanceFor[SessionProvider](clazz, args)
+
+    instantiate(List((classOf[ActorSystem], system), (classOf[Config], config)))
+      .recoverWith { case x: NoSuchMethodException ⇒ instantiate(List((classOf[ActorSystem], system))) }
+      .recoverWith { case x: NoSuchMethodException ⇒ instantiate(Nil) }
+      .recoverWith {
+        case ex: Exception ⇒
+          Failure(new IllegalArgumentException(s"Unable to create SessionProvider instance for class [$className]", ex))
+      }.get
   }
 
-  private[this] val connectionPoolConfig = config.getConfig("connection-pool")
-
-  val poolingOptions = new PoolingOptions()
-    .setNewConnectionThreshold(
-      HostDistance.LOCAL,
-      connectionPoolConfig.getInt("new-connection-threshold-local")
-    )
-    .setNewConnectionThreshold(
-      HostDistance.REMOTE,
-      connectionPoolConfig.getInt("new-connection-threshold-remote")
-    )
-    .setMaxRequestsPerConnection(
-      HostDistance.LOCAL,
-      connectionPoolConfig.getInt("max-requests-per-connection-local")
-    )
-    .setMaxRequestsPerConnection(
-      HostDistance.REMOTE,
-      connectionPoolConfig.getInt("max-requests-per-connection-remote")
-    )
-    .setConnectionsPerHost(
-      HostDistance.LOCAL,
-      connectionPoolConfig.getInt("connections-per-host-core-local"),
-      connectionPoolConfig.getInt("connections-per-host-max-local")
-    )
-    .setConnectionsPerHost(
-      HostDistance.REMOTE,
-      connectionPoolConfig.getInt("connections-per-host-core-remote"),
-      connectionPoolConfig.getInt("connections-per-host-max-remote")
-    )
-    .setPoolTimeoutMillis(
-      connectionPoolConfig.getInt("pool-timeout-millis")
-    )
-
-  val clusterBuilder: Cluster.Builder = {
-    val b = Cluster.builder
-      .addContactPointsWithPorts(contactPoints.asJava)
-      .withPoolingOptions(poolingOptions)
-      .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
-    protocolVersion match {
-      case None    => b
-      case Some(v) => b.withProtocolVersion(v)
-    }
-  }
-
-  private val username = config.getString("authentication.username")
-  if (username != "") {
-    clusterBuilder.withCredentials(
-      username,
-      config.getString("authentication.password")
-    )
-  }
-
-  private val localDatacenter = config.getString("local-datacenter")
-  if (localDatacenter != "") {
-    clusterBuilder.withLoadBalancingPolicy(
-      new TokenAwarePolicy(
-        DCAwareRoundRobinPolicy.builder.withLocalDc(localDatacenter).build()
-      )
-    )
-  }
-
-  private val truststorePath = config.getString("ssl.truststore.path")
-  if (truststorePath != "") {
-    val trustStore = StorePathPasswordConfig(
-      truststorePath,
-      config.getString("ssl.truststore.password")
-    )
-
-    val keystorePath = config.getString("ssl.keystore.path")
-    val keyStore: Option[StorePathPasswordConfig] =
-      if (keystorePath != "") {
-        val keyStore = StorePathPasswordConfig(
-          keystorePath,
-          config.getString("ssl.keystore.password")
-        )
-        Some(keyStore)
-      } else None
-
-    val context = SSLSetup.constructContext(trustStore, keyStore)
-
-    clusterBuilder.withSSL(JdkSSLOptions.builder.withSSLContext(context).build())
-  }
+  // FIXME temporary until we have fixed blocking in initialization, issue #6
+  private[cassandra] val clusterBuilderTimeout: FiniteDuration = 10.seconds
 }
 
 object CassandraPluginConfig {
 
   val keyspaceNameRegex = """^("[a-zA-Z]{1}[\w]{0,47}"|[a-zA-Z]{1}[\w]{0,47})$"""
-
-  /**
-   * Builds list of InetSocketAddress out of host:port pairs or host entries + given port parameter.
-   */
-  def getContactPoints(contactPoints: Seq[String], port: Int): Seq[InetSocketAddress] = {
-    contactPoints match {
-      case null | Nil => throw new IllegalArgumentException("A contact point list cannot be empty.")
-      case hosts => hosts map {
-        ipWithPort =>
-          ipWithPort.split(":") match {
-            case Array(host, port) => new InetSocketAddress(host, port.toInt)
-            case Array(host)       => new InetSocketAddress(host, port)
-            case msg               => throw new IllegalArgumentException(s"A contact point should have the form [host:port] or [host] but was: $msg.")
-          }
-      }
-    }
-  }
 
   /**
    * Builds replication strategy command to create a keyspace.

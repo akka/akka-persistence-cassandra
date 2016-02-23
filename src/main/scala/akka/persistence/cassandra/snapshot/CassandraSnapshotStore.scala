@@ -21,9 +21,10 @@ import scala.util.{ Failure, Success, Try }
 import scala.util.control.NonFatal
 import akka.serialization.Serialization
 import akka.serialization.SerializerWithStringManifest
+import scala.concurrent.Await
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
-  val config = new CassandraSnapshotStoreConfig(cfg)
+  val config = new CassandraSnapshotStoreConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
 
   import CassandraSnapshotStore._
@@ -53,7 +54,8 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
   private[this] lazy val cassandraSession: CassandraSession = {
     retry(config.connectionRetries + 1, config.connectionRetryDelay.toMillis) {
-      val underlying: Session = clusterBuilder.build.connect()
+      // FIXME Await until we have fixed blocking in initialization, issue #6
+      val underlying: Session = Await.result(config.sessionProvider.connect(), clusterBuilderTimeout)
       CassandraMetricsRegistry(context.system).addMetrics(metricsCategory, underlying.getCluster.getMetrics.getRegistry)
       try {
         val s = new CassandraSession(underlying)

@@ -28,6 +28,7 @@ import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByP
 import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.{ CassandraMetricsRegistry, retry }
 import akka.NotUsed
+import scala.concurrent.Await
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -68,7 +69,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
 
   private val log = Logging.getLogger(system, getClass)
   private val writePluginId = config.getString("write-plugin")
-  private val writePluginConfig = new CassandraJournalConfig(system.settings.config.getConfig(writePluginId))
+  private val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig(writePluginId))
   private val queryPluginConfig = new CassandraReadJournalConfig(config, writePluginConfig)
   private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
 
@@ -124,8 +125,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   }
 
   private lazy val cassandraSession: CassandraSession = {
+    implicit val ec = system.dispatchers.lookup(queryPluginConfig.pluginDispatcher)
     retry(writePluginConfig.connectionRetries + 1, writePluginConfig.connectionRetryDelay.toMillis) {
-      val underlying: Session = writePluginConfig.clusterBuilder.build.connect()
+      // FIXME Await until we have fixed blocking in initialization, issue #6
+      val underlying: Session = Await.result(
+        writePluginConfig.sessionProvider.connect(),
+        writePluginConfig.clusterBuilderTimeout
+      )
 
       CassandraMetricsRegistry(system).addMetrics(metricsCategory, underlying.getCluster.getMetrics.getRegistry)
       try {

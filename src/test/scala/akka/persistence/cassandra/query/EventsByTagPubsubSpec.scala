@@ -37,6 +37,7 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.Matchers
 import org.scalatest.WordSpecLike
 import akka.cluster.Cluster
+import scala.concurrent.Await
 
 object EventsByTagPubsubSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
@@ -60,10 +61,10 @@ class EventsByTagPubsubSpec extends TestKit(ActorSystem("EventsByTagPubsubSpec",
   override def systemName: String = "EventsByTagPubsubSpec"
   implicit val mat = ActorMaterializer()(system)
   lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
-  val writePluginConfig = new CassandraJournalConfig(system.settings.config.getConfig("cassandra-journal"))
+  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   lazy val session = {
-    val cluster = writePluginConfig.clusterBuilder.build
-    cluster.connect()
+    import system.dispatcher
+    Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
   }
 
   override protected def beforeAll(): Unit = {

@@ -18,6 +18,7 @@ import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.query.PersistenceQuery
 import scala.util.Try
 import com.datastax.driver.core.Session
+import scala.concurrent.Await
 
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
@@ -45,13 +46,14 @@ class AllPersistenceIdsSpec
   val cfg = AllPersistenceIdsSpec.config
     .withFallback(system.settings.config)
     .getConfig("cassandra-journal")
-  val pluginConfig = new CassandraPluginConfig(cfg)
+  val pluginConfig = new CassandraPluginConfig(system, cfg)
 
   var session: Session = _
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    session = pluginConfig.clusterBuilder.build.connect()
+    import system.dispatcher
+    session = Await.result(pluginConfig.sessionProvider.connect(), 5.seconds)
   }
 
   override protected def afterAll(): Unit = {
