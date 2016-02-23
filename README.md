@@ -14,7 +14,7 @@ Dependencies
 
 To include the latest release of the Cassandra plugins into your `sbt` project, add the following lines to your `build.sbt` file:
 
-    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.10"
+    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.11"
 
 This version of `akka-persistence-cassandra` depends on Akka 2.4.2 and Scala 2.11.6. 
 
@@ -45,7 +45,7 @@ The event data, snapshot data and meta data are stored in a separate columns ins
 
 ### Migrations from 0.6 to 0.7
 
-Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.10/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
+Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.11/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
 
 ### Migrating from 0.3.x (Akka 2.3.x)
 
@@ -67,7 +67,7 @@ To activate the journal plugin, add the following line to your Akka `application
 
     akka.persistence.journal.plugin = "cassandra-journal"
 
-This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.10/src/main/resources/reference.conf):
+This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.11/src/main/resources/reference.conf):
 
 ### Caveats
 
@@ -90,6 +90,6 @@ To activate the snapshot-store plugin, add the following line to your Akka `appl
 
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
 
-This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.10/src/main/resources/reference.conf):
+This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.11/src/main/resources/reference.conf):
 
 
