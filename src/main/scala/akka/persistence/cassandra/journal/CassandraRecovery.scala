@@ -4,15 +4,13 @@
 package akka.persistence.cassandra.journal
 
 import scala.concurrent._
-
 import java.lang.{ Long => JLong }
-
 import akka.actor.{ ExtendedActorSystem, ActorLogging }
 import akka.persistence.PersistentRepr
 import akka.stream.ActorMaterializer
-
 import akka.persistence.cassandra.listenableFutureToFuture
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
+import akka.persistence.query.PersistenceQuery
 
 trait CassandraRecovery extends ActorLogging {
   this: CassandraJournal =>
@@ -23,10 +21,7 @@ trait CassandraRecovery extends ActorLogging {
   private implicit val materializer = ActorMaterializer()
 
   private[this] lazy val queries: CassandraReadJournal =
-    new CassandraReadJournal(
-      extendedActorSystem,
-      context.system.settings.config.getConfig(config.queryPlugin)
-    )
+    PersistenceQuery(extendedActorSystem).readJournalFor(config.queryPlugin)
 
   override def asyncReplayMessages(
     persistenceId:  String,
@@ -53,13 +48,11 @@ trait CassandraRecovery extends ActorLogging {
     }
 
   private def asyncFindHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
-    import cassandraSession._
 
     def find(currentPnr: Long, currentSnr: Long): Future[Long] = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
-      listenableFutureToFuture(
-        session.executeAsync(preparedSelectHighestSequenceNr.bind(persistenceId, currentPnr: JLong))
-      )
+      val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, currentPnr: JLong))
+      boundSelectHighestSequenceNr.flatMap(session.select)
         .map { rs =>
           Option(rs.one()).map { row =>
             (row.getBool("used"), row.getLong("sequence_nr"))
@@ -79,8 +72,9 @@ trait CassandraRecovery extends ActorLogging {
     find(partitionNr(fromSequenceNr), fromSequenceNr)
   }
 
-  private[this] def asyncHighestDeletedSequenceNumber(partitionKey: String): Future[Long] = {
-    listenableFutureToFuture(session.executeAsync(cassandraSession.preparedSelectDeletedTo.bind(partitionKey)))
+  def asyncHighestDeletedSequenceNumber(persistenceId: String): Future[Long] = {
+    val boundSelectDeletedTo = preparedSelectDeletedTo.map(_.bind(persistenceId))
+    boundSelectDeletedTo.flatMap(session.select)
       .map(r => Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
   }
 }

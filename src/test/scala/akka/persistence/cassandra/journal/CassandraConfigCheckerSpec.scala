@@ -44,21 +44,32 @@ object CassandraConfigCheckerSpec {
 
 import akka.persistence.cassandra.journal.CassandraConfigCheckerSpec._
 
-class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigCheckerSpec", config)) with ImplicitSender with WordSpecLike with MustMatchers with CassandraLifecycle {
+class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigCheckerSpec", config))
+  with ImplicitSender with WordSpecLike with MustMatchers with CassandraLifecycle {
 
+  import system.dispatcher
   implicit val cfg = config.withFallback(system.settings.config).getConfig("cassandra-journal")
   implicit val pluginConfig = new CassandraPluginConfig(system, cfg)
 
   override def systemName: String = "CassandraConfigCheckerSpec"
+
+  lazy val session = {
+    Await.result(pluginConfig.sessionProvider.connect(), 5.seconds)
+  }
+
+  override protected def afterAll(): Unit = {
+    session.close()
+    super.afterAll()
+  }
 
   "CassandraConfigChecker" should {
 
     "persist value in cassandra" in {
       waitForPersistenceInitialization()
       val underTest = createCassandraConfigChecker
-      underTest.session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
+      session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
 
-      val persistentConfig = underTest.initializePersistentConfig
+      val persistentConfig = Await.result(underTest.initializePersistentConfig(session), remainingOrDefault)
       persistentConfig.get(CassandraJournalConfig.TargetPartitionProperty) must be(defined)
       persistentConfig.get(CassandraJournalConfig.TargetPartitionProperty).get must be("5")
       getTargetSize(underTest) must be("5")
@@ -67,11 +78,11 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigChe
     "multiple persistence should keep the same value" in {
       waitForPersistenceInitialization()
       val underTest = createCassandraConfigChecker
-      underTest.session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
+      session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
 
       (1 to 5).foreach(i => {
         val underTest = createCassandraConfigChecker(pluginConfig, cfg.withValue("target-partition-size", ConfigValueFactory.fromAnyRef("5")))
-        val persistentConfig = underTest.initializePersistentConfig
+        val persistentConfig = Await.result(underTest.initializePersistentConfig(session), remainingOrDefault)
         persistentConfig.get(CassandraJournalConfig.TargetPartitionProperty).get must be("5")
         assert(persistentConfig.contains(CassandraJournalConfig.TargetPartitionProperty))
         getTargetSize(underTest) must be("5")
@@ -81,12 +92,12 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigChe
     "throw exception when starting with wrong value" in {
       waitForPersistenceInitialization()
       val underTest = createCassandraConfigChecker
-      underTest.session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
-      underTest.initializePersistentConfig
+      session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
+      Await.result(underTest.initializePersistentConfig(session), remainingOrDefault)
 
       val try3Size = createCassandraConfigChecker(pluginConfig, cfg.withValue("target-partition-size", ConfigValueFactory.fromAnyRef("3")))
       intercept[IllegalArgumentException] {
-        try3Size.initializePersistentConfig
+        Await.result(try3Size.initializePersistentConfig(session), remainingOrDefault)
       }
 
       getTargetSize(underTest) must be("5")
@@ -94,13 +105,12 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigChe
 
     "concurrent calls keep consistent value" in {
       waitForPersistenceInitialization()
-      createCassandraConfigChecker.session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
-      implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(10))
+      session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.configTable}")
 
       val resultFuture = Future.sequence((1 to 10).map(i => Future {
         (i, Try {
           val underTest = createCassandraConfigChecker(pluginConfig, cfg.withValue("target-partition-size", ConfigValueFactory.fromAnyRef(i.toString)))
-          underTest.initializePersistentConfig
+          Await.result(underTest.initializePersistentConfig(session), remainingOrDefault)
         })
       }))
 
@@ -120,18 +130,10 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigChe
     }
   }
 
-  def createCassandraConfigChecker(implicit pluginConfig: CassandraPluginConfig, cfg: Config): CassandraConfigChecker = {
-
-    val clusterSession = {
-      import system.dispatcher
-      Await.result(pluginConfig.sessionProvider.connect(), 5.seconds)
-    }
-
-    new CassandraConfigChecker {
-      override def session: Session = clusterSession
+  def createCassandraConfigChecker(implicit pluginConfig: CassandraPluginConfig, cfg: Config): CassandraStatements =
+    new CassandraStatements {
       override def config: CassandraJournalConfig = new CassandraJournalConfig(system, cfg)
     }
-  }
 
   def waitForPersistenceInitialization() = {
     val actor = system.actorOf(Props(classOf[DummyActor], "p1", self))
@@ -140,7 +142,7 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigChe
     actor ! PoisonPill
   }
 
-  def getTargetSize(checker: CassandraConfigChecker): String = {
-    checker.session.execute(s"${checker.selectConfig} WHERE property='${CassandraJournalConfig.TargetPartitionProperty}'").one().getString("value")
+  def getTargetSize(checker: CassandraStatements): String = {
+    session.execute(s"${checker.selectConfig} WHERE property='${CassandraJournalConfig.TargetPartitionProperty}'").one().getString("value")
   }
 }

@@ -45,6 +45,8 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))
   val writeConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("write-consistency"))
 
+  val blockingDispatcherId: String = config.getString("blocking-dispatcher")
+
   val sessionProvider: SessionProvider = {
     val className = config.getString("session-provider")
     val dynamicAccess = system.asInstanceOf[ExtendedActorSystem].dynamicAccess
@@ -62,8 +64,8 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
       }.get
   }
 
-  // FIXME temporary until we have fixed blocking in initialization, issue #6
-  private[cassandra] val clusterBuilderTimeout: FiniteDuration = 10.seconds
+  // FIXME temporary until we have fixed all blocking
+  private[cassandra] val blockingTimeout: FiniteDuration = 10.seconds
 }
 
 object CassandraPluginConfig {
