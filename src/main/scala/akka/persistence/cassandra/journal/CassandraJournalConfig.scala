@@ -22,6 +22,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
   val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
   val enableEventsByTagQuery: Boolean = !cassandra2xCompat && config.getBoolean("enable-events-by-tag-query")
   val eventsByTagView: String = config.getString("events-by-tag-view")
+  val recoveryCassandraQueryJournal = config.getString("recovery-cassandra-query-journal")
   val pubsubMinimumInterval: Duration = {
     val key = "pubsub-minimum-interval"
     config.getString(key).toLowerCase(Locale.ROOT) match {
