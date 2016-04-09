@@ -25,7 +25,7 @@ trait CassandraRecovery extends ActorLogging {
   private[this] lazy val queries: CassandraReadJournal =
     new CassandraReadJournal(
       extendedActorSystem,
-      context.system.settings.config.getConfig(config.recoveryCassandraQueryJournal)
+      context.system.settings.config.getConfig(config.queryPlugin)
     )
 
   override def asyncReplayMessages(
