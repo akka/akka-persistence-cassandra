@@ -197,5 +197,12 @@ class CassandraPluginConfigTest extends TestKit(ActorSystem("CassandraPluginConf
       val config = new CassandraPluginConfig(system, configWithFalseKeyspaceAutocreate)
       config.keyspaceAutoCreate must be(false)
     }
+
+    "parse tables-autocreate parameter" in {
+      val configWithFalseTablesAutocreate = ConfigFactory.parseString("""tables-autocreate = false""").withFallback(defaultConfig)
+
+      val config = new CassandraPluginConfig(system, configWithFalseTablesAutocreate)
+      config.tablesAutoCreate must be(false)
+    }
   }
 }

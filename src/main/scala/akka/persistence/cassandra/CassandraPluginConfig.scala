@@ -31,6 +31,7 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val tableCompactionStrategy: CassandraCompactionStrategy = CassandraCompactionStrategy(config.getConfig("table-compaction-strategy"))
 
   val keyspaceAutoCreate: Boolean = config.getBoolean("keyspace-autocreate")
+  val tablesAutoCreate: Boolean = config.getBoolean("tables-autocreate")
 
   val connectionRetries: Int = config.getInt("connect-retries")
   val connectionRetryDelay: FiniteDuration = config.getDuration("connect-retry-delay", TimeUnit.MILLISECONDS).millis

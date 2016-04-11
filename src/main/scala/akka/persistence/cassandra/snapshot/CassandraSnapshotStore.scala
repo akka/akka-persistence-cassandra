@@ -35,7 +35,8 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
     if (config.keyspaceAutoCreate)
       underlying.execute(createKeyspace)
-    underlying.execute(createTable)
+    if (config.tablesAutoCreate)
+      underlying.execute(createTable)
 
     val preparedWriteSnapshot = underlying.prepare(writeSnapshot).setConsistencyLevel(writeConsistency)
     val preparedDeleteSnapshot = underlying.prepare(deleteSnapshot).setConsistencyLevel(writeConsistency)
