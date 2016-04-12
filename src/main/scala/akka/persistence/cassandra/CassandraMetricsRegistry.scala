@@ -9,8 +9,7 @@ import akka.actor._
 
 import com.codahale.metrics.MetricRegistry
 import scala.concurrent.{ ExecutionContext, Future }
-import scala.collection.convert.wrapAsScala._
-import ExecutionContext.Implicits.global
+import scala.collection.JavaConverters._
 
 /**
  * Retrieves Cassandra metrics registry for an actor system
@@ -24,8 +23,9 @@ class CassandraMetricsRegistry extends Extension {
     metricRegistry.register(category, registry)
 
   private[cassandra] def removeMetrics(category: String): Unit =
-    Future {
-      metricRegistry.getNames.toList.filter(_.startsWith(category)).foreach(metricRegistry.remove)
+    metricRegistry.getNames.iterator.asScala.foreach { name =>
+      if (name.startsWith(category))
+        metricRegistry.remove(name)
     }
 }
 

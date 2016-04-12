@@ -17,19 +17,4 @@ package object cassandra {
     lf.addListener(new Runnable { def run() = promise.complete(Try(lf.get())) }, executionContext.asInstanceOf[Executor])
     promise.future
   }
-  def retry[T](n: Int)(fn: => T): T = {
-    retry(n, 0)(fn)
-  }
-
-  @annotation.tailrec
-  def retry[T](n: Int, delay: Long)(fn: => T): T = {
-    Try { fn } match {
-      case Success(x) => x
-      case _ if n > 1 => {
-        Thread.sleep(delay)
-        retry(n - 1, delay)(fn)
-      }
-      case Failure(e) => throw e
-    }
-  }
 }

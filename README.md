@@ -29,6 +29,10 @@ It implements the following [Persistence Queries](http://doc.akka.io/docs/akka/2
 Migrations
 ----------
 
+### Migrations from 0.11 to 0.12
+
+Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.12/src/main/resources/reference.conf):
+
 ### Migrations from 0.9 to 0.10
 
 The event data, snapshot data and meta data are stored in a separate columns instead of being wrapped in blob. Run the following statements in `cqlsh`:
