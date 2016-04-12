@@ -74,7 +74,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   private[journal] class CassandraSession(val underlying: Session) {
 
-    executeCreateKeyspaceAndTables(underlying, config.keyspaceAutoCreate, maxTagId)
+    executeCreateKeyspaceAndTables(underlying, config.keyspaceAutoCreate, config.tablesAutoCreate, maxTagId)
 
     val preparedWriteMessage = underlying.prepare(writeMessage)
     val preparedDeleteMessages = underlying.prepare(deleteMessages)

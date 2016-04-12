@@ -151,14 +151,16 @@ trait CassandraStatements {
    *
    * The materialized view for eventsByTag query is not created if `maxTagId` is 0.
    */
-  def executeCreateKeyspaceAndTables(session: Session, keyspaceAutoCreate: Boolean, maxTagId: Int): Unit =
+  def executeCreateKeyspaceAndTables(session: Session, keyspaceAutoCreate: Boolean, tablesAutoCreate: Boolean, maxTagId: Int): Unit =
     CassandraStatements.createKeyspaceAndTablesLock.synchronized {
       if (keyspaceAutoCreate)
         session.execute(createKeyspace)
-      session.execute(createTable)
-      session.execute(createMetatdataTable)
-      session.execute(createConfigTable)
-      for (tagId <- 1 to maxTagId)
-        session.execute(createEventsByTagMaterializedView(tagId))
+      if (tablesAutoCreate) {
+        session.execute(createTable)
+        session.execute(createMetatdataTable)
+        session.execute(createConfigTable)
+        for (tagId <- 1 to maxTagId)
+          session.execute(createEventsByTagMaterializedView(tagId))
+      }
     }
 }

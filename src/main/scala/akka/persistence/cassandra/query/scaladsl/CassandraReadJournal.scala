@@ -83,7 +83,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     }
 
     writeStatements.executeCreateKeyspaceAndTables(underlying, writePluginConfig.keyspaceAutoCreate,
-      writePluginConfig.maxTagId)
+      writePluginConfig.tablesAutoCreate, writePluginConfig.maxTagId)
 
     val preparedSelectEventsByTag: Vector[PreparedStatement] =
       (1 to writePluginConfig.maxTagId).map { tagId =>
