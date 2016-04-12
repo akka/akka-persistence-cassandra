@@ -35,6 +35,14 @@ object CassandraJournalConfiguration {
       cassandra-snapshot-store.keyspace=CassandraJournalProtocolV3Spec
     """
   ).withFallback(config)
+
+  lazy val compat2Config = ConfigFactory.parseString(
+    s"""
+      cassandra-journal.cassandra-2x-compat = on
+      cassandra-journal.keyspace=CassandraJournalCompat2Spec
+      cassandra-snapshot-store.keyspace=CassandraJournalCompat2Spec
+    """
+  ).withFallback(config)
 }
 
 class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
@@ -57,6 +65,12 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
  */
 class CassandraJournalProtocolV3Spec extends JournalSpec(CassandraJournalConfiguration.protocolV3Config) with CassandraLifecycle {
   override def systemName: String = "CassandraJournalProtocolV3Spec"
+
+  override def supportsRejectingNonSerializableObjects = false
+}
+
+class CassandraJournalCompat2Spec extends JournalSpec(CassandraJournalConfiguration.compat2Config) with CassandraLifecycle {
+  override def systemName: String = "CassandraJournalCompat2Spec"
 
   override def supportsRejectingNonSerializableObjects = false
 }
