@@ -27,12 +27,12 @@ import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenc
 import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByPersistenceIdSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
+import akka.persistence.{ Persistence, PersistentRepr }
 import akka.stream.ActorAttributes
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import com.datastax.driver.core.PreparedStatement
-import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.UUIDs
+import com.datastax.driver.core.{ ConsistencyLevel, PreparedStatement, Session }
 import com.typesafe.config.Config
 
 object CassandraReadJournal {
@@ -414,13 +414,14 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    *  - In the public eventsByPersistenceId and currentEventsByPersistenceId queries.
    */
   private[cassandra] def eventsByPersistenceId(
-    persistenceId:   String,
-    fromSequenceNr:  Long,
-    toSequenceNr:    Long,
-    max:             Long,
-    fetchSize:       Int,
-    refreshInterval: Option[FiniteDuration],
-    name:            String
+    persistenceId:          String,
+    fromSequenceNr:         Long,
+    toSequenceNr:           Long,
+    max:                    Long,
+    fetchSize:              Int,
+    refreshInterval:        Option[FiniteDuration],
+    name:                   String,
+    customConsistencyLevel: Option[ConsistencyLevel] = None
   ): Source[PersistentRepr, NotUsed] = {
 
     createSource[PersistentRepr, CombinedEventsByPersistenceIdStmts](combinedEventsByPersistenceIdStmts, (s, c) =>
@@ -436,7 +437,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
             c.preparedSelectEventsByPersistenceId,
             c.preparedSelectInUse,
             c.preparedSelectDeletedTo,
-            s
+            s,
+            customConsistencyLevel
           ),
           queryPluginConfig
         )

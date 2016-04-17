@@ -3,28 +3,59 @@
  */
 package akka.persistence.cassandra.query
 
-import java.nio.ByteBuffer
 import java.lang.{ Long => JLong }
-import scala.collection.JavaConverters._
-import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
+import java.nio.ByteBuffer
+
 import akka.actor.Props
 import akka.persistence.PersistentRepr
-import akka.serialization.{ SerializationExtension, Serialization }
-import com.datastax.driver.core.utils.Bytes
-import com.datastax.driver.core.{ ResultSet, Row, PreparedStatement, Session }
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.query.QueryActorPublisher._
-import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher._
 import akka.persistence.cassandra.journal.CassandraJournal
+import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher._
+import akka.persistence.cassandra.query.QueryActorPublisher._
+import akka.serialization.{ Serialization, SerializationExtension }
+import com.datastax.driver.core._
+import com.datastax.driver.core.utils.Bytes
+
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{ ExecutionContext, Future }
 
 private[query] object EventsByPersistenceIdPublisher {
   private[query] final case class EventsByPersistenceIdSession(
-    selectEventsByPersistenceId: PreparedStatement,
-    selectInUse:                 PreparedStatement,
-    selectDeletedTo:             PreparedStatement,
-    session:                     Session
-  )
+    selectEventsByPersistenceIdQuery: PreparedStatement,
+    selectInUseQuery:                 PreparedStatement,
+    selectDeletedToQuery:             PreparedStatement,
+    session:                          Session,
+    customConsistencyLevel:           Option[ConsistencyLevel]
+  ) {
+
+    def selectEventsByPersistenceId(
+      persistenceId: String,
+      partitionNr:   Long,
+      progress:      Long,
+      toSeqNr:       Long,
+      fetchSize:     Int
+    )(implicit ec: ExecutionContext): Future[ResultSet] = {
+      val boundStatement = selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
+      boundStatement.setFetchSize(fetchSize)
+      executeStatement(boundStatement)
+    }
+
+    def selectInUse(persistenceId: String, currentPnr: Long)(implicit ec: ExecutionContext): Future[ResultSet] =
+      executeStatement(selectInUseQuery.bind(persistenceId, currentPnr: JLong))
+
+    def selectDeletedTo(partitionKey: String)(implicit ec: ExecutionContext): Future[ResultSet] =
+      executeStatement(selectDeletedToQuery.bind(partitionKey))
+
+    private def executeStatement(statement: Statement)(implicit ec: ExecutionContext): Future[ResultSet] =
+      listenableFutureToFuture(
+        session.executeAsync(withCustomConsistencyLevel(statement))
+      )
+
+    private def withCustomConsistencyLevel(statement: Statement): Statement = {
+      customConsistencyLevel.foreach(consistencyLevel => statement.setConsistencyLevel(consistencyLevel))
+      statement
+    }
+  }
 
   private[query] final case class EventsByPersistenceIdState(
     progress:    Long,
@@ -62,7 +93,7 @@ private[query] class EventsByPersistenceIdPublisher(
     state.progress > toSeqNr || state.count >= max
 
   override protected def initialState: Future[EventsByPersistenceIdState] =
-    highestDeletedSequenceNumber(persistenceId, session.selectDeletedTo).map { del =>
+    highestDeletedSequenceNumber(persistenceId).map { del =>
       val initialFromSequenceNr = math.max(del + 1, fromSeqNr)
       val currentPnr = partitionNr(initialFromSequenceNr, config.targetPartitionSize) + 1
 
@@ -125,40 +156,17 @@ private[query] class EventsByPersistenceIdPublisher(
       }
   }
 
-  private[this] def inUse(persistenceId: String, currentPnr: Long): Future[Boolean] = {
-    session.session
-      .executeAsync(session.selectInUse.bind(persistenceId, currentPnr: JLong))
+  private[this] def inUse(persistenceId: String, currentPnr: Long): Future[Boolean] =
+    session.selectInUse(persistenceId, currentPnr)
       .map(rs => if (rs.isExhausted) false else rs.one().getBool("used"))
-  }
 
-  private[this] def highestDeletedSequenceNumber(
-    partitionKey:            String,
-    preparedSelectDeletedTo: PreparedStatement
-  ): Future[Long] = {
-    listenableFutureToFuture(
-      session.session.executeAsync(preparedSelectDeletedTo.bind(partitionKey))
-    )
+  private[this] def highestDeletedSequenceNumber(partitionKey: String): Future[Long] =
+    session.selectDeletedTo(partitionKey)
       .map(r => Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
-  }
 
   private[this] def partitionNr(sequenceNr: Long, targetPartitionSize: Int): Long =
     (sequenceNr - 1L) / targetPartitionSize
 
-  private[this] def query(state: EventsByPersistenceIdState): Future[NewResultSet] = {
-    val boundStatement =
-      session.selectEventsByPersistenceId.bind(
-        persistenceId, state.partitionNr: JLong, state.progress: JLong, toSeqNr: JLong
-      )
-
-    boundStatement.setFetchSize(fetchSize)
-
-    /*val st = session.session.getState
-    val hosts = st.getConnectedHosts.asScala
-    val cons = st.getOpenConnections(hosts.head)
-    val inflight = st.getInFlightQueries(hosts.head)
-
-    println(s"Host ${hosts.head}, connections $cons, open $inflight")*/
-
-    listenableFutureToFuture(session.session.executeAsync(boundStatement)).map(NewResultSet)
-  }
+  private[this] def query(state: EventsByPersistenceIdState): Future[NewResultSet] =
+    session.selectEventsByPersistenceId(persistenceId, state.partitionNr, state.progress, toSeqNr, fetchSize).map(NewResultSet)
 }
