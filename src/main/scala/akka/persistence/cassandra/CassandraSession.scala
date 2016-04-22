@@ -3,8 +3,8 @@
  */
 package akka.persistence.cassandra
 
+import java.util.function.{ Function => JFunction }
 import java.util.concurrent.atomic.AtomicReference
-
 import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -12,7 +12,6 @@ import scala.concurrent.Promise
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.Done
 import akka.actor.ActorSystem
 import akka.event.LoggingAdapter
@@ -21,6 +20,7 @@ import com.datastax.driver.core.ProtocolVersion
 import com.datastax.driver.core.ResultSet
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.Statement
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * INTERNAL API
@@ -33,6 +33,21 @@ private[cassandra] final class CassandraSession(
 ) {
 
   implicit private val ec = executionContext
+
+  // cache of PreparedStatement (PreparedStatement should only be prepared once)
+  private val preparedStatements = new ConcurrentHashMap[String, Future[PreparedStatement]]
+  private val computePreparedStatement = new JFunction[String, Future[PreparedStatement]] {
+    override def apply(key: String): Future[PreparedStatement] =
+      underlying().flatMap { s =>
+        val prepared: Future[PreparedStatement] = s.prepareAsync(key)
+        prepared.onFailure {
+          case _ =>
+            // this is async, i.e. we are not updating the map from the compute function
+            preparedStatements.remove(key)
+        }
+        prepared
+      }
+  }
 
   private val _underlyingSession = new AtomicReference[Future[Session]]()
 
@@ -57,10 +72,6 @@ private[cassandra] final class CassandraSession(
           s.onFailure {
             case e =>
               _underlyingSession.compareAndSet(s, null)
-              log.warning(
-                "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
-                e.getMessage
-              )
           }
           system.registerOnTermination {
             s.foreach(close)
@@ -76,9 +87,16 @@ private[cassandra] final class CassandraSession(
     }
 
     val existing = _underlyingSession.get
-    if (existing == null)
-      retry(() => setup())
-    else
+    if (existing == null) {
+      val result = retry(() => setup())
+      result.onFailure {
+        case e => log.warning(
+          "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
+          e.getMessage
+        )
+      }
+      result
+    } else
       existing
   }
 
@@ -104,10 +122,6 @@ private[cassandra] final class CassandraSession(
       } catch {
         case NonFatal(e) =>
           // this is only in case the direct calls, such as sessionProvider, throws
-          log.warning(
-            "Failed to initialize CassandraSession. It will be retried on demand. Caused by: {}",
-            e.getMessage
-          )
           promise.failure(e)
       }
     }
@@ -118,7 +132,9 @@ private[cassandra] final class CassandraSession(
   }
 
   def prepare(stmt: String): Future[PreparedStatement] =
-    underlying().flatMap(_.prepareAsync(stmt))
+    underlying().flatMap { _ =>
+      preparedStatements.computeIfAbsent(stmt, computePreparedStatement)
+    }
 
   def executeWrite(stmt: Statement): Future[Unit] = {
     if (stmt.getConsistencyLevel == null)

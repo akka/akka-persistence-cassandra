@@ -19,6 +19,8 @@ import akka.persistence.query.PersistenceQuery
 import scala.util.Try
 import com.datastax.driver.core.Session
 import scala.concurrent.Await
+import akka.stream.scaladsl.Source
+import akka.NotUsed
 
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
@@ -71,6 +73,10 @@ class AllPersistenceIdsSpec
   lazy val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
+  def all(): Source[String, NotUsed] = queries.allPersistenceIds().filterNot(_ == "persistenceInit")
+
+  def current(): Source[String, NotUsed] = queries.currentPersistenceIds().filterNot(_ == "persistenceInit")
+
   private[this] def deleteAllEvents(): Unit = {
     session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.table}")
   }
@@ -91,7 +97,7 @@ class AllPersistenceIdsSpec
       setup("b", 1)
       setup("c", 1)
 
-      val src = queries.currentPersistenceIds()
+      val src = current()
       src.runWith(TestSink.probe[Any])
         .request(4)
         .expectNextUnordered("a", "b", "c")
@@ -101,7 +107,7 @@ class AllPersistenceIdsSpec
     "deliver persistenceId only once if there are multiple events spanning partitions" in {
       setup("d", 100)
 
-      val src = queries.currentPersistenceIds()
+      val src = current()
       src.runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("d")
@@ -113,7 +119,7 @@ class AllPersistenceIdsSpec
         setup(UUID.randomUUID().toString, 1)
       }
 
-      val src = queries.currentPersistenceIds()
+      val src = current()
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(1000)
 
@@ -130,7 +136,7 @@ class AllPersistenceIdsSpec
       setup("e", 1)
       setup("f", 1)
 
-      val src = queries.allPersistenceIds()
+      val src = all()
       val probe = src.runWith(TestSink.probe[Any])
         .request(5)
         .expectNextUnordered("e", "f")
@@ -143,7 +149,7 @@ class AllPersistenceIdsSpec
     "find new events after demand request" in {
       setup("h", 1)
       setup("i", 1)
-      val src = queries.allPersistenceIds()
+      val src = all()
       val probe = src.runWith(TestSink.probe[Any])
 
       probe.request(1)
@@ -164,7 +170,7 @@ class AllPersistenceIdsSpec
       setup("n", 1)
       setup("o", 1)
 
-      val src = queries.allPersistenceIds()
+      val src = all()
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(2)
       probe.expectNext()
@@ -180,7 +186,7 @@ class AllPersistenceIdsSpec
     "deliver persistenceId only once if there are multiple events spanning partitions" in {
       setup("p", 1000)
 
-      val src = queries.allPersistenceIds()
+      val src = all()
       val probe = src.runWith(TestSink.probe[Any])
 
       probe

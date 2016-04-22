@@ -110,33 +110,33 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     writePluginConfig, writePluginConfig.maxTagId
   ))
 
-  private lazy val preparedSelectEventsByTag: Vector[Future[PreparedStatement]] =
-    (1 to writePluginConfig.maxTagId).map { tagId =>
-      session.prepare(queryStatements.selectEventsByTag(tagId))
-        .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
-    }.toVector
+  private def preparedSelectEventsByTag(tagId: Int): Future[PreparedStatement] = {
+    require(tagId <= writePluginConfig.maxTagId)
+    session.prepare(queryStatements.selectEventsByTag(tagId))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
+  }
 
-  private lazy val preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
+  private def preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
     session
       .prepare(writeStatements.selectMessages)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
 
-  private lazy val preparedSelectInUse: Future[PreparedStatement] =
+  private def preparedSelectInUse: Future[PreparedStatement] =
     session
       .prepare(writeStatements.selectInUse)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
 
-  private lazy val preparedSelectDeletedTo: Future[PreparedStatement] =
+  private def preparedSelectDeletedTo: Future[PreparedStatement] =
     session
       .prepare(writeStatements.selectDeletedTo)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
 
-  private lazy val preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
+  private def preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
     session
       .prepare(queryStatements.selectDistinctPersistenceIds)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
 
-  private lazy val combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
+  private def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
     for {
       ps1 <- preparedSelectEventsByPersistenceId
       ps2 <- preparedSelectInUse
@@ -149,7 +149,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
 
   private def selectStatement(tag: String): Future[PreparedStatement] = {
     val tagId = writePluginConfig.tags.getOrElse(tag, 1)
-    preparedSelectEventsByTag(tagId - 1)
+    preparedSelectEventsByTag(tagId)
   }
 
   /**
