@@ -13,6 +13,7 @@ import akka.testkit.TestKitBase
 import akka.testkit.TestProbe
 import org.scalatest._
 import com.typesafe.config.ConfigFactory
+import java.util.concurrent.TimeUnit
 
 object CassandraLifecycle {
 
@@ -26,8 +27,16 @@ object CassandraLifecycle {
 
   def awaitPersistenceInit(system: ActorSystem): Unit = {
     val probe = TestProbe()(system)
-    system.actorOf(Props[AwaitPersistenceInit]).tell("hello", probe.ref)
-    probe.expectMsg(35.seconds, "hello")
+    val t0 = System.nanoTime()
+    var n = 0
+    probe.within(45.seconds) {
+      probe.awaitAssert {
+        n += 1
+        system.actorOf(Props[AwaitPersistenceInit], "persistenceInit" + n).tell("hello", probe.ref)
+        probe.expectMsg(5.seconds, "hello")
+        system.log.debug("awaitPersistenceInit took {} ms {}", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0), system.name)
+      }
+    }
   }
 
   class AwaitPersistenceInit extends PersistentActor {
@@ -54,6 +63,12 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suit
   def cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource
 
   override protected def beforeAll(): Unit = {
+    startCassandra()
+    awaitPersistenceInit()
+    super.beforeAll()
+  }
+
+  def startCassandra(): Unit = {
     val cassandraDirectory = new File("target/" + systemName)
     CassandraLauncher.start(
       cassandraDirectory,
@@ -61,9 +76,6 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suit
       clean = true,
       port = 0
     )
-
-    awaitPersistenceInit()
-    super.beforeAll()
   }
 
   def awaitPersistenceInit(): Unit = {

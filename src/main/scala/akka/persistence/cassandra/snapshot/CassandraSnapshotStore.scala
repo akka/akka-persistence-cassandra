@@ -35,13 +35,13 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     metricsCategory = s"${self.path.name}",
     init = session => executeCreateKeyspaceAndTables(session, config))
 
-  private lazy val preparedWriteSnapshot = session.prepare(writeSnapshot).map(_.setConsistencyLevel(writeConsistency))
-  private lazy val preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(_.setConsistencyLevel(writeConsistency))
-  private lazy val preparedSelectSnapshot = session.prepare(selectSnapshot).map(_.setConsistencyLevel(readConsistency))
-  private lazy val preparedSelectSnapshotMetadataForLoad =
+  private def preparedWriteSnapshot = session.prepare(writeSnapshot).map(_.setConsistencyLevel(writeConsistency))
+  private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(_.setConsistencyLevel(writeConsistency))
+  private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(_.setConsistencyLevel(readConsistency))
+  private def preparedSelectSnapshotMetadataForLoad =
     session.prepare(selectSnapshotMetadata(limit = Some(maxMetadataResultSize)))
       .map(_.setConsistencyLevel(readConsistency))
-  private lazy val preparedSelectSnapshotMetadataForDelete =
+  private def preparedSelectSnapshotMetadataForDelete =
     session.prepare(selectSnapshotMetadata(limit = None)).map(_.setConsistencyLevel(readConsistency))
 
   override def preStart(): Unit = {

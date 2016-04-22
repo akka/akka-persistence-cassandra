@@ -27,7 +27,7 @@ object CassandraSslSpec {
         |cassandra-journal.port = ${CassandraLauncher.randomPort}
         |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
         |cassandra-journal.keyspace=CassandraSslSpec${if (keyStore) 1 else 2}
-        |cassandra-snapshot-store.keyspace=CassandraLoadSpec${if (keyStore) 1 else 2}Snapshot
+        |cassandra-snapshot-store.keyspace=CassandraSslSpec${if (keyStore) 1 else 2}Snapshot
         |cassandra-snapshot-store.ssl.truststore.path="src/test/resources/security/cts_truststore.jks"
         |cassandra-snapshot-store.ssl.truststore.password="hbbUtqn3Y1D4Tw"
         |cassandra-journal.ssl.truststore.path="src/test/resources/security/cts_truststore.jks"
