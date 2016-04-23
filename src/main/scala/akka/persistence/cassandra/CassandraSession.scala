@@ -142,6 +142,8 @@ private[cassandra] final class CassandraSession(
       preparedStatements.computeIfAbsent(stmt, computePreparedStatement)
     }
 
+  def execute(stmt: Statement): Future[ResultSet] = underlying().flatMap(_.executeAsync(stmt))
+
   def executeWrite(stmt: Statement): Future[Unit] = {
     if (stmt.getConsistencyLevel == null)
       stmt.setConsistencyLevel(settings.writeConsistency)
