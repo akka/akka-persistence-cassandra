@@ -195,21 +195,17 @@ trait CassandraStatements {
     session.executeAsync(selectConfig)
       .flatMap { rs =>
         val properties = rs.all.asScala.map(row => (row.getString("property"), row.getString("value"))).toMap
-        val result = properties.get(CassandraJournalConfig.TargetPartitionProperty) match {
+        properties.get(CassandraJournalConfig.TargetPartitionProperty) match {
           case Some(oldValue) =>
             assertCorrectPartitionSize(oldValue)
             Future.successful(properties)
           case None =>
             session.executeAsync(writeConfig, CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
-              .map(_ => properties.updated(CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString))
-        }
-        result.flatMap { properties =>
-          session.executeAsync(writeConfig, CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
-            .map { rs =>
-              if (!rs.wasApplied())
-                Option(rs.one).map(_.getString("value")).foreach(assertCorrectPartitionSize)
-              properties
-            }
+              .map { rs =>
+                if (!rs.wasApplied())
+                  Option(rs.one).map(_.getString("value")).foreach(assertCorrectPartitionSize)
+                properties.updated(CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
+              }
         }
       }
 
