@@ -102,9 +102,13 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
 
       val localDatacenter = config.getString("local-datacenter")
       if (localDatacenter != "") {
+        val usedHostsPerRemoteDc = config.getInt("used-hosts-per-remote-dc")
         b.withLoadBalancingPolicy(
           new TokenAwarePolicy(
-            DCAwareRoundRobinPolicy.builder.withLocalDc(localDatacenter).build()
+            DCAwareRoundRobinPolicy.builder
+              .withLocalDc(localDatacenter)
+              .withUsedHostsPerRemoteDc(usedHostsPerRemoteDc)
+              .build()
           )
         )
       }
