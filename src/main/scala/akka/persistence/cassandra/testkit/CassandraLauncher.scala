@@ -13,12 +13,15 @@ import java.net.InetSocketAddress
 import java.nio.channels.ServerSocketChannel
 import org.apache.cassandra.io.util.FileUtils
 import org.apache.cassandra.service.CassandraDaemon
+import scala.util.control.NonFatal
 
 /**
  * Starts Cassandra in current JVM. There can only be one Cassandra instance per JVM,
  * but keyspaces can be used for isolation.
  */
 object CassandraLauncher {
+
+  class CleanFailedException(message: String, cause: Throwable) extends RuntimeException(message, cause)
 
   /**
    * Default config for testing "test-embedded-cassandra.yaml"
@@ -83,12 +86,20 @@ object CassandraLauncher {
    * @param port the `native_transport_port` to use, if 0 a random
    *   free port is used, which can be retrieved (before starting)
    *   with [[CassandraLauncher.randomPort]].
+   * @throws [[CleanFailedException]] if `clean` is `true` and removal of the directory fails
    */
   def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int): Unit = this.synchronized {
     if (cassandraDaemon.isEmpty) {
 
-      if (clean)
-        FileUtils.deleteRecursive(cassandraDirectory);
+      if (clean) {
+        try {
+          FileUtils.deleteRecursive(cassandraDirectory);
+        } catch {
+          // deleteRecursive may throw AssertionError
+          case e: AssertionError => throw new CleanFailedException(e.getMessage, e)
+          case NonFatal(e)       => throw new CleanFailedException(e.getMessage, e)
+        }
+      }
 
       if (!cassandraDirectory.exists)
         require(cassandraDirectory.mkdirs(), s"Couldn't create Cassandra directory [$cassandraDirectory]")
