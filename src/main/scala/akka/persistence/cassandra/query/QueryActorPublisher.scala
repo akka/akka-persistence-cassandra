@@ -81,6 +81,8 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
       context.become(exhaustFetchAndBecome(newRs, s, false, false))
     case InitialFinished(s, newRs) =>
       context.become(exhaustFetchAndBecome(newRs, s, true, false))
+    case Status.Failure(cause) =>
+      onErrorThenStop(cause)
   }
 
   private[this] def awaiting(rs: ResultSet, s: State, f: Boolean): Receive = {
@@ -93,6 +95,8 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
       context.become(exhaustFetchAndBecome(newRs, s, f, false))
     case Finished(newRs) =>
       context.become(exhaustFetchAndBecome(newRs, s, true, false))
+    case Status.Failure(cause) =>
+      onErrorThenStop(cause)
   }
 
   private[this] def idle(rs: ResultSet, s: State, f: Boolean): Receive = {
@@ -101,6 +105,8 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
       context.become(exhaustFetchAndBecome(rs, s, f, false))
     case Continue =>
       context.become(exhaustFetchAndBecome(rs, s, f, true))
+    case Status.Failure(cause) =>
+      onErrorThenStop(cause)
   }
 
   override def receive: Receive = starting
