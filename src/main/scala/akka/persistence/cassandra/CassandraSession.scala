@@ -67,7 +67,13 @@ private[cassandra] final class CassandraSession(
         val s = initialize(settings.sessionProvider.connect())
         if (_underlyingSession.compareAndSet(null, s)) {
           s.foreach { ses =>
-            CassandraMetricsRegistry(system).addMetrics(metricsCategory, ses.getCluster.getMetrics.getRegistry)
+            try {
+              if (!ses.getCluster.isClosed())
+                CassandraMetricsRegistry(system).addMetrics(metricsCategory, ses.getCluster.getMetrics.getRegistry)
+            } catch {
+              case NonFatal(e) => log.debug("Couldn't register metrics {}, due to {}", metricsCategory, e.getMessage)
+            }
+
           }
           s.onFailure {
             case e =>
