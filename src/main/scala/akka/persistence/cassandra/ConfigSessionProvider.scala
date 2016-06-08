@@ -4,23 +4,19 @@
 package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.actor.ActorSystem
-import com.datastax.driver.core.Cluster
-import com.datastax.driver.core.HostDistance
-import com.datastax.driver.core.JdkSSLOptions
-import com.datastax.driver.core.PoolingOptions
-import com.datastax.driver.core.ProtocolVersion
-import com.datastax.driver.core.QueryOptions
-import com.datastax.driver.core.Session
+import com.datastax.driver.core._
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 import com.datastax.driver.core.policies.TokenAwarePolicy
 import com.typesafe.config.Config
+
+import scala.concurrent.duration.FiniteDuration
 
 /**
  * Default implementation of the `SessionProvider` that is used for creating the
@@ -46,6 +42,9 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   val protocolVersion: Option[ProtocolVersion] = config.getString("protocol-version") match {
     case "" => None
     case _  => Some(ProtocolVersion.fromInt(config.getInt("protocol-version")))
+  }
+  object connection {
+    val readTimeout = FiniteDuration(config.getDuration("connection.read-timeout").toMillis, TimeUnit.MILLISECONDS)
   }
 
   private[this] val connectionPoolConfig = config.getConfig("connection-pool")
@@ -87,6 +86,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
         .addContactPointsWithPorts(cp.asJava)
         .withPoolingOptions(poolingOptions)
         .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
+        .withSocketOptions(new SocketOptions().setReadTimeoutMillis(connection.readTimeout.toMillis.toInt))
       protocolVersion match {
         case None    => b
         case Some(v) => b.withProtocolVersion(v)
