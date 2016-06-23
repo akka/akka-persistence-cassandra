@@ -3,10 +3,8 @@
  */
 package akka.persistence.cassandra
 
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, Future }
 import com.datastax.driver.core.Session
-import com.typesafe.config.Config
-import scala.concurrent.ExecutionContext
 
 /**
  * The implementation of the `SessionProvider` is used for creating the

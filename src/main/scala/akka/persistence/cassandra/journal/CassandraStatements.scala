@@ -3,12 +3,12 @@
  */
 package akka.persistence.cassandra.journal
 
-import scala.collection.JavaConverters._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 import akka.Done
+import akka.persistence.cassandra._
 import com.datastax.driver.core.Session
-import akka.persistence.cassandra.CassandraSession
+
+import scala.collection.JavaConverters._
+import scala.concurrent.{ ExecutionContext, Future }
 
 trait CassandraStatements {
   def config: CassandraJournalConfig
@@ -154,27 +154,26 @@ trait CassandraStatements {
    */
   def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig,
                                      maxTagId: Int)(implicit ec: ExecutionContext): Future[Done] = {
-    import akka.persistence.cassandra.listenableFutureToFuture
 
     def create(): Future[Done] = {
 
       val keyspace: Future[Done] =
-        if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).map(_ => Done)
+        if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).asScala.map(_ => Done)
         else Future.successful(Done)
 
       val tables =
         if (config.tablesAutoCreate) {
           for {
             _ <- keyspace
-            _ <- session.executeAsync(createTable)
-            _ <- session.executeAsync(createMetatdataTable)
-            done <- session.executeAsync(createConfigTable).map(_ => Done)
+            _ <- session.executeAsync(createTable).asScala
+            _ <- session.executeAsync(createMetatdataTable).asScala
+            done <- session.executeAsync(createConfigTable).asScala.map(_ => Done)
           } yield done
         } else keyspace
 
       def createTag(todo: List[String]): Future[Done] =
         todo match {
-          case create :: remainder => session.executeAsync(create).flatMap(_ => createTag(remainder))
+          case create :: remainder => session.executeAsync(create).asScala.flatMap(_ => createTag(remainder))
           case Nil                 => Future.successful(Done)
         }
 
@@ -191,24 +190,21 @@ trait CassandraStatements {
   }
 
   def initializePersistentConfig(session: Session)(implicit ec: ExecutionContext): Future[Map[String, String]] = {
-    import akka.persistence.cassandra.listenableFutureToFuture
-    session.executeAsync(selectConfig)
-      .flatMap { rs =>
-        val properties = rs.all.asScala.map(row => (row.getString("property"), row.getString("value"))).toMap
-        properties.get(CassandraJournalConfig.TargetPartitionProperty) match {
-          case Some(oldValue) =>
-            assertCorrectPartitionSize(oldValue)
-            Future.successful(properties)
-          case None =>
-            session.executeAsync(writeConfig, CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
-              .map { rs =>
-                if (!rs.wasApplied())
-                  Option(rs.one).map(_.getString("value")).foreach(assertCorrectPartitionSize)
-                properties.updated(CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
-              }
-        }
+    session.executeAsync(selectConfig).asScala.flatMap { rs =>
+      val properties = rs.all.asScala.map(row => (row.getString("property"), row.getString("value"))).toMap
+      properties.get(CassandraJournalConfig.TargetPartitionProperty) match {
+        case Some(oldValue) =>
+          assertCorrectPartitionSize(oldValue)
+          Future.successful(properties)
+        case None =>
+          session.executeAsync(writeConfig, CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
+            .asScala.map { rs =>
+              if (!rs.wasApplied())
+                Option(rs.one).map(_.getString("value")).foreach(assertCorrectPartitionSize)
+              properties.updated(CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
+            }
       }
-
+    }
   }
 
   private def assertCorrectPartitionSize(size: String) =

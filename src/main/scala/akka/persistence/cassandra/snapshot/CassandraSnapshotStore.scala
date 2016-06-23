@@ -6,21 +6,20 @@ package akka.persistence.cassandra.snapshot
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 
-import scala.collection.immutable
-import scala.concurrent.Await
-import scala.concurrent.Future
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
-import akka.serialization.Serialization
-import akka.serialization.SerializationExtension
-import akka.serialization.SerializerWithStringManifest
+import akka.serialization.{ Serialization, SerializationExtension, SerializerWithStringManifest }
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
+
+import scala.collection.immutable
+import scala.collection.mutable.ListBuffer
+import scala.concurrent.Future
+import scala.collection.JavaConverters._
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
   val config = new CassandraSnapshotStoreConfig(context.system, cfg)
@@ -134,7 +133,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   def executeBatch(body: BatchStatement => Unit): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
     body(batch)
-    session.underlying().flatMap(_.executeAsync(batch)).map(_ => ())
+    session.underlying().flatMap(_.executeAsync(batch).asScala).map(_ => ())
   }
 
   private lazy val transportInformation: Option[Serialization.Information] = {
@@ -166,49 +165,32 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   }
 
   private def metadata(prepStmt: PreparedStatement, persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Vector[SnapshotMetadata]] = {
-    // TODO the RowIterator is using some blocking, would benefit from a rewrite
-    Future {
-      new RowIterator(prepStmt, persistenceId, criteria.maxSequenceNr).map { row =>
-        SnapshotMetadata(row.getString("persistence_id"), row.getLong("sequence_nr"), row.getLong("timestamp"))
-      }.dropWhile(_.timestamp > criteria.maxTimestamp).toVector
-    }(blockingDispatcher)
-  }
+    def iterate(nr: Long, buf: ListBuffer[SnapshotMetadata]): Future[Vector[SnapshotMetadata]] = {
+      session.execute(prepStmt.bind(persistenceId, nr: JLong)) flatMap { rs =>
+        var rowCount = 0
+        var nextNr = 0l
 
-  private class RowIterator(prepStmt: PreparedStatement, persistenceId: String, maxSequenceNr: Long) extends Iterator[Row] {
-    var currentSequenceNr = maxSequenceNr
-    var rowCount = 0
+        def fetchAvailable(rs: ResultSet): Future[Vector[SnapshotMetadata]] = {
+          for (r <- rs.iterator.asScala.take(rs.getAvailableWithoutFetching)) {
+            nextNr = r.getLong("sequence_nr")
+            rowCount += 1
+            buf += SnapshotMetadata(r.getString("persistence_id"), nextNr, r.getLong("timestamp"))
+          }
+          if (rowCount < maxMetadataResultSize) Future.successful(buf.dropWhile(_.timestamp > criteria.maxTimestamp).toVector)
+          else if (rs.isFullyFetched) iterate(nextNr - 1, buf)
+          else rs.fetchMoreResults.asScala.flatMap(fetchAvailable)
+        }
 
-    // we know that the session is initialized, since we got the prepStmt
-    val ses = Await.result(session.underlying(), config.blockingTimeout)
-
-    // FIXME more blocking
-    var iter = newIter()
-    def newIter() = ses.execute(prepStmt.bind(persistenceId, currentSequenceNr: JLong)).iterator
-
-    @annotation.tailrec
-    final def hasNext: Boolean =
-      if (iter.hasNext)
-        true
-      else if (rowCount < maxMetadataResultSize)
-        false
-      else {
-        rowCount = 0
-        currentSequenceNr -= 1
-        iter = newIter()
-        hasNext
+        fetchAvailable(rs)
       }
-
-    def next(): Row = {
-      val row = iter.next()
-      currentSequenceNr = row.getLong("sequence_nr")
-      rowCount += 1
-      row
     }
+    iterate(criteria.maxSequenceNr, ListBuffer.empty)
   }
 
 }
 
 private[snapshot] object CassandraSnapshotStore {
+
   private case object Init
 
   private case class Serialized(serialized: ByteBuffer, serManifest: String, serId: Int)

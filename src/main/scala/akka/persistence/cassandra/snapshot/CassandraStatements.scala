@@ -3,11 +3,10 @@
  */
 package akka.persistence.cassandra.snapshot
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, Future }
 import akka.Done
 import com.datastax.driver.core.Session
-import akka.persistence.cassandra.CassandraSession
+import akka.persistence.cassandra._
 
 trait CassandraStatements {
   def config: CassandraSnapshotStoreConfig
@@ -65,14 +64,13 @@ trait CassandraStatements {
    * nodes also but serializing those statements gives a better "experience".
    */
   def executeCreateKeyspaceAndTables(session: Session, config: CassandraSnapshotStoreConfig)(implicit ec: ExecutionContext): Future[Done] = {
-    import akka.persistence.cassandra.listenableFutureToFuture
 
     def create(): Future[Done] = {
       val keyspace: Future[Done] =
-        if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).map(_ => Done)
+        if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).asScala.map(_ => Done)
         else Future.successful(Done)
 
-      if (config.tablesAutoCreate) keyspace.flatMap(_ => session.executeAsync(createTable)).map(_ => Done)
+      if (config.tablesAutoCreate) keyspace.flatMap(_ => session.executeAsync(createTable).asScala).map(_ => Done)
       else keyspace
     }
 

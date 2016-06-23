@@ -8,7 +8,6 @@ import java.lang.{ Long => JLong }
 import akka.actor.{ ExtendedActorSystem, ActorLogging }
 import akka.persistence.PersistentRepr
 import akka.stream.ActorMaterializer
-import akka.persistence.cassandra.listenableFutureToFuture
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.PersistenceQuery
 
