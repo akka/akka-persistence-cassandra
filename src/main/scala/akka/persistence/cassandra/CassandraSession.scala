@@ -3,24 +3,19 @@
  */
 package akka.persistence.cassandra
 
-import java.util.function.{ Function => JFunction }
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
-import scala.annotation.tailrec
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.Promise
-import scala.util.Failure
-import scala.util.Success
-import scala.util.control.NonFatal
+import java.util.function.{ Function => JFunction }
+
 import akka.Done
 import akka.actor.ActorSystem
 import akka.event.LoggingAdapter
-import com.datastax.driver.core.PreparedStatement
-import com.datastax.driver.core.ProtocolVersion
-import com.datastax.driver.core.ResultSet
-import com.datastax.driver.core.Session
-import com.datastax.driver.core.Statement
-import java.util.concurrent.ConcurrentHashMap
+import com.datastax.driver.core._
+
+import scala.annotation.tailrec
+import scala.concurrent.{ ExecutionContext, Future, Promise }
+import scala.util.control.NonFatal
+import scala.util.{ Failure, Success }
 
 /**
  * INTERNAL API
@@ -39,7 +34,7 @@ private[cassandra] final class CassandraSession(
   private val computePreparedStatement = new JFunction[String, Future[PreparedStatement]] {
     override def apply(key: String): Future[PreparedStatement] =
       underlying().flatMap { s =>
-        val prepared: Future[PreparedStatement] = s.prepareAsync(key)
+        val prepared: Future[PreparedStatement] = s.prepareAsync(key).asScala
         prepared.onFailure {
           case _ =>
             // this is async, i.e. we are not updating the map from the compute function
@@ -51,14 +46,12 @@ private[cassandra] final class CassandraSession(
 
   private val _underlyingSession = new AtomicReference[Future[Session]]()
 
-  final def underlying(): Future[Session] = {
+  def underlying(): Future[Session] = {
 
-    def initialize(session: Future[Session]): Future[Session] = {
-      session.flatMap { s =>
-        val result = init(s)
-        result.onFailure { case _ => close(s) }
-        result.map(_ => s)
-      }
+    def initialize(session: Future[Session]): Future[Session] = session.flatMap { s =>
+      val result = init(s)
+      result.onFailure { case _ => close(s) }
+      result.map(_ => s)
     }
 
     @tailrec def setup(): Future[Session] = {
@@ -68,7 +61,7 @@ private[cassandra] final class CassandraSession(
         if (_underlyingSession.compareAndSet(null, s)) {
           s.foreach { ses =>
             try {
-              if (!ses.getCluster.isClosed())
+              if (!ses.getCluster.isClosed)
                 CassandraMetricsRegistry(system).addMetrics(metricsCategory, ses.getCluster.getMetrics.getRegistry)
             } catch {
               case NonFatal(e) => log.debug("Couldn't register metrics {}, due to {}", metricsCategory, e.getMessage)
@@ -142,27 +135,23 @@ private[cassandra] final class CassandraSession(
       preparedStatements.computeIfAbsent(stmt, computePreparedStatement)
     }
 
-  def execute(stmt: Statement): Future[ResultSet] = underlying().flatMap(_.executeAsync(stmt))
+  def execute(stmt: Statement): Future[ResultSet] = underlying().flatMap(_.executeAsync(stmt).asScala)
 
   def executeWrite(stmt: Statement): Future[Unit] = {
     if (stmt.getConsistencyLevel == null)
       stmt.setConsistencyLevel(settings.writeConsistency)
-    underlying().flatMap { s =>
-      s.executeAsync(stmt).map(_ => ())
-    }
+    underlying().flatMap(_.executeAsync(stmt).asScala.map(_ => ()))
   }
 
   def select(stmt: Statement): Future[ResultSet] = {
     if (stmt.getConsistencyLevel == null)
       stmt.setConsistencyLevel(settings.readConsistency)
-    underlying().flatMap { s =>
-      s.executeAsync(stmt)
-    }
+    underlying().flatMap(_.executeAsync(stmt).asScala)
   }
 
   private def close(s: Session): Unit = {
     s.closeAsync()
-    s.getCluster().closeAsync()
+    s.getCluster.closeAsync()
     CassandraMetricsRegistry(system).removeMetrics(metricsCategory)
   }
 
@@ -188,7 +177,7 @@ private[cassandra] final class CassandraSession(
 /**
  * INTERNAL API
  */
-private[cassandra] final object CassandraSession {
+private[cassandra] object CassandraSession {
   private val serializedExecutionProgress = new AtomicReference[Future[Done]](Future.successful(Done))
 
   def serializedExecution(recur: () => Future[Done], exec: () => Future[Done])(implicit ec: ExecutionContext): Future[Done] = {

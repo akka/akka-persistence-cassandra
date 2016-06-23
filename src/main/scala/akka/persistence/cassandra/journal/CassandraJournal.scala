@@ -338,7 +338,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   private def executeBatch(body: BatchStatement ⇒ Unit, retryPolicy: RetryPolicy): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy).asInstanceOf[BatchStatement]
     body(batch)
-    session.underlying().flatMap(_.executeAsync(batch)).map(_ => ())
+    session.underlying().flatMap(_.executeAsync(batch).asScala).map(_ => ())
   }
 
   private def execute(stmt: Statement, retryPolicy: RetryPolicy): Future[Unit] = {

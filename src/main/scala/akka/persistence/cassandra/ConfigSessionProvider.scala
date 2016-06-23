@@ -7,9 +7,7 @@ import java.net.InetSocketAddress
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
+import scala.concurrent.{ ExecutionContext, Future }
 import akka.actor.ActorSystem
 import com.datastax.driver.core.Cluster
 import com.datastax.driver.core.HostDistance
@@ -39,7 +37,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
 
   def connect()(implicit ec: ExecutionContext): Future[Session] = {
     val clusterId = config.getString("cluster-id")
-    clusterBuilder(clusterId).flatMap(_.build().connectAsync())
+    clusterBuilder(clusterId).flatMap(_.build().connectAsync.asScala)
   }
 
   val fetchSize = config.getInt("max-result-size")

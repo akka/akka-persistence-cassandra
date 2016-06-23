@@ -5,9 +5,7 @@ package akka.persistence.cassandra.query
 
 import java.nio.ByteBuffer
 import java.util.UUID
-import akka.persistence.journal.EventAdapters
 
-import scala.concurrent.Future
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Props
@@ -26,6 +24,7 @@ import akka.persistence.cassandra.journal.TimeBucket
 import akka.actor.NoSerializationVerificationNeeded
 import com.datastax.driver.core.Row
 import akka.persistence.cassandra.journal.CassandraJournal
+import akka.persistence.cassandra._
 
 private[query] object EventsByTagFetcher {
 
@@ -50,7 +49,6 @@ private[query] class EventsByTagFetcher(
   extends Actor with ActorLogging {
 
   import context.dispatcher
-  import akka.persistence.cassandra.listenableFutureToFuture
   import akka.persistence.cassandra.query.UUIDComparator.comparator.compare
   import EventsByTagFetcher._
   import EventsByTagPublisher._
@@ -69,8 +67,7 @@ private[query] class EventsByTagFetcher(
   override def preStart(): Unit = {
     val boundStmt = preparedSelect.bind(tag, timeBucket.key, fromOffset, toOffset, limit: Integer)
     boundStmt.setFetchSize(settings.fetchSize)
-    val init: Future[ResultSet] = session.executeAsync(boundStmt)
-    init.map(InitResultSet.apply).pipeTo(self)
+    session.executeAsync(boundStmt).asScala.map(InitResultSet.apply).pipeTo(self)
   }
 
   def receive = {
@@ -91,15 +88,14 @@ private[query] class EventsByTagFetcher(
   }
 
   def continue(resultSet: ResultSet): Unit = {
-    if (resultSet.isExhausted()) {
+    if (resultSet.isExhausted) {
       replyTo ! ReplayDone(count, seqNumbers, highestOffset)
       context.stop(self)
     } else {
 
       @tailrec def loop(n: Int): Unit = {
         if (n == 0) {
-          val more: Future[ResultSet] = resultSet.fetchMoreResults()
-          more.map(_ => Fetched).pipeTo(self)
+          resultSet.fetchMoreResults.asScala.map(_ => Fetched).pipeTo(self)
         } else {
           count += 1
           val row = resultSet.one()

@@ -133,7 +133,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   def executeBatch(body: BatchStatement => Unit): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
     body(batch)
-    session.underlying().flatMap(_.executeAsync(batch)).map(_ => ())
+    session.underlying().flatMap(_.executeAsync(batch).asScala).map(_ => ())
   }
 
   private lazy val transportInformation: Option[Serialization.Information] = {

@@ -3,19 +3,18 @@
  */
 package akka.persistence.cassandra.query
 
+import akka.actor._
+import akka.pattern.pipe
+import akka.persistence.cassandra._
+import akka.persistence.cassandra.query.QueryActorPublisher._
+import akka.stream.actor.ActorPublisher
+import akka.stream.actor.ActorPublisherMessage.{ Cancel, Request, SubscriptionTimeoutExceeded }
+import com.datastax.driver.core.{ ResultSet, Row }
+
 import scala.annotation.tailrec
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
-
-import akka.actor._
-import akka.pattern.pipe
-import akka.stream.actor.ActorPublisher
-import akka.stream.actor.ActorPublisherMessage.{ Cancel, Request, SubscriptionTimeoutExceeded }
-import com.datastax.driver.core.{ Row, ResultSet }
-
-import akka.persistence.cassandra._
-import akka.persistence.cassandra.query.QueryActorPublisher._
 
 object QueryActorPublisher {
   private[query] final case class ReplayFailed(cause: Throwable)
@@ -140,12 +139,8 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
     val availableWithoutFetching = resultSet.getAvailableWithoutFetching
     val isFullyFetched = resultSet.isFullyFetched
 
-    if (shouldFetchMore(
-      availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue
-    )) {
-      listenableFutureToFuture(resultSet.fetchMoreResults())
-        .map(FetchedResultSet)
-        .pipeTo(self)
+    if (shouldFetchMore(availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue)) {
+      resultSet.fetchMoreResults.asScala.map(FetchedResultSet).pipeTo(self)
       awaiting(resultSet, state, finished)
     } else if (shouldIdle(availableWithoutFetching, state)) {
       idle(resultSet, state, finished)

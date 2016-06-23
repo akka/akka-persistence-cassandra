@@ -17,7 +17,7 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 
 import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.Future
 
 private[query] object EventsByPersistenceIdPublisher {
   private[query] final case class EventsByPersistenceIdSession(
@@ -34,22 +34,20 @@ private[query] object EventsByPersistenceIdPublisher {
       progress:      Long,
       toSeqNr:       Long,
       fetchSize:     Int
-    )(implicit ec: ExecutionContext): Future[ResultSet] = {
+    ): Future[ResultSet] = {
       val boundStatement = selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
       executeStatement(boundStatement)
     }
 
-    def selectInUse(persistenceId: String, currentPnr: Long)(implicit ec: ExecutionContext): Future[ResultSet] =
+    def selectInUse(persistenceId: String, currentPnr: Long): Future[ResultSet] =
       executeStatement(selectInUseQuery.bind(persistenceId, currentPnr: JLong))
 
-    def selectDeletedTo(partitionKey: String)(implicit ec: ExecutionContext): Future[ResultSet] =
+    def selectDeletedTo(partitionKey: String): Future[ResultSet] =
       executeStatement(selectDeletedToQuery.bind(partitionKey))
 
-    private def executeStatement(statement: Statement)(implicit ec: ExecutionContext): Future[ResultSet] =
-      listenableFutureToFuture(
-        session.executeAsync(withCustomConsistencyLevel(statement))
-      )
+    private def executeStatement(statement: Statement): Future[ResultSet] =
+      session.executeAsync(withCustomConsistencyLevel(statement)).asScala
 
     private def withCustomConsistencyLevel(statement: Statement): Statement = {
       customConsistencyLevel.foreach(consistencyLevel => statement.setConsistencyLevel(consistencyLevel))

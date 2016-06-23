@@ -72,7 +72,6 @@ private[query] class AllPersistenceIdsPublisher(
   private[this] def query(state: AllPersistenceIdsState): Future[Action] = {
     val boundStatement = session.selectDistinctPersistenceIds.bind()
     boundStatement.setFetchSize(config.fetchSize)
-
-    listenableFutureToFuture(session.session.executeAsync(boundStatement)).map(Finished)
+    session.session.executeAsync(boundStatement).asScala.map(Finished)
   }
 }
