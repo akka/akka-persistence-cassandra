@@ -105,17 +105,6 @@ object CassandraIntegrationSpec {
     override def preStart() = ()
   }
 
-  class ViewA(val viewId: String, val persistenceId: String, probe: ActorRef) extends PersistentView {
-    def receive = {
-      case payload =>
-        probe ! payload
-    }
-
-    override def autoUpdate: Boolean = false
-
-    override def autoUpdateReplayMax: Long = 0
-  }
-
 }
 
 import CassandraIntegrationSpec._
@@ -177,30 +166,6 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("CassandraIntegration
     "not replay range-deleted messages" in {
       val persistenceId = UUID.randomUUID().toString
       testRangeDelete(persistenceId)
-    }
-    "replay messages incrementally" in {
-      val persistenceId = UUID.randomUUID().toString
-      val probe = TestProbe()
-      val processor1 = system.actorOf(Props(classOf[ProcessorA], persistenceId, self))
-      1L to 6L foreach { i =>
-        processor1 ! s"a-${i}"
-        expectMsgAllOf(s"a-${i}", i, false)
-      }
-
-      val view = system.actorOf(Props(classOf[ViewA], "p7-view", persistenceId, probe.ref))
-      probe.expectNoMsg(200.millis)
-
-      view ! Update(await = true, replayMax = 3L)
-      probe.expectMsg(s"a-1")
-      probe.expectMsg(s"a-2")
-      probe.expectMsg(s"a-3")
-      probe.expectNoMsg(200.millis)
-
-      view ! Update(await = true, replayMax = 3L)
-      probe.expectMsg(s"a-4")
-      probe.expectMsg(s"a-5")
-      probe.expectMsg(s"a-6")
-      probe.expectNoMsg(200.millis)
     }
     "write and replay with persistAll greater than partition size skipping whole partition" in {
       val persistenceId = UUID.randomUUID().toString
