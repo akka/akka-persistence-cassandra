@@ -4,11 +4,14 @@
 package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.concurrent.duration.FiniteDuration
 
 import akka.actor.ActorSystem
 import com.datastax.driver.core.Cluster
@@ -19,6 +22,7 @@ import com.datastax.driver.core.ProtocolVersion
 import com.datastax.driver.core.QueryOptions
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
+import com.datastax.driver.core.policies.ExponentialReconnectionPolicy
 import com.datastax.driver.core.policies.TokenAwarePolicy
 import com.typesafe.config.Config
 
@@ -81,11 +85,14 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
       connectionPoolConfig.getInt("pool-timeout-millis")
     )
 
+  val reconnectMaxDelay: FiniteDuration = config.getDuration("reconnect-max-delay", TimeUnit.MILLISECONDS).millis
+
   def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
       val b = Cluster.builder
         .addContactPointsWithPorts(cp.asJava)
         .withPoolingOptions(poolingOptions)
+        .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
         .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
       protocolVersion match {
         case None    => b
