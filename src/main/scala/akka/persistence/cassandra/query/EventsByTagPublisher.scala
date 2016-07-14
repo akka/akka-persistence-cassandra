@@ -8,6 +8,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+
 import akka.persistence.journal.EventAdapters
 
 import scala.concurrent.duration._
@@ -27,13 +28,14 @@ import com.datastax.driver.core.utils.UUIDs
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.pubsub.DistributedPubSubMediator
+import akka.persistence.cassandra.PreparedStatementEnvelope
 
 private[query] object EventsByTagPublisher {
 
   def props(tag: String, fromOffset: UUID, toOffset: Option[UUID], settings: CassandraReadJournalConfig,
             session: Session, preparedSelect: PreparedStatement): Props = {
-    Props(new EventsByTagPublisher(tag, fromOffset, toOffset,
-      settings, session, preparedSelect))
+    Props(classOf[EventsByTagPublisher],tag, fromOffset, toOffset,
+      settings, PreparedStatementEnvelope(session,preparedSelect))
   }
 
   private[query] case object Continue extends DeadLetterSuppression
@@ -51,7 +53,7 @@ private[query] object EventsByTagPublisher {
 
 private[query] class EventsByTagPublisher(
   tag: String, fromOffset: UUID, toOffset: Option[UUID],
-  settings: CassandraReadJournalConfig, session: Session, preparedSelect: PreparedStatement
+  settings: CassandraReadJournalConfig, preparedSelect: PreparedStatementEnvelope
 )
   extends ActorPublisher[UUIDPersistentRepr] with DeliveryBuffer[UUIDPersistentRepr] with ActorLogging {
   import akka.persistence.cassandra.query.UUIDComparator.comparator.compare
@@ -201,7 +203,7 @@ private[query] class EventsByTagPublisher(
         tag, currTimeBucket, currOffset, limit
       )
     context.actorOf(EventsByTagFetcher.props(tag, currTimeBucket, currOffset, toOffs, limit, backtracking,
-      self, session, preparedSelect, seqNumbers, settings))
+      self, preparedSelect, seqNumbers, settings))
     context.become(replaying(limit))
   }
 

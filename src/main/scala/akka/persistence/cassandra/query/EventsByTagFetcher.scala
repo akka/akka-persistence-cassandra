@@ -5,6 +5,7 @@ package akka.persistence.cassandra.query
 
 import java.nio.ByteBuffer
 import java.util.UUID
+
 import akka.persistence.journal.EventAdapters
 
 import scala.concurrent.Future
@@ -20,10 +21,12 @@ import com.datastax.driver.core.ResultSet
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.Bytes
 import akka.actor.ActorLogging
+
 import scala.annotation.tailrec
 import akka.actor.DeadLetterSuppression
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.actor.NoSerializationVerificationNeeded
+import akka.persistence.cassandra.{PreparedStatementEnvelope, SessionEnvelope}
 import com.datastax.driver.core.Row
 import akka.persistence.cassandra.journal.CassandraJournal
 
@@ -35,16 +38,16 @@ private[query] object EventsByTagFetcher {
 
   def props(tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int,
             backtracking: Boolean, replyTo: ActorRef,
-            session: Session, preparedSelect: PreparedStatement, seqNumbers: Option[SequenceNumbers],
+            preparedSelect: PreparedStatementEnvelope, seqNumbers: Option[SequenceNumbers],
             settings: CassandraReadJournalConfig): Props =
-    Props(new EventsByTagFetcher(tag, timeBucket, fromOffset, toOffset, limit, backtracking,
-      replyTo, session, preparedSelect, seqNumbers, settings)).withDispatcher(settings.pluginDispatcher)
+    Props(classOf[EventsByTagFetcher],tag, timeBucket, fromOffset, toOffset, limit, backtracking,
+      replyTo, preparedSelect, seqNumbers, settings).withDispatcher(settings.pluginDispatcher)
 
 }
 
 private[query] class EventsByTagFetcher(
   tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int, backtracking: Boolean,
-  replyTo: ActorRef, session: Session, preparedSelect: PreparedStatement,
+  replyTo: ActorRef, preparedSelect: PreparedStatementEnvelope,
   seqN: Option[SequenceNumbers], settings: CassandraReadJournalConfig
 )
   extends Actor with ActorLogging {
@@ -67,9 +70,9 @@ private[query] class EventsByTagFetcher(
   var seqNumbers = seqN
 
   override def preStart(): Unit = {
-    val boundStmt = preparedSelect.bind(tag, timeBucket.key, fromOffset, toOffset, limit: Integer)
+    val boundStmt = preparedSelect.ps.bind(tag, timeBucket.key, fromOffset, toOffset, limit: Integer)
     boundStmt.setFetchSize(settings.fetchSize)
-    val init: Future[ResultSet] = session.executeAsync(boundStmt)
+    val init: Future[ResultSet] = preparedSelect.session.executeAsync(boundStmt)
     init.map(InitResultSet.apply).pipeTo(self)
   }
 

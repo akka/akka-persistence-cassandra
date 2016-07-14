@@ -44,6 +44,8 @@ object EventsByTagPubsubSpec {
 
   val config = ConfigFactory.parseString(s"""
     akka.actor.provider = "akka.cluster.ClusterActorRefProvider"
+    akka.actor.serialize-messages = on
+    akka.actor.serialize-creators = on
     cassandra-journal {
       pubsub-minimum-interval = 1 millisecond
     }
