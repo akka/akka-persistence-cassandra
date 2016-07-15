@@ -44,6 +44,8 @@ object EventsByTagSpec {
 
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
+    akka.actor.serialize-messages = on
+    akka.actor.serialize-creators = on
     cassandra-journal {
       #target-partition-size = 5
       port = ${CassandraLauncher.randomPort}

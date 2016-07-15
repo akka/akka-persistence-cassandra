@@ -3,13 +3,15 @@
  */
 package akka.persistence.cassandra.query
 
+import akka.actor.NoSerializationVerificationNeeded
 import scala.concurrent.duration._
 import com.typesafe.config.Config
 import com.datastax.driver.core.ConsistencyLevel
 import akka.persistence.cassandra.journal.CassandraJournalConfig
 import akka.persistence.cassandra.journal.TimeBucket
 
-private[query] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig) {
+private[query] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig)
+  extends NoSerializationVerificationNeeded {
   val refreshInterval: FiniteDuration = config.getDuration("refresh-interval", MILLISECONDS).millis
   val maxBufferSize: Int = config.getInt("max-buffer-size")
   val fetchSize: Int = config.getInt("max-result-size-query")

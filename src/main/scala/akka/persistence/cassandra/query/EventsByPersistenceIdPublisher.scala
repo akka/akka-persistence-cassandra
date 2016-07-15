@@ -3,21 +3,21 @@
  */
 package akka.persistence.cassandra.query
 
-import java.lang.{ Long => JLong }
+import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 
-import akka.actor.Props
+import akka.actor.{NoSerializationVerificationNeeded, Props}
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher._
 import akka.persistence.cassandra.query.QueryActorPublisher._
-import akka.serialization.{ Serialization, SerializationExtension }
+import akka.serialization.{Serialization, SerializationExtension}
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 
 import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
 
 private[query] object EventsByPersistenceIdPublisher {
   private[query] final case class EventsByPersistenceIdSession(
@@ -26,7 +26,7 @@ private[query] object EventsByPersistenceIdPublisher {
     selectDeletedToQuery:             PreparedStatement,
     session:                          Session,
     customConsistencyLevel:           Option[ConsistencyLevel]
-  ) {
+  ) extends NoSerializationVerificationNeeded{
 
     def selectEventsByPersistenceId(
       persistenceId: String,
@@ -69,8 +69,8 @@ private[query] object EventsByPersistenceIdPublisher {
     config: CassandraReadJournalConfig
   ): Props =
     Props(
-      new EventsByPersistenceIdPublisher(persistenceId, fromSeqNr, toSeqNr, max, fetchSize,
-        refreshInterval, session, config)
+      classOf[EventsByPersistenceIdPublisher],persistenceId, fromSeqNr, toSeqNr, max, fetchSize,
+        refreshInterval, session, config
     )
 }
 

@@ -21,6 +21,8 @@ import akka.stream.testkit.scaladsl.TestSink
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
+    akka.actor.serialize-messages = on
+    akka.actor.serialize-creators = on
     cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-journal.keyspace=EventsByPersistenceIdSpec
     cassandra-query-journal.max-buffer-size = 10
