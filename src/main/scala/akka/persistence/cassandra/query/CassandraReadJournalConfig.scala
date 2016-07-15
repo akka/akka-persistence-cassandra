@@ -4,7 +4,6 @@
 package akka.persistence.cassandra.query
 
 import akka.actor.NoSerializationVerificationNeeded
-
 import scala.concurrent.duration._
 import com.typesafe.config.Config
 import com.datastax.driver.core.ConsistencyLevel

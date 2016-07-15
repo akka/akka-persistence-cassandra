@@ -17,7 +17,6 @@ import akka.serialization.SerializationExtension
 import com.datastax.driver.core.ResultSet
 import com.datastax.driver.core.utils.Bytes
 import akka.actor.ActorLogging
-
 import scala.annotation.tailrec
 import akka.actor.DeadLetterSuppression
 import akka.persistence.cassandra.journal.TimeBucket

@@ -8,7 +8,6 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
-
 import akka.persistence.journal.EventAdapters
 
 import scala.concurrent.duration._
