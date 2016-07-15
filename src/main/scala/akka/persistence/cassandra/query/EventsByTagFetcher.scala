@@ -6,8 +6,6 @@ package akka.persistence.cassandra.query
 import java.nio.ByteBuffer
 import java.util.UUID
 
-import akka.persistence.journal.EventAdapters
-
 import scala.concurrent.Future
 import akka.actor.Actor
 import akka.actor.ActorRef
@@ -16,9 +14,7 @@ import akka.actor.Status
 import akka.pattern.pipe
 import akka.persistence.PersistentRepr
 import akka.serialization.SerializationExtension
-import com.datastax.driver.core.PreparedStatement
 import com.datastax.driver.core.ResultSet
-import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.Bytes
 import akka.actor.ActorLogging
 
@@ -26,7 +22,7 @@ import scala.annotation.tailrec
 import akka.actor.DeadLetterSuppression
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.actor.NoSerializationVerificationNeeded
-import akka.persistence.cassandra.{PreparedStatementEnvelope, SessionEnvelope}
+import akka.persistence.cassandra.PreparedStatementEnvelope
 import com.datastax.driver.core.Row
 import akka.persistence.cassandra.journal.CassandraJournal
 
