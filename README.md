@@ -16,7 +16,7 @@ To include the latest release of the Cassandra plugins into your `sbt` project, 
 
     libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.17"
 
-This version of `akka-persistence-cassandra` depends on Akka 2.4.7 and Scala 2.11.8. 
+This version of `akka-persistence-cassandra` depends on Akka 2.4.9 and Scala 2.11.8.
 
 It is compatible with Cassandra 3.0.0 or higher, and it is also compatible with Cassandra 2.1.6 or higher (versions < 2.1.6 have a static column bug) if you configure `cassandra-journal.cassandra-2x-compat=on` in your `application.conf`. With Cassandra 2.x compatibility some features will not be enabled, e.g. `eventsByTag`.
 
