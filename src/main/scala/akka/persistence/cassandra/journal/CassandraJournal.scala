@@ -227,9 +227,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         bs.setString("event_manifest", m.eventManifest)
         bs.setBytes("event", m.serialized)
         // for backwards compatibility
-        bs.setToNull("message")
+        bs.unset("message")
+
         if (session.protocolVersion.compareTo(ProtocolVersion.V4) < 0) {
-          (1 to maxTagsPerEvent).foreach(tagId => bs.setToNull("tag" + tagId))
+          (1 to maxTagsPerEvent).foreach(tagId => bs.unset("tag" + tagId))
         }
 
         if (m.tags.nonEmpty) {
