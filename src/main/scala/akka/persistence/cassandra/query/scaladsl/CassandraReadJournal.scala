@@ -113,28 +113,28 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   private def preparedSelectEventsByTag(tagId: Int): Future[PreparedStatement] = {
     require(tagId <= writePluginConfig.maxTagId)
     session.prepare(queryStatements.selectEventsByTag(tagId))
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
   }
 
   private def preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
     session
       .prepare(writeStatements.selectMessages)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
 
   private def preparedSelectInUse: Future[PreparedStatement] =
     session
       .prepare(writeStatements.selectInUse)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
 
   private def preparedSelectDeletedTo: Future[PreparedStatement] =
     session
       .prepare(writeStatements.selectDeletedTo)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
 
   private def preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
     session
       .prepare(queryStatements.selectDistinctPersistenceIds)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
 
   private def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
     for {

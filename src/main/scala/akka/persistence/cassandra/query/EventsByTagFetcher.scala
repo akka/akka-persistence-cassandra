@@ -35,7 +35,7 @@ private[query] object EventsByTagFetcher {
             backtracking: Boolean, replyTo: ActorRef,
             preparedSelect: PreparedStatementEnvelope, seqNumbers: Option[SequenceNumbers],
             settings: CassandraReadJournalConfig): Props =
-    Props(classOf[EventsByTagFetcher],tag, timeBucket, fromOffset, toOffset, limit, backtracking,
+    Props(classOf[EventsByTagFetcher], tag, timeBucket, fromOffset, toOffset, limit, backtracking,
       replyTo, preparedSelect, seqNumbers, settings).withDispatcher(settings.pluginDispatcher)
 
 }

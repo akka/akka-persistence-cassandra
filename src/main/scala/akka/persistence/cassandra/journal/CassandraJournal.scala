@@ -76,19 +76,19 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     executeCreateKeyspaceAndTables(session, config, maxTagId)
       .flatMap(_ => initializePersistentConfig(session)))
 
-  def preparedWriteMessage = session.prepare(writeMessage)
-  def preparedDeleteMessages = session.prepare(deleteMessages)
+  def preparedWriteMessage = session.prepare(writeMessage).map(_.setIdempotent(true))
+  def preparedDeleteMessages = session.prepare(deleteMessages).map(_.setIdempotent(true))
   def preparedSelectMessages = session.prepare(selectMessages)
-    .map(_.setConsistencyLevel(readConsistency))
+    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
   def preparedCheckInUse = session.prepare(selectInUse)
-    .map(_.setConsistencyLevel(readConsistency))
-  def preparedWriteInUse = session.prepare(writeInUse)
+    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
+  def preparedWriteInUse = session.prepare(writeInUse).map(_.setIdempotent(true))
   def preparedSelectHighestSequenceNr = session.prepare(selectHighestSequenceNr)
-    .map(_.setConsistencyLevel(readConsistency))
+    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
   def preparedSelectDeletedTo = session.prepare(selectDeletedTo)
-    .map(_.setConsistencyLevel(readConsistency))
+    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
   def preparedInsertDeletedTo = session.prepare(insertDeletedTo)
-    .map(_.setConsistencyLevel(writeConsistency))
+    .map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
 
   override def preStart(): Unit = {
     // eager initialization, but not from constructor

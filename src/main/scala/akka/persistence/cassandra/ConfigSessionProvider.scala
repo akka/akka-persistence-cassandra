@@ -21,18 +21,18 @@ import com.datastax.driver.core.policies.TokenAwarePolicy
 import com.typesafe.config.Config
 
 /**
-  * Default implementation of the `SessionProvider` that is used for creating the
-  * Cassandra Session. This class is building the Cluster from configuration
-  * properties.
-  *
-  * You may create a subclass of this that performs lookup the contact points
-  * of the Cassandra cluster asynchronously instead of reading them in the
-  * configuration. Such a subclass should override the [[#lookupContactPoints]]
-  * method.
-  *
-  * The implementation is defined in configuration `session-provider` property.
-  * The config parameter is the config section of the plugin.
-  */
+ * Default implementation of the `SessionProvider` that is used for creating the
+ * Cassandra Session. This class is building the Cluster from configuration
+ * properties.
+ *
+ * You may create a subclass of this that performs lookup the contact points
+ * of the Cassandra cluster asynchronously instead of reading them in the
+ * configuration. Such a subclass should override the [[#lookupContactPoints]]
+ * method.
+ *
+ * The implementation is defined in configuration `session-provider` property.
+ * The config parameter is the config section of the plugin.
+ */
 class ConfigSessionProvider(system: ActorSystem, config: Config) extends SessionProvider {
 
   def connect()(implicit ec: ExecutionContext): Future[Session] = {
@@ -94,7 +94,6 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
         case Some(v) => b.withProtocolVersion(v)
       }
 
-
       val username = config.getString("authentication.username")
       if (username != "") {
         b.withCredentials(
@@ -146,10 +145,10 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
       val sendBufferSize = socketConfig.getInt("send-buffer-size")
       val receiveBufferSize = socketConfig.getInt("receive-buffer-size")
 
-      if(sendBufferSize > 0) {
+      if (sendBufferSize > 0) {
         socketOptions.setSendBufferSize(sendBufferSize)
       }
-      if(receiveBufferSize > 0) {
+      if (receiveBufferSize > 0) {
         socketOptions.setReceiveBufferSize(receiveBufferSize)
       }
 
@@ -159,12 +158,12 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   }
 
   /**
-    * Subclass may override this method to perform lookup the contact points
-    * of the Cassandra cluster asynchronously instead of reading them from the
-    * configuration.
-    *
-    * @param clusterId the configured `cluster-id` to lookup
-    */
+   * Subclass may override this method to perform lookup the contact points
+   * of the Cassandra cluster asynchronously instead of reading them from the
+   * configuration.
+   *
+   * @param clusterId the configured `cluster-id` to lookup
+   */
   def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
     val port: Int = config.getInt("port")
     val contactPoints = config.getStringList("contact-points").asScala.toList
@@ -172,8 +171,8 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   }
 
   /**
-    * Builds list of InetSocketAddress out of host:port pairs or host entries + given port parameter.
-    */
+   * Builds list of InetSocketAddress out of host:port pairs or host entries + given port parameter.
+   */
   protected def buildContactPoints(contactPoints: immutable.Seq[String], port: Int): immutable.Seq[InetSocketAddress] = {
     contactPoints match {
       case null | Nil => throw new IllegalArgumentException("A contact point list cannot be empty.")

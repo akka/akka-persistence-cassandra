@@ -35,14 +35,14 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     metricsCategory = s"${self.path.name}",
     init = session => executeCreateKeyspaceAndTables(session, config))
 
-  private def preparedWriteSnapshot = session.prepare(writeSnapshot).map(_.setConsistencyLevel(writeConsistency))
-  private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(_.setConsistencyLevel(writeConsistency))
-  private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(_.setConsistencyLevel(readConsistency))
+  private def preparedWriteSnapshot = session.prepare(writeSnapshot).map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
+  private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
+  private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
   private def preparedSelectSnapshotMetadataForLoad =
     session.prepare(selectSnapshotMetadata(limit = Some(maxMetadataResultSize)))
-      .map(_.setConsistencyLevel(readConsistency))
+      .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
   private def preparedSelectSnapshotMetadataForDelete =
-    session.prepare(selectSnapshotMetadata(limit = None)).map(_.setConsistencyLevel(readConsistency))
+    session.prepare(selectSnapshotMetadata(limit = None)).map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
 
   override def preStart(): Unit = {
     // eager initialization, but not from constructor

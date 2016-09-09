@@ -33,8 +33,8 @@ private[query] object EventsByTagPublisher {
 
   def props(tag: String, fromOffset: UUID, toOffset: Option[UUID], settings: CassandraReadJournalConfig,
             session: Session, preparedSelect: PreparedStatement): Props = {
-    Props(classOf[EventsByTagPublisher],tag, fromOffset, toOffset,
-      settings, PreparedStatementEnvelope(session,preparedSelect))
+    Props(classOf[EventsByTagPublisher], tag, fromOffset, toOffset,
+      settings, PreparedStatementEnvelope(session, preparedSelect))
   }
 
   private[query] case object Continue extends DeadLetterSuppression
