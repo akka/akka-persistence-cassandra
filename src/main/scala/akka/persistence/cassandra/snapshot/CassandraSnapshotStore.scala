@@ -75,7 +75,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
       case Snapshot(s) => Some(SelectedSnapshot(md, s))
     } recoverWith {
       case e =>
-        log.warning("Failed to load snapshot, trying older one. Caused by: {}", e.getMessage)
+        log.warning("Failed to load snapshot, trying older one. Caused by: [{}: {}]", e.getClass.getName, e.getMessage)
         loadNAsync(mds) // try older snapshot
     }
   }
