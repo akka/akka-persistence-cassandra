@@ -298,7 +298,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
                   {
                     val delete = asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
                     delete.onFailure {
-                      case e => log.warning(s"Unable to complete deletes for persistence id ${persistenceId}, toSequenceNr ${toSequenceNr}. The plugin will continue to function correctly but you will need to manually delete the old messages.", e)
+                      case e => log.warning(s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                        "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                        "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
                     }
                     delete
                   }
@@ -311,9 +313,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
                 boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
               }))
                 .onFailure {
-                  case e => log.warning(s"Unable to complete deletes for persistence id ${persistenceId}, " +
-                    s"toSequenceNr ${toSequenceNr}. The plugin will continue to " +
-                    "function correctly but you will need to manually delete the old messages.", e)
+                  case e => log.warning("Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                    "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                    "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
                 }
             }
           }
