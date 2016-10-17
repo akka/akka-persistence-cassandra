@@ -13,3 +13,4 @@ target/
 *.sublime-project
 /bin/
 ext-lib-src/
+.classpath_nb

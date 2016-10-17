@@ -3,7 +3,7 @@ import de.heikoseeberger.sbtheader.HeaderPattern
 import com.typesafe.sbt.SbtScalariform
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 
-enablePlugins(AutomateHeaderPlugin)
+enablePlugins(AutomateHeaderPlugin,SbtOsgi)
 
 organization := "com.typesafe.akka"
 organizationName := "Typesafe Inc."
@@ -68,7 +68,8 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion   % "test",
   "org.scalatest"          %% "scalatest"                           % "2.1.4"       % "test",
   // cassandra-all for testkit.CassandraLauncher, app should define it as test dependency if needed
-  "org.apache.cassandra"    % "cassandra-all"                       % "3.7"         % "optional"
+  "org.apache.cassandra"    % "cassandra-all"                       % "3.7"         % "optional",
+  "org.osgi"                % "org.osgi.core"                       % "5.0.0"       % "provided"
 )
 
 headers := headers.value ++ Map(
@@ -93,3 +94,11 @@ def formattingPreferences = {
     .setPreference(AlignSingleLineCaseStatements, true)
     .setPreference(SpacesAroundMultiImports, true)
 }
+
+def akkaImport(packageName: String = "akka.*") = versionedImport(packageName, "2.4", "2.5")
+def configImport(packageName: String = "com.typesafe.config.*") = versionedImport(packageName, "1.3.0", "1.4.0")
+def versionedImport(packageName: String, lower: String, upper: String) = s"""$packageName;version="[$lower,$upper)""""
+
+osgiSettings
+OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*")
+OsgiKeys.importPackage := Seq(akkaImport(), "*");
