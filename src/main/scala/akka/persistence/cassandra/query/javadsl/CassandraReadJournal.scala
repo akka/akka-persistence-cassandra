@@ -10,6 +10,7 @@ import akka.persistence.cassandra.query.UUIDEventEnvelope
 import akka.persistence.query.EventEnvelope
 import akka.persistence.query.javadsl._
 import akka.stream.javadsl.Source
+import akka.persistence.cassandra.session.javadsl.CassandraSession
 
 object CassandraReadJournal {
   /**
@@ -46,6 +47,11 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
   with CurrentEventsByPersistenceIdQuery
   with EventsByTagQuery
   with CurrentEventsByTagQuery {
+
+  /**
+   * Data Access Object for arbitrary queries or updates.
+   */
+  def session: CassandraSession = new CassandraSession(scaladslReadJournal.session)
 
   /**
    * Use this as the UUID offset in `eventsByTag` queries when you want all

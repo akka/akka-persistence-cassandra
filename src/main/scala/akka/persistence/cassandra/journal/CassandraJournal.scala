@@ -34,6 +34,7 @@ import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
 import com.datastax.driver.core.utils.Bytes
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
+import akka.persistence.cassandra.session.scaladsl.CassandraSession
 
 class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
 
@@ -70,11 +71,17 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     case _ => None
   }
 
-  val session = new CassandraSession(context.system, config, context.dispatcher, log,
+  val session = new CassandraSession(
+    context.system,
+    config.sessionProvider,
+    config.sessionSettings,
+    context.dispatcher,
+    log,
     metricsCategory = s"${self.path.name}",
     init = session =>
     executeCreateKeyspaceAndTables(session, config, maxTagId)
-      .flatMap(_ => initializePersistentConfig(session)))
+      .flatMap(_ => initializePersistentConfig(session).map(_ => Done))
+  )
 
   def preparedWriteMessage = session.prepare(writeMessage).map(_.setIdempotent(true))
   def preparedDeleteMessages = session.prepare(deleteMessages).map(_.setIdempotent(true))
@@ -320,7 +327,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
           logicalDelete.foreach(_ => physicalDelete())
 
-          logicalDelete
+          logicalDelete.map(_ => Done)
         }
       }
     }
@@ -331,7 +338,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
     val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, partitionNr: JLong))
-    boundSelectHighestSequenceNr.flatMap(session.select)
+    boundSelectHighestSequenceNr.flatMap(session.selectResultSet)
       .map(rs => Option(rs.one()))
       .map(row => row.map(s => PartitionInfo(partitionNr, minSequenceNr(partitionNr), min(s.getLong("sequence_nr"), maxSequenceNr)))
         .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
@@ -345,7 +352,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   private def execute(stmt: Statement, retryPolicy: RetryPolicy): Future[Unit] = {
     stmt.setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy)
-    session.executeWrite(stmt)
+    session.executeWrite(stmt).map(_ => ())
   }
 
   private def asyncReadLowestSequenceNr(persistenceId: String, fromSequenceNr: Long, highestDeletedSequenceNumber: Long): Future[Long] = {

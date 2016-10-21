@@ -7,7 +7,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import akka.Done
 import com.datastax.driver.core.Session
-import akka.persistence.cassandra.CassandraSession
+import akka.persistence.cassandra.session.scaladsl.CassandraSession
 
 trait CassandraStatements {
   def config: CassandraSnapshotStoreConfig

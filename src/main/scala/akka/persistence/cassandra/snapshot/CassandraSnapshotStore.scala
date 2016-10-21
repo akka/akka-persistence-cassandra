@@ -21,6 +21,7 @@ import akka.serialization.SerializerWithStringManifest
 import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
+import akka.persistence.cassandra.session.scaladsl.CassandraSession
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
   val config = new CassandraSnapshotStoreConfig(context.system, cfg)
@@ -31,9 +32,15 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   import context.dispatcher
   val blockingDispatcher = context.system.dispatchers.lookup(config.blockingDispatcherId)
 
-  val session = new CassandraSession(context.system, config, context.dispatcher, log,
+  val session = new CassandraSession(
+    context.system,
+    config.sessionProvider,
+    config.sessionSettings,
+    context.dispatcher,
+    log,
     metricsCategory = s"${self.path.name}",
-    init = session => executeCreateKeyspaceAndTables(session, config))
+    init = session => executeCreateKeyspaceAndTables(session, config)
+  )
 
   private def preparedWriteSnapshot = session.prepare(writeSnapshot).map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
   private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
@@ -82,7 +89,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
   def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
     val boundSelectSnapshot = preparedSelectSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
-    boundSelectSnapshot.flatMap(session.select).map { rs =>
+    boundSelectSnapshot.flatMap(session.selectResultSet).map { rs =>
       val row = rs.one()
       row.getBytes("snapshot") match {
         case null =>
@@ -115,14 +122,14 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
           bs.unset("snapshot")
         }
 
-        session.executeWrite(bs)
+        session.executeWrite(bs).map(_ => ())
       }
     }
   }
 
   override def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
     val boundDeleteSnapshot = preparedDeleteSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
-    boundDeleteSnapshot.flatMap(session.executeWrite)
+    boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
   }
 
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
