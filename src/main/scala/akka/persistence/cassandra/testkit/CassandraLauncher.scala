@@ -86,7 +86,8 @@ object CassandraLauncher {
    * @param port the `native_transport_port` to use, if 0 a random
    *   free port is used, which can be retrieved (before starting)
    *   with [[CassandraLauncher.randomPort]].
-   * @throws [[CleanFailedException]] if `clean` is `true` and removal of the directory fails
+   * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
+   *   is `true` and removal of the directory fails
    */
   def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int): Unit = this.synchronized {
     if (cassandraDaemon.isEmpty) {

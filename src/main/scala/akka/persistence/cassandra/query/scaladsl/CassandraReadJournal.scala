@@ -19,7 +19,6 @@ import akka.NotUsed
 import akka.actor.ExtendedActorSystem
 import akka.event.Logging
 import akka.persistence.{ Persistence, PersistentRepr }
-import akka.persistence.cassandra.CassandraSession
 import akka.persistence.cassandra.journal.CassandraJournalConfig
 import akka.persistence.cassandra.journal.CassandraStatements
 import akka.persistence.cassandra.query._
@@ -34,6 +33,7 @@ import akka.util.ByteString
 import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core.{ ConsistencyLevel, PreparedStatement, Session }
 import com.typesafe.config.Config
+import akka.persistence.cassandra.session.scaladsl.CassandraSession
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -104,11 +104,21 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     override def config = queryPluginConfig
   }
 
-  val session = new CassandraSession(system, writePluginConfig, ec, log, metricsCategory,
+  /**
+   * Data Access Object for arbitrary queries or updates.
+   */
+  val session: CassandraSession = new CassandraSession(
+    system,
+    writePluginConfig.sessionProvider,
+    writePluginConfig.sessionSettings,
+    ec,
+    log,
+    metricsCategory,
     init = session => writeStatements.executeCreateKeyspaceAndTables(
     session,
     writePluginConfig, writePluginConfig.maxTagId
-  ))
+  )
+  )
 
   private def preparedSelectEventsByTag(tagId: Int): Future[PreparedStatement] = {
     require(tagId <= writePluginConfig.maxTagId)

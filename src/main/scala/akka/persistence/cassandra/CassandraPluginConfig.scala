@@ -16,12 +16,19 @@ import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
 import scala.util.Failure
 import scala.concurrent.Future
+import akka.persistence.cassandra.session.CassandraSessionSettings
 
 case class StorePathPasswordConfig(path: String, password: String)
 
 class CassandraPluginConfig(system: ActorSystem, config: Config) {
 
   import akka.persistence.cassandra.CassandraPluginConfig._
+
+  val sessionProvider: SessionProvider =
+    SessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
+
+  val sessionSettings: CassandraSessionSettings =
+    CassandraSessionSettings(config)
 
   val keyspace: String = config.getString("keyspace")
   val table: String = config.getString("table")
@@ -33,36 +40,16 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val keyspaceAutoCreate: Boolean = config.getBoolean("keyspace-autocreate")
   val tablesAutoCreate: Boolean = config.getBoolean("tables-autocreate")
 
-  val connectionRetries: Int = config.getInt("connect-retries")
-  val connectionRetryDelay: FiniteDuration = config.getDuration("connect-retry-delay", TimeUnit.MILLISECONDS).millis
-
   val replicationStrategy: String = getReplicationStrategy(
     config.getString("replication-strategy"),
     config.getInt("replication-factor"),
     config.getStringList("data-center-replication-factors").asScala
   )
 
-  val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))
-  val writeConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("write-consistency"))
+  val readConsistency: ConsistencyLevel = sessionSettings.readConsistency
+  val writeConsistency: ConsistencyLevel = sessionSettings.writeConsistency
 
   val blockingDispatcherId: String = config.getString("blocking-dispatcher")
-
-  val sessionProvider: SessionProvider = {
-    val className = config.getString("session-provider")
-    val dynamicAccess = system.asInstanceOf[ExtendedActorSystem].dynamicAccess
-    val clazz = dynamicAccess.getClassFor[SessionProvider](className).get
-
-    def instantiate(args: immutable.Seq[(Class[_], AnyRef)]) =
-      dynamicAccess.createInstanceFor[SessionProvider](clazz, args)
-
-    instantiate(List((classOf[ActorSystem], system), (classOf[Config], config)))
-      .recoverWith { case x: NoSuchMethodException ⇒ instantiate(List((classOf[ActorSystem], system))) }
-      .recoverWith { case x: NoSuchMethodException ⇒ instantiate(Nil) }
-      .recoverWith {
-        case ex: Exception ⇒
-          Failure(new IllegalArgumentException(s"Unable to create SessionProvider instance for class [$className]", ex))
-      }.get
-  }
 
   // FIXME temporary until we have fixed all blocking
   private[cassandra] val blockingTimeout: FiniteDuration = 10.seconds
