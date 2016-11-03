@@ -261,18 +261,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * The tags must be defined in the `tags` section of the `cassandra-journal` configuration.
    * Max 3 tags per event is supported.
    *
-   * You can retrieve a subset of all events by specifying `offset`, or use `0L` to retrieve all
-   * events with a given tag. The `offset` corresponds to a timesamp of the events. Note that the
-   * corresponding offset of each event is provided in the `akka.persistence.query.EventEnvelope`,
+   * You can use `NoOffset` to retrieve all events with a given tag or
+   * retrieve a subset of all events by specifying a `TimeBasedUUID` `offset`.
+   *
+   * The offset of each event is provided in the streamed envelopes returned,
    * which makes it possible to resume the stream at a later point from a given offset.
-   * The `offset` is inclusive, i.e. the events with the exact same timestamp will be included
-   * in the returned stream.
    *
-   * There is a variant of this query with a time based UUID as offset. That query is better
-   * for cases where you want to resume the stream from an exact point without receiving
-   * duplicate events for the same timestamp.
-   *
-   * In addition to the `offset` the `EventEnvelope` also provides `persistenceId` and `sequenceNr`
+   * In addition to the `offset` the envelope also provides `persistenceId` and `sequenceNr`
    * for each event. The `sequenceNr` is the sequence number for the persistent actor with the
    * `persistenceId` that persisted the event. The `persistenceId` + `sequenceNr` is an unique
    * identifier for the event.
@@ -378,7 +373,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * is completed immediately when it reaches the end of the "result set". Events that are
    * stored after the query is completed are not included in the event stream.
    *
-   * Use [[#firstOffset]] when you want all events from the beginning of time.
+   * Use `NoOffset` when you want all events from the beginning of time.
    *
    * The `offset` is exclusive, i.e. the event with the exact same UUID will not be included
    * in the returned stream.
@@ -578,6 +573,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   private[this] def offsetToInternalOffset(offset: Offset): UUID =
     offset match {
       case TimeBasedUUID(uuid) => uuid
+      case Sequence(timestamp) => offsetUuid(timestamp)
       case NoOffset            => firstOffset
       case unsupported =>
         throw new IllegalArgumentException("Cassandra does not support " + unsupported.getClass.getName + " offsets")

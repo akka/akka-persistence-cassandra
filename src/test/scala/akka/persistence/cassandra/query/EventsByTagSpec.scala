@@ -10,6 +10,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+
 import scala.concurrent.duration._
 import scala.util.Try
 import akka.actor.ActorSystem
@@ -22,10 +23,8 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.journal.Tagged
 import akka.persistence.journal.WriteEventAdapter
-import akka.persistence.query.EventEnvelope
-import akka.persistence.query.PersistenceQuery
-import akka.persistence.query.scaladsl.CurrentEventsByTagQuery
-import akka.persistence.query.scaladsl.EventsByTagQuery
+import akka.persistence.query.{ EventEnvelope, EventEnvelope2, NoOffset, PersistenceQuery }
+import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, CurrentEventsByTagQuery2, EventsByTagQuery }
 import akka.serialization.SerializationExtension
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.TestSubscriber
@@ -36,6 +35,7 @@ import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
 import org.scalatest.Matchers
 import org.scalatest.WordSpecLike
+
 import scala.concurrent.Await
 import com.typesafe.config.Config
 
@@ -172,7 +172,7 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
 class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsByTagSpec.config) {
   import EventsByTagSpec._
 
-  "Cassandra query currentEventsByTag" must {
+  "Cassandra query (old deprecated) currentEventsByTag" must {
     "implement standard CurrentEventsByTagQuery" in {
       queries.isInstanceOf[CurrentEventsByTagQuery] should ===(true)
     }
@@ -301,7 +301,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
     }
   }
 
-  "Cassandra live eventsByTag" must {
+  "Cassandra live (old deprecated) eventsByTag" must {
     "implement standard EventsByTagQuery" in {
       queries.isInstanceOf[EventsByTagQuery] should ===(true)
     }
@@ -449,10 +449,298 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
 
 }
 
+class EventsByTag2Spec extends AbstractEventsByTagSpec("EventsByTag2Spec", EventsByTagSpec.config) {
+  import EventsByTagSpec._
+
+  "Cassandra query currentEventsByTag" must {
+    "implement standard CurrentEventsByTagQuery" in {
+      queries.isInstanceOf[CurrentEventsByTagQuery2] should ===(true)
+    }
+
+    "find existing events" in {
+      val a = system.actorOf(TestActor.props("a"))
+      val b = system.actorOf(TestActor.props("b"))
+      a ! "hello"
+      expectMsg(20.seconds, s"hello-done")
+      a ! "a green apple"
+      expectMsg(s"a green apple-done")
+      b ! "a black car"
+      expectMsg(s"a black car-done")
+      a ! "something else"
+      expectMsg(s"something else-done")
+      a ! "a green banana"
+      expectMsg(s"a green banana-done")
+      b ! "a green leaf"
+      expectMsg(s"a green leaf-done")
+
+      val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
+      val probe = greenSrc.runWith(TestSink.probe[Any])
+      probe.request(2)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }
+      probe.expectNoMsg(500.millis)
+      probe.request(2)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "a green leaf") => e }
+      probe.expectComplete()
+
+      val blackSrc = queries.currentEventsByTag(tag = "black", offset = NoOffset)
+      val probe2 = blackSrc.runWith(TestSink.probe[Any])
+      probe2.request(5)
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "b", 1L, "a black car") => e }
+      probe2.expectComplete()
+
+      val appleSrc = queries.currentEventsByTag(tag = "apple", offset = NoOffset)
+      val probe3 = appleSrc.runWith(TestSink.probe[Any])
+      probe3.request(5)
+      probe3.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
+      probe3.expectComplete()
+    }
+
+    "complete when no events" in {
+      val src = queries.currentEventsByTag(tag = "pink", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(2)
+      probe.expectComplete()
+    }
+
+    "not see new events after demand request" in {
+      val c = system.actorOf(TestActor.props("c"))
+
+      val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
+      val probe = greenSrc.runWith(TestSink.probe[Any])
+      probe.request(2)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }
+      probe.expectNoMsg(100.millis)
+
+      c ! "a green cucumber"
+      expectMsg(s"a green cucumber-done")
+
+      probe.expectNoMsg(100.millis)
+      probe.request(5)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "a green leaf") => e }
+      probe.expectComplete() // green cucumber not seen
+    }
+
+    // FIXME we need a timestamp offset type for this
+    // deprecated method covers the behaviour right now
+    /* "find events from timestamp offset" in {
+      val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
+      val probe1 = greenSrc1.runWith(TestSink.probe[Any])
+      probe1.request(2)
+      probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
+      val offs = probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }.offset
+      probe1.cancel()
+
+      val timestampOffset = ???
+      val greenSrc2 = queries.currentEventsByTag(tag = "green", timestampOffset)
+      val probe2 = greenSrc2.runWith(TestSink.probe[Any])
+      probe2.request(10)
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "a green leaf") => e }
+      probe2.cancel()
+    }*/
+
+    "find events from UUID offset" in {
+      val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
+      val probe1 = greenSrc1.runWith(TestSink.probe[Any])
+      probe1.request(2)
+      probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
+      val offs = probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }.offset
+      probe1.cancel()
+
+      val greenSrc2 = queries.currentEventsByTag(tag = "green", offs)
+      val probe2 = greenSrc2.runWith(TestSink.probe[Any])
+      probe2.request(10)
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "a green leaf") => e }
+      probe2.cancel()
+    }
+
+    "find existing events that spans several time buckets" in {
+      val t1 = today.minusDays(5).atStartOfDay.plusHours(13)
+      val w1 = UUID.randomUUID().toString
+      val pr1 = PersistentRepr("e1", 1L, "p1", "", writerUuid = w1)
+      writeTestEvent(t1, pr1, Set("T1"))
+      val t2 = t1.plusHours(1)
+      val pr2 = PersistentRepr("e2", 2L, "p1", "", writerUuid = w1)
+      writeTestEvent(t2, pr2, Set("T1"))
+      val t3 = t1.plusDays(1)
+      val pr3 = PersistentRepr("e3", 3L, "p1", "", writerUuid = w1)
+      writeTestEvent(t3, pr3, Set("T1"))
+      val t4 = t1.plusDays(3)
+      val pr4 = PersistentRepr("e4", 4L, "p1", "", writerUuid = w1)
+      writeTestEvent(t4, pr4, Set("T1"))
+
+      val src = queries.currentEventsByTag(tag = "T1", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(2)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 1L, "e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 2L, "e2") => e }
+      probe.expectNoMsg(500.millis)
+      probe.request(5)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 3L, "e3") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 4L, "e4") => e }
+      probe.expectComplete()
+    }
+  }
+
+  "Cassandra live eventsByTag" must {
+    "implement standard EventsByTagQuery" in {
+      queries.isInstanceOf[EventsByTagQuery] should ===(true)
+    }
+
+    "find new events" in {
+      val d = system.actorOf(TestActor.props("d"))
+
+      val blackSrc = queries.eventsByTag(tag = "black", offset = NoOffset)
+      val probe = blackSrc.runWith(TestSink.probe[Any])
+      probe.request(2)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 1L, "a black car") => e }
+      probe.expectNoMsg(100.millis)
+
+      d ! "a black dog"
+      expectMsg(s"a black dog-done")
+      d ! "a black night"
+      expectMsg(s"a black night-done")
+
+      probe.expectNextPF { case e @ EventEnvelope2(_, "d", 1L, "a black dog") => e }
+      probe.expectNoMsg(100.millis)
+      probe.request(10)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "d", 2L, "a black night") => e }
+      probe.cancel()
+    }
+
+    // FIXME we need a timestamp offset type for this
+    // deprecated method covers the behaviour right now
+    /*
+    "find events from timestamp offset " in {
+      val greenSrc1 = queries.eventsByTag(tag = "green", offset = NoOffset)
+      val probe1 = greenSrc1.runWith(TestSink.probe[Any])
+      probe1.request(2)
+      probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
+      val offs = probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }.offset
+      probe1.cancel()
+
+      val timstampOffset = ???
+      val greenSrc2 = queries.eventsByTag(tag = "green", timestampOffset)
+      val probe2 = greenSrc2.runWith(TestSink.probe[Any])
+      probe2.request(10)
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "a green leaf") => e }
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "c", 1L, "a green cucumber") => e }
+      probe2.expectNoMsg(100.millis)
+      probe2.cancel()
+    }
+    */
+
+    "find events from UUID offset " in {
+      val greenSrc1 = queries.eventsByTag(tag = "green", offset = NoOffset)
+      val probe1 = greenSrc1.runWith(TestSink.probe[Any])
+      probe1.request(2)
+      probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
+      val offs = probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }.offset
+      probe1.cancel()
+
+      val greenSrc2 = queries.eventsByTag(tag = "green", offs)
+      val probe2 = greenSrc2.runWith(TestSink.probe[Any])
+      probe2.request(10)
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "a green leaf") => e }
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "c", 1L, "a green cucumber") => e }
+      probe2.expectNoMsg(100.millis)
+      probe2.cancel()
+    }
+
+    "find new events that spans several time buckets" in {
+      val t1 = today.minusDays(5).atStartOfDay.plusHours(13)
+      val w1 = UUID.randomUUID().toString
+      val pr1 = PersistentRepr("e1", 1L, "p1", "", writerUuid = w1)
+      writeTestEvent(t1, pr1, Set("T1"))
+      val t2 = t1.plusHours(1)
+      val pr2 = PersistentRepr("e2", 2L, "p1", "", writerUuid = w1)
+      writeTestEvent(t2, pr2, Set("T1"))
+
+      val src = queries.eventsByTag(tag = "T1", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 1L, "e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 2L, "e2") => e }
+
+      val t3 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+      val pr3 = PersistentRepr("e3", 3L, "p1", "", writerUuid = w1)
+      writeTestEvent(t3, pr3, Set("T1"))
+      val t4 = LocalDateTime.now(ZoneOffset.UTC)
+      val pr4 = PersistentRepr("e4", 4L, "p1", "", writerUuid = w1)
+      writeTestEvent(t4, pr4, Set("T1"))
+
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 3L, "e3") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 4L, "e4") => e }
+      probe.cancel()
+    }
+
+    "sort events by timestamp" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+      val pr1 = PersistentRepr("p1-e1", 1L, "p1", "", writerUuid = w1)
+      writeTestEvent(t1, pr1, Set("T2"))
+      val t3 = LocalDateTime.now(ZoneOffset.UTC)
+      val pr3 = PersistentRepr("p1-e2", 2L, "p1", "", writerUuid = w1)
+      writeTestEvent(t3, pr3, Set("T2"))
+
+      val src = queries.eventsByTag(tag = "T2", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+
+      // simulate async eventually consistent Materialized View update
+      // that cause p1-e2 to show up before p2-e1
+      Thread.sleep(500)
+      val t2 = t3.minus(1, ChronoUnit.MILLIS)
+      val pr2 = PersistentRepr("p2-e1", 1L, "p2", "", writerUuid = w2)
+      writeTestEvent(t2, pr2, Set("T2"))
+
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 1L, "p1-e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p2", 1L, "p2-e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 2L, "p1-e2") => e }
+      probe.cancel()
+    }
+
+    "stream many events" in {
+      val e = system.actorOf(TestActor.props("e"))
+
+      val src = queries.eventsByTag(tag = "yellow", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+
+      for (n <- 1 to 100)
+        e ! s"yellow-$n"
+
+      probe.request(200)
+      for (n <- 1 to 100) {
+        val Expected = s"yellow-$n"
+        probe.expectNextPF { case e @ EventEnvelope2(_, "e", _, Expected) => e }
+      }
+      probe.expectNoMsg(100.millis)
+
+      for (n <- 101 to 200)
+        e ! s"yellow-$n"
+
+      for (n <- 101 to 200) {
+        val Expected = s"yellow-$n"
+        probe.expectNextPF { case e @ EventEnvelope2(_, "e", _, Expected) => e }
+      }
+      probe.expectNoMsg(100.millis)
+
+      probe.request(10)
+      probe.expectNoMsg(100.millis)
+    }
+
+  }
+
+}
+
 class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagStrictBySeqNoSpec", EventsByTagSpec.strictConfig) {
   import EventsByTagSpec._
 
-  "Cassandra live eventsByTag with delayed-event-timeout > 0s" must {
+  "Cassandra live (old deprecated) eventsByTag with delayed-event-timeout > 0s" must {
 
     "detect missing sequence number and wait for it" in {
       val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
@@ -586,3 +874,142 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
   }
 
 }
+
+class EventsByTag2StrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTag2StrictBySeqNoSpec", EventsByTagSpec.strictConfig) {
+  import EventsByTagSpec._
+
+  "Cassandra live eventsByTag with delayed-event-timeout > 0s" must {
+
+    "detect missing sequence number and wait for it" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+      val w1 = UUID.randomUUID().toString
+      val pr1 = PersistentRepr("e1", 1L, "p1", "", writerUuid = w1)
+      writeTestEvent(t1, pr1, Set("T3"))
+
+      val t2 = t1.plusSeconds(1)
+      val pr2 = PersistentRepr("e2", 2L, "p1", "", writerUuid = w1)
+      writeTestEvent(t2, pr2, Set("T3"))
+
+      val t4 = t1.plusSeconds(3)
+      val pr4 = PersistentRepr("e4", 4L, "p1", "", writerUuid = w1)
+      writeTestEvent(t4, pr4, Set("T3"))
+
+      val src = queries.eventsByTag(tag = "T3", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 1L, "e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 2L, "e2") => e }
+      probe.expectNoMsg(500.millis)
+
+      val t3 = t1.plusSeconds(2)
+      val pr3 = PersistentRepr("e3", 3L, "p1", "", writerUuid = w1)
+      writeTestEvent(t3, pr3, Set("T3"))
+
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 3L, "e3") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 4L, "e4") => e }
+      probe.cancel()
+    }
+
+    "detect missing sequence number and fail after timeout" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+      val w1 = UUID.randomUUID().toString
+      val pr1 = PersistentRepr("e1", 1L, "p1", "", writerUuid = w1)
+      writeTestEvent(t1, pr1, Set("T4"))
+
+      val t2 = t1.plusSeconds(1)
+      val pr2 = PersistentRepr("e2", 2L, "p1", "", writerUuid = w1)
+      writeTestEvent(t2, pr2, Set("T4"))
+
+      val t4 = t1.plusSeconds(3)
+      val pr4 = PersistentRepr("e4", 4L, "p1", "", writerUuid = w1)
+      writeTestEvent(t4, pr4, Set("T4"))
+
+      val src = queries.eventsByTag(tag = "T4", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 1L, "e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 2L, "e2") => e }
+      probe.expectNoMsg(1.seconds)
+      probe.expectError().getClass should be(classOf[IllegalStateException])
+    }
+
+    "detect missing sequence number and go back to find it" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+      val pr1 = PersistentRepr("p1-e1", 1L, "p1", "", writerUuid = w1)
+      writeTestEvent(t1, pr1, Set("T5"))
+
+      val t2 = t1.plusSeconds(1)
+      val pr2 = PersistentRepr("p1-e2", 2L, "p1", "", writerUuid = w1)
+      writeTestEvent(t2, pr2, Set("T5"))
+
+      val t3 = t1.plusSeconds(2)
+      val pr3 = PersistentRepr("p2-e1", 1L, "p2", "", writerUuid = w2)
+      writeTestEvent(t3, pr3, Set("T5"))
+
+      val t4 = t1.plusSeconds(4)
+      val pr4 = PersistentRepr("p2-e2", 2L, "p2", "", writerUuid = w2)
+      writeTestEvent(t4, pr4, Set("T5"))
+
+      val src = queries.eventsByTag(tag = "T5", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 1L, "p1-e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 2L, "p1-e2") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p2", 1L, "p2-e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p2", 2L, "p2-e2") => e }
+
+      // too early p1-e4
+      val t5 = t1.plusSeconds(5)
+      val pr5 = PersistentRepr("p1-e4", 4L, "p1", "", writerUuid = w1)
+      writeTestEvent(t5, pr5, Set("T5"))
+      probe.expectNoMsg(500.millis)
+
+      // the delayed p1-e3, and the timeuuid is before p2-e2
+      val t6 = t1.plusSeconds(3)
+      val pr6 = PersistentRepr("p1-e3", 3L, "p1", "", writerUuid = w1)
+      writeTestEvent(t6, pr6, Set("T5"))
+
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 3L, "p1-e3") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 4L, "p1-e4") => e }
+
+      val t7 = t1.plusSeconds(7)
+      val pr7 = PersistentRepr("p2-e3", 3L, "p2", "", writerUuid = w2)
+      writeTestEvent(t7, pr7, Set("T5"))
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p2", 3L, "p2-e3") => e }
+
+      probe.cancel()
+    }
+
+    "find delayed events" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+      val pr1 = PersistentRepr("p1-e1", 1L, "p1", "", writerUuid = w1)
+      writeTestEvent(t1, pr1, Set("T6"))
+
+      val t2 = t1.plusSeconds(2)
+      val pr2 = PersistentRepr("p2-e1", 1L, "p2", "", writerUuid = w2)
+      writeTestEvent(t2, pr2, Set("T6"))
+
+      val src = queries.eventsByTag(tag = "T6", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 1L, "p1-e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p2", 1L, "p2-e1") => e }
+
+      // delayed, and timestamp is before p2-e1
+      val t3 = t1.plusSeconds(1)
+      val pr3 = PersistentRepr("p1-e2", 2L, "p1", "", writerUuid = w1)
+      writeTestEvent(t3, pr3, Set("T6"))
+
+      probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 2L, "p1-e2") => e }
+
+      probe.cancel()
+    }
+
+  }
+
+}
+
