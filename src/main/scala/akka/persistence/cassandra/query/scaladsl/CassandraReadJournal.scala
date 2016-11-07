@@ -184,6 +184,16 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     if (timestamp == 0L) firstOffset else UUIDs.startOf(timestamp)
 
   /**
+   * Create a time based UUID that can be used as offset in `eventsByTag`
+   * queries. The `timestamp` is a unix timestamp (as returned by
+   * `System#currentTimeMillis`.
+   */
+  def timeBasedUUIDFrom(timestamp: Long): Offset = {
+    if (timestamp == 0L) NoOffset
+    else TimeBasedUUID(offsetUuid(timestamp))
+  }
+
+  /**
    * `eventsByTag` is used for retrieving events that were marked with
    * a given tag, e.g. all events of an Aggregate Root type.
    *
@@ -266,6 +276,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    *
    * The offset of each event is provided in the streamed envelopes returned,
    * which makes it possible to resume the stream at a later point from a given offset.
+   *
+   * For querying events that happened after a long unix timestamp you can use [[#timeBasedUUIDFrom]]
+   * to create the offset to use with this method.
    *
    * In addition to the `offset` the envelope also provides `persistenceId` and `sequenceNr`
    * for each event. The `sequenceNr` is the sequence number for the persistent actor with the
@@ -374,9 +387,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * stored after the query is completed are not included in the event stream.
    *
    * Use `NoOffset` when you want all events from the beginning of time.
+   * To acquire an offset from a long unix timestamp to use with this query, you can use [[#timeBasedUUIDFrom]].
    *
-   * The `offset` is exclusive, i.e. the event with the exact same UUID will not be included
-   * in the returned stream.
    */
   override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope2, NotUsed] = {
     try {
@@ -416,7 +428,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   override def currentEventsByTag(tag: String, offset: Long): Source[EventEnvelope, NotUsed] = {
     currentEventsByTag(tag, internalUuidToOffset(offsetUuid(offset)))
       .map(env => EventEnvelope(
-        offset = UUIDs.unixTimestamp(env.offset.asInstanceOf[TimeBasedUUID].value),
+        offset = UUIDs.unixTimestamp(offsetToInternalOffset(env.offset)),
         persistenceId = env.persistenceId,
         sequenceNr = env.sequenceNr,
         event = env.event
@@ -573,7 +585,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   private[this] def offsetToInternalOffset(offset: Offset): UUID =
     offset match {
       case TimeBasedUUID(uuid) => uuid
-      case Sequence(timestamp) => offsetUuid(timestamp)
       case NoOffset            => firstOffset
       case unsupported =>
         throw new IllegalArgumentException("Cassandra does not support " + unsupported.getClass.getName + " offsets")
