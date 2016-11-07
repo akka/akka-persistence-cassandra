@@ -7,15 +7,15 @@ import scala.annotation.tailrec
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
-
 import akka.actor._
 import akka.pattern.pipe
 import akka.stream.actor.ActorPublisher
 import akka.stream.actor.ActorPublisherMessage.{ Cancel, Request, SubscriptionTimeoutExceeded }
-import com.datastax.driver.core.{ Row, ResultSet }
-
+import com.datastax.driver.core.{ ResultSet, Row }
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.QueryActorPublisher._
+
+import scala.util.control.NonFatal
 
 object QueryActorPublisher {
   private[query] final case class ReplayFailed(cause: Throwable)
@@ -119,13 +119,19 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
     behaviour: Option[(ResultSet, State, Boolean) => Receive] = None
   ): Receive = {
 
-    val (newRs, newState) =
-      exhaustFetch(resultSet, state, resultSet.getAvailableWithoutFetching, 0, totalDemand)
+    try {
+      val (newRs, newState) =
+        exhaustFetch(resultSet, state, resultSet.getAvailableWithoutFetching, 0, totalDemand)
 
-    behaviour.fold {
-      nextBehavior(newRs, newState, finished, continue)
-    } {
-      _(newRs, newState, finished)
+      behaviour.fold {
+        nextBehavior(newRs, newState, finished, continue)
+      } {
+        _(newRs, newState, finished)
+      }
+    } catch {
+      case NonFatal(t) =>
+        onErrorThenStop(t)
+        Actor.ignoringBehavior
     }
   }
 
