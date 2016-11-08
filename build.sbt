@@ -98,7 +98,9 @@ def formattingPreferences = {
 def akkaImport(packageName: String = "akka.*") = versionedImport(packageName, "2.4", "2.5")
 def configImport(packageName: String = "com.typesafe.config.*") = versionedImport(packageName, "1.3.0", "1.4.0")
 def versionedImport(packageName: String, lower: String, upper: String) = s"""$packageName;version="[$lower,$upper)""""
+def optionalImport(packageName: String) = s"$packageName;resolution:=optional"
 
 osgiSettings
-OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*")
-OsgiKeys.importPackage := Seq(akkaImport(), "*");
+OsgiKeys.exportPackage  := Seq("akka.persistence.cassandra.*")
+OsgiKeys.importPackage  := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*");
+OsgiKeys.privatePackage := Seq()
