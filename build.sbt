@@ -12,7 +12,8 @@ name := "akka-persistence-cassandra"
 
 licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licenses/LICENSE-2.0")))
 
-scalaVersion := "2.11.8"
+crossScalaVersions := Seq("2.11.8", "2.12.0")
+scalaVersion := crossScalaVersions.value.head
 crossVersion := CrossVersion.binary
 
 scalacOptions ++= Seq(
@@ -66,7 +67,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"      %% "akka-persistence-query-experimental" % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion   % "test",
   "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion   % "test",
-  "org.scalatest"          %% "scalatest"                           % "2.1.4"       % "test",
+  "org.scalatest"          %% "scalatest"                           % "3.0.0"       % "test",
   // cassandra-all for testkit.CassandraLauncher, app should define it as test dependency if needed
   "org.apache.cassandra"    % "cassandra-all"                       % "3.7"         % "optional",
   "org.osgi"                % "org.osgi.core"                       % "5.0.0"       % "provided"

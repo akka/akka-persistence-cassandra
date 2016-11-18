@@ -1,9 +1,11 @@
 language: scala
 sudo: false
 scala:
-  - "2.11.7"
+  - "2.11.8"
+  - "2.12.0"
 jdk:
   - oraclejdk8
+sbt_args: -J-XX:ReservedCodeCacheSize=128m
 cache:
   directories:
     - $HOME/.ivy2/cache
