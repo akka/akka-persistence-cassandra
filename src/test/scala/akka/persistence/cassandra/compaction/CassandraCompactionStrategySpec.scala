@@ -18,8 +18,6 @@ import scala.concurrent.Await
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(
     s"""
-      |cassandra-journal.port = ${CassandraLauncher.randomPort}
-      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.keyspace=CassandraCompactionStrategySpec
       |cassandra-snapshot-store.keyspace=CassandraCompactionStrategySpecSnapshot
     """.stripMargin

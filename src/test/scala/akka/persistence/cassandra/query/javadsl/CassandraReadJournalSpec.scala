@@ -22,7 +22,6 @@ import akka.stream.testkit.scaladsl.TestSink
 object CassandraReadJournalSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
-    cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-journal.keyspace=JavadslCassandraReadJournalSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s

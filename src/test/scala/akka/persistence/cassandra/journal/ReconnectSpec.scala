@@ -18,8 +18,6 @@ import akka.persistence.cassandra.CassandraLifecycle.AwaitPersistenceInit
 object ReconnectSpec {
   val config = ConfigFactory.parseString(
     s"""
-      |cassandra-journal.port = ${CassandraLauncher.randomPort}
-      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.keyspace=ReconnectSpec
       |cassandra-snapshot-store.keyspace=ReconnectSpecSnapshot
     """.stripMargin

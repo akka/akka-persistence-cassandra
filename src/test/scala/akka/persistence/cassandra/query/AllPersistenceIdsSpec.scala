@@ -25,7 +25,6 @@ import akka.NotUsed
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
-    cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-journal.keyspace=AllPersistenceIdsSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s

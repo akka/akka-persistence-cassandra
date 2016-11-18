@@ -17,8 +17,6 @@ import scala.language.postfixOps
 object CassandraLoadSpec {
   val config = ConfigFactory.parseString(
     s"""
-      |cassandra-journal.port = ${CassandraLauncher.randomPort}
-      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.replication-strategy = NetworkTopologyStrategy
       |cassandra-journal.data-center-replication-factors = ["dc1:1"]
       |cassandra-journal.keyspace=CassandraLoadSpec

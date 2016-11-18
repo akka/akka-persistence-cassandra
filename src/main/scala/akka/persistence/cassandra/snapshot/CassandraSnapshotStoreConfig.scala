@@ -9,4 +9,5 @@ import akka.actor.ActorSystem
 
 class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
   val maxMetadataResultSize = config.getInt("max-metadata-result-size")
+  val maxLoadAttempts = config.getInt("max-load-attempts")
 }

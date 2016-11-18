@@ -25,8 +25,6 @@ object CassandraIntegrationSpec {
       |akka.persistence.publish-plugin-commands = on
       |cassandra-journal.target-partition-size = 5
       |cassandra-journal.max-result-size = 3
-      |cassandra-journal.port = ${CassandraLauncher.randomPort}
-      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.keyspace=CassandraIntegrationSpec
       |cassandra-snapshot-store.keyspace=CassandraIntegrationSpecSnapshot
     """.stripMargin

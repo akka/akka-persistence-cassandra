@@ -38,8 +38,6 @@ object CassandraSessionSpec {
   lazy val config = ConfigFactory.parseString(
     s"""
       akka.loglevel = INFO
-      cassandra-journal.port = ${CassandraLauncher.randomPort}
-      cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       cassandra-journal.keyspace=CassandraSessionSpec
 
       test-cassandra-session-config {
