@@ -15,6 +15,7 @@ licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licen
 crossScalaVersions := Seq("2.11.8", "2.12.0")
 scalaVersion := crossScalaVersions.value.head
 crossVersion := CrossVersion.binary
+releaseCrossBuild := true
 
 scalacOptions ++= Seq(
   "-encoding", "UTF-8",
