@@ -58,7 +58,7 @@ testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a")
 // disable parallel tests
 parallelExecution in Test := false
 
-val AkkaVersion = "2.4.12"
+val AkkaVersion = "2.4.14"
 
 libraryDependencies ++= Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.1.0",

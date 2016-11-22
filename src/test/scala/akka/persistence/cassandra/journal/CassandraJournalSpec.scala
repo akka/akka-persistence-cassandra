@@ -13,8 +13,6 @@ import com.typesafe.config.ConfigFactory
 object CassandraJournalConfiguration {
   lazy val config = ConfigFactory.parseString(
     s"""
-      |cassandra-journal.port = ${CassandraLauncher.randomPort}
-      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.keyspace=CassandraJournalSpec
       |cassandra-snapshot-store.keyspace=CassandraJournalSpecSnapshot
     """.stripMargin

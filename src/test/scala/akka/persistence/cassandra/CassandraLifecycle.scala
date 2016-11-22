@@ -17,9 +17,11 @@ import java.util.concurrent.TimeUnit
 
 object CassandraLifecycle {
 
-  val config = ConfigFactory.parseString("""
+  val config = ConfigFactory.parseString(s"""
     akka.persistence.journal.plugin = "cassandra-journal"
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
+    cassandra-journal.port = ${CassandraLauncher.randomPort}
+    cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
     cassandra-journal.circuit-breaker.call-timeout = 30s
     akka.test.single-expect-default = 20s
     akka.actor.serialize-messages=on

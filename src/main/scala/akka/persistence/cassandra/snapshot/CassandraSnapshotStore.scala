@@ -72,18 +72,21 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
   override def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = for {
     prepStmt <- preparedSelectSnapshotMetadataForLoad
-    mds <- metadata(prepStmt, persistenceId, criteria).map(_.take(3))
+    mds <- metadata(prepStmt, persistenceId, criteria).map(_.take(maxLoadAttempts))
     res <- loadNAsync(mds)
   } yield res
 
   def loadNAsync(metadata: immutable.Seq[SnapshotMetadata]): Future[Option[SelectedSnapshot]] = metadata match {
-    case Seq() => Future.successful(None)
+    case Seq() => Future.successful(None) // no snapshots stored
     case md +: mds => load1Async(md) map {
       case Snapshot(s) => Some(SelectedSnapshot(md, s))
     } recoverWith {
       case e =>
         log.warning("Failed to load snapshot, trying older one. Caused by: [{}: {}]", e.getClass.getName, e.getMessage)
-        loadNAsync(mds) // try older snapshot
+        if (mds.isEmpty)
+          Future.failed(e) // all attempts failed
+        else
+          loadNAsync(mds) // try older snapshot
     }
   }
 

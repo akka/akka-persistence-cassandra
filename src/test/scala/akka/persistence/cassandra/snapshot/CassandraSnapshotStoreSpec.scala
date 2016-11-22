@@ -20,8 +20,6 @@ import scala.concurrent.Await
 object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(
     s"""
-      |cassandra-journal.port = ${CassandraLauncher.randomPort}
-      |cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
       |cassandra-journal.keyspace=CassandraSnapshotStoreSpec
       |cassandra-snapshot-store.keyspace=CassandraSnapshotStoreSpecSnapshot
       |cassandra-snapshot-store.max-metadata-result-size = 2
@@ -107,7 +105,7 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStor
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
 
       // no 4th attempt has been made
-      probe.expectMsg(LoadSnapshotResult(None, Long.MaxValue))
+      probe.expectMsgType[LoadSnapshotFailed]
     }
   }
 }

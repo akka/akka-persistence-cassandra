@@ -23,7 +23,6 @@ object EventsByPersistenceIdSpec {
     akka.loglevel = INFO
     akka.actor.serialize-messages = on
     akka.actor.serialize-creators = on
-    cassandra-journal.port = ${CassandraLauncher.randomPort}
     cassandra-journal.keyspace=EventsByPersistenceIdSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
