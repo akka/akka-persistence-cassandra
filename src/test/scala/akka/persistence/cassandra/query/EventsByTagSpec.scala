@@ -38,6 +38,7 @@ import org.scalatest.WordSpecLike
 
 import scala.concurrent.Await
 import com.typesafe.config.Config
+import akka.persistence.query.TimeBasedUUID
 
 object EventsByTagSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
@@ -522,24 +523,31 @@ class EventsByTag2Spec extends AbstractEventsByTagSpec("EventsByTag2Spec", Event
       probe.expectComplete() // green cucumber not seen
     }
 
-    // FIXME we need a timestamp offset type for this
-    // deprecated method covers the behaviour right now
-    /* "find events from timestamp offset" in {
+    "find events from timestamp offset" in {
       val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
       val probe1 = greenSrc1.runWith(TestSink.probe[Any])
       probe1.request(2)
-      probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
-      val offs = probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }.offset
+      val appleOffs = probe1.expectNextPF {
+        case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e
+      }.offset.asInstanceOf[TimeBasedUUID]
+      val bananaOffs = probe1.expectNextPF {
+        case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e
+      }.offset.asInstanceOf[TimeBasedUUID]
       probe1.cancel()
 
-      val timestampOffset = ???
-      val greenSrc2 = queries.currentEventsByTag(tag = "green", timestampOffset)
+      val appleTimestamp = queries.timestampFrom(appleOffs)
+      val bananaTimestamp = queries.timestampFrom(bananaOffs)
+      bananaTimestamp should be <= (bananaTimestamp)
+
+      val greenSrc2 = queries.currentEventsByTag(tag = "green", queries.timeBasedUUIDFrom(bananaTimestamp))
       val probe2 = greenSrc2.runWith(TestSink.probe[Any])
       probe2.request(10)
+      if (appleTimestamp == bananaTimestamp)
+        probe2.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
       probe2.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }
       probe2.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "a green leaf") => e }
       probe2.cancel()
-    }*/
+    }
 
     "find events from UUID offset" in {
       val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
@@ -735,6 +743,48 @@ class EventsByTag2Spec extends AbstractEventsByTagSpec("EventsByTag2Spec", Event
 
   }
 
+}
+
+class EventsByTagZeroEventualConsistencyDelaySpec
+  extends AbstractEventsByTagSpec(
+    "EventsByTagZeroEventualConsistencyDelaySpec",
+    ConfigFactory.parseString("cassandra-query-journal.eventual-consistency-delay = 0s")
+      .withFallback(EventsByTagSpec.strictConfig)
+  ) {
+  import EventsByTagSpec._
+
+  "Cassandra query currentEventsByTag with zero eventual-consistency-delay" must {
+
+    "find existing events" in {
+      val a = system.actorOf(TestActor.props("a"))
+      val b = system.actorOf(TestActor.props("b"))
+      a ! "a green apple"
+      val NumberOfBananas = 5017
+      expectMsg(20.seconds, s"a green apple-done")
+      (1 to NumberOfBananas).foreach { n =>
+        a ! s"a green banana-$n"
+        expectMsg(s"a green banana-$n-done")
+      }
+
+      b ! "a green leaf"
+      expectMsg(s"a green leaf-done")
+
+      val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
+      val probe = greenSrc.runWith(TestSink.probe[Any])
+      probe.request(NumberOfBananas + 10L)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "a", 1L, "a green apple") => e }
+      (1 to NumberOfBananas).foreach { n =>
+        val SeqNr = 1L + n
+        val Description = s"a green banana-$n"
+        withClue(s"banana-$n") {
+          probe.expectNextPF { case e @ EventEnvelope2(_, "a", SeqNr, Description) => e }
+        }
+      }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 1L, "a green leaf") => e }
+      probe.expectComplete()
+    }
+
+  }
 }
 
 class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagStrictBySeqNoSpec", EventsByTagSpec.strictConfig) {
