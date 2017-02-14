@@ -37,8 +37,20 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
 
   def connect()(implicit ec: ExecutionContext): Future[Session] = {
     val clusterId = config.getString("cluster-id")
-    clusterBuilder(clusterId).flatMap(_.build().connectAsync())
+    clusterBuilder(clusterId).flatMap { b =>
+      val cluster = b.build()
+      createQueryLogger() match {
+        case Some(logger) => cluster.register(logger)
+        case None         =>
+      }
+      cluster.connectAsync()
+    }
   }
+
+  protected def createQueryLogger(): Option[QueryLogger] =
+    if (config.getBoolean("log-queries"))
+      Some(QueryLogger.builder().build())
+    else None
 
   val fetchSize = config.getInt("max-result-size")
   val protocolVersion: Option[ProtocolVersion] = config.getString("protocol-version") match {
