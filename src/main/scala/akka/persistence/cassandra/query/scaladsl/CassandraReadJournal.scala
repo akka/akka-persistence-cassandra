@@ -194,6 +194,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   }
 
   /**
+   * Convert a `TimeBasedUUID` to a unix timestamp (as returned by
+   * `System#currentTimeMillis`.
+   */
+  def timestampFrom(offset: TimeBasedUUID): Long =
+    UUIDs.unixTimestamp(offset.value)
+
+  /**
    * `eventsByTag` is used for retrieving events that were marked with
    * a given tag, e.g. all events of an Aggregate Root type.
    *

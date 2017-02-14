@@ -38,6 +38,7 @@ import org.scalatest.WordSpecLike
 
 import scala.concurrent.Await
 import com.typesafe.config.Config
+import akka.persistence.query.TimeBasedUUID
 
 object EventsByTagSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
@@ -522,24 +523,31 @@ class EventsByTag2Spec extends AbstractEventsByTagSpec("EventsByTag2Spec", Event
       probe.expectComplete() // green cucumber not seen
     }
 
-    // FIXME we need a timestamp offset type for this
-    // deprecated method covers the behaviour right now
-    /* "find events from timestamp offset" in {
+    "find events from timestamp offset" in {
       val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
       val probe1 = greenSrc1.runWith(TestSink.probe[Any])
       probe1.request(2)
-      probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
-      val offs = probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }.offset
+      val appleOffs = probe1.expectNextPF {
+        case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e
+      }.offset.asInstanceOf[TimeBasedUUID]
+      val bananaOffs = probe1.expectNextPF {
+        case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e
+      }.offset.asInstanceOf[TimeBasedUUID]
       probe1.cancel()
 
-      val timestampOffset = ???
-      val greenSrc2 = queries.currentEventsByTag(tag = "green", timestampOffset)
+      val appleTimestamp = queries.timestampFrom(appleOffs)
+      val bananaTimestamp = queries.timestampFrom(bananaOffs)
+      bananaTimestamp should be <= (bananaTimestamp)
+
+      val greenSrc2 = queries.currentEventsByTag(tag = "green", queries.timeBasedUUIDFrom(bananaTimestamp))
       val probe2 = greenSrc2.runWith(TestSink.probe[Any])
       probe2.request(10)
+      if (appleTimestamp == bananaTimestamp)
+        probe2.expectNextPF { case e @ EventEnvelope2(_, "a", 2L, "a green apple") => e }
       probe2.expectNextPF { case e @ EventEnvelope2(_, "a", 4L, "a green banana") => e }
       probe2.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "a green leaf") => e }
       probe2.cancel()
-    }*/
+    }
 
     "find events from UUID offset" in {
       val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
