@@ -545,10 +545,14 @@ class FixedRetryPolicy(number: Int) extends RetryPolicy {
   override def onUnavailable(statement: Statement, cl: ConsistencyLevel, requiredReplica: Int, aliveReplica: Int, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
   override def onWriteTimeout(statement: Statement, cl: ConsistencyLevel, writeType: WriteType, requiredAcks: Int, receivedAcks: Int, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
   override def onReadTimeout(statement: Statement, cl: ConsistencyLevel, requiredResponses: Int, receivedResponses: Int, dataRetrieved: Boolean, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
-  override def onRequestError(statement: Statement, cl: ConsistencyLevel, cause: DriverException, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
+  override def onRequestError(statement: Statement, cl: ConsistencyLevel, cause: DriverException, nbRetry: Int): RetryDecision = tryNextHost(cl, nbRetry)
 
   private def retry(cl: ConsistencyLevel, nbRetry: Int): RetryDecision = {
     if (nbRetry < number) RetryDecision.retry(cl) else RetryDecision.rethrow()
+  }
+
+  private def tryNextHost(cl: ConsistencyLevel, nbRetry: Int): RetryDecision = {
+    if (nbRetry < number) RetryDecision.tryNextHost(cl) else RetryDecision.rethrow()
   }
 
   override def init(c: Cluster): Unit = ()
