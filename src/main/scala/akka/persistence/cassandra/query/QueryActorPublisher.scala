@@ -78,23 +78,23 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
   private[this] val starting: Receive = {
     case _: Cancel | SubscriptionTimeoutExceeded => context.stop(self)
     case InitialNewResultSet(s, newRs) =>
-      context.become(exhaustFetchAndBecome(newRs, s, false, false))
+      context.become(exhaustFetchAndBecome(newRs, s, finished = false, continue = false))
     case InitialFinished(s, newRs) =>
-      context.become(exhaustFetchAndBecome(newRs, s, true, false))
+      context.become(exhaustFetchAndBecome(newRs, s, finished = true, continue = false))
     case Status.Failure(cause) =>
       onErrorThenStop(cause)
   }
 
-  private[this] def awaiting(rs: ResultSet, s: State, f: Boolean): Receive = {
+  private[this] def awaiting(rs: ResultSet, s: State, finished: Boolean): Receive = {
     case _: Cancel | SubscriptionTimeoutExceeded => context.stop(self)
     case Request(_) =>
-      context.become(exhaustFetchAndBecome(rs, s, f, false, Some(awaiting)))
+      context.become(exhaustFetchAndBecome(rs, s, finished, continue = false, Some(awaiting)))
     case NewResultSet(newRs) =>
-      context.become(exhaustFetchAndBecome(newRs, s, f, false))
+      context.become(exhaustFetchAndBecome(newRs, s, finished, continue = false))
     case FetchedResultSet(newRs) =>
-      context.become(exhaustFetchAndBecome(newRs, s, f, false))
+      context.become(exhaustFetchAndBecome(newRs, s, finished, continue = false))
     case Finished(newRs) =>
-      context.become(exhaustFetchAndBecome(newRs, s, true, false))
+      context.become(exhaustFetchAndBecome(newRs, s, finished = true, continue = false))
     case Status.Failure(cause) =>
       onErrorThenStop(cause)
   }
@@ -123,10 +123,9 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
       val (newRs, newState) =
         exhaustFetch(resultSet, state, resultSet.getAvailableWithoutFetching, 0, totalDemand)
 
-      behaviour.fold {
-        nextBehavior(newRs, newState, finished, continue)
-      } {
-        _(newRs, newState, finished)
+      behaviour match {
+        case None    => nextBehavior(newRs, newState, finished, continue)
+        case Some(b) => b(newRs, newState, finished)
       }
     } catch {
       case NonFatal(t) =>
@@ -223,7 +222,10 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
       (resultSet, state)
     } else {
       val (event, nextState) = updateState(state, resultSet.one())
-      event.fold(())(onNext)
+      event match {
+        case Some(evt) => onNext(evt)
+        case None      =>
+      }
       exhaustFetch(resultSet, nextState, available - 1, count + 1, max)
     }
   }
