@@ -745,6 +745,48 @@ class EventsByTag2Spec extends AbstractEventsByTagSpec("EventsByTag2Spec", Event
 
 }
 
+class EventsByTagZeroEventualConsistencyDelaySpec
+  extends AbstractEventsByTagSpec(
+    "EventsByTagZeroEventualConsistencyDelaySpec",
+    ConfigFactory.parseString("cassandra-query-journal.eventual-consistency-delay = 0s")
+      .withFallback(EventsByTagSpec.strictConfig)
+  ) {
+  import EventsByTagSpec._
+
+  "Cassandra query currentEventsByTag with zero eventual-consistency-delay" must {
+
+    "find existing events" in {
+      val a = system.actorOf(TestActor.props("a"))
+      val b = system.actorOf(TestActor.props("b"))
+      a ! "a green apple"
+      val NumberOfBananas = 5017
+      expectMsg(20.seconds, s"a green apple-done")
+      (1 to NumberOfBananas).foreach { n =>
+        a ! s"a green banana-$n"
+        expectMsg(s"a green banana-$n-done")
+      }
+
+      b ! "a green leaf"
+      expectMsg(s"a green leaf-done")
+
+      val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
+      val probe = greenSrc.runWith(TestSink.probe[Any])
+      probe.request(NumberOfBananas + 10L)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "a", 1L, "a green apple") => e }
+      (1 to NumberOfBananas).foreach { n =>
+        val SeqNr = 1L + n
+        val Description = s"a green banana-$n"
+        withClue(s"banana-$n") {
+          probe.expectNextPF { case e @ EventEnvelope2(_, "a", SeqNr, Description) => e }
+        }
+      }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 1L, "a green leaf") => e }
+      probe.expectComplete()
+    }
+
+  }
+}
+
 class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagStrictBySeqNoSpec", EventsByTagSpec.strictConfig) {
   import EventsByTagSpec._
 

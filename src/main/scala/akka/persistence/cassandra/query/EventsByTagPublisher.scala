@@ -84,6 +84,7 @@ private[query] class EventsByTagPublisher(
     else None
   var abortDeadline: Option[Deadline] = None
   var lookForMissingDeadline: Deadline = nextLookForMissingDeadline()
+  var replayCountZero = false
 
   val tickTask =
     context.system.scheduler.schedule(refreshInterval, refreshInterval, self, Continue)(context.dispatcher)
@@ -183,7 +184,7 @@ private[query] class EventsByTagPublisher(
     }
 
   def stopIfDone(): Unit = {
-    if (buf.isEmpty && (isToOffsetDone || isCurrentTimeAfterToOffset())) {
+    if (buf.isEmpty && (isToOffsetDone || (replayCountZero && isCurrentTimeAfterToOffset()))) {
       onCompleteThenStop()
     }
   }
@@ -231,9 +232,11 @@ private[query] class EventsByTagPublisher(
           nextTimeBucket()
           self ! Continue // more to fetch
         } else {
+          replayCountZero = true
           stopIfDone()
         }
       } else {
+        replayCountZero = false
         self ! Continue // more to fetch
       }
 
