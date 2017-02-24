@@ -18,8 +18,9 @@ These guidelines mainly apply to Typesafe’s “mature” projects - not necess
 
 Depending on which version (or sometimes module) you want to work on, you should target a specific branch as explained below:
 
-* `master` – development branch for Cassandra 3.x
-* `cassandra-2.x` – old development branch for Cassandra 2.x, but master can also be used with a Cassandra 2.x server (and we are currently only making releases from master) 
+* `master` – development branch for Cassandra 3.x and Akka 2.5
+* `release-2.4` – development/release branch for Cassandra 3.x and Akka 2.4
+* `cassandra-2.x` – old development branch for Cassandra 2.x, but master can also be used with a Cassandra 2.x server (and we are currently only making releases from `master` and `release-2.4`) 
 
 ## General Workflow
 
