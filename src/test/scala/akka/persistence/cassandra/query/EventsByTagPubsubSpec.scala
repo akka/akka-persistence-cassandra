@@ -38,6 +38,7 @@ import org.scalatest.Matchers
 import org.scalatest.WordSpecLike
 import akka.cluster.Cluster
 import scala.concurrent.Await
+import akka.persistence.query.NoOffset
 
 object EventsByTagPubsubSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
@@ -84,7 +85,7 @@ class EventsByTagPubsubSpec extends TestKit(ActorSystem("EventsByTagPubsubSpec",
     "present new events to an ongoing getEventsByTag stream long before polling would kick in" in {
       val actor = system.actorOf(TestActor.props("EventsByTagPubsubSpec_a"))
 
-      val blackSrc = queries.eventsByTag(tag = "black", offset = 0L)
+      val blackSrc = queries.eventsByTag(tag = "black", offset = NoOffset)
       val probe = blackSrc.runWith(TestSink.probe[Any])
       probe.request(2)
       probe.expectNoMsg(300.millis)

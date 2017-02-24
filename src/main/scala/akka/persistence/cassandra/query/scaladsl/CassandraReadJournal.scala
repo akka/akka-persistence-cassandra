@@ -71,14 +71,12 @@ object CassandraReadJournal {
  */
 class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   extends ReadJournal
-  with AllPersistenceIdsQuery
+  with PersistenceIdsQuery
   with CurrentPersistenceIdsQuery
   with EventsByPersistenceIdQuery
   with CurrentEventsByPersistenceIdQuery
   with EventsByTagQuery
-  with EventsByTagQuery2
-  with CurrentEventsByTagQuery
-  with CurrentEventsByTagQuery2 {
+  with CurrentEventsByTagQuery {
 
   import CassandraReadJournal.CombinedEventsByPersistenceIdStmts
 
@@ -209,75 +207,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * The tags must be defined in the `tags` section of the `cassandra-journal` configuration.
    * Max 3 tags per event is supported.
    *
-   * You can retrieve a subset of all events by specifying `offset`, or use `0L` to retrieve all
-   * events with a given tag. The `offset` corresponds to a timesamp of the events. Note that the
-   * corresponding offset of each event is provided in the `akka.persistence.query.EventEnvelope`,
-   * which makes it possible to resume the stream at a later point from a given offset.
-   * The `offset` is inclusive, i.e. the events with the exact same timestamp will be included
-   * in the returned stream.
-   *
-   * There is a variant of this query with a time based UUID as offset. That query is better
-   * for cases where you want to resume the stream from an exact point without receiving
-   * duplicate events for the same timestamp.
-   *
-   * In addition to the `offset` the `EventEnvelope` also provides `persistenceId` and `sequenceNr`
-   * for each event. The `sequenceNr` is the sequence number for the persistent actor with the
-   * `persistenceId` that persisted the event. The `persistenceId` + `sequenceNr` is an unique
-   * identifier for the event.
-   *
-   * The returned event stream is ordered by the offset (timestamp), which corresponds
-   * to the same order as the write journal stored the events, with inaccuracy due to clock skew
-   * between different nodes. The same stream elements (in same order) are returned for multiple
-   * executions of the query on a best effort basis. The query is using a Cassandra Materialized
-   * View for the query and that is eventually consistent, so different queries may see different
-   * events for the latest events, but eventually the result will be ordered by timestamp
-   * (Cassandra timeuuid column). To compensate for the the eventual consistency the query is
-   * delayed to not read the latest events, see `cassandra-query-journal.eventual-consistency-delay`
-   * in reference.conf. However, this is only best effort and in case of network partitions
-   * or other things that may delay the updates of the Materialized View the events may be
-   * delivered in different order (not strictly by their timestamp).
-   *
-   * If you use the same tag for all events for a `persistenceId` it is possible to get
-   * a more strict delivery order than otherwise. This can be useful when all events of
-   * a PersistentActor class (all events of all instances of that PersistentActor class)
-   * are tagged with the same tag. Then the events for each `persistenceId` can be delivered
-   * strictly by sequence number. If a sequence number is missing the query is delayed up
-   * to the configured `delayed-event-timeout` and if the expected event is still not
-   * found the stream is completed with failure. This means that there must not be any
-   * holes in the sequence numbers for a given tag, i.e. all events must be tagged
-   * with the same tag. Set `delayed-event-timeout` to for example 30s to enable this
-   * feature. It is disabled by default.
-   *
-   * Deleted events are also deleted from the tagged event stream.
-   *
-   * The stream is not completed when it reaches the end of the currently stored events,
-   * but it continues to push new events when new events are persisted.
-   * Corresponding query that is completed when it reaches the end of the currently
-   * stored events is provided by `currentEventsByTag`.
-   *
-   * The stream is completed with failure if there is a failure in executing the query in the
-   * backend journal.
-   */
-  @deprecated("use eventsByTag(String, Offset) instead", "0.20")
-  override def eventsByTag(tag: String, offset: Long): Source[EventEnvelope, NotUsed] = {
-    eventsByTag(tag, offsetUuid(offset))
-      .map(env => EventEnvelope(
-        offset = UUIDs.unixTimestamp(env.offset),
-        persistenceId = env.persistenceId,
-        sequenceNr = env.sequenceNr,
-        event = env.event
-      ))
-  }
-
-  /**
-   * `eventsByTag` is used for retrieving events that were marked with
-   * a given tag, e.g. all events of an Aggregate Root type.
-   *
-   * To tag events you create an `akka.persistence.journal.EventAdapter` that wraps the events
-   * in a `akka.persistence.journal.Tagged` with the given `tags`.
-   * The tags must be defined in the `tags` section of the `cassandra-journal` configuration.
-   * Max 3 tags per event is supported.
-   *
    * You can use `NoOffset` to retrieve all events with a given tag or
    * retrieve a subset of all events by specifying a `TimeBasedUUID` `offset`.
    *
@@ -325,7 +254,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * The stream is completed with failure if there is a failure in executing the query in the
    * backend journal.
    */
-  override def eventsByTag(tag: String, offset: Offset): Source[EventEnvelope2, NotUsed] = {
+  override def eventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
     try {
       if (writePluginConfig.enableEventsByTagQuery) {
         require(tag != null && tag != "", "tag must not be null or empty")
@@ -333,10 +262,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         val fromOffset = offsetToInternalOffset(offset)
 
         import queryPluginConfig._
-        createSource[EventEnvelope2, PreparedStatement](selectStatement(tag), (s, ps) =>
+        createSource[EventEnvelope, PreparedStatement](selectStatement(tag), (s, ps) =>
           Source.actorPublisher[UUIDPersistentRepr](EventsByTagPublisher.props(tag, fromOffset,
             None, queryPluginConfig, s, ps))
-            .mapConcat(r => toEventEnvelope2(r.persistentRepr, TimeBasedUUID(r.offset)))
+            .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
             .mapMaterializedValue(_ => NotUsed)
             .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
             .withAttributes(ActorAttributes.dispatcher(pluginDispatcher)))
@@ -374,21 +303,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   }
 
   /**
-   * Same type of query as the `eventsByTag` query with `Long` offset, but this one has
-   * a time based UUID `offset`. This query is better for cases where you want to resume
-   * the stream from an exact point without receiving duplicate events for the same
-   * timestamp.
-   *
-   * Use [[#firstOffset]] when you want all events from the beginning of time.
-   *
-   * The `offset` is exclusive, i.e. the event with the exact same UUID will not be included
-   * in the returned stream.
-   */
-  @deprecated("use eventsByTag(String, Offset) instead", "0.20")
-  def eventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
-    eventsByTag(tag, internalUuidToOffset(offset)).map(eventEnvelope2toUuidEnvelope)
-
-  /**
    * Same type of query as `eventsByTag` but the event stream
    * is completed immediately when it reaches the end of the "result set". Events that are
    * stored after the query is completed are not included in the event stream.
@@ -397,7 +311,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * To acquire an offset from a long unix timestamp to use with this query, you can use [[#timeBasedUUIDFrom]].
    *
    */
-  override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope2, NotUsed] = {
+  override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
     try {
       if (writePluginConfig.enableEventsByTagQuery) {
         require(tag != null && tag != "", "tag must not be null or empty")
@@ -405,10 +319,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
 
         val fromOffset = offsetToInternalOffset(offset)
         val toOffset = Some(offsetUuid(System.currentTimeMillis()))
-        createSource[EventEnvelope2, PreparedStatement](selectStatement(tag), (s, ps) =>
+        createSource[EventEnvelope, PreparedStatement](selectStatement(tag), (s, ps) =>
           Source.actorPublisher[UUIDPersistentRepr](EventsByTagPublisher.props(tag, fromOffset,
             toOffset, queryPluginConfig, s, ps))
-            .mapConcat(r => toEventEnvelope2(r.persistentRepr, TimeBasedUUID(r.offset)))
+            .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
             .mapMaterializedValue(_ => NotUsed)
             .named("currentEventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
             .withAttributes(ActorAttributes.dispatcher(pluginDispatcher)))
@@ -422,40 +336,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         Source.failed(e)
     }
   }
-
-  /**
-   * Same type of query as `eventsByTag` but the event stream
-   * is completed immediately when it reaches the end of the "result set". Events that are
-   * stored after the query is completed are not included in the event stream.
-   *
-   * The `offset` is inclusive, i.e. the events with the exact same timestamp will be included
-   * in the returned stream.
-   */
-  @deprecated("use currentEventsByTag(String, Offset) instead", "0.20")
-  override def currentEventsByTag(tag: String, offset: Long): Source[EventEnvelope, NotUsed] = {
-    currentEventsByTag(tag, internalUuidToOffset(offsetUuid(offset)))
-      .map(env => EventEnvelope(
-        offset = UUIDs.unixTimestamp(offsetToInternalOffset(env.offset)),
-        persistenceId = env.persistenceId,
-        sequenceNr = env.sequenceNr,
-        event = env.event
-      ))
-  }
-
-  /**
-   * Same type of query as the `currentEventsByTag` query with `Long` offset, but this one has
-   * a time based UUID `offset`. This query is better for cases where you want to resume
-   * the stream from an exact point without receiving duplicate events for the same
-   * timestamp.
-   *
-   * Use [[#firstOffset]] when you want all events from the beginning of time.
-   *
-   * The `offset` is exclusive, i.e. the event with the exact same UUID will not be included
-   * in the returned stream.
-   */
-  @deprecated("use currentEventsByTag(String, Offset) instead", "0.20")
-  def currentEventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
-    currentEventsByTag(tag, internalUuidToOffset(offset)).map(eventEnvelope2toUuidEnvelope)
 
   /**
    * `eventsByPersistenceId` is used to retrieve a stream of events for a particular persistenceId.
@@ -559,31 +439,15 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         .named(name))
   }
 
-  private[this] def toUUIDEventEnvelopes(persistentRepr: PersistentRepr, offset: UUID): immutable.Iterable[UUIDEventEnvelope] =
+  private[this] def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
-      UUIDEventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
+      EventEnvelope(Offset.sequence(offset), persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
     }
 
-  private[this] def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
+  private[this] def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
       EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
     }
-
-  private[this] def toEventEnvelope2(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope2] =
-    adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope2(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
-    }
-
-  private[this] def eventEnvelope2toUuidEnvelope(env: EventEnvelope2): UUIDEventEnvelope =
-    UUIDEventEnvelope(
-      env.offset match {
-        case TimeBasedUUID(uuid) => uuid
-        case unexpected          => throw new IllegalArgumentException(s"Unexpected offset type $unexpected for envelope $env")
-      },
-      env.persistenceId,
-      env.sequenceNr,
-      env.event
-    )
 
   private[this] def internalUuidToOffset(uuid: UUID): Offset =
     if (uuid == firstOffset) NoOffset
@@ -623,7 +487,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * More importantly the live query has to repeatedly execute the query each `refresh-interval`,
    * because order is not defined and new `persistenceId`s may appear anywhere in the query results.
    */
-  def allPersistenceIds(): Source[String, NotUsed] =
+  override def persistenceIds(): Source[String, NotUsed] =
     persistenceIds(Some(queryPluginConfig.refreshInterval), "allPersistenceIds")
 
   /**
@@ -631,7 +495,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
    * is completed immediately when it reaches the end of the "result set". Events that are
    * stored after the query is completed are not included in the event stream.
    */
-  def currentPersistenceIds(): Source[String, NotUsed] =
+  override def currentPersistenceIds(): Source[String, NotUsed] =
     persistenceIds(None, "currentPersistenceIds")
 
   private[this] def persistenceIds(
