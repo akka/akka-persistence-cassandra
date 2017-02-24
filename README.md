@@ -12,48 +12,19 @@ Dependencies
 
 ### Latest release
 
-To include the latest release of the Cassandra plugins into your `sbt` project, add the following lines to your `build.sbt` file:
+To include the latest release of the Cassandra plugins for **Akka 2.4.x** into your `sbt` project, add the following lines to your `build.sbt` file:
 
     libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.23"
 
 This version of `akka-persistence-cassandra` depends on Akka 2.4.17. It has been published for Scala 2.11 and 2.12.
 
-It is compatible with Cassandra 3.0.0 or higher, and it is also compatible with Cassandra 2.1.6 or higher (versions < 2.1.6 have a static column bug) if you configure `cassandra-journal.cassandra-2x-compat=on` in your `application.conf`. With Cassandra 2.x compatibility some features will not be enabled, e.g. `eventsByTag`.
+To include the latest release of the Cassandra plugins for **Akka 2.5.x** into your `sbt` project, add the following lines to your `build.sbt` file:
 
-It implements the following [Persistence Queries](http://doc.akka.io/docs/akka/2.4/scala/persistence-query.html):
+    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.50-M2"
 
-* allPersistenceIds, currentPersistenceIds
-* eventsByPersistenceId, currentEventsByPersistenceId
-* eventsByTag, currentEventsByTag (only for Cassandra 3.x)
+This version of `akka-persistence-cassandra` depends on Akka 2.5-M2. It has been published for Scala 2.11 and 2.12.
 
-Migrations
-----------
-
-### Migrations from 0.11 to 0.12
-
-Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.23/src/main/resources/reference.conf):
-
-### Migrations from 0.9 to 0.10
-
-The event data, snapshot data and meta data are stored in a separate columns instead of being wrapped in blob. Run the following statements in `cqlsh`:
-
-    drop materialized view akka.eventsbytag;
-    alter table akka.messages add writer_uuid text;
-    alter table akka.messages add ser_id int;
-    alter table akka.messages add ser_manifest text;
-    alter table akka.messages add event_manifest text;
-    alter table akka.messages add event blob;
-    alter table akka_snapshot.snapshots add ser_id int;
-    alter table akka_snapshot.snapshots add ser_manifest text;
-    alter table akka_snapshot.snapshots add snapshot_data blob;
-
-### Migrations from 0.6 to 0.7
-
-Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.23/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
-
-### Migrating from 0.3.x (Akka 2.3.x)
-
-Schema and property changes mean that you can't currently upgrade from 0.3 to 0.4 SNAPSHOT and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.9/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala).
+Those versions are compatible with Cassandra 3.0.0 or higher, and it is also compatible with Cassandra 2.1.6 or higher (versions < 2.1.6 have a static column bug) if you configure `cassandra-journal.cassandra-2x-compat=on` in your `application.conf`. With Cassandra 2.x compatibility some features will not be enabled, e.g. `eventsByTag`.
 
 Journal plugin
 --------------
@@ -82,12 +53,6 @@ This will run the journal with its default settings. The default settings can be
 
 These issues are likely to be resolved in future versions of the plugin.
 
-### Persistence Query usage example 
-Obtain a stream with all events tagged with "someTag" with Persistence Query:
-
-    val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
-    queries.eventsByTag("someTag", readJournal.firstOffset)
-
 Snapshot store plugin
 ---------------------
 
@@ -103,4 +68,50 @@ To activate the snapshot-store plugin, add the following line to your Akka `appl
 
 This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.23/src/main/resources/reference.conf):
 
+Persistence Queries
+-------------------
+
+It implements the following [Persistence Queries](http://doc.akka.io/docs/akka/2.4/scala/persistence-query.html):
+
+* persistenceIds, currentPersistenceIds
+* eventsByPersistenceId, currentEventsByPersistenceId
+* eventsByTag, currentEventsByTag (only for Cassandra 3.x)
+
+Persistence Query usage example to obtain a stream with all events tagged with "someTag" with Persistence Query:
+
+    val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+    queries.eventsByTag("someTag", Offset.noOffset)
+
+Migrations
+----------
+
+### Migrations from 0.23 to 0.50
+
+The Persistence Query API changed slightly, see [migration guide for Akka 2.5](http://doc.akka.io/docs/akka/2.5-M1/project/migration-guide-2.4.x-2.5.x.html#Persistence_Query).
+
+### Migrations from 0.11 to 0.12
+
+Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.23/src/main/resources/reference.conf):
+
+### Migrations from 0.9 to 0.10
+
+The event data, snapshot data and meta data are stored in a separate columns instead of being wrapped in blob. Run the following statements in `cqlsh`:
+
+    drop materialized view akka.eventsbytag;
+    alter table akka.messages add writer_uuid text;
+    alter table akka.messages add ser_id int;
+    alter table akka.messages add ser_manifest text;
+    alter table akka.messages add event_manifest text;
+    alter table akka.messages add event blob;
+    alter table akka_snapshot.snapshots add ser_id int;
+    alter table akka_snapshot.snapshots add ser_manifest text;
+    alter table akka_snapshot.snapshots add snapshot_data blob;
+
+### Migrations from 0.6 to 0.7
+
+Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.23/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
+
+### Migrating from 0.3.x (Akka 2.3.x)
+
+Schema and property changes mean that you can't currently upgrade from 0.3 to 0.4 SNAPSHOT and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.9/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala).
 

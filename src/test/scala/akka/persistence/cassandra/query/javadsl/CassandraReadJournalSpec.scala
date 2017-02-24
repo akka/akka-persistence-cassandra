@@ -18,6 +18,7 @@ import akka.persistence.query.PersistenceQuery
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.stream.testkit.scaladsl.TestSink
+import akka.persistence.query.Offset
 
 object CassandraReadJournalSpec {
   val config = ConfigFactory.parseString(s"""
@@ -86,7 +87,7 @@ class CassandraReadJournalSpec
     }
 
     "start eventsByTag query" in {
-      val src = javaQueries.eventsByTag("a", 0L)
+      val src = javaQueries.eventsByTag("a", Offset.noOffset)
       src.asScala.map(_.persistenceId).runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("a")
@@ -95,7 +96,7 @@ class CassandraReadJournalSpec
     }
 
     "start current eventsByTag query" in {
-      val src = javaQueries.currentEventsByTag("a", 0L)
+      val src = javaQueries.currentEventsByTag("a", Offset.noOffset)
       src.asScala.map(_.persistenceId).runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("a")

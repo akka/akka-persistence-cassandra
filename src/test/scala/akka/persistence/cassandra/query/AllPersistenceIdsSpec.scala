@@ -72,7 +72,7 @@ class AllPersistenceIdsSpec
   lazy val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
-  def all(): Source[String, NotUsed] = queries.allPersistenceIds().filterNot(_ == "persistenceInit")
+  def all(): Source[String, NotUsed] = queries.persistenceIds().filterNot(_ == "persistenceInit")
 
   def current(): Source[String, NotUsed] = queries.currentPersistenceIds().filterNot(_ == "persistenceInit")
 

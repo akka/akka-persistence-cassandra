@@ -19,6 +19,7 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
+import akka.persistence.query.NoOffset
 
 object EventAdaptersReadSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
@@ -135,7 +136,7 @@ class EventAdaptersReadSpec
         case _               => ""
       })
 
-      val src = queries.currentEventsByTag("red", 0L)
+      val src = queries.currentEventsByTag("red", NoOffset)
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("d-1", "d-3", "d-5")
@@ -149,7 +150,7 @@ class EventAdaptersReadSpec
         case _               => ""
       })
 
-      val src = queries.currentEventsByTag("yellow", 0L)
+      val src = queries.currentEventsByTag("yellow", NoOffset)
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("e-1", "e-2", "e-2", "e-3")
@@ -163,7 +164,7 @@ class EventAdaptersReadSpec
         case _               => ""
       })
 
-      val src = queries.currentEventsByTag("green", 0L)
+      val src = queries.currentEventsByTag("green", NoOffset)
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("e-1", "foo-e-2", "e-3")

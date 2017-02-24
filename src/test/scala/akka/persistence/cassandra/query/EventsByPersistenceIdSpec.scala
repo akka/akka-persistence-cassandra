@@ -17,6 +17,7 @@ import org.scalatest.concurrent.ScalaFutures
 import scala.concurrent.duration._
 
 import akka.stream.testkit.scaladsl.TestSink
+import akka.persistence.query.Offset
 
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
@@ -152,9 +153,9 @@ class EventsByPersistenceIdSpec
       src.map(x => (x.persistenceId, x.sequenceNr, x.offset)).runWith(TestSink.probe[Any])
         .request(3)
         .expectNext(
-          ("h", 1, 1),
-          ("h", 2, 2),
-          ("h", 3, 3)
+          ("h", 1, Offset.sequence(1)),
+          ("h", 2, Offset.sequence(2)),
+          ("h", 3, Offset.sequence(3))
         )
         .expectComplete()
     }
