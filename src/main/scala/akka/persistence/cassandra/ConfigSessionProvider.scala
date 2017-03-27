@@ -19,6 +19,8 @@ import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 import com.datastax.driver.core.policies.ExponentialReconnectionPolicy
 import com.datastax.driver.core.policies.TokenAwarePolicy
 import com.typesafe.config.Config
+import com.datastax.driver.core.policies.SpeculativeExecutionPolicy
+import com.datastax.driver.core.policies.ConstantSpeculativeExecutionPolicy
 
 /**
  * Default implementation of the `SessionProvider` that is used for creating the
@@ -93,6 +95,14 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
 
   val reconnectMaxDelay: FiniteDuration = config.getDuration("reconnect-max-delay", TimeUnit.MILLISECONDS).millis
 
+  val speculativeExecution: Option[SpeculativeExecutionPolicy] =
+    config.getInt("speculative-executions") match {
+      case 0 => None
+      case n =>
+        val delayMs = config.getDuration("speculative-executions-delay", MILLISECONDS)
+        Some(new ConstantSpeculativeExecutionPolicy(delayMs, n))
+    }
+
   def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
       val b = Cluster.builder
@@ -100,6 +110,11 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
         .withPoolingOptions(poolingOptions)
         .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
         .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
+
+      speculativeExecution match {
+        case Some(policy) => b.withSpeculativeExecutionPolicy(policy)
+        case None         =>
+      }
 
       protocolVersion match {
         case None    => b

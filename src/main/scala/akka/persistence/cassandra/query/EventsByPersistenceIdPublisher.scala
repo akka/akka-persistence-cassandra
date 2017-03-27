@@ -18,6 +18,7 @@ import com.datastax.driver.core.utils.Bytes
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ ExecutionContext, Future }
+import com.datastax.driver.core.policies.RetryPolicy
 
 private[query] object EventsByPersistenceIdPublisher {
   private[query] final case class EventsByPersistenceIdSession(
@@ -25,7 +26,8 @@ private[query] object EventsByPersistenceIdPublisher {
     selectInUseQuery:                 PreparedStatement,
     selectDeletedToQuery:             PreparedStatement,
     session:                          Session,
-    customConsistencyLevel:           Option[ConsistencyLevel]
+    customConsistencyLevel:           Option[ConsistencyLevel],
+    customRetryPolicy:                Option[RetryPolicy]
   ) extends NoSerializationVerificationNeeded {
 
     def selectEventsByPersistenceId(
@@ -48,11 +50,12 @@ private[query] object EventsByPersistenceIdPublisher {
 
     private def executeStatement(statement: Statement)(implicit ec: ExecutionContext): Future[ResultSet] =
       listenableFutureToFuture(
-        session.executeAsync(withCustomConsistencyLevel(statement))
+        session.executeAsync(withCustom(statement))
       )
 
-    private def withCustomConsistencyLevel(statement: Statement): Statement = {
-      customConsistencyLevel.foreach(consistencyLevel => statement.setConsistencyLevel(consistencyLevel))
+    private def withCustom(statement: Statement): Statement = {
+      customConsistencyLevel.foreach(statement.setConsistencyLevel)
+      customRetryPolicy.foreach(statement.setRetryPolicy)
       statement
     }
   }

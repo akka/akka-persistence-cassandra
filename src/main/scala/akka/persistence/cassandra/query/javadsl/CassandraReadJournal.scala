@@ -48,7 +48,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
   with EventsByPersistenceIdQuery
   with CurrentEventsByPersistenceIdQuery
   with EventsByTagQuery
-  with EventsByTagQuery2  
+  with EventsByTagQuery2
   with CurrentEventsByTagQuery
   with CurrentEventsByTagQuery2 {
 
@@ -125,10 +125,10 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    *
    * The stream is completed with failure if there is a failure in executing the query in the
    * backend journal.
-   */    
+   */
   override def eventsByTag(tag: String, offset: Offset): Source[EventEnvelope2, NotUsed] =
     scaladslReadJournal.eventsByTag(tag, offset).asJava
-    
+
   /**
    * `eventsByTag` is used for retrieving events that were marked with
    * a given tag, e.g. all events of an Aggregate Root type.
@@ -208,7 +208,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    */
   def eventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
     scaladslReadJournal.eventsByTag(tag, offset).asJava
-    
+
   /**
    * Same type of query as `eventsByTag` but the event stream
    * is completed immediately when it reaches the end of the "result set". Events that are
@@ -220,7 +220,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    */
   override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope2, NotUsed] =
     scaladslReadJournal.currentEventsByTag(tag, offset).asJava
-    
+
   /**
    * Same type of query as `eventsByTag` but the event stream
    * is completed immediately when it reaches the end of the "result set". Events that are

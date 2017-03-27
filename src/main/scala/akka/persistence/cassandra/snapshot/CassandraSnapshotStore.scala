@@ -22,6 +22,8 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import com.datastax.driver.core.policies.LoggingRetryPolicy
+import akka.persistence.cassandra.journal.FixedRetryPolicy
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
   val config = new CassandraSnapshotStoreConfig(context.system, cfg)
@@ -42,14 +44,26 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     init = session => executeCreateKeyspaceAndTables(session, config)
   )
 
-  private def preparedWriteSnapshot = session.prepare(writeSnapshot).map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
-  private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
-  private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
+  private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
+  private val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
+  private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.readRetries))
+
+  private def preparedWriteSnapshot = session.prepare(writeSnapshot).map(
+    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(writeRetryPolicy)
+  )
+  private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(
+    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy)
+  )
+  private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(
+    _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
+  )
   private def preparedSelectSnapshotMetadataForLoad =
     session.prepare(selectSnapshotMetadata(limit = Some(maxMetadataResultSize)))
-      .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
+      .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
   private def preparedSelectSnapshotMetadataForDelete =
-    session.prepare(selectSnapshotMetadata(limit = None)).map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
+    session.prepare(selectSnapshotMetadata(limit = None)).map(
+      _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
+    )
 
   override def preStart(): Unit = {
     // eager initialization, but not from constructor
@@ -70,11 +84,13 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     session.close()
   }
 
-  override def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = for {
-    prepStmt <- preparedSelectSnapshotMetadataForLoad
-    mds <- metadata(prepStmt, persistenceId, criteria).map(_.take(maxLoadAttempts))
-    res <- loadNAsync(mds)
-  } yield res
+  override def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = {
+    for {
+      prepStmt <- preparedSelectSnapshotMetadataForLoad
+      mds <- metadata(prepStmt, persistenceId, criteria).map(_.take(maxLoadAttempts))
+      res <- loadNAsync(mds)
+    } yield res
+  }
 
   def loadNAsync(metadata: immutable.Seq[SnapshotMetadata]): Future[Option[SelectedSnapshot]] = metadata match {
     case Seq() => Future.successful(None) // no snapshots stored
