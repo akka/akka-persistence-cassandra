@@ -132,16 +132,22 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     val boundSelectSnapshot = preparedSelectSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
     boundSelectSnapshot.flatMap(session.selectResultSet).map { rs =>
       val row = rs.one()
-      row.getBytes("snapshot") match {
-        case null =>
-          Snapshot(serialization.deserialize(
-            row.getBytes("snapshot_data").array,
-            row.getInt("ser_id"),
-            row.getString("ser_manifest")
-          ).get)
-        case bytes =>
-          // for backwards compatibility
-          serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get
+      if (row == null) {
+        // can happen since metadata and the actual snapshot might not be replicated at exactly same time
+        throw new NoSuchElementException(s"No snapshot for persistenceId [${metadata.persistenceId}] " +
+          s"with with sequenceNr [${metadata.sequenceNr}]")
+      } else {
+        row.getBytes("snapshot") match {
+          case null =>
+            Snapshot(serialization.deserialize(
+              row.getBytes("snapshot_data").array,
+              row.getInt("ser_id"),
+              row.getString("ser_manifest")
+            ).get)
+          case bytes =>
+            // for backwards compatibility
+            serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get
+        }
       }
     }
   }
