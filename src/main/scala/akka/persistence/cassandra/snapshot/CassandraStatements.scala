@@ -27,7 +27,7 @@ trait CassandraStatements {
         snapshot_data blob,
         snapshot blob,
         PRIMARY KEY (persistence_id, sequence_nr))
-        WITH CLUSTERING ORDER BY (sequence_nr DESC)
+        WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${config.gcGraceSeconds}
         AND compaction = ${config.tableCompactionStrategy.asCQL}
     """
 

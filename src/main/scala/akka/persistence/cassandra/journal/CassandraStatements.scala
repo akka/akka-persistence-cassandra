@@ -43,7 +43,7 @@ trait CassandraStatements {
         tag3 text,
         message blob,
         PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
-        WITH gc_grace_seconds =${config.gc_grace_seconds}
+        WITH gc_grace_seconds =${config.gcGraceSeconds}
         AND compaction = ${config.tableCompactionStrategy.asCQL}
     """
 

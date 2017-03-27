@@ -53,6 +53,8 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val writeRetries: Int = config.getInt("write-retries")
   val readRetries: Int = config.getInt("read-retries")
 
+  val gcGraceSeconds: Long = config.getLong("gc-grace-seconds")
+
 }
 
 object CassandraPluginConfig {

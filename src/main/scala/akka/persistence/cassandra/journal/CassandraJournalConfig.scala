@@ -16,7 +16,6 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
   val targetPartitionSize: Int = config.getInt(CassandraJournalConfig.TargetPartitionProperty)
   val maxResultSize: Int = config.getInt("max-result-size")
   val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
-  val gc_grace_seconds: Long = config.getLong("gc-grace-seconds")
   val maxMessageBatchSize = config.getInt("max-message-batch-size")
   val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
   val enableEventsByTagQuery: Boolean = !cassandra2xCompat && config.getBoolean("enable-events-by-tag-query")
