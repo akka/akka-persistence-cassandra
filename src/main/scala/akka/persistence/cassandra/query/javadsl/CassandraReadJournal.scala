@@ -11,6 +11,8 @@ import akka.persistence.query.EventEnvelope
 import akka.persistence.query.javadsl._
 import akka.stream.javadsl.Source
 import akka.persistence.cassandra.session.javadsl.CassandraSession
+import akka.persistence.query.Offset
+import akka.persistence.query.EventEnvelope2
 
 object CassandraReadJournal {
   /**
@@ -46,7 +48,9 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
   with EventsByPersistenceIdQuery
   with CurrentEventsByPersistenceIdQuery
   with EventsByTagQuery
-  with CurrentEventsByTagQuery {
+  with EventsByTagQuery2  
+  with CurrentEventsByTagQuery
+  with CurrentEventsByTagQuery2 {
 
   /**
    * Data Access Object for arbitrary queries or updates.
@@ -66,6 +70,65 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    */
   def offsetUuid(timestamp: Long): UUID = scaladslReadJournal.offsetUuid(timestamp)
 
+  /**
+   * `eventsByTag` is used for retrieving events that were marked with
+   * a given tag, e.g. all events of an Aggregate Root type.
+   *
+   * To tag events you create an `akka.persistence.journal.EventAdapter` that wraps the events
+   * in a `akka.persistence.journal.Tagged` with the given `tags`.
+   * The tags must be defined in the `tags` section of the `cassandra-journal` configuration.
+   * Max 3 tags per event is supported.
+   *
+   * You can use `NoOffset` to retrieve all events with a given tag or
+   * retrieve a subset of all events by specifying a `TimeBasedUUID` `offset`.
+   *
+   * The offset of each event is provided in the streamed envelopes returned,
+   * which makes it possible to resume the stream at a later point from a given offset.
+   *
+   * For querying events that happened after a long unix timestamp you can use [[#timeBasedUUIDFrom]]
+   * to create the offset to use with this method.
+   *
+   * In addition to the `offset` the envelope also provides `persistenceId` and `sequenceNr`
+   * for each event. The `sequenceNr` is the sequence number for the persistent actor with the
+   * `persistenceId` that persisted the event. The `persistenceId` + `sequenceNr` is an unique
+   * identifier for the event.
+   *
+   * The returned event stream is ordered by the offset (timestamp), which corresponds
+   * to the same order as the write journal stored the events, with inaccuracy due to clock skew
+   * between different nodes. The same stream elements (in same order) are returned for multiple
+   * executions of the query on a best effort basis. The query is using a Cassandra Materialized
+   * View for the query and that is eventually consistent, so different queries may see different
+   * events for the latest events, but eventually the result will be ordered by timestamp
+   * (Cassandra timeuuid column). To compensate for the the eventual consistency the query is
+   * delayed to not read the latest events, see `cassandra-query-journal.eventual-consistency-delay`
+   * in reference.conf. However, this is only best effort and in case of network partitions
+   * or other things that may delay the updates of the Materialized View the events may be
+   * delivered in different order (not strictly by their timestamp).
+   *
+   * If you use the same tag for all events for a `persistenceId` it is possible to get
+   * a more strict delivery order than otherwise. This can be useful when all events of
+   * a PersistentActor class (all events of all instances of that PersistentActor class)
+   * are tagged with the same tag. Then the events for each `persistenceId` can be delivered
+   * strictly by sequence number. If a sequence number is missing the query is delayed up
+   * to the configured `delayed-event-timeout` and if the expected event is still not
+   * found the stream is completed with failure. This means that there must not be any
+   * holes in the sequence numbers for a given tag, i.e. all events must be tagged
+   * with the same tag. Set `delayed-event-timeout` to for example 30s to enable this
+   * feature. It is disabled by default.
+   *
+   * Deleted events are also deleted from the tagged event stream.
+   *
+   * The stream is not completed when it reaches the end of the currently stored events,
+   * but it continues to push new events when new events are persisted.
+   * Corresponding query that is completed when it reaches the end of the currently
+   * stored events is provided by `currentEventsByTag`.
+   *
+   * The stream is completed with failure if there is a failure in executing the query in the
+   * backend journal.
+   */    
+  override def eventsByTag(tag: String, offset: Offset): Source[EventEnvelope2, NotUsed] =
+    scaladslReadJournal.eventsByTag(tag, offset).asJava
+    
   /**
    * `eventsByTag` is used for retrieving events that were marked with
    * a given tag, e.g. all events of an Aggregate Root type.
@@ -145,7 +208,19 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    */
   def eventsByTag(tag: String, offset: UUID): Source[UUIDEventEnvelope, NotUsed] =
     scaladslReadJournal.eventsByTag(tag, offset).asJava
-
+    
+  /**
+   * Same type of query as `eventsByTag` but the event stream
+   * is completed immediately when it reaches the end of the "result set". Events that are
+   * stored after the query is completed are not included in the event stream.
+   *
+   * Use `NoOffset` when you want all events from the beginning of time.
+   * To acquire an offset from a long unix timestamp to use with this query, you can use [[#timeBasedUUIDFrom]].
+   *
+   */
+  override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope2, NotUsed] =
+    scaladslReadJournal.currentEventsByTag(tag, offset).asJava
+    
   /**
    * Same type of query as `eventsByTag` but the event stream
    * is completed immediately when it reaches the end of the "result set". Events that are
