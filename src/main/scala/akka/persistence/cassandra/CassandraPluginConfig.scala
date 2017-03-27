@@ -49,6 +49,10 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val readConsistency: ConsistencyLevel = sessionSettings.readConsistency
   val writeConsistency: ConsistencyLevel = sessionSettings.writeConsistency
 
+  val deleteRetries: Int = config.getInt("delete-retries")
+  val writeRetries: Int = config.getInt("write-retries")
+  val readRetries: Int = config.getInt("read-retries")
+
   val blockingDispatcherId: String = config.getString("blocking-dispatcher")
 
   // FIXME temporary until we have fixed all blocking
