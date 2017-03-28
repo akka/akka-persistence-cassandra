@@ -38,7 +38,8 @@ trait CassandraRecovery extends ActorLogging {
         replayMaxResultSize,
         None,
         "asyncReplayMessages",
-        Some(config.readConsistency)
+        someReadConsistency,
+        someReadRetryPolicy
       )
       .runForeach(replayCallback)
       .map(_ => ())

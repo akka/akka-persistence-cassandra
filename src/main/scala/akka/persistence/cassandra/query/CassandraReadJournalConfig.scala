@@ -16,6 +16,7 @@ private[query] class CassandraReadJournalConfig(config: Config, writePluginConfi
   val maxBufferSize: Int = config.getInt("max-buffer-size")
   val fetchSize: Int = config.getInt("max-result-size-query")
   val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))
+  val readRetries: Int = config.getInt("read-retries")
   val firstTimeBucket: TimeBucket = TimeBucket(config.getString("first-time-bucket"))
   val eventualConsistencyDelay: FiniteDuration =
     config.getDuration("eventual-consistency-delay", MILLISECONDS).millis
@@ -28,4 +29,5 @@ private[query] class CassandraReadJournalConfig(config: Config, writePluginConfi
   val targetPartitionSize: Int = writePluginConfig.targetPartitionSize
   val table: String = writePluginConfig.table
   val pubsubMinimumInterval: Duration = writePluginConfig.pubsubMinimumInterval
+
 }

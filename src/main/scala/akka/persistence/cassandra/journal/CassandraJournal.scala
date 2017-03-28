@@ -86,14 +86,14 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   def preparedWriteMessage = session.prepare(writeMessage).map(_.setIdempotent(true))
   def preparedDeleteMessages = session.prepare(deleteMessages).map(_.setIdempotent(true))
   def preparedSelectMessages = session.prepare(selectMessages)
-    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
+    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
   def preparedCheckInUse = session.prepare(selectInUse)
     .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
   def preparedWriteInUse = session.prepare(writeInUse).map(_.setIdempotent(true))
   def preparedSelectHighestSequenceNr = session.prepare(selectHighestSequenceNr)
-    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
+    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
   def preparedSelectDeletedTo = session.prepare(selectDeletedTo)
-    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
+    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
   def preparedInsertDeletedTo = session.prepare(insertDeletedTo)
     .map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
 
@@ -119,6 +119,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
   private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
   private val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
+  private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.readRetries))
+  private[akka] val someReadRetryPolicy = Some(readRetryPolicy)
+  private[akka] val someReadConsistency = Some(config.readConsistency)
 
   override def postStop(): Unit = {
     session.close()
@@ -541,11 +544,38 @@ private[cassandra] object CassandraJournal {
   }
 }
 
+/**
+ * The retry policy that is used for reads, writes and deletes with
+ * configured number of retries before giving up.
+ * See http://docs.datastax.com/en/developer/java-driver/3.1/manual/retries/
+ */
 class FixedRetryPolicy(number: Int) extends RetryPolicy {
-  override def onUnavailable(statement: Statement, cl: ConsistencyLevel, requiredReplica: Int, aliveReplica: Int, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
-  override def onWriteTimeout(statement: Statement, cl: ConsistencyLevel, writeType: WriteType, requiredAcks: Int, receivedAcks: Int, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
-  override def onReadTimeout(statement: Statement, cl: ConsistencyLevel, requiredResponses: Int, receivedResponses: Int, dataRetrieved: Boolean, nbRetry: Int): RetryDecision = retry(cl, nbRetry)
-  override def onRequestError(statement: Statement, cl: ConsistencyLevel, cause: DriverException, nbRetry: Int): RetryDecision = tryNextHost(cl, nbRetry)
+  override def onUnavailable(statement: Statement, cl: ConsistencyLevel, requiredReplica: Int, aliveReplica: Int,
+                             nbRetry: Int): RetryDecision = {
+    // Same implementation as in DefaultRetryPolicy
+    // If this is the first retry it triggers a retry on the next host.
+    // The rationale is that the first coordinator might have been network-isolated from all other nodes (thinking
+    // they're down), but still able to communicate with the client; in that case, retrying on the same host has almost
+    // no chance of success, but moving to the next host might solve the issue.
+    if (nbRetry == 0)
+      tryNextHost(cl, nbRetry) // see DefaultRetryPolicy
+    else
+      retry(cl, nbRetry)
+  }
+
+  override def onWriteTimeout(statement: Statement, cl: ConsistencyLevel, writeType: WriteType, requiredAcks: Int,
+                              receivedAcks: Int, nbRetry: Int): RetryDecision = {
+    retry(cl, nbRetry)
+  }
+
+  override def onReadTimeout(statement: Statement, cl: ConsistencyLevel, requiredResponses: Int, receivedResponses: Int,
+                             dataRetrieved: Boolean, nbRetry: Int): RetryDecision = {
+    retry(cl, nbRetry)
+  }
+  override def onRequestError(statement: Statement, cl: ConsistencyLevel, cause: DriverException,
+                              nbRetry: Int): RetryDecision = {
+    tryNextHost(cl, nbRetry)
+  }
 
   private def retry(cl: ConsistencyLevel, nbRetry: Int): RetryDecision = {
     if (nbRetry < number) RetryDecision.retry(cl) else RetryDecision.rethrow()
