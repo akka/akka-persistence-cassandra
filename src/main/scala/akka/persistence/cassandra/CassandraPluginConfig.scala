@@ -53,10 +53,6 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val writeRetries: Int = config.getInt("write-retries")
   val readRetries: Int = config.getInt("read-retries")
 
-  val blockingDispatcherId: String = config.getString("blocking-dispatcher")
-
-  // FIXME temporary until we have fixed all blocking
-  private[cassandra] val blockingTimeout: FiniteDuration = 10.seconds
 }
 
 object CassandraPluginConfig {
