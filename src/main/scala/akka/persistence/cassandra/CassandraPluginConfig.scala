@@ -49,10 +49,12 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val readConsistency: ConsistencyLevel = sessionSettings.readConsistency
   val writeConsistency: ConsistencyLevel = sessionSettings.writeConsistency
 
-  val blockingDispatcherId: String = config.getString("blocking-dispatcher")
+  val deleteRetries: Int = config.getInt("delete-retries")
+  val writeRetries: Int = config.getInt("write-retries")
+  val readRetries: Int = config.getInt("read-retries")
 
-  // FIXME temporary until we have fixed all blocking
-  private[cassandra] val blockingTimeout: FiniteDuration = 10.seconds
+  val gcGraceSeconds: Long = config.getLong("gc-grace-seconds")
+
 }
 
 object CassandraPluginConfig {

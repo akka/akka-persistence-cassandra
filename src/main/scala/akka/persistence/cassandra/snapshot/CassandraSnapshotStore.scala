@@ -22,6 +22,10 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import com.datastax.driver.core.policies.LoggingRetryPolicy
+import akka.persistence.cassandra.journal.FixedRetryPolicy
+import akka.stream.scaladsl.Sink
+import akka.stream.ActorMaterializer
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
   val config = new CassandraSnapshotStoreConfig(context.system, cfg)
@@ -30,7 +34,8 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   import CassandraSnapshotStore._
   import config._
   import context.dispatcher
-  val blockingDispatcher = context.system.dispatchers.lookup(config.blockingDispatcherId)
+
+  private val someMaxLoadAttempts = Some(config.maxLoadAttempts)
 
   val session = new CassandraSession(
     context.system,
@@ -42,14 +47,29 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     init = session => executeCreateKeyspaceAndTables(session, config)
   )
 
-  private def preparedWriteSnapshot = session.prepare(writeSnapshot).map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
-  private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
-  private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
-  private def preparedSelectSnapshotMetadataForLoad =
-    session.prepare(selectSnapshotMetadata(limit = Some(maxMetadataResultSize)))
-      .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
-  private def preparedSelectSnapshotMetadataForDelete =
-    session.prepare(selectSnapshotMetadata(limit = None)).map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
+  private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
+  private val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
+  private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.readRetries))
+
+  private def preparedWriteSnapshot = session.prepare(writeSnapshot).map(
+    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(writeRetryPolicy)
+  )
+  private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(
+    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy)
+  )
+  private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(
+    _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
+  )
+  private def preparedSelectSnapshotMetadata =
+    session.prepare(selectSnapshotMetadata(limit = None)).map(
+      _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
+    )
+  private def preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit =
+    session.prepare(selectSnapshotMetadata(limit = Some(maxLoadAttempts))).map(
+      _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
+    )
+
+  private implicit val materializer = ActorMaterializer()
 
   override def preStart(): Unit = {
     // eager initialization, but not from constructor
@@ -62,19 +82,27 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
       preparedWriteSnapshot
       preparedDeleteSnapshot
       preparedSelectSnapshot
-      preparedSelectSnapshotMetadataForLoad
-      preparedSelectSnapshotMetadataForDelete
+      preparedSelectSnapshotMetadata
+      preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
   }
 
   override def postStop(): Unit = {
     session.close()
   }
 
-  override def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = for {
-    prepStmt <- preparedSelectSnapshotMetadataForLoad
-    mds <- metadata(prepStmt, persistenceId, criteria).map(_.take(maxLoadAttempts))
-    res <- loadNAsync(mds)
-  } yield res
+  override def loadAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = {
+    // The normal case is that timestamp is not specified (Long.MaxValue) in the criteria and then we can
+    // use a select stmt with LIMIT if maxLoadAttempts, otherwise the result is iterated and
+    // non-matching timestamps are discarded.
+    val prepStmt =
+      if (criteria.maxTimestamp == Long.MaxValue) preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
+      else preparedSelectSnapshotMetadata
+    for {
+      p <- prepStmt
+      mds <- metadata(p, persistenceId, criteria, someMaxLoadAttempts)
+      res <- loadNAsync(mds)
+    } yield res
+  }
 
   def loadNAsync(metadata: immutable.Seq[SnapshotMetadata]): Future[Option[SelectedSnapshot]] = metadata match {
     case Seq() => Future.successful(None) // no snapshots stored
@@ -104,16 +132,22 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     val boundSelectSnapshot = preparedSelectSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
     boundSelectSnapshot.flatMap(session.selectResultSet).map { rs =>
       val row = rs.one()
-      row.getBytes("snapshot") match {
-        case null =>
-          Snapshot(serialization.deserialize(
-            row.getBytes("snapshot_data").array,
-            row.getInt("ser_id"),
-            row.getString("ser_manifest")
-          ).get)
-        case bytes =>
-          // for backwards compatibility
-          serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get
+      if (row == null) {
+        // can happen since metadata and the actual snapshot might not be replicated at exactly same time
+        throw new NoSuchElementException(s"No snapshot for persistenceId [${metadata.persistenceId}] " +
+          s"with with sequenceNr [${metadata.sequenceNr}]")
+      } else {
+        row.getBytes("snapshot") match {
+          case null =>
+            Snapshot(serialization.deserialize(
+              row.getBytes("snapshot_data").array,
+              row.getInt("ser_id"),
+              row.getString("ser_manifest")
+            ).get)
+          case bytes =>
+            // for backwards compatibility
+            serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get
+        }
       }
     }
   }
@@ -146,8 +180,8 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   }
 
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
-    preparedSelectSnapshotMetadataForDelete.flatMap { prepStmt =>
-      metadata(prepStmt, persistenceId, criteria).flatMap { mds =>
+    preparedSelectSnapshotMetadata.flatMap { prepStmt =>
+      metadata(prepStmt, persistenceId, criteria, limit = None).flatMap { mds =>
         val boundStatements = mds.map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
         Future.sequence(boundStatements).flatMap { stmts =>
           executeBatch(batch => stmts.foreach(batch.add))
@@ -190,44 +224,16 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     }
   }
 
-  private def metadata(prepStmt: PreparedStatement, persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Vector[SnapshotMetadata]] = {
-    // TODO the RowIterator is using some blocking, would benefit from a rewrite
-    Future {
-      new RowIterator(prepStmt, persistenceId, criteria.maxSequenceNr).map { row =>
-        SnapshotMetadata(row.getString("persistence_id"), row.getLong("sequence_nr"), row.getLong("timestamp"))
-      }.dropWhile(_.timestamp > criteria.maxTimestamp).toVector
-    }(blockingDispatcher)
-  }
+  private def metadata(prepStmt: PreparedStatement, persistenceId: String, criteria: SnapshotSelectionCriteria,
+                       limit: Option[Int]): Future[immutable.Seq[SnapshotMetadata]] = {
+    val boundStmt = prepStmt.bind(persistenceId, criteria.maxSequenceNr: JLong)
+    val source = session.select(boundStmt)
+      .map(row => SnapshotMetadata(row.getString("persistence_id"), row.getLong("sequence_nr"), row.getLong("timestamp")))
+      .dropWhile(_.timestamp > criteria.maxTimestamp)
 
-  private class RowIterator(prepStmt: PreparedStatement, persistenceId: String, maxSequenceNr: Long) extends Iterator[Row] {
-    var currentSequenceNr = maxSequenceNr
-    var rowCount = 0
-
-    // we know that the session is initialized, since we got the prepStmt
-    val ses = Await.result(session.underlying(), config.blockingTimeout)
-
-    // FIXME more blocking
-    var iter = newIter()
-    def newIter() = ses.execute(prepStmt.bind(persistenceId, currentSequenceNr: JLong)).iterator
-
-    @annotation.tailrec
-    final def hasNext: Boolean =
-      if (iter.hasNext)
-        true
-      else if (rowCount < maxMetadataResultSize)
-        false
-      else {
-        rowCount = 0
-        currentSequenceNr -= 1
-        iter = newIter()
-        hasNext
-      }
-
-    def next(): Row = {
-      val row = iter.next()
-      currentSequenceNr = row.getLong("sequence_nr")
-      rowCount += 1
-      row
+    limit match {
+      case Some(n) => source.take(n.toLong).runWith(Sink.seq)
+      case None    => source.runWith(Sink.seq)
     }
   }
 

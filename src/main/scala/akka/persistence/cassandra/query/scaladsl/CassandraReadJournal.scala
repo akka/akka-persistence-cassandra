@@ -34,6 +34,9 @@ import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core.{ ConsistencyLevel, PreparedStatement, Session }
 import com.typesafe.config.Config
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import com.datastax.driver.core.policies.LoggingRetryPolicy
+import akka.persistence.cassandra.journal.FixedRetryPolicy
+import com.datastax.driver.core.policies.RetryPolicy
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -120,31 +123,38 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   )
   )
 
+  private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(queryPluginConfig.readRetries))
+
   private def preparedSelectEventsByTag(tagId: Int): Future[PreparedStatement] = {
     require(tagId <= writePluginConfig.maxTagId)
     session.prepare(queryStatements.selectEventsByTag(tagId))
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
+        .setRetryPolicy(readRetryPolicy))
   }
 
   private def preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
     session
       .prepare(writeStatements.selectMessages)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
+        .setRetryPolicy(readRetryPolicy))
 
   private def preparedSelectInUse: Future[PreparedStatement] =
     session
       .prepare(writeStatements.selectInUse)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
+        .setRetryPolicy(readRetryPolicy))
 
   private def preparedSelectDeletedTo: Future[PreparedStatement] =
     session
       .prepare(writeStatements.selectDeletedTo)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
+        .setRetryPolicy(readRetryPolicy))
 
   private def preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
     session
       .prepare(queryStatements.selectDistinctPersistenceIds)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
+        .setRetryPolicy(readRetryPolicy))
 
   private def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
     for {
@@ -412,7 +422,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     fetchSize:              Int,
     refreshInterval:        Option[FiniteDuration],
     name:                   String,
-    customConsistencyLevel: Option[ConsistencyLevel] = None
+    customConsistencyLevel: Option[ConsistencyLevel] = None,
+    customRetryPolicy:      Option[RetryPolicy]      = None
   ): Source[PersistentRepr, NotUsed] = {
 
     createSource[PersistentRepr, CombinedEventsByPersistenceIdStmts](combinedEventsByPersistenceIdStmts, (s, c) =>
@@ -429,7 +440,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
             c.preparedSelectInUse,
             c.preparedSelectDeletedTo,
             s,
-            customConsistencyLevel
+            customConsistencyLevel,
+            customRetryPolicy
           ),
           queryPluginConfig
         )
