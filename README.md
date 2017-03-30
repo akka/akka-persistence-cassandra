@@ -20,7 +20,7 @@ This version of `akka-persistence-cassandra` depends on Akka 2.4.17. It has been
 
 To include the latest release of the Cassandra plugins for **Akka 2.5.x** into your `sbt` project, add the following lines to your `build.sbt` file:
 
-    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.50-RC1"
+    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.50-RC2"
 
 This version of `akka-persistence-cassandra` depends on Akka 2.5-M2. It has been published for Scala 2.11 and 2.12.
 
