@@ -80,6 +80,7 @@ object EventsByTagSpec {
     """).withFallback(CassandraLifecycle.config)
 
   val strictConfig = ConfigFactory.parseString(s"""
+    akka.loglevel = DEBUG
     cassandra-query-journal.delayed-event-timeout = 3s
     """).withFallback(config)
 
@@ -1055,6 +1056,130 @@ class EventsByTag2StrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTag
       writeTestEvent(t3, pr3, Set("T6"))
 
       probe.expectNextPF { case e @ EventEnvelope2(_, "p1", 2L, "p1-e2") => e }
+
+      probe.cancel()
+    }
+
+    "find delayed events 2" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+
+      val t2 = t1.plusSeconds(1)
+      val eventA1 = PersistentRepr("A1", 1L, "a", "", writerUuid = w1)
+      writeTestEvent(t2, eventA1, Set("T7"))
+
+      val src = queries.eventsByTag(tag = "T7", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "a", 1L, "A1") => e }
+
+      // delayed, timestamp is before A1
+      val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
+      writeTestEvent(t1, eventB1, Set("T7"))
+      val t3 = t1.plusSeconds(2)
+      val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
+      writeTestEvent(t3, eventB2, Set("T7"))
+
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 1L, "B1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "B2") => e }
+
+      probe.cancel()
+    }
+
+    "find delayed events 3" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+
+      val eventB0 = PersistentRepr("B0", 1L, "b", "", writerUuid = w2)
+      writeTestEvent(t1.minusSeconds(1), eventB0, Set("T8"))
+
+      val t2 = t1.plusSeconds(1)
+      val eventA1 = PersistentRepr("A1", 1L, "a", "", writerUuid = w1)
+      writeTestEvent(t2, eventA1, Set("T8"))
+
+      val src = queries.eventsByTag(tag = "T8", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 1L, "B0") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "a", 1L, "A1") => e }
+
+      // delayed, timestamp is before A1
+      val eventB1 = PersistentRepr("B1", 2L, "b", "", writerUuid = w2)
+      writeTestEvent(t1, eventB1, Set("T8"))
+      val t3 = t1.plusSeconds(2)
+      val eventB2 = PersistentRepr("B2", 3L, "b", "", writerUuid = w2)
+      writeTestEvent(t3, eventB2, Set("T8"))
+
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "B1") => e }
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 3L, "B2") => e }
+
+      probe.cancel()
+    }
+
+    "find delayed events from offset" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+
+      val eventA1 = PersistentRepr("A1", 1L, "a", "", writerUuid = w1)
+      writeTestEvent(t1.plusSeconds(2), eventA1, Set("T9"))
+
+      val src1 = queries.eventsByTag(tag = "T9", offset = NoOffset)
+      val probe1 = src1.runWith(TestSink.probe[Any])
+      probe1.request(10)
+      val offs = probe1.expectNextPF { case e @ EventEnvelope2(_, "a", 1L, "A1") => e }.offset.asInstanceOf[TimeBasedUUID]
+      probe1.cancel()
+
+      // start a new query from the offset
+      val src2 = queries.eventsByTag(tag = "T9", offset = offs)
+      val probe2 = src2.runWith(TestSink.probe[Any])
+      probe2.request(10)
+
+      // delayed, timestamp is before A1, i.e. before the offset
+      val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
+      writeTestEvent(t1.plusSeconds(1), eventB1, Set("T9"))
+      val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
+      writeTestEvent(t1.plusSeconds(3), eventB2, Set("T9"))
+
+      probe2.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "B2") => e }
+
+      probe2.cancel()
+    }
+
+    "find delayed events when many other events" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+
+      (1L to 100L).foreach { n =>
+        val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
+        writeTestEvent(t1.plus(n, ChronoUnit.MILLIS), eventA, Set("T10"))
+      }
+
+      val src = queries.eventsByTag(tag = "T10", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(1000)
+      probe.expectNextN(100)
+
+      val t2 = t1.plusSeconds(1)
+      (101L to 200L).foreach { n =>
+        val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
+        writeTestEvent(t2.plus(n, ChronoUnit.MILLIS), eventA, Set("T10"))
+      }
+      probe.expectNextN(100)
+
+      // delayed, timestamp is before A101 but after A100
+      val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
+      writeTestEvent(t2.minus(100, ChronoUnit.MILLIS), eventB1, Set("T10"))
+
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 1L, "B1") => e }
+      probe.expectNoMsg(2.second)
+
+      val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
+      writeTestEvent(t2.plusSeconds(1), eventB2, Set("T10"))
+      probe.expectNextPF { case e @ EventEnvelope2(_, "b", 2L, "B2") => e }
 
       probe.cancel()
     }

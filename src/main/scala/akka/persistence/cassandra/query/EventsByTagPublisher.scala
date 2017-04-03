@@ -39,10 +39,10 @@ private[query] object EventsByTagPublisher {
 
   private[query] case object Continue extends DeadLetterSuppression
 
-  private[query] case class ReplayDone(count: Int, seqNumbers: Option[SequenceNumbers], highest: UUID)
+  private[query] case class ReplayDone(retrievedCount: Int, deliveredCount: Int, seqNumbers: Option[SequenceNumbers], highest: UUID)
     extends DeadLetterSuppression
   private[query] case class ReplayAborted(
-    seqNumbers: Option[SequenceNumbers], persistenceId: String, expectedSeqNr: Long, gotSeqNr: Long
+    seqNumbers: Option[SequenceNumbers], persistenceId: String, expectedSeqNr: Option[Long], gotSeqNr: Long
   )
     extends DeadLetterSuppression
   private[query] final case class ReplayFailed(cause: Throwable)
@@ -83,7 +83,9 @@ private[query] class EventsByTagPublisher(
     if (strictBySeqNumber) Some(SequenceNumbers.empty)
     else None
   var abortDeadline: Option[Deadline] = None
+  val lookForMissingDuration: FiniteDuration = (settings.delayedEventTimeout / 2).min(20.seconds)
   var lookForMissingDeadline: Deadline = nextLookForMissingDeadline()
+  var backtracking = false
   var replayCountZero = false
 
   val tickTask =
@@ -121,13 +123,11 @@ private[query] class EventsByTagPublisher(
       if (compare(fromOffset, backFromOffset) >= 0) fromOffset
       else backFromOffset
     currTimeBucket = TimeBucket(currOffset)
+    backtracking = true
   }
 
-  def isBacktracking: Boolean =
-    compare(currOffset, highestOffset) < 0
-
   def nextLookForMissingDeadline(): Deadline =
-    Deadline.now + (settings.delayedEventTimeout / 2)
+    Deadline.now + lookForMissingDuration
 
   // exceptions from Fetcher
   override val supervisorStrategy = OneForOneStrategy(loggingEnabled = false) {
@@ -147,7 +147,7 @@ private[query] class EventsByTagPublisher(
 
   def idle: Receive = {
     case Continue =>
-      if (strictBySeqNumber && !isBacktracking && lookForMissingDeadline.isOverdue()) {
+      if (strictBySeqNumber && !backtracking && lookForMissingDeadline.isOverdue()) {
         // look for delayed events
         goBack()
         lookForMissingDeadline = nextLookForMissingDeadline()
@@ -170,7 +170,7 @@ private[query] class EventsByTagPublisher(
   }
 
   def timeForReplay: Boolean =
-    !isToOffsetDone && (isBacktracking || buf.isEmpty || buf.size <= maxBufferSize / 2)
+    !isToOffsetDone && (backtracking || buf.isEmpty || buf.size <= maxBufferSize / 2)
 
   def isToOffsetDone: Boolean = toOffset match {
     case None       => false
@@ -189,8 +189,10 @@ private[query] class EventsByTagPublisher(
     }
   }
 
+  private def backtrackingLog: String =
+    if (backtracking) "backtracking " else ""
+
   def replay(): Unit = {
-    val backtracking = isBacktracking
     val limit =
       if (backtracking) maxBufferSize
       else maxBufferSize - buf.size
@@ -199,8 +201,8 @@ private[query] class EventsByTagPublisher(
       else UUIDs.endOf(System.currentTimeMillis() - eventualConsistencyDelayMillis)
     if (log.isDebugEnabled)
       log.debug(
-        s"${if (backtracking) "backtracking " else ""}query for tag [{}] from [{}] [{}] limit [{}]",
-        tag, currTimeBucket, currOffset, limit
+        s"${backtrackingLog}query for tag [{}] from [{}] [{}] limit [{}]",
+        tag, currTimeBucket, s"$currOffset (${UUIDs.unixTimestamp(currOffset)})", limit
       )
     context.actorOf(EventsByTagFetcher.props(tag, currTimeBucket, currOffset, toOffs, limit, backtracking,
       self, preparedSelect, seqNumbers, settings))
@@ -218,16 +220,23 @@ private[query] class EventsByTagPublisher(
         buf :+= env
       deliverBuf()
 
-    case ReplayDone(count, seqN, highest) =>
-      log.debug("query chunk done for tag [{}], timBucket [{}], count [{}]", tag, currTimeBucket, count)
+    case ReplayDone(retrievedCount, deliveredCount, seqN, highest) =>
+      if (log.isDebugEnabled)
+        log.debug(
+          s"${backtrackingLog}query chunk done for tag [{}], timBucket [{}], count [{}] of [{}]",
+          tag, currTimeBucket, deliveredCount, retrievedCount
+        )
       seqNumbers = seqN
       currOffset = highest
-      if (currOffset == highestOffset)
-        abortDeadline = None // back on track again
+      if (currOffset == highestOffset) {
+        // back on track again
+        abortDeadline = None
+        backtracking = false
+      }
 
       deliverBuf()
 
-      if (count == 0) {
+      if (retrievedCount == 0) {
         if (isTimeBucketBeforeToday()) {
           nextTimeBucket()
           self ! Continue // more to fetch
@@ -245,8 +254,12 @@ private[query] class EventsByTagPublisher(
     case ReplayAborted(seqN, pid, expectedSeqNr, gotSeqNr) =>
       // this will only happen when delayedEventTimeout is > 0s
       seqNumbers = seqN
-      def logMsg = s"query chunk aborted for tag [$tag], timBucket [$currTimeBucket], " +
-        s" expected sequence number [$expectedSeqNr] for [$pid], but got [$gotSeqNr]"
+      def logMsg = expectedSeqNr match {
+        case None => s"${backtrackingLog}query chunk aborted for tag [$tag], timBucket [$currTimeBucket], " +
+          s" due to possibly first event for [$pid], got sequence number [$gotSeqNr]"
+        case Some(expected) => s"${backtrackingLog}query chunk aborted for tag [$tag], timBucket [$currTimeBucket], " +
+          s" due to missing event for [$pid], expected sequence number [$expected], but got [$gotSeqNr]"
+      }
       abortDeadline match {
         case Some(deadline) if deadline.isOverdue =>
           val m = logMsg
@@ -259,10 +272,14 @@ private[query] class EventsByTagPublisher(
           // go back in history and look for missing sequence numbers
           goBack()
           context.become(idle)
+          if (expectedSeqNr.isEmpty) {
+            // start the backtracking query immediately when aborted due to possibly first event
+            self ! Continue
+          }
       }
 
     case ReplayFailed(cause) =>
-      log.debug("query failed for tag [{}], due to [{}]", tag, cause.getMessage)
+      log.debug(s"${backtrackingLog}query failed for tag [{}], due to [{}]", tag, cause.getMessage)
       deliverBuf()
       onErrorThenStop(cause)
 
