@@ -26,6 +26,7 @@ import com.datastax.driver.core.policies.LoggingRetryPolicy
 import akka.persistence.cassandra.journal.FixedRetryPolicy
 import akka.stream.scaladsl.Sink
 import akka.stream.ActorMaterializer
+import java.util.NoSuchElementException
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
   val config = new CassandraSnapshotStoreConfig(context.system, cfg)
@@ -109,6 +110,11 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     case md +: mds => load1Async(md) map {
       case Snapshot(s) => Some(SelectedSnapshot(md, s))
     } recoverWith {
+      case e: NoSuchElementException if metadata.size == 1 =>
+        // Thrown load1Async when snapshot couldn't be found, which can happen since metadata and the
+        // actual snapshot might not be replicated at exactly same time.
+        // Treat this as if there were no snapshots.
+        Future.successful(None)
       case e =>
         if (mds.isEmpty) {
           log.warning(
@@ -133,7 +139,8 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     boundSelectSnapshot.flatMap(session.selectResultSet).map { rs =>
       val row = rs.one()
       if (row == null) {
-        // can happen since metadata and the actual snapshot might not be replicated at exactly same time
+        // Can happen since metadata and the actual snapshot might not be replicated at exactly same time.
+        // Handled by loadNAsync.
         throw new NoSuchElementException(s"No snapshot for persistenceId [${metadata.persistenceId}] " +
           s"with with sequenceNr [${metadata.sequenceNr}]")
       } else {
