@@ -61,7 +61,8 @@ private[query] class EventsByTagFetcher(
   }
 
   var highestOffset: UUID = fromOffset
-  var count = 0
+  var retrievedCount = 0
+  var deliveredCount = 0
   var seqNumbers = seqN
 
   override def preStart(): Unit = {
@@ -90,7 +91,7 @@ private[query] class EventsByTagFetcher(
 
   def continue(resultSet: ResultSet): Unit = {
     if (resultSet.isExhausted()) {
-      replyTo ! ReplayDone(count, seqNumbers, highestOffset)
+      replyTo ! ReplayDone(retrievedCount, deliveredCount, seqNumbers, highestOffset)
       context.stop(self)
     } else {
 
@@ -99,7 +100,7 @@ private[query] class EventsByTagFetcher(
           val more: Future[ResultSet] = resultSet.fetchMoreResults()
           more.map(_ => Fetched).pipeTo(self)
         } else {
-          count += 1
+          retrievedCount += 1
           val row = resultSet.one()
           val pid = row.getString("persistence_id")
           val seqNr = row.getLong("sequence_nr")
@@ -113,18 +114,33 @@ private[query] class EventsByTagFetcher(
 
           seqNumbers match {
             case None =>
+              deliveredCount += 1
               replyTo ! UUIDPersistentRepr(offs, toPersistentRepr(row, pid, seqNr))
               loop(n - 1)
 
             case Some(s) =>
               s.isNext(pid, seqNr) match {
-                case SequenceNumbers.Yes | SequenceNumbers.PossiblyFirst =>
+                case SequenceNumbers.Yes =>
                   seqNumbers = Some(s.updated(pid, seqNr))
+                  deliveredCount += 1
                   replyTo ! UUIDPersistentRepr(offs, toPersistentRepr(row, pid, seqNr))
                   loop(n - 1)
 
+                case SequenceNumbers.PossiblyFirst =>
+                  if (backtracking) {
+                    // when in backtracking mode we use the seen sequence number as the starting point
+                    seqNumbers = Some(s.updated(pid, seqNr))
+                    deliveredCount += 1
+                    replyTo ! UUIDPersistentRepr(offs, toPersistentRepr(row, pid, seqNr))
+                    loop(n - 1)
+                  } else {
+                    // otherwise we need to go back and try to find earlier event
+                    replyTo ! ReplayAborted(seqNumbers, pid, expectedSeqNr = None, gotSeqNr = seqNr)
+                    // end loop
+                  }
+
                 case SequenceNumbers.After =>
-                  replyTo ! ReplayAborted(seqNumbers, pid, s.get(pid) + 1, seqNr)
+                  replyTo ! ReplayAborted(seqNumbers, pid, expectedSeqNr = Some(s.get(pid) + 1), gotSeqNr = seqNr)
                 // end loop
 
                 case SequenceNumbers.Before =>
