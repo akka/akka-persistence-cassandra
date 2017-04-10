@@ -28,6 +28,8 @@ import akka.persistence.cassandra.journal.TimeBucket
 import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.pubsub.DistributedPubSubMediator
 import akka.persistence.cassandra.PreparedStatementEnvelope
+import java.time.format.DateTimeFormatter
+import java.time.Instant
 
 private[query] object EventsByTagPublisher {
 
@@ -39,7 +41,8 @@ private[query] object EventsByTagPublisher {
 
   private[query] case object Continue extends DeadLetterSuppression
 
-  private[query] case class ReplayDone(retrievedCount: Int, deliveredCount: Int, seqNumbers: Option[SequenceNumbers], highest: UUID)
+  private[query] case class ReplayDone(retrievedCount: Int, deliveredCount: Int, seqNumbers: Option[SequenceNumbers],
+                                       highest: UUID, mightBeMore: Boolean)
     extends DeadLetterSuppression
   private[query] case class ReplayAborted(
     seqNumbers: Option[SequenceNumbers], persistenceId: String, expectedSeqNr: Option[Long], gotSeqNr: Long
@@ -47,6 +50,20 @@ private[query] object EventsByTagPublisher {
     extends DeadLetterSuppression
   private[query] final case class ReplayFailed(cause: Throwable)
     extends DeadLetterSuppression with NoSerializationVerificationNeeded
+
+  private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+  private def formatOffset(uuid: UUID): String = {
+    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(UUIDs.unixTimestamp(uuid)), ZoneOffset.UTC)
+    s"$uuid (${timestampFormatter.format(time)})"
+  }
+
+  private[query] sealed trait BacktrackingMode extends NoSerializationVerificationNeeded
+  private[query] case object NoBacktracking extends BacktrackingMode
+  private[query] case object LookingForDelayed extends BacktrackingMode
+  private[query] final case class LookingForMissing(
+    toOffset: UUID, abortDeadLine: Deadline
+  ) extends BacktrackingMode
 
 }
 
@@ -82,10 +99,9 @@ private[query] class EventsByTagPublisher(
   var seqNumbers: Option[SequenceNumbers] =
     if (strictBySeqNumber) Some(SequenceNumbers.empty)
     else None
-  var abortDeadline: Option[Deadline] = None
-  val lookForMissingDuration: FiniteDuration = (settings.delayedEventTimeout / 2).min(20.seconds)
-  var lookForMissingDeadline: Deadline = nextLookForMissingDeadline()
-  var backtracking = false
+  val lookForDelayedDuration: FiniteDuration = (settings.delayedEventTimeout / 2).min(20.seconds)
+  var lookForDelayedDeadline: Deadline = nextLookForDelayedDeadline()
+  private var backtrackingMode: BacktrackingMode = NoBacktracking
   var replayCountZero = false
 
   val tickTask =
@@ -116,18 +132,32 @@ private[query] class EventsByTagPublisher(
   def isTimeBucketBeforeToday(): Boolean =
     currTimeBucket.isBefore(today())
 
-  def goBack(): Unit = {
+  def backtracking: Boolean = backtrackingMode match {
+    case NoBacktracking       => false
+    case LookingForDelayed    => true
+    case _: LookingForMissing => true
+  }
+
+  def goBack(lookForMissing: Boolean): Unit = {
     val timestamp = UUIDs.unixTimestamp(currOffset) - settings.delayedEventTimeout.toMillis
     val backFromOffset = UUIDs.startOf(timestamp)
     currOffset =
       if (compare(fromOffset, backFromOffset) >= 0) fromOffset
       else backFromOffset
     currTimeBucket = TimeBucket(currOffset)
-    backtracking = true
+    backtrackingMode match {
+      case LookingForMissing(_, _) => // already in that mode
+      case _ =>
+        if (lookForMissing) {
+          val toOffs = UUIDs.endOf(System.currentTimeMillis() - eventualConsistencyDelayMillis)
+          backtrackingMode = LookingForMissing(toOffs, Deadline.now + settings.delayedEventTimeout)
+        } else
+          backtrackingMode = LookingForDelayed
+    }
   }
 
-  def nextLookForMissingDeadline(): Deadline =
-    Deadline.now + lookForMissingDuration
+  def nextLookForDelayedDeadline(): Deadline =
+    Deadline.now + lookForDelayedDuration
 
   // exceptions from Fetcher
   override val supervisorStrategy = OneForOneStrategy(loggingEnabled = false) {
@@ -147,10 +177,10 @@ private[query] class EventsByTagPublisher(
 
   def idle: Receive = {
     case Continue =>
-      if (strictBySeqNumber && !backtracking && lookForMissingDeadline.isOverdue()) {
+      if (strictBySeqNumber && !backtracking && lookForDelayedDeadline.isOverdue()) {
         // look for delayed events
-        goBack()
-        lookForMissingDeadline = nextLookForMissingDeadline()
+        goBack(lookForMissing = false)
+        lookForDelayedDeadline = nextLookForDelayedDeadline()
       }
       if (timeForReplay)
         replay()
@@ -189,23 +219,30 @@ private[query] class EventsByTagPublisher(
     }
   }
 
-  private def backtrackingLog: String =
-    if (backtracking) "backtracking " else ""
+  private def backtrackingLog: String = backtrackingMode match {
+    case NoBacktracking       => ""
+    case LookingForDelayed    => "backtracking delayed "
+    case _: LookingForMissing => "backtracking missing "
+  }
 
   def replay(): Unit = {
     val limit =
       if (backtracking) maxBufferSize
       else maxBufferSize - buf.size
-    val toOffs =
-      if (backtracking && abortDeadline.isEmpty) highestOffset
-      else UUIDs.endOf(System.currentTimeMillis() - eventualConsistencyDelayMillis)
+    val toOffs = backtrackingMode match {
+      case NoBacktracking               => UUIDs.endOf(System.currentTimeMillis() - eventualConsistencyDelayMillis)
+      case LookingForDelayed            => highestOffset
+      case LookingForMissing(toOffs, _) => toOffs
+    }
+
     if (log.isDebugEnabled)
       log.debug(
         s"${backtrackingLog}query for tag [{}] from [{}] [{}] limit [{}]",
-        tag, currTimeBucket, s"$currOffset (${UUIDs.unixTimestamp(currOffset)})", limit
+        tag, currTimeBucket, formatOffset(currOffset), limit
       )
-    context.actorOf(EventsByTagFetcher.props(tag, currTimeBucket, currOffset, toOffs, limit, backtracking,
-      self, preparedSelect, seqNumbers, settings))
+
+    context.actorOf(EventsByTagFetcher.props(tag, currTimeBucket, currOffset, toOffs, limit,
+      backtrackingMode, self, preparedSelect, seqNumbers, settings))
     context.become(replaying(limit))
   }
 
@@ -220,7 +257,7 @@ private[query] class EventsByTagPublisher(
         buf :+= env
       deliverBuf()
 
-    case ReplayDone(retrievedCount, deliveredCount, seqN, highest) =>
+    case ReplayDone(retrievedCount, deliveredCount, seqN, highest, mightBeMore) =>
       if (log.isDebugEnabled)
         log.debug(
           s"${backtrackingLog}query chunk done for tag [{}], timBucket [{}], count [{}] of [{}]",
@@ -228,25 +265,18 @@ private[query] class EventsByTagPublisher(
         )
       seqNumbers = seqN
       currOffset = highest
-      if (currOffset == highestOffset) {
-        // back on track again
-        abortDeadline = None
-        backtracking = false
-      }
+      replayCountZero = retrievedCount == 0
 
       deliverBuf()
 
-      if (retrievedCount == 0) {
-        if (isTimeBucketBeforeToday()) {
-          nextTimeBucket()
-          self ! Continue // more to fetch
-        } else {
-          replayCountZero = true
-          stopIfDone()
-        }
+      if (mightBeMore) {
+        self ! Continue // fetched limit, more to fetch
+      } else if (isTimeBucketBeforeToday()) {
+        nextTimeBucket()
+        self ! Continue // fetch more from next time bucket
       } else {
-        replayCountZero = false
-        self ! Continue // more to fetch
+        backtrackingMode = NoBacktracking
+        stopIfDone()
       }
 
       context.become(idle)
@@ -260,17 +290,15 @@ private[query] class EventsByTagPublisher(
         case Some(expected) => s"${backtrackingLog}query chunk aborted for tag [$tag], timBucket [$currTimeBucket], " +
           s" due to missing event for [$pid], expected sequence number [$expected], but got [$gotSeqNr]"
       }
-      abortDeadline match {
-        case Some(deadline) if deadline.isOverdue =>
+      backtrackingMode match {
+        case LookingForMissing(_, deadline) if deadline.isOverdue =>
           val m = logMsg
           log.error(m)
           onErrorThenStop(new IllegalStateException(m))
         case _ =>
           if (log.isDebugEnabled) log.debug(logMsg)
-          if (abortDeadline.isEmpty)
-            abortDeadline = Some(Deadline.now + settings.delayedEventTimeout)
           // go back in history and look for missing sequence numbers
-          goBack()
+          goBack(lookForMissing = true)
           context.become(idle)
           if (expectedSeqNr.isEmpty) {
             // start the backtracking query immediately when aborted due to possibly first event
