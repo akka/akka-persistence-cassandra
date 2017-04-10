@@ -3,17 +3,16 @@
  */
 package akka.persistence.cassandra.testkit
 
-import java.io.BufferedReader
-import java.io.BufferedWriter
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.net.InetSocketAddress
+import java.io._
+import java.net.{ InetSocketAddress, Socket, URLClassLoader }
 import java.nio.channels.ServerSocketChannel
+import java.util.concurrent.TimeUnit
+
 import org.apache.cassandra.io.util.FileUtils
 import org.apache.cassandra.service.CassandraDaemon
+
 import scala.util.control.NonFatal
+import scala.concurrent.duration._
 
 /**
  * Starts Cassandra in current JVM. There can only be one Cassandra instance per JVM,
@@ -22,6 +21,11 @@ import scala.util.control.NonFatal
 object CassandraLauncher {
 
   class CleanFailedException(message: String, cause: Throwable) extends RuntimeException(message, cause)
+
+  private val ForcedShutdownTimeout = 20.seconds
+  // Used in fork mode to wait for Cassandra to start listening
+  private val AwaitListenTimeout = 45.seconds
+  private val AwaitListenPoll = 100.millis
 
   /**
    * Default config for testing "test-embedded-cassandra.yaml"
@@ -56,10 +60,10 @@ object CassandraLauncher {
     val configResource =
       if (args.length > 3) args(3)
       else System.getProperty("CassandraLauncher.configResource", DefaultTestConfigResource)
-    CassandraLauncher.start(dir, configResource, clean, port)
+    CassandraLauncher.start(dir, configResource, clean, port, fork = false)
   }
 
-  private var cassandraDaemon: Option[CassandraDaemon] = None
+  private var cassandraDaemon: Option[Closeable] = None
 
   /**
    * The random free port that will be used if `port=0` is
@@ -89,9 +93,26 @@ object CassandraLauncher {
    * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
    *   is `true` and removal of the directory fails
    */
-  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int): Unit = this.synchronized {
-    if (cassandraDaemon.isEmpty) {
+  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int): Unit =
+    start(cassandraDirectory, configResource, clean, port, fork = false)
 
+  /**
+   * Start Cassandra
+   *
+   * @param cassandraDirectory the data directory to use
+   * @param configResource yaml configuration loaded from classpath,
+   *   default configuration for testing is defined in [[CassandraLauncher#DefaultTestConfigResource]]
+   * @param clean if `true` all files in the data directory will be deleted
+   *   before starting Cassandra
+   * @param port the `native_transport_port` to use, if 0 a random
+   *   free port is used, which can be retrieved (before starting)
+   *   with [[CassandraLauncher.randomPort]].
+   * @param fork Whether a forked process should be started.
+   * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
+   *   is `true` and removal of the directory fails
+   */
+  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int, fork: Boolean): Unit = this.synchronized {
+    if (cassandraDaemon.isEmpty) {
       if (clean) {
         try {
           FileUtils.deleteRecursive(cassandraDirectory);
@@ -106,24 +127,80 @@ object CassandraLauncher {
         require(cassandraDirectory.mkdirs(), s"Couldn't create Cassandra directory [$cassandraDirectory]")
 
       val realPort = if (port == 0) randomPort else port
-      val storagePort = freePort()
 
-      // http://wiki.apache.org/cassandra/StorageConfiguration
-      val conf = readResource(configResource)
-      val amendedConf = conf
-        .replace("$PORT", realPort.toString)
-        .replace("$STORAGE_PORT", storagePort.toString)
-        .replace("$DIR", cassandraDirectory.getAbsolutePath)
-      val configFile = new File(cassandraDirectory, configResource)
-      writeToFile(configFile, amendedConf)
+      if (fork) {
 
-      System.setProperty("cassandra.config", "file:" + configFile.getAbsolutePath)
-      System.setProperty("cassandra-foreground", "true")
+        // Calculate classpath
+        val classpath = this.getClass.getClassLoader match {
+          case urlClassLoader: URLClassLoader => urlClassLoader.getURLs
+          case other                          => sys.error(s"Unable to determine classpath by inspecting CassandraLaunchers classloader, expected a URLClassLoader, but got $other")
+        }
 
-      // runManaged = true to avoid System.exit
-      val daemon = new CassandraDaemon(true)
-      daemon.activate()
-      cassandraDaemon = Some(daemon)
+        val / = File.separator
+        val javaBin = s"${System.getProperty("java.home")}${/}bin${/}java"
+        val classpathArg = classpath.map {
+          case fileUrl if fileUrl.getProtocol.equalsIgnoreCase("file") =>
+            new File(fileUrl.toURI).getAbsolutePath
+          case other => sys.error(s"Unable to convert non file classpath URL to classpath: $other")
+        }.mkString(File.pathSeparator)
+        val className = classOf[CassandraLauncher].getCanonicalName
+
+        val builder = new ProcessBuilder(javaBin, "-cp", classpathArg, className,
+          s"$realPort", /* clean = */ "false", cassandraDirectory.getAbsolutePath, configResource)
+          .inheritIO()
+
+        val process = builder.start()
+
+        val shutdownHook = new Thread {
+          override def run(): Unit = {
+            process.destroyForcibly()
+          }
+        }
+        Runtime.getRuntime.addShutdownHook(shutdownHook)
+
+        // We wait for Cassandra to start listening before we return, since running in non fork mode will also not
+        // return until Cassandra has started listening.
+        waitForCassandraToListen(realPort)
+
+        cassandraDaemon = Some(new Closeable {
+          override def close(): Unit = {
+            process.destroy()
+            Runtime.getRuntime.removeShutdownHook(shutdownHook)
+            if (process.waitFor(ForcedShutdownTimeout.toMillis, TimeUnit.MILLISECONDS)) {
+              val exitStatus = process.exitValue()
+              // Java processes killed with SIGTERM may exit with a status of 143
+              if (exitStatus != 0 && exitStatus != 143) {
+                sys.error(s"Cassandra exited with non zero status: ${process.exitValue()}")
+              }
+            } else {
+              process.destroyForcibly()
+              sys.error(s"Cassandra process did not stop within $ForcedShutdownTimeout, killing.")
+            }
+          }
+        })
+
+      } else {
+        val storagePort = freePort()
+
+        // http://wiki.apache.org/cassandra/StorageConfiguration
+        val conf = readResource(configResource)
+        val amendedConf = conf
+          .replace("$PORT", realPort.toString)
+          .replace("$STORAGE_PORT", storagePort.toString)
+          .replace("$DIR", cassandraDirectory.getAbsolutePath)
+        val configFile = new File(cassandraDirectory, configResource)
+        writeToFile(configFile, amendedConf)
+
+        System.setProperty("cassandra.config", "file:" + configFile.getAbsolutePath)
+        System.setProperty("cassandra-foreground", "true")
+
+        // runManaged = true to avoid System.exit
+        val daemon = new CassandraDaemon(true)
+        daemon.activate()
+        cassandraDaemon = Some(new Closeable {
+          override def close(): Unit = daemon.deactivate()
+        })
+      }
     }
   }
 
@@ -132,7 +209,7 @@ object CassandraLauncher {
    * again in same JVM.
    */
   def stop(): Unit = this.synchronized {
-    cassandraDaemon.foreach(_.deactivate())
+    cassandraDaemon.foreach(_.close())
     cassandraDaemon = None
   }
 
@@ -162,4 +239,28 @@ object CassandraLauncher {
     }
   }
 
+  private def waitForCassandraToListen(port: Int) = {
+    val deadline = AwaitListenTimeout.fromNow
+    @annotation.tailrec
+    def tryConnect(): Unit = {
+      val retry = try {
+        new Socket("localhost", port).close()
+        false
+      } catch {
+        case ioe: IOException if deadline.hasTimeLeft() =>
+          Thread.sleep(AwaitListenPoll.toMillis)
+          true
+        case ioe: IOException =>
+          throw new RuntimeException(s"Cassandra did not start within $AwaitListenTimeout", ioe)
+      }
+      if (retry) tryConnect()
+    }
+    tryConnect()
+  }
+
 }
+
+/**
+ * Exists so that we can get a reference to the CassandraLauncher, rather than the CassandraLauncher$ class.
+ */
+class CassandraLauncher
