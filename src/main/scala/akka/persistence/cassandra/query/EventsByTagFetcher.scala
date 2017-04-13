@@ -32,17 +32,18 @@ private[query] object EventsByTagFetcher {
   private case object Fetched extends DeadLetterSuppression
 
   def props(tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int,
-            backtracking: Boolean, replyTo: ActorRef,
+            backtrackingMode: EventsByTagPublisher.BacktrackingMode, replyTo: ActorRef,
             preparedSelect: PreparedStatementEnvelope, seqNumbers: Option[SequenceNumbers],
             settings: CassandraReadJournalConfig): Props =
-    Props(classOf[EventsByTagFetcher], tag, timeBucket, fromOffset, toOffset, limit, backtracking,
+    Props(classOf[EventsByTagFetcher], tag, timeBucket, fromOffset, toOffset, limit, backtrackingMode,
       replyTo, preparedSelect, seqNumbers, settings).withDispatcher(settings.pluginDispatcher)
 
 }
 
 private[query] class EventsByTagFetcher(
-  tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int, backtracking: Boolean,
-  replyTo: ActorRef, preparedSelect: PreparedStatementEnvelope,
+  tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int,
+  backtrackingMode: EventsByTagPublisher.BacktrackingMode,
+  replyTo:          ActorRef, preparedSelect: PreparedStatementEnvelope,
   seqN: Option[SequenceNumbers], settings: CassandraReadJournalConfig
 )
   extends Actor with ActorLogging {
@@ -91,7 +92,7 @@ private[query] class EventsByTagFetcher(
 
   def continue(resultSet: ResultSet): Unit = {
     if (resultSet.isExhausted()) {
-      replyTo ! ReplayDone(retrievedCount, deliveredCount, seqNumbers, highestOffset)
+      replyTo ! ReplayDone(retrievedCount, deliveredCount, seqNumbers, highestOffset, retrievedCount >= limit)
       context.stop(self)
     } else {
 
@@ -127,25 +128,28 @@ private[query] class EventsByTagFetcher(
                   loop(n - 1)
 
                 case SequenceNumbers.PossiblyFirst =>
-                  if (backtracking) {
-                    // when in backtracking mode we use the seen sequence number as the starting point
-                    seqNumbers = Some(s.updated(pid, seqNr))
-                    deliveredCount += 1
-                    replyTo ! UUIDPersistentRepr(offs, toPersistentRepr(row, pid, seqNr))
-                    loop(n - 1)
-                  } else {
-                    // otherwise we need to go back and try to find earlier event
-                    replyTo ! ReplayAborted(seqNumbers, pid, expectedSeqNr = None, gotSeqNr = seqNr)
+                  backtrackingMode match {
+                    case LookingForMissing(_, _) =>
+                      // when in backtracking mode we use the seen sequence number as the starting point
+                      seqNumbers = Some(s.updated(pid, seqNr))
+                      deliveredCount += 1
+                      replyTo ! UUIDPersistentRepr(offs, toPersistentRepr(row, pid, seqNr))
+                      loop(n - 1)
+                    case _ =>
+                      // otherwise we need to go back and try to find earlier event
+                      replyTo ! ReplayAborted(seqNumbers, pid, expectedSeqNr = None, gotSeqNr = seqNr)
+                      context.stop(self)
                     // end loop
                   }
 
                 case SequenceNumbers.After =>
                   replyTo ! ReplayAborted(seqNumbers, pid, expectedSeqNr = Some(s.get(pid) + 1), gotSeqNr = seqNr)
+                  context.stop(self)
                 // end loop
 
                 case SequenceNumbers.Before =>
                   // duplicate, discard
-                  if (!backtracking)
+                  if (backtrackingMode == NoBacktracking)
                     log.debug(s"Discarding duplicate. Got sequence number [$seqNr] for [$pid], " +
                       s"but current sequence number is [${s.get(pid)}]")
                   loop(n - 1)

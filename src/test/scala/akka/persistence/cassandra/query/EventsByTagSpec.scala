@@ -80,7 +80,9 @@ object EventsByTagSpec {
     """).withFallback(CassandraLifecycle.config)
 
   val strictConfig = ConfigFactory.parseString(s"""
-    cassandra-query-journal.delayed-event-timeout = 3s
+    akka.loglevel = INFO
+    cassandra-query-journal.delayed-event-timeout = 5s
+    cassandra-query-journal.eventual-consistency-delay = 1s
     """).withFallback(config)
 
 }
@@ -767,6 +769,47 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       writeTestEvent(t2.plusSeconds(1), eventB2, Set("T10"))
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B2") => e }
 
+      probe.cancel()
+    }
+
+    "find events from many persistenceIds" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+
+      // limit is 50, so let's use something not divisible by 50
+      (1L to 70L).foreach { n =>
+        val eventA2 = PersistentRepr(s"A$n-2", sequenceNr = 2, persistenceId = s"a$n", "",
+          writerUuid = UUID.randomUUID().toString)
+        writeTestEvent(t1.plus(n, ChronoUnit.MILLIS), eventA2, Set("T11"))
+      }
+
+      val src = queries.eventsByTag(tag = "T11", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(1000)
+      probe.expectNextN(70)
+
+      (101L to 200L).foreach { n =>
+        val eventA2 = PersistentRepr(s"A$n-2", sequenceNr = 2, persistenceId = s"a$n", "",
+          writerUuid = UUID.randomUUID().toString)
+        writeTestEvent(t1.plus(n, ChronoUnit.MILLIS), eventA2, Set("T11"))
+      }
+      probe.expectNextN(100)
+
+      (101L to 200L).foreach { n =>
+        val eventA3 = PersistentRepr(s"A$n-3", sequenceNr = 3, persistenceId = s"a$n", "",
+          writerUuid = UUID.randomUUID().toString)
+        writeTestEvent(t1.plus(500 + n, ChronoUnit.MILLIS), eventA3, Set("T11"))
+      }
+      probe.expectNextN(100)
+
+      // those are delayed, timestamp before 101-200 A3
+      (1L to 70L).foreach { n =>
+        val eventA3 = PersistentRepr(s"A$n-3", sequenceNr = 3, persistenceId = s"a$n", "",
+          writerUuid = UUID.randomUUID().toString)
+        writeTestEvent(t1.plus(200 + n, ChronoUnit.MILLIS), eventA3, Set("T11"))
+      }
+      probe.expectNextN(70)
+
+      probe.expectNoMsg(1.second)
       probe.cancel()
     }
 
