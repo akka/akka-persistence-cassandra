@@ -94,7 +94,7 @@ object CassandraLauncher {
 
       if (clean) {
         try {
-          FileUtils.deleteRecursive(cassandraDirectory);
+          FileUtils.deleteRecursive(cassandraDirectory)
         } catch {
           // deleteRecursive may throw AssertionError
           case e: AssertionError => throw new CleanFailedException(e.getMessage, e)
@@ -156,7 +156,7 @@ object CassandraLauncher {
   private def writeToFile(file: File, content: String): Unit = {
     val writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), "utf-8"))
     try {
-      writer.write(content);
+      writer.write(content)
     } finally {
       writer.close()
     }
