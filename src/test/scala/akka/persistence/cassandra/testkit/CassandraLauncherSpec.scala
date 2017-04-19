@@ -26,8 +26,7 @@ class CassandraLauncherSpec extends TestKit(ActorSystem("CassandraLauncherSpec")
         cassandraDirectory,
         configResource = CassandraLauncher.DefaultTestConfigResource,
         clean = true,
-        port = 0,
-        fork = true
+        port = 0
       )
 
       awaitAssert({
