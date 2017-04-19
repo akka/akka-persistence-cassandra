@@ -88,6 +88,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suit
   }
 
   override protected def afterAll(): Unit = {
+    shutdown(system, verifySystemShutdown = true)
     CassandraLauncher.stop()
     super.afterAll()
   }
