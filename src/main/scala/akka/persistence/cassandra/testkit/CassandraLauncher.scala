@@ -11,15 +11,23 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.InetSocketAddress
 import java.nio.channels.ServerSocketChannel
-import org.apache.cassandra.io.util.FileUtils
-import org.apache.cassandra.service.CassandraDaemon
+
 import scala.util.control.NonFatal
+import scala.language.reflectiveCalls
+import scala.util.Try
 
 /**
  * Starts Cassandra in current JVM. There can only be one Cassandra instance per JVM,
  * but keyspaces can be used for isolation.
  */
 object CassandraLauncher {
+  val CassandraDaemonClassName = "org.apache.cassandra.service.CassandraDaemon"
+  val CassandraUnitShadedDaemonClassName = s"org.cassandraunit.shaded.$CassandraDaemonClassName"
+
+  private type CassandraDaemon = {
+    def activate(): Unit
+    def deactivate(): Unit
+  }
 
   class CleanFailedException(message: String, cause: Throwable) extends RuntimeException(message, cause)
 
@@ -94,7 +102,7 @@ object CassandraLauncher {
 
       if (clean) {
         try {
-          FileUtils.deleteRecursive(cassandraDirectory)
+          deleteRecursive(cassandraDirectory)
         } catch {
           // deleteRecursive may throw AssertionError
           case e: AssertionError => throw new CleanFailedException(e.getMessage, e)
@@ -119,9 +127,11 @@ object CassandraLauncher {
 
       System.setProperty("cassandra.config", "file:" + configFile.getAbsolutePath)
       System.setProperty("cassandra-foreground", "true")
+      // Shaded epoll doesn't work, and for a test utility we don't need it anyway
+      System.setProperty("cassandra.native.epoll.enabled", "false")
 
       // runManaged = true to avoid System.exit
-      val daemon = new CassandraDaemon(true)
+      val daemon = newCassandraDaemon()
       daemon.activate()
       cassandraDaemon = Some(daemon)
     }
@@ -134,6 +144,24 @@ object CassandraLauncher {
   def stop(): Unit = this.synchronized {
     cassandraDaemon.foreach(_.deactivate())
     cassandraDaemon = None
+  }
+
+  /**
+   * Create a new Cassandra daemon
+   */
+  private def newCassandraDaemon(): CassandraDaemon = {
+    val classNames = List(CassandraUnitShadedDaemonClassName, CassandraDaemonClassName)
+
+    classNames.collectFirst(Function.unlift(className => Try[Class[_]] {
+      this.getClass.getClassLoader.loadClass(className)
+    }.toOption)) match {
+      case Some(clazz) =>
+        clazz.getDeclaredConstructor(classOf[Boolean])
+          .newInstance(Boolean.box(true)).asInstanceOf[CassandraDaemon]
+      case None =>
+        sys.error("Unable to find Cassandra on Classpath. Either add org.apache.cassandra:cassandra-all to the " +
+          "classpath, or add org.cassandraunit:cassandra-unit-shaded for shaded Cassandra.")
+    }
   }
 
   private def readResource(resource: String): String = {
@@ -160,6 +188,13 @@ object CassandraLauncher {
     } finally {
       writer.close()
     }
+  }
+
+  private def deleteRecursive(file: File): Unit = {
+    if (file.isDirectory) {
+      file.listFiles().foreach(deleteRecursive)
+    }
+    file.delete()
   }
 
 }
