@@ -27,21 +27,24 @@ object CassandraLifecycle {
     akka.actor.serialize-messages=on
     """)
 
-  def awaitPersistenceInit(system: ActorSystem): Unit = {
+  def awaitPersistenceInit(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
     val probe = TestProbe()(system)
     val t0 = System.nanoTime()
     var n = 0
     probe.within(45.seconds) {
       probe.awaitAssert {
         n += 1
-        system.actorOf(Props[AwaitPersistenceInit], "persistenceInit" + n).tell("hello", probe.ref)
+        system.actorOf(Props(classOf[AwaitPersistenceInit], journalPluginId, snapshotPluginId), "persistenceInit" + n).tell("hello", probe.ref)
         probe.expectMsg(5.seconds, "hello")
         system.log.debug("awaitPersistenceInit took {} ms {}", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0), system.name)
       }
     }
   }
 
-  class AwaitPersistenceInit extends PersistentActor {
+  class AwaitPersistenceInit(
+    override val journalPluginId:  String,
+    override val snapshotPluginId: String
+  ) extends PersistentActor {
     def persistenceId: String = "persistenceInit"
 
     def receiveRecover: Receive = {
@@ -85,6 +88,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suit
   }
 
   override protected def afterAll(): Unit = {
+    shutdown(system, verifySystemShutdown = true)
     CassandraLauncher.stop()
     super.afterAll()
   }

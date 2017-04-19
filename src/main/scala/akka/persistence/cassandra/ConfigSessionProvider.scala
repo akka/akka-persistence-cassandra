@@ -59,6 +59,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
     case "" => None
     case _  => Some(ProtocolVersion.fromInt(config.getInt("protocol-version")))
   }
+  val port: Int = config.getInt("port")
 
   private[this] val connectionPoolConfig = config.getConfig("connection-pool")
 
@@ -110,6 +111,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
         .withPoolingOptions(poolingOptions)
         .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
         .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
+        .withPort(port)
 
       speculativeExecution match {
         case Some(policy) => b.withSpeculativeExecutionPolicy(policy)
@@ -192,7 +194,6 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
    * @param clusterId the configured `cluster-id` to lookup
    */
   def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
-    val port: Int = config.getInt("port")
     val contactPoints = config.getStringList("contact-points").asScala.toList
     Future.successful(buildContactPoints(contactPoints, port))
   }

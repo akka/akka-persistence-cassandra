@@ -57,6 +57,7 @@ class CassandraConfigCheckerSpec extends TestKit(ActorSystem("CassandraConfigChe
 
   override protected def afterAll(): Unit = {
     session.close()
+    session.getCluster.close()
     super.afterAll()
   }
 

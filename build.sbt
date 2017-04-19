@@ -12,7 +12,7 @@ name := "akka-persistence-cassandra"
 
 licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licenses/LICENSE-2.0")))
 
-crossScalaVersions := Seq("2.11.8", "2.12.0")
+crossScalaVersions := Seq("2.11.8", "2.12.1")
 scalaVersion := crossScalaVersions.value.head
 crossVersion := CrossVersion.binary
 releaseCrossBuild := true
@@ -30,24 +30,6 @@ scalacOptions ++= Seq(
   "-Xfuture"
 )
 
-// group tests, a single test per group
-def singleTests(tests: Seq[TestDefinition]) = {
-  // We could group non Cassandra tests into another group
-  // to avoid new JVM for each test, see http://www.scala-sbt.org/release/docs/Testing.html
-  val javaOptions = Seq("-Xms512M", "-Xmx1G", "-XX:+PrintGCDetails", "-XX:+PrintGCTimeStamps")
-  tests map { test =>
-    new Group(
-      name = test.name,
-      tests = Seq(test),
-      runPolicy = SubProcess(javaOptions))
-  }
-}
-
-javaOptions in Test ++= Seq("-Xms512M", "-Xmx1G", "-XX:+PrintGCDetails", "-XX:+PrintGCTimeStamps")
-
-fork in Test := true // for Cassandra tests
-
-testGrouping in Test <<= definedTests in Test map singleTests // for Cassandra tests
 
 // show full stack traces and test case durations
 testOptions in Test += Tests.Argument("-oDF")
@@ -62,16 +44,20 @@ parallelExecution in Test := false
 val AkkaVersion = "2.4.17"
 
 libraryDependencies ++= Seq(
-  "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.1.0",
+  "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.1.4",
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query-experimental" % AkkaVersion,
-  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion   % "test",
-  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion   % "test",
-  "org.scalatest"          %% "scalatest"                           % "3.0.0"       % "test",
+  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion     % "test",
+  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % "test",
+  "org.scalatest"          %% "scalatest"                           % "3.0.0"         % "test",
   // cassandra-all for testkit.CassandraLauncher, app should define it as test dependency if needed
-  "org.apache.cassandra"    % "cassandra-all"                       % "3.7"         % "optional",
-  "org.osgi"                % "org.osgi.core"                       % "5.0.0"       % "provided"
+  "org.apache.cassandra"    % "cassandra-all"                       % "3.10"          % "optional" exclude("io.netty", "netty-all"),
+  // cassandra-all 3.10 depends on netty-all 4.0.39, while cassandra-driver-core 3.1.0 depends on netty-handler 4.0.37,
+  // we exclude netty-all, and upgrade individual deps
+  "io.netty"                % "netty-handler"                       % "4.0.39.Final"  % "optional",
+  "io.netty"                % "netty-transport-native-epoll"        % "4.0.39.Final"  % "optional",
+  "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % "provided"
 )
 
 headers := headers.value ++ Map(
@@ -104,5 +90,5 @@ def optionalImport(packageName: String) = s"$packageName;resolution:=optional"
 
 osgiSettings
 OsgiKeys.exportPackage  := Seq("akka.persistence.cassandra.*")
-OsgiKeys.importPackage  := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*");
+OsgiKeys.importPackage  := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*")
 OsgiKeys.privatePackage := Seq()
