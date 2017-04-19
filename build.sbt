@@ -36,7 +36,7 @@ def singleTests(tests: Seq[TestDefinition]) = {
   // to avoid new JVM for each test, see http://www.scala-sbt.org/release/docs/Testing.html
   val javaOptions = Seq("-Xms512M", "-Xmx1G", "-XX:+PrintGCDetails", "-XX:+PrintGCTimeStamps")
   tests map { test =>
-    new Group(
+    Group(
       name = test.name,
       tests = Seq(test),
       runPolicy = SubProcess(javaOptions))
@@ -104,5 +104,5 @@ def optionalImport(packageName: String) = s"$packageName;resolution:=optional"
 
 osgiSettings
 OsgiKeys.exportPackage  := Seq("akka.persistence.cassandra.*")
-OsgiKeys.importPackage  := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*");
+OsgiKeys.importPackage  := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*")
 OsgiKeys.privatePackage := Seq()
