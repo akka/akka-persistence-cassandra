@@ -66,12 +66,16 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query"              % AkkaVersion,
-  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion   % "test",
-  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion   % "test",
-  "org.scalatest"          %% "scalatest"                           % "3.0.0"       % "test",
+  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion     % "test",
+  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % "test",
+  "org.scalatest"          %% "scalatest"                           % "3.0.0"         % "test",
   // cassandra-all for testkit.CassandraLauncher, app should define it as test dependency if needed
-  "org.apache.cassandra"    % "cassandra-all"                       % "3.7"         % "optional",
-  "org.osgi"                % "org.osgi.core"                       % "5.0.0"       % "provided"
+  "org.apache.cassandra"    % "cassandra-all"                       % "3.10"          % "optional" exclude("io.netty", "netty-all"),
+  // cassandra-all 3.10 depends on netty-all 4.0.39, while cassandra-driver-core 3.1.0 depends on netty-handler 4.0.37,
+  // we exclude netty-all, and upgrade individual deps
+  "io.netty"                % "netty-handler"                       % "4.0.39.Final"  % "optional",
+  "io.netty"                % "netty-transport-native-epoll"        % "4.0.39.Final"  % "optional",
+  "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % "provided"
 )
 
 headers := headers.value ++ Map(
