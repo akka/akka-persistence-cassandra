@@ -59,6 +59,7 @@ class AllPersistenceIdsSpec
 
   override protected def afterAll(): Unit = {
     session.close()
+    session.getCluster.close()
     super.afterAll()
   }
 
