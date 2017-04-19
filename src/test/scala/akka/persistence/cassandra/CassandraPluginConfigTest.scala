@@ -92,7 +92,24 @@ class CassandraPluginConfigTest extends TestKit(ActorSystem("CassandraPluginConf
           new InetSocketAddress("127.0.0.1", 29142)
         )
       )
+    }
 
+    "ignore the port configuration with host:port values as contact points" in {
+      val configWithHostPortPairAndPort = ConfigFactory.parseString(
+        """
+          contact-points = ["127.0.0.1:19142", "127.0.0.1:29142", "127.0.0.1"]
+          port = 39142
+        """
+      ).withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, configWithHostPortPairAndPort)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
+        List(
+          new InetSocketAddress("127.0.0.1", 19142),
+          new InetSocketAddress("127.0.0.1", 29142),
+          new InetSocketAddress("127.0.0.1", 39142)
+        )
+      )
     }
 
     "parse config with a list of contact points without port" in {
@@ -105,6 +122,36 @@ class CassandraPluginConfigTest extends TestKit(ActorSystem("CassandraPluginConf
           new InetSocketAddress("127.0.0.2", 9042)
         )
       )
+    }
+
+    "use the port configuration with a list of contact points without port" in {
+      lazy val configWithHostsAndPort = ConfigFactory.parseString(
+        """
+          contact-points = ["127.0.0.1", "127.0.0.2"]
+          port = 19042
+        """
+      ).withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, configWithHostsAndPort)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
+        List(
+          new InetSocketAddress("127.0.0.1", 19042),
+          new InetSocketAddress("127.0.0.2", 19042)
+        )
+      )
+    }
+
+    "set the port configuration on the cluster builder" in {
+      lazy val configWithHostsAndPort = ConfigFactory.parseString(
+        """
+          contact-points = ["127.0.0.1", "127.0.0.2"]
+          port = 19042
+        """
+      ).withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, configWithHostsAndPort)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      val clusterBuilder = Await.result(sessionProvider.clusterBuilder(""), 3.seconds)
+      clusterBuilder.getConfiguration.getProtocolOptions.getPort mustBe 19042
     }
 
     "use custom ConfigSessionProvider for cluster1" in {
