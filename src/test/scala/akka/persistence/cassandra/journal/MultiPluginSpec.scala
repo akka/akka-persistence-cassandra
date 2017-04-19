@@ -106,7 +106,10 @@ class MultiPluginSpec
     session.execute(s"CREATE KEYSPACE IF NOT EXISTS $journalKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
     session.execute(s"CREATE KEYSPACE IF NOT EXISTS $snapshotKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
 
-    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-a", "cassandra-snapshot-c")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-a")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-b")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-c", "cassandra-snapshot-c")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-d", "cassandra-snapshot-d")
   }
 
   override protected def afterAll(): Unit = {
