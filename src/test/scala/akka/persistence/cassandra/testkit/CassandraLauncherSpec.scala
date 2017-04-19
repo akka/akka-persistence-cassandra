@@ -10,13 +10,28 @@ import akka.testkit.TestKit
 import com.datastax.driver.core.Cluster
 import org.scalatest.{ Matchers, WordSpecLike }
 import scala.concurrent.duration._
+import org.scalatest.BeforeAndAfterAll
 
-class CassandraLauncherSpec extends TestKit(ActorSystem("CassandraLauncherSpec")) with Matchers with WordSpecLike {
+class CassandraLauncherSpec extends TestKit(ActorSystem("CassandraLauncherSpec"))
+  with Matchers with WordSpecLike with BeforeAndAfterAll {
 
-  private def testCassandra() = {
-    Cluster.builder()
-      .addContactPoints("localhost").withPort(CassandraLauncher.randomPort)
-      .build().connect().execute("SELECT now() from system.local;").one()
+  override protected def afterAll(): Unit = {
+    shutdown(system, verifySystemShutdown = true)
+    CassandraLauncher.stop()
+    super.afterAll()
+  }
+
+  private def testCassandra(): Unit = {
+    val session =
+      Cluster.builder()
+        .addContactPoints("localhost").withPort(CassandraLauncher.randomPort)
+        .build().connect()
+    try
+      session.execute("SELECT now() from system.local;").one()
+    finally {
+      session.close()
+      session.getCluster.close()
+    }
   }
 
   "The CassandraLauncher" should {

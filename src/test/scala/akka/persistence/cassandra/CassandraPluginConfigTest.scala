@@ -17,6 +17,7 @@ import scala.concurrent.Await
 import scala.concurrent.Future
 import com.typesafe.config.Config
 import scala.concurrent.ExecutionContext
+import org.scalatest.BeforeAndAfterAll
 
 object CassandraPluginConfigTest {
   class TestContactPointsProvider(system: ActorSystem, config: Config) extends ConfigSessionProvider(system, config) {
@@ -30,7 +31,8 @@ object CassandraPluginConfigTest {
   }
 }
 
-class CassandraPluginConfigTest extends TestKit(ActorSystem("CassandraPluginConfigTest")) with WordSpecLike with MustMatchers {
+class CassandraPluginConfigTest extends TestKit(ActorSystem("CassandraPluginConfigTest"))
+  with WordSpecLike with MustMatchers with BeforeAndAfterAll {
   import CassandraPluginConfigTest._
   import system.dispatcher
   lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-journal")
@@ -64,6 +66,11 @@ class CassandraPluginConfigTest extends TestKit(ActorSystem("CassandraPluginConf
       ('"' + maxKey + '"', true),
       (maxKey + "_", false)
     )
+  }
+
+  override protected def afterAll(): Unit = {
+    shutdown(system, verifySystemShutdown = true)
+    super.afterAll()
   }
 
   "A CassandraPluginConfig" should {
