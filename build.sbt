@@ -2,34 +2,55 @@ import Tests._
 import de.heikoseeberger.sbtheader.HeaderPattern
 import com.typesafe.sbt.SbtScalariform
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
+import sbt.Keys._
+import sbtassembly.AssemblyPlugin.autoImport._
 
-enablePlugins(AutomateHeaderPlugin,SbtOsgi)
+lazy val root = (project in file("."))
+  .enablePlugins(AutomateHeaderPlugin, SbtOsgi)
+  .dependsOn(cassandraLauncher % Optional)
+  .aggregate(cassandraLauncher)
 
-organization := "com.typesafe.akka"
-organizationName := "Typesafe Inc."
+def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
+  organization := "com.typesafe.akka",
+  organizationName := "Typesafe Inc.",
+  licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
+
+  crossScalaVersions := Seq("2.11.8", "2.12.1"),
+  scalaVersion := crossScalaVersions.value.head,
+  crossVersion := CrossVersion.binary,
+
+  scalacOptions ++= Seq(
+    "-encoding", "UTF-8",
+    "-feature",
+    "-unchecked",
+    "-deprecation",
+    //"-Xfatal-warnings",
+    "-Xlint",
+    "-Yno-adapted-args",
+    "-Ywarn-dead-code",
+    "-Ywarn-numeric-widen",
+    "-Xfuture"
+  ),
+
+  headers := headers.value ++ Map(
+    "scala" -> (
+      HeaderPattern.cStyleBlockComment,
+      """|/*
+         | * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+         | */
+         |""".stripMargin
+    )
+  ),
+
+  ScalariformKeys.preferences in Compile  := formattingPreferences,
+  ScalariformKeys.preferences in Test     := formattingPreferences
+)
+
+common
 
 name := "akka-persistence-cassandra"
 
-licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licenses/LICENSE-2.0")))
-
-crossScalaVersions := Seq("2.11.8", "2.12.1")
-scalaVersion := crossScalaVersions.value.head
-crossVersion := CrossVersion.binary
 releaseCrossBuild := true
-
-scalacOptions ++= Seq(
-  "-encoding", "UTF-8",
-  "-feature",
-  "-unchecked",
-  "-deprecation",
-  //"-Xfatal-warnings",
-  "-Xlint",
-  "-Yno-adapted-args",
-  "-Ywarn-dead-code",
-  "-Ywarn-numeric-widen",
-  "-Xfuture"
-)
-
 
 // show full stack traces and test case durations
 testOptions in Test += Tests.Argument("-oDF")
@@ -51,28 +72,8 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion     % "test",
   "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % "test",
   "org.scalatest"          %% "scalatest"                           % "3.0.0"         % "test",
-  // cassandra-all for testkit.CassandraLauncher, app should define it as test dependency if needed
-  "org.apache.cassandra"    % "cassandra-all"                       % "3.10"          % "optional" exclude("io.netty", "netty-all"),
-  // cassandra-all 3.10 depends on netty-all 4.0.39, while cassandra-driver-core 3.1.0 depends on netty-handler 4.0.37,
-  // we exclude netty-all, and upgrade individual deps
-  "io.netty"                % "netty-handler"                       % "4.0.39.Final"  % "optional",
-  "io.netty"                % "netty-transport-native-epoll"        % "4.0.39.Final"  % "optional",
   "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % "provided"
 )
-
-headers := headers.value ++ Map(
-  "scala" -> (
-    HeaderPattern.cStyleBlockComment,
-    """|/*
-       | * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
-       | */
-       |""".stripMargin
-  )
-)
-
-SbtScalariform.scalariformSettings
-ScalariformKeys.preferences in Compile  := formattingPreferences
-ScalariformKeys.preferences in Test     := formattingPreferences
 
 def formattingPreferences = {
   import scalariform.formatter.preferences._
@@ -92,3 +93,24 @@ osgiSettings
 OsgiKeys.exportPackage  := Seq("akka.persistence.cassandra.*")
 OsgiKeys.importPackage  := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*")
 OsgiKeys.privatePackage := Seq()
+
+lazy val cassandraLauncher = (project in file("cassandra-launcher"))
+  .settings(common: _*)
+  .settings(
+    name := "akka-persistence-cassandra-launcher",
+    managedResourceDirectories in Compile += (target in cassandraBundle).value / "bundle",
+    managedResources in Compile += (assembly in cassandraBundle).value
+  )
+
+// This project doesn't get published directly, rather the assembled artifact is included as part of cassandraLaunchers
+// resources
+lazy val cassandraBundle = (project in file("cassandra-bundle"))
+  .settings(
+    name := "akka-persistence-cassandra-bundle",
+    crossPaths := false,
+    autoScalaLibrary := false,
+    libraryDependencies += "org.apache.cassandra" % "cassandra-all" % "3.10" exclude("commons-logging", "commons-logging"),
+
+    target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
+    assemblyJarName in assembly := "cassandra-bundle.jar"
+  )

@@ -41,7 +41,8 @@ class CassandraLauncherSpec extends TestKit(ActorSystem("CassandraLauncherSpec")
         cassandraDirectory,
         configResource = CassandraLauncher.DefaultTestConfigResource,
         clean = true,
-        port = 0
+        port = 0,
+        CassandraLauncher.classpathForResources("logback-test.xml")
       )
 
       awaitAssert({

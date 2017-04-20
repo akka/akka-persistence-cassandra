@@ -4,15 +4,14 @@
 package akka.persistence.cassandra.testkit
 
 import java.io._
-import java.net.{ InetSocketAddress, Socket, URLClassLoader }
+import java.net.{ InetSocketAddress, Socket, URI }
 import java.nio.channels.ServerSocketChannel
+import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
-import org.apache.cassandra.io.util.FileUtils
-import org.apache.cassandra.service.CassandraDaemon
-
-import scala.util.control.NonFatal
+import scala.collection.immutable
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
 /**
  * Starts Cassandra in current JVM. There can only be one Cassandra instance per JVM,
@@ -60,7 +59,7 @@ object CassandraLauncher {
     val configResource =
       if (args.length > 3) args(3)
       else System.getProperty("CassandraLauncher.configResource", DefaultTestConfigResource)
-    CassandraLauncher.startEmbedded(dir, configResource, clean, port)
+    start(dir, configResource, clean, port)
   }
 
   private var cassandraDaemon: Option[Closeable] = None
@@ -80,6 +79,21 @@ object CassandraLauncher {
   }
 
   /**
+   * Use this to add classpath directories to the classpath
+   */
+  def classpathForResources(resources: String*): immutable.Seq[String] = {
+    resources.map { resource =>
+      this.getClass.getClassLoader.getResource(resource) match {
+        case null => sys.error("Resource not found: " + resource)
+        case fileUrl if fileUrl.getProtocol == "file" =>
+          new File(URI.create(fileUrl.toString.stripSuffix(resource))).getCanonicalPath
+        case jarUrl if jarUrl.getProtocol == "jar" =>
+          new File(URI.create(jarUrl.getPath.takeWhile(_ != '!'))).getCanonicalPath
+      }
+    }.distinct.to[immutable.Seq]
+  }
+
+  /**
    * Start Cassandra
    *
    * @param cassandraDirectory the data directory to use
@@ -93,20 +107,60 @@ object CassandraLauncher {
    * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
    *   is `true` and removal of the directory fails
    */
-  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int): Unit = this.synchronized {
+  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int): Unit =
+    start(cassandraDirectory, configResource, clean, port, Nil)
+
+  /**
+   * Start Cassandra
+   *
+   * @param cassandraDirectory the data directory to use
+   * @param configResource yaml configuration loaded from classpath,
+   *   default configuration for testing is defined in [[CassandraLauncher#DefaultTestConfigResource]]
+   * @param clean if `true` all files in the data directory will be deleted
+   *   before starting Cassandra
+   * @param port the `native_transport_port` to use, if 0 a random
+   *   free port is used, which can be retrieved (before starting)
+   *   with [[CassandraLauncher.randomPort]].
+   * @param classpath Any additional jars/directories to add to the classpath. Use
+   *                  [[CassandraLauncher#classpathForResources]] to assist in calculating this.
+   * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
+   *   is `true` and removal of the directory fails
+   */
+  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int, classpath: immutable.Seq[String]): Unit = this.synchronized {
     if (cassandraDaemon.isEmpty) {
       prepareCassandraDirectory(cassandraDirectory, clean)
 
       val realPort = if (port == 0) randomPort else port
+      val storagePort = freePort()
 
-      startForked(cassandraDirectory, configResource, realPort)
+      // http://wiki.apache.org/cassandra/StorageConfiguration
+      val conf = readResource(configResource)
+      val amendedConf = conf
+        .replace("$PORT", realPort.toString)
+        .replace("$STORAGE_PORT", storagePort.toString)
+        .replace("$DIR", cassandraDirectory.getAbsolutePath)
+      val configFile = new File(cassandraDirectory, configResource)
+      writeToFile(configFile, amendedConf)
+
+      // Extract the cassandra bundle to the directory
+      val cassandraBundleFile = new File(cassandraDirectory, "cassandra-bundle.jar")
+      if (!cassandraBundleFile.exists()) {
+        val is = this.getClass.getClassLoader.getResourceAsStream("akka/persistence/cassandra/launcher/cassandra-bundle.jar")
+        try {
+          Files.copy(is, cassandraBundleFile.toPath)
+        } finally {
+          is.close()
+        }
+      }
+
+      startForked(configFile, cassandraBundleFile, classpath, realPort)
     }
   }
 
   private def prepareCassandraDirectory(cassandraDirectory: File, clean: Boolean): Unit = {
     if (clean) {
       try {
-        FileUtils.deleteRecursive(cassandraDirectory)
+        deleteRecursive(cassandraDirectory)
       } catch {
         // deleteRecursive may throw AssertionError
         case e: AssertionError => throw new CleanFailedException(e.getMessage, e)
@@ -118,50 +172,15 @@ object CassandraLauncher {
       require(cassandraDirectory.mkdirs(), s"Couldn't create Cassandra directory [$cassandraDirectory]")
   }
 
-  private def startEmbedded(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int): Unit = {
-    prepareCassandraDirectory(cassandraDirectory, clean)
-
-    val realPort = if (port == 0) randomPort else port
-    val storagePort = freePort()
-
-    // http://wiki.apache.org/cassandra/StorageConfiguration
-    val conf = readResource(configResource)
-    val amendedConf = conf
-      .replace("$PORT", realPort.toString)
-      .replace("$STORAGE_PORT", storagePort.toString)
-      .replace("$DIR", cassandraDirectory.getAbsolutePath)
-    val configFile = new File(cassandraDirectory, configResource)
-    writeToFile(configFile, amendedConf)
-
-    System.setProperty("cassandra.config", "file:" + configFile.getAbsolutePath)
-    System.setProperty("cassandra-foreground", "true")
-
-    // runManaged = true to avoid System.exit
-    val daemon = new CassandraDaemon(true)
-    daemon.activate()
-    cassandraDaemon = Some(new Closeable {
-      override def close(): Unit = daemon.deactivate()
-    })
-  }
-
-  private def startForked(cassandraDirectory: File, configResource: String, realPort: Int): Unit = {
+  private def startForked(configFile: File, cassandraBundle: File, classpath: immutable.Seq[String], port: Int): Unit = {
     // Calculate classpath
-    val classpath = this.getClass.getClassLoader match {
-      case urlClassLoader: URLClassLoader => urlClassLoader.getURLs
-      case other                          => sys.error(s"Unable to determine classpath by inspecting CassandraLaunchers classloader, expected a URLClassLoader, but got $other")
-    }
-
     val / = File.separator
     val javaBin = s"${System.getProperty("java.home")}${/}bin${/}java"
-    val classpathArg = classpath.map {
-      case fileUrl if fileUrl.getProtocol.equalsIgnoreCase("file") =>
-        new File(fileUrl.toURI).getAbsolutePath
-      case other => sys.error(s"Unable to convert non file classpath URL to classpath: $other")
-    }.mkString(File.pathSeparator)
-    val className = classOf[CassandraLauncher].getCanonicalName
+    val className = "org.apache.cassandra.service.CassandraDaemon"
+    val classpathArgument = (classpath :+ cassandraBundle.getAbsolutePath).mkString(File.pathSeparator)
 
-    val builder = new ProcessBuilder(javaBin, "-cp", classpathArg, className,
-      s"$realPort", /* clean = */ "false", cassandraDirectory.getAbsolutePath, configResource)
+    val builder = new ProcessBuilder(javaBin, "-cp", classpathArgument,
+      "-Dcassandra.config=file:" + configFile.getAbsoluteFile, "-Dcassandra-foreground=true", className)
       .inheritIO()
 
     val process = builder.start()
@@ -175,7 +194,7 @@ object CassandraLauncher {
 
     // We wait for Cassandra to start listening before we return, since running in non fork mode will also not
     // return until Cassandra has started listening.
-    waitForCassandraToListen(realPort)
+    waitForCassandraToListen(port)
 
     cassandraDaemon = Some(new Closeable {
       override def close(): Unit = {
@@ -249,9 +268,12 @@ object CassandraLauncher {
     tryConnect()
   }
 
+  private def deleteRecursive(file: File): Unit = {
+    if (file.isDirectory) {
+      file.listFiles().foreach(deleteRecursive)
+    }
+    file.delete()
+  }
+
 }
 
-/**
- * Exists so that we can get a reference to the CassandraLauncher, rather than the CassandraLauncher$ class.
- */
-class CassandraLauncher
