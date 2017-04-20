@@ -20,9 +20,12 @@ This version of `akka-persistence-cassandra` depends on Akka 2.4.17. It has been
 
 To include the latest release of the Cassandra plugins for **Akka 2.5.x** into your `sbt` project, add the following lines to your `build.sbt` file:
 
-    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.51"
+    libraryDependencies += Seq(
+      "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.52",
+      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.52" % Test
+    )
 
-This version of `akka-persistence-cassandra` depends on Akka 2.5.0. It has been published for Scala 2.11 and 2.12.
+This version of `akka-persistence-cassandra` depends on Akka 2.5.0. It has been published for Scala 2.11 and 2.12.  The launcher artifact is a utility for starting an embedded Cassandra, useful for running tests. It can be removed if not needed.
 
 Those versions are compatible with Cassandra 3.0.0 or higher, and it is also compatible with Cassandra 2.1.6 or higher (versions < 2.1.6 have a static column bug) if you configure `cassandra-journal.cassandra-2x-compat=on` in your `application.conf`. With Cassandra 2.x compatibility some features will not be enabled, e.g. `eventsByTag`.
 
@@ -84,6 +87,28 @@ Persistence Query usage example to obtain a stream with all events tagged with "
 
 Migrations
 ----------
+
+### Migrations from 0.51 to 0.52
+
+`CassandraLauncher` has been pulled out into its own artifact, and now bundles Cassandra into a single fat jar, which is bundled into the launcher artifact. This has allowed Cassandra to be launched without it being on the classpath, which prevents classpath conflicts, but it also means that Cassandra can't be configured by changing files on the classpath, for example, a custom `logback.xml` in `src/test/resources` is no longer sufficient to configure Cassandra's logging. To address this, `CassandraLauncher.start` now accepts a list of classpath elements that will be added to the classpath, and provides a utility for locating classpath elements based on resource name.
+
+To depend on the new `CassandraLauncher` artifact, remove any dependency on `cassandra-all` itself, and add:
+
+```scala
+"com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.52"
+```
+
+to your build.  To modify the classpath that Cassandra uses, for example, if you have a `logback.xml` file in your `src/test/resources` directory that you want Cassandra to use, you can do this:
+
+```scala
+CassandraLauncher.start(
+   cassandraDirectory,
+   CassandraLauncher.DefaultTestConfigResource,
+   clean = true,
+   port = 0,
+   CassandraLauncher.classpathForResources("logback.xml")
+)
+```
 
 ### Migrations from 0.23 to 0.50
 

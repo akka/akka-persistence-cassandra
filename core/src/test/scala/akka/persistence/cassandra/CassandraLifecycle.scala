@@ -79,7 +79,8 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suit
       cassandraDirectory,
       configResource = cassandraConfigResource,
       clean = true,
-      port = 0
+      port = 0,
+      CassandraLauncher.classpathForResources("logback-test.xml")
     )
   }
 
