@@ -85,6 +85,9 @@ object EventsByTagSpec {
     cassandra-query-journal.eventual-consistency-delay = 1s
     """).withFallback(config)
 
+  val strictConfigFirstOffset1001DaysAgo = ConfigFactory.parseString(s"""
+    cassandra-query-journal.first-time-bucket = ${TimeBucket(today.minusDays(1001)).key}
+    """).withFallback(strictConfig)
 }
 
 class ColorFruitTagger extends WriteEventAdapter {
@@ -1228,5 +1231,36 @@ class EventsByTag2StrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTag
 
   }
 
+}
+
+class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
+  extends AbstractEventsByTagSpec("EventsByTagStrictBySeqNoEarlyFirstOffsetSpec", EventsByTagSpec.strictConfigFirstOffset1001DaysAgo) {
+  import EventsByTagSpec._
+
+  "Cassandra live eventsByTag with delayed-event-timeout > 0s and firstOffset = 1000 days ago" must {
+    "find all events when starting the query 1000 days ago" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5).minusDays(1001)
+      val t2 = t1.minusMinutes(1)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+
+      // create two events per day over the last 1000 days to be sure that delayed event backtracking is
+      // triggered before reaching the current day timebucket
+      (1L to 1000L).foreach { n =>
+        val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
+        val eventB = PersistentRepr(s"B$n", n, "b", "", writerUuid = w2)
+        writeTestEvent(t1.plus(n, ChronoUnit.DAYS), eventA, Set("T11"))
+        writeTestEvent(t2.plus(n, ChronoUnit.DAYS), eventB, Set("T11"))
+      }
+
+      // the search for delayed events should start before we get to the current timebucket
+      // until 0.26/0.51 backtracking was broken and events would be skipped
+      val src = queries.eventsByTag(tag = "T11", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(2000)
+      probe.expectNextN(2000)
+      probe.cancel()
+    }
+  }
 }
 
