@@ -177,7 +177,7 @@ private[query] class EventsByTagPublisher(
 
   def idle: Receive = {
     case Continue =>
-      if (strictBySeqNumber && !backtracking && lookForDelayedDeadline.isOverdue()) {
+      if (timeToLookForDelayed) {
         // look for delayed events
         goBack(lookForMissing = false)
         lookForDelayedDeadline = nextLookForDelayedDeadline()
@@ -198,6 +198,9 @@ private[query] class EventsByTagPublisher(
       else
         context.system.scheduler.scheduleOnce(settings.eventualConsistencyDelay, self, Continue)
   }
+
+  def timeToLookForDelayed: Boolean =
+    strictBySeqNumber && !backtracking && lookForDelayedDeadline.isOverdue() && !isTimeBucketBeforeToday()
 
   def timeForReplay: Boolean =
     !isToOffsetDone && (backtracking || buf.isEmpty || buf.size <= maxBufferSize / 2)
@@ -275,6 +278,8 @@ private[query] class EventsByTagPublisher(
         nextTimeBucket()
         self ! Continue // fetch more from next time bucket
       } else {
+        if (backtrackingMode != NoBacktracking)
+          currTimeBucket = TimeBucket(currOffset)
         backtrackingMode = NoBacktracking
         stopIfDone()
       }
