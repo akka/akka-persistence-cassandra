@@ -110,7 +110,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
         .addContactPointsWithPorts(cp.asJava)
         .withPoolingOptions(poolingOptions)
         .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
-        .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
+        .withQueryOptions(new QueryOptions().setConsistencyLevel(ConsistencyLevel.ONE).setFetchSize(fetchSize))
         .withPort(port)
 
       speculativeExecution match {
