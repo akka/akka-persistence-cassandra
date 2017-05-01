@@ -9,6 +9,7 @@ import java.nio.channels.ServerSocketChannel
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
+import scala.annotation.varargs
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
@@ -79,8 +80,24 @@ object CassandraLauncher {
   }
 
   /**
-   * Use this to add classpath directories to the classpath
+   * Use this to locate classpath elements from the current classpath to add
+   * to the classpath of the launched Cassandra.
+   *
+   * This is particularly useful if you want a custom logging, you can use
+   * this to ensure that the directory that your log file is in is on the
+   * classpath of the forked Cassandra process, for example:
+   *
+   * ```
+   * CassandraLauncher.start(
+   *   cassandraDirectory,
+   *   CassandraLauncher.DefaultTestConfigResource,
+   *   clean = true,
+   *   port = 0,
+   *   CassandraLauncher.classpathForResources("logback.xml")
+   * )
+   * ```
    */
+  @varargs
   def classpathForResources(resources: String*): immutable.Seq[String] = {
     resources.map { resource =>
       this.getClass.getClassLoader.getResource(resource) match {
