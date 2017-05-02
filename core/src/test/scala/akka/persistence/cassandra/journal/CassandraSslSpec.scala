@@ -26,17 +26,17 @@ object CassandraSslSpec {
         |cassandra-journal.max-result-size = 3
         |cassandra-journal.keyspace=CassandraSslSpec${if (keyStore) 1 else 2}
         |cassandra-snapshot-store.keyspace=CassandraSslSpec${if (keyStore) 1 else 2}Snapshot
-        |cassandra-snapshot-store.ssl.truststore.path="src/test/resources/security/cts_truststore.jks"
+        |cassandra-snapshot-store.ssl.truststore.path="core/src/test/resources/security/cts_truststore.jks"
         |cassandra-snapshot-store.ssl.truststore.password="hbbUtqn3Y1D4Tw"
-        |cassandra-journal.ssl.truststore.path="src/test/resources/security/cts_truststore.jks"
+        |cassandra-journal.ssl.truststore.path="core/src/test/resources/security/cts_truststore.jks"
         |cassandra-journal.ssl.truststore.password="hbbUtqn3Y1D4Tw"
       """.stripMargin
 
     val keyStoreConfig = if (keyStore) {
       s"""
-      |cassandra-snapshot-store.ssl.keystore.path="src/test/resources/security/cts_keystore.jks"
+      |cassandra-snapshot-store.ssl.keystore.path="core/src/test/resources/security/cts_keystore.jks"
       |cassandra-snapshot-store.ssl.keystore.password="5zsGJ0LxnpozNQ"
-      |cassandra-journal.ssl.keystore.path="src/test/resources/security/cts_keystore.jks"
+      |cassandra-journal.ssl.keystore.path="core/src/test/resources/security/cts_keystore.jks"
       |cassandra-journal.ssl.keystore.password="5zsGJ0LxnpozNQ"
       """.stripMargin
     } else ""

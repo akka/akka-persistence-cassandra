@@ -51,18 +51,18 @@ seed_provider:
 
 server_encryption_options:
    internode_encryption: all
-   keystore: src/test/resources/security/sts_keystore.jks
+   keystore: core/src/test/resources/security/sts_keystore.jks
    keystore_password: "LZk1rh3AUnWm3g"
-   truststore: src/test/resources/security/sts_truststore.jks
+   truststore: core/src/test/resources/security/sts_truststore.jks
    truststore_password: "uRq1zJnwDgLAT2"
    require_client_auth: true
 client_encryption_options:
    enabled: true
-   keystore: src/test/resources/security/stc_keystore.jks
+   keystore: core/src/test/resources/security/stc_keystore.jks
    keystore_password: "8yJQLUnGkwZxOw"
    require_client_auth: true
    optional: false
-   truststore: src/test/resources/security/stc_truststore.jks
+   truststore: core/src/test/resources/security/stc_truststore.jks
    truststore_password: "erZHDS9Eo0CcNo"
 
 # The following settings were inspired by
