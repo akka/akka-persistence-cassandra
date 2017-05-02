@@ -12,7 +12,7 @@ name := "akka-persistence-cassandra"
 
 licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licenses/LICENSE-2.0")))
 
-crossScalaVersions := Seq("2.11.8", "2.12.1")
+crossScalaVersions := Seq("2.11.11", "2.12.2")
 scalaVersion := crossScalaVersions.value.head
 crossVersion := CrossVersion.binary
 releaseCrossBuild := true
@@ -41,7 +41,7 @@ testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a")
 // disable parallel tests
 parallelExecution in Test := false
 
-val AkkaVersion = "2.4.17"
+val AkkaVersion = "2.4.18"
 
 libraryDependencies ++= Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.1.4",
