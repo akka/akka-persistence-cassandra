@@ -169,12 +169,6 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
         bs.setInt("ser_id", ser.serId)
         bs.setString("ser_manifest", ser.serManifest)
         bs.setBytes("snapshot_data", ser.serialized)
-        // for backwards compatibility
-        if (session.protocolVersion.compareTo(ProtocolVersion.V4) < 0) {
-          bs.setToNull("snapshot")
-        } else {
-          bs.unset("snapshot")
-        }
 
         session.executeWrite(bs).map(_ => ())
       }
