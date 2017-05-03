@@ -86,7 +86,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       .flatMap(_ => initializePersistentConfig(session).map(_ => Done))
   )
 
-  def preparedWriteMessage = session.prepare(writeMessage).map(_.setIdempotent(true))
+  def preparedWriteMessage_threeTags = session.prepare(writeMessage_threeTags).map(_.setIdempotent(true))
+  def preparedWriteMessage_twoTags = session.prepare(writeMessage_twoTags).map(_.setIdempotent(true))
+  def preparedWriteMessage_oneTag = session.prepare(writeMessage_oneTag).map(_.setIdempotent(true))
+  def preparedWriteMessage_noTag = session.prepare(writeMessage_noTag).map(_.setIdempotent(true))
   def preparedDeleteMessages = session.prepare(deleteMessages).map(_.setIdempotent(true))
   def preparedSelectMessages = session.prepare(selectMessages)
     .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
@@ -115,7 +118,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       writeInProgress.remove(persistenceId, f)
     case CassandraJournal.Init =>
       // try initialize early, to be prepared for first real request
-      preparedWriteMessage
+      preparedWriteMessage_threeTags
+      preparedWriteMessage_twoTags
+      preparedWriteMessage_oneTag
+      preparedWriteMessage_noTag
       preparedDeleteMessages
       preparedSelectMessages
       preparedCheckInUse
@@ -232,7 +238,14 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       // use same clock source as the UUID for the timeBucket
       val nowUuid = UUIDs.timeBased()
       val now = UUIDs.unixTimestamp(nowUuid)
-      preparedWriteMessage.map { stmt =>
+
+      val statement =
+        if (m.tags.isEmpty) preparedWriteMessage_noTag
+        else if (m.tags.size == 1) preparedWriteMessage_oneTag
+        else if (m.tags.size == 2) preparedWriteMessage_twoTags
+        else preparedWriteMessage_threeTags
+
+      statement.map { stmt =>
         val bs = stmt.bind()
         bs.setString("persistence_id", persistenceId)
         bs.setLong("partition_nr", maxPnr)
