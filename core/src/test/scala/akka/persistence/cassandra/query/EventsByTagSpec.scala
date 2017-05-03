@@ -25,7 +25,7 @@ import akka.persistence.journal.Tagged
 import akka.persistence.journal.WriteEventAdapter
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
 import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, EventsByTagQuery }
-import akka.serialization.SerializationExtension
+import akka.serialization.{ SerializationExtension, SerializerWithStringManifest }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
@@ -127,7 +127,7 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
     val writeStatements: CassandraStatements = new CassandraStatements {
       def config: CassandraJournalConfig = writePluginConfig
     }
-    session.prepare(writeStatements.writeMessage)
+    session.prepare(writeStatements.writeMessage_threeTags)
   }
 
   def writeTestEvent(time: LocalDateTime, persistent: PersistentRepr, tags: Set[String]): Unit = {
@@ -144,7 +144,18 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
       val tagId = writePluginConfig.tags.getOrElse(tag, 1)
       bs.setString("tag" + tagId, tag)
     }
-    bs.setBytes("message", serialized)
+    val serializer = serialization.findSerializerFor(persistent)
+    val serManifest = serializer match {
+      case ser2: SerializerWithStringManifest ⇒
+        ser2.manifest(persistent)
+      case _ ⇒
+        if (serializer.includeManifest) persistent.getClass.getName
+        else PersistentRepr.Undefined
+    }
+    bs.setInt("ser_id", serializer.identifier)
+    bs.setString("ser_manifest", serManifest)
+    bs.setString("event_manifest", persistent.manifest)
+    bs.setBytes("event", serialized)
     session.execute(bs)
   }
 
@@ -307,12 +318,12 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       val src = queries.currentEventsByTag(tag = "T1", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(2)
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, `pr1`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, `pr2`) => e }
       probe.expectNoMsg(500.millis)
       probe.request(5)
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "e3") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, "e4") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, `pr3`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, `pr4`) => e }
       probe.expectComplete()
     }
   }
@@ -400,8 +411,8 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       val src = queries.eventsByTag(tag = "T1", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(10)
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, `pr1`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, `pr2`) => e }
 
       val t3 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
       val pr3 = PersistentRepr("e3", 3L, "p1", "", writerUuid = w1)
@@ -410,8 +421,16 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       val pr4 = PersistentRepr("e4", 4L, "p1", "", writerUuid = w1)
       writeTestEvent(t4, pr4, Set("T1"))
 
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "e3") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, "e4") => e }
+      probe.expectNextPF {
+        case e @ EventEnvelope(_, "p1", 3L, _pr3) =>
+          _pr3 shouldBe a[PersistentRepr]
+          _pr3.asInstanceOf[PersistentRepr].payload shouldBe "e3"
+      }
+      probe.expectNextPF {
+        case e @ EventEnvelope(_, "p1", 4L, _pr4) =>
+          _pr4 shouldBe a[PersistentRepr]
+          _pr4.asInstanceOf[PersistentRepr].payload shouldBe "e4"
+      }
       probe.cancel()
     }
 
@@ -436,9 +455,9 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       val pr2 = PersistentRepr("p2-e1", 1L, "p2", "", writerUuid = w2)
       writeTestEvent(t2, pr2, Set("T2"))
 
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "p1-e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "p2-e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "p1-e2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, `pr1`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, `pr2`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, `pr3`) => e }
       probe.cancel()
     }
 
@@ -539,16 +558,16 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val src = queries.eventsByTag(tag = "T3", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(10)
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, `pr1`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, `pr2`) => e }
       probe.expectNoMsg(500.millis)
 
       val t3 = t1.plusSeconds(2)
       val pr3 = PersistentRepr("e3", 3L, "p1", "", writerUuid = w1)
       writeTestEvent(t3, pr3, Set("T3"))
 
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "e3") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, "e4") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, `pr3`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, `pr4`) => e }
       probe.cancel()
     }
 
@@ -569,8 +588,8 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val src = queries.eventsByTag(tag = "T4", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(10)
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, `pr1`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, `pr2`) => e }
       probe.expectNoMsg(1.seconds)
       probe.expectError().getClass should be(classOf[IllegalStateException])
     }
@@ -597,10 +616,10 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val src = queries.eventsByTag(tag = "T5", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(10)
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "p1-e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "p1-e2") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "p2-e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 2L, "p2-e2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, `pr1`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, `pr2`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, `pr3`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 2L, `pr4`) => e }
 
       // too early p1-e4
       val t5 = t1.plusSeconds(5)
@@ -613,13 +632,13 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val pr6 = PersistentRepr("p1-e3", 3L, "p1", "", writerUuid = w1)
       writeTestEvent(t6, pr6, Set("T5"))
 
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "p1-e3") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, "p1-e4") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, `pr6`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, `pr5`) => e }
 
       val t7 = t1.plusSeconds(7)
       val pr7 = PersistentRepr("p2-e3", 3L, "p2", "", writerUuid = w2)
       writeTestEvent(t7, pr7, Set("T5"))
-      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 3L, "p2-e3") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 3L, `pr7`) => e }
 
       probe.cancel()
     }
@@ -638,15 +657,15 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val src = queries.eventsByTag(tag = "T6", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(10)
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "p1-e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "p2-e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, `pr1`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, `pr2`) => e }
 
       // delayed, and timestamp is before p2-e1
       val t3 = t1.plusSeconds(1)
       val pr3 = PersistentRepr("p1-e2", 2L, "p1", "", writerUuid = w1)
       writeTestEvent(t3, pr3, Set("T6"))
 
-      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "p1-e2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, `pr3`) => e }
 
       probe.cancel()
     }
@@ -663,7 +682,7 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val src = queries.eventsByTag(tag = "T7", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(10)
-      probe.expectNextPF { case e @ EventEnvelope(_, "a", 1L, "A1") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "a", 1L, `eventA1`) => e }
 
       // delayed, timestamp is before A1
       val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
@@ -672,8 +691,8 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
       writeTestEvent(t3, eventB2, Set("T7"))
 
-      probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, `eventB1`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, `eventB2`) => e }
 
       probe.cancel()
     }
@@ -693,8 +712,8 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val src = queries.eventsByTag(tag = "T8", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(10)
-      probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B0") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "a", 1L, "A1") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, `eventB0`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "a", 1L, `eventA1`) => e }
 
       // delayed, timestamp is before A1
       val eventB1 = PersistentRepr("B1", 2L, "b", "", writerUuid = w2)
@@ -703,8 +722,8 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val eventB2 = PersistentRepr("B2", 3L, "b", "", writerUuid = w2)
       writeTestEvent(t3, eventB2, Set("T8"))
 
-      probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "b", 3L, "B2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, `eventB1`) => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "b", 3L, `eventB2`) => e }
 
       probe.cancel()
     }
@@ -720,7 +739,7 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val src1 = queries.eventsByTag(tag = "T9", offset = NoOffset)
       val probe1 = src1.runWith(TestSink.probe[Any])
       probe1.request(10)
-      val offs = probe1.expectNextPF { case e @ EventEnvelope(_, "a", 1L, "A1") => e }.offset.asInstanceOf[TimeBasedUUID]
+      val offs = probe1.expectNextPF { case e @ EventEnvelope(_, "a", 1L, `eventA1`) => e }.offset.asInstanceOf[TimeBasedUUID]
       probe1.cancel()
 
       // start a new query from the offset
@@ -734,7 +753,7 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
       writeTestEvent(t1.plusSeconds(3), eventB2, Set("T9"))
 
-      probe2.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B2") => e }
+      probe2.expectNextPF { case e @ EventEnvelope(_, "b", 2L, `eventB2`) => e }
 
       probe2.cancel()
     }
@@ -765,12 +784,12 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
       writeTestEvent(t2.minus(100, ChronoUnit.MILLIS), eventB1, Set("T10"))
 
-      probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B1") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, `eventB1`) => e }
       probe.expectNoMsg(2.second)
 
       val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
       writeTestEvent(t2.plusSeconds(1), eventB2, Set("T10"))
-      probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, `eventB2`) => e }
 
       probe.cancel()
     }

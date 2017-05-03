@@ -64,7 +64,22 @@ trait CassandraStatements {
          WITH CLUSTERING ORDER BY (timestamp ASC)
       """
 
-  def writeMessage = s"""
+  def writeMessage_threeTags = s"""
+      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event, tag1, tag2, tag3, used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , true)
+    """
+
+  def writeMessage_twoTags = s"""
+      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event, tag1, tag2, used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)
+    """
+
+  def writeMessage_oneTag = s"""
+      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event, tag1, used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , true)
+    """
+
+  def writeMessage_noTag = s"""
       INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event, used)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ? , true)
     """
