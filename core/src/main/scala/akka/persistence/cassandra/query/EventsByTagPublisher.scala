@@ -199,8 +199,10 @@ private[query] class EventsByTagPublisher(
         context.system.scheduler.scheduleOnce(settings.eventualConsistencyDelay, self, Continue)
   }
 
-  def timeToLookForDelayed: Boolean =
-    strictBySeqNumber && !backtracking && lookForDelayedDeadline.isOverdue() && !isTimeBucketBeforeToday()
+  def timeToLookForDelayed: Boolean = {
+    strictBySeqNumber && toOffset.isEmpty && !backtracking &&
+      lookForDelayedDeadline.isOverdue() && !isTimeBucketBeforeToday()
+  }
 
   def timeForReplay: Boolean =
     !isToOffsetDone && (backtracking || buf.isEmpty || buf.size <= maxBufferSize / 2)
@@ -263,12 +265,12 @@ private[query] class EventsByTagPublisher(
     case ReplayDone(retrievedCount, deliveredCount, seqN, highest, mightBeMore) =>
       if (log.isDebugEnabled)
         log.debug(
-          s"${backtrackingLog}query chunk done for tag [{}], timBucket [{}], count [{}] of [{}]",
+          s"${backtrackingLog}query chunk done for tag [{}], timBucket [{}], count [{}] of [{}], mightBeMore [$mightBeMore]",
           tag, currTimeBucket, deliveredCount, retrievedCount
         )
       seqNumbers = seqN
       currOffset = highest
-      replayCountZero = retrievedCount == 0
+      replayCountZero = backtrackingMode == NoBacktracking && retrievedCount == 0
 
       deliverBuf()
 
@@ -280,6 +282,9 @@ private[query] class EventsByTagPublisher(
       } else {
         if (backtrackingMode != NoBacktracking)
           currTimeBucket = TimeBucket(currOffset)
+        // make sure LookingForDelayed is not triggered immediately again in case of slow queries
+        if (backtrackingMode == LookingForDelayed)
+          lookForDelayedDeadline = nextLookForDelayedDeadline()
         backtrackingMode = NoBacktracking
         stopIfDone()
       }

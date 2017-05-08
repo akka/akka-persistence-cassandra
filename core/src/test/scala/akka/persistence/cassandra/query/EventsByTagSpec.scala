@@ -865,3 +865,42 @@ class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
   }
 }
 
+class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec
+  extends AbstractEventsByTagSpec("EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec", EventsByTagSpec.strictConfig) {
+  import EventsByTagSpec._
+
+  "Cassandra eventsByTag with many events in current time bucket" must {
+    "find all current events" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5).minusDays(4)
+      val t2 = t1.minusMinutes(1)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+
+      // create two events per day before current day timebucket
+      (1L to 3L).foreach { n =>
+        val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
+        val eventB = PersistentRepr(s"B$n", n, "b", "", writerUuid = w2)
+        writeTestEvent(t1.plus(n, ChronoUnit.DAYS), eventA, Set("T12"))
+        writeTestEvent(t2.plus(n, ChronoUnit.DAYS), eventB, Set("T12"))
+      }
+
+      val t3 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1)
+      (4L to 100).foreach { n =>
+        val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
+        val eventB = PersistentRepr(s"B$n", n, "b", "", writerUuid = w2)
+        writeTestEvent(t3.plus(n * 2, ChronoUnit.MILLIS), eventA, Set("T12"))
+        writeTestEvent(t3.plus(n * 2 + 1, ChronoUnit.MILLIS), eventB, Set("T12"))
+
+      }
+
+      // the search for delayed events should start before we get to the current timebucket
+      // until 0.26/0.51 backtracking was broken and events would be skipped
+      val src = queries.currentEventsByTag(tag = "T12", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(2000)
+      probe.expectNextN(200)
+      probe.expectComplete()
+    }
+  }
+}
+
