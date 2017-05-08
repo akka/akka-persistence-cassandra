@@ -46,7 +46,7 @@ To activate the journal plugin, add the following line to your Akka `application
 
     akka.persistence.journal.plugin = "cassandra-journal"
 
-This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.52/src/main/resources/reference.conf):
+This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.52/core/src/main/resources/reference.conf):
 
 ### Caveats
 
@@ -69,7 +69,7 @@ To activate the snapshot-store plugin, add the following line to your Akka `appl
 
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
 
-This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.52/src/main/resources/reference.conf):
+This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.52/core/src/main/resources/reference.conf):
 
 Persistence Queries
 -------------------
@@ -116,7 +116,7 @@ The Persistence Query API changed slightly, see [migration guide for Akka 2.5](h
 
 ### Migrations from 0.11 to 0.12
 
-Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.52/src/main/resources/reference.conf):
+Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.52/core/src/main/resources/reference.conf):
 
 ### Migrations from 0.9 to 0.10
 
@@ -134,7 +134,7 @@ The event data, snapshot data and meta data are stored in a separate columns ins
 
 ### Migrations from 0.6 to 0.7
 
-Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.52/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
+Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.7/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
 
 ### Migrating from 0.3.x (Akka 2.3.x)
 
