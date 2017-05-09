@@ -29,6 +29,7 @@ object CassandraSnapshotStoreConfiguration {
   lazy val protocolV3Config = ConfigFactory.parseString(
     s"""
       cassandra-journal.protocol-version = 3
+      cassandra-journal.enable-events-by-tag-query = off
       cassandra-journal.keyspace=CassandraSnapshotStoreProtocolV3Spec
       cassandra-snapshot-store.keyspace=CassandraSnapshotStoreProtocolV3Spec
     """
