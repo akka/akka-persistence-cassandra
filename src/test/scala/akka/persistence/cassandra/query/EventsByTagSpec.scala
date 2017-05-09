@@ -124,7 +124,7 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
     val writeStatements: CassandraStatements = new CassandraStatements {
       def config: CassandraJournalConfig = writePluginConfig
     }
-    session.prepare(writeStatements.writeMessage_threeTags)
+    session.prepare(writeStatements.writeMessage)
   }
 
   def writeTestEvent(time: LocalDateTime, persistent: PersistentRepr, tags: Set[String]): Unit = {
