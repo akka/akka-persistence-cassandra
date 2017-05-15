@@ -86,7 +86,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       .flatMap(_ => initializePersistentConfig(session).map(_ => Done))
   )
 
-  def preparedWriteMessage = session.prepare(writeMessage).map(_.setIdempotent(true))
+  def preparedWriteMessage = session.prepare(if (config.enableEventsByTagQuery) writeMessage else writeMessage_noTags).map(_.setIdempotent(true))
   def preparedDeleteMessages = session.prepare(deleteMessages).map(_.setIdempotent(true))
   def preparedSelectMessages = session.prepare(selectMessages)
     .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
@@ -151,7 +151,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         aw.persistenceId,
         aw.payload.map { pr =>
           val (pr2, tags) = pr.payload match {
-            case Tagged(payload, tags) =>
+            case Tagged(payload, tags) if config.enableEventsByTagQuery =>
               (pr.withPayload(payload), tags)
             case _ => (pr, Set.empty[String])
           }
@@ -232,6 +232,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       // use same clock source as the UUID for the timeBucket
       val nowUuid = UUIDs.timeBased()
       val now = UUIDs.unixTimestamp(nowUuid)
+
       preparedWriteMessage.map { stmt =>
         val bs = stmt.bind()
         bs.setString("persistence_id", persistenceId)
@@ -244,13 +245,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         bs.setString("ser_manifest", m.serManifest)
         bs.setString("event_manifest", m.eventManifest)
         bs.setBytes("event", m.serialized)
-
-        if (session.protocolVersion.compareTo(ProtocolVersion.V4) < 0) {
-          bs.setToNull("message")
-          (1 to maxTagsPerEvent).foreach(tagId => bs.setToNull("tag" + tagId))
-        } else {
-          bs.unset("message")
-        }
 
         if (m.tags.nonEmpty) {
           var tagCounts = Array.ofDim[Int](maxTagsPerEvent)
