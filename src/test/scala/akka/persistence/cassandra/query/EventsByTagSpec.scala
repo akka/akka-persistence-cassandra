@@ -25,7 +25,7 @@ import akka.persistence.journal.Tagged
 import akka.persistence.journal.WriteEventAdapter
 import akka.persistence.query.{ EventEnvelope, EventEnvelope2, NoOffset, PersistenceQuery }
 import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, CurrentEventsByTagQuery2, EventsByTagQuery }
-import akka.serialization.SerializationExtension
+import akka.serialization.{ SerializationExtension, SerializerWithStringManifest }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
@@ -131,7 +131,18 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
   }
 
   def writeTestEvent(time: LocalDateTime, persistent: PersistentRepr, tags: Set[String]): Unit = {
-    val serialized = ByteBuffer.wrap(serialization.serialize(persistent).get)
+    val event = persistent.payload.asInstanceOf[AnyRef]
+    val serializer = serialization.findSerializerFor(event)
+    val serialized = ByteBuffer.wrap(serialization.serialize(event).get)
+
+    val serManifest = serializer match {
+      case ser2: SerializerWithStringManifest ⇒
+        ser2.manifest(persistent)
+      case _ ⇒
+        if (serializer.includeManifest) persistent.getClass.getName
+        else PersistentRepr.Undefined
+    }
+
     val timestamp = time.toInstant(ZoneOffset.UTC).toEpochMilli
 
     val bs = preparedWriteMessage.bind()
@@ -144,7 +155,10 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
       val tagId = writePluginConfig.tags.getOrElse(tag, 1)
       bs.setString("tag" + tagId, tag)
     }
-    bs.setBytes("message", serialized)
+    bs.setInt("ser_id", serializer.identifier)
+    bs.setString("ser_manifest", serManifest)
+    bs.setString("event_manifest", persistent.manifest)
+    bs.setBytes("event", serialized)
     session.execute(bs)
   }
 

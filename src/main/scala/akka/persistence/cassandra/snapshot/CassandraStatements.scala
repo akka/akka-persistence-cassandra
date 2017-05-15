@@ -32,8 +32,8 @@ trait CassandraStatements {
     """
 
   def writeSnapshot = s"""
-      INSERT INTO ${tableName} (persistence_id, sequence_nr, timestamp, ser_manifest, ser_id, snapshot_data, snapshot)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO ${tableName} (persistence_id, sequence_nr, timestamp, ser_manifest, ser_id, snapshot_data)
+      VALUES (?, ?, ?, ?, ?, ?)
     """
 
   def deleteSnapshot = s"""
