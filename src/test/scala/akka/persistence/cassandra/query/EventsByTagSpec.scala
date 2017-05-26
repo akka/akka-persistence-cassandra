@@ -39,6 +39,9 @@ import org.scalatest.WordSpecLike
 import scala.concurrent.Await
 import com.typesafe.config.Config
 import akka.persistence.query.TimeBasedUUID
+import akka.testkit.TestProbe
+import akka.event.Logging.Warning
+import org.scalatest.BeforeAndAfterEach
 
 object EventsByTagSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
@@ -47,6 +50,7 @@ object EventsByTagSpec {
     akka.loglevel = INFO
     akka.actor.serialize-messages = on
     akka.actor.serialize-creators = on
+    akka.actor.warn-about-java-serializer-usage = off
     cassandra-journal {
       #target-partition-size = 5
       port = ${CassandraLauncher.randomPort}
@@ -108,7 +112,7 @@ class ColorFruitTagger extends WriteEventAdapter {
 
 abstract class AbstractEventsByTagSpec(override val systemName: String, config: Config)
   extends TestKit(ActorSystem(systemName, config))
-  with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
+  with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle with BeforeAndAfterEach {
   import EventsByTagSpec._
 
   implicit val mat = ActorMaterializer()(system)
@@ -186,6 +190,16 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
     Try(session.close())
     Try(session.getCluster.close())
     super.afterAll()
+  }
+
+  val logProbe = TestProbe()
+  system.eventStream.subscribe(logProbe.ref, classOf[Warning])
+  system.eventStream.subscribe(logProbe.ref, classOf[Error])
+
+  override protected def afterEach(): Unit = {
+    // check for the buffer exceeded log (and other issues)
+    logProbe.expectNoMsg(100.millis)
+    super.afterEach()
   }
 }
 
@@ -1313,6 +1327,130 @@ class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec
       probe.request(2000)
       probe.expectNextN(200)
       probe.expectComplete()
+    }
+  }
+}
+
+class EventsByTagStrictBySeqMemoryIssueSpec
+  extends AbstractEventsByTagSpec("EventsByTagStrictBySeqMemoryIssueSpec", EventsByTagSpec.strictConfig) {
+  import EventsByTagSpec._
+
+  "Cassandra eventsByTag with many events" must {
+    "not use more than then buffer capacity when looking for delayed" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5).minusDays(4)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+      val w3 = UUID.randomUUID().toString
+
+      // max-buffer-size = 50
+      // create 120 events per day in total, 60 from each one of the two persistenceId
+      var lastT = t1
+      for {
+        day <- 0L to 3L
+        n <- 1L to 60L
+      } {
+        val seqNr = 60 * day + n
+        val eventA = PersistentRepr(s"A$seqNr", seqNr, "a", "", writerUuid = w1)
+        val eventB = PersistentRepr(s"B$n", seqNr, "b", "", writerUuid = w2)
+        val t = t1.plus(day, ChronoUnit.DAYS).plus(2 * n, ChronoUnit.MILLIS)
+        writeTestEvent(t, eventA, Set("T13"))
+        writeTestEvent(t.plus(1L, ChronoUnit.MILLIS), eventB, Set("T13"))
+        lastT = t
+      }
+
+      val src = queries.eventsByTag(tag = "T13", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+
+      val requested1 = 150L
+      probe.request(requested1) // somewhere in day 2
+      probe.expectNextN(requested1)
+      probe.expectNoMsg(200.millis)
+      system.log.debug(s"Part 1 done")
+
+      // beginning of current day
+      val requested2 = 120L * 4 - requested1 - 90
+      probe.request(requested2)
+      probe.expectNextN(requested2)
+      probe.expectNoMsg(2.seconds) // enough to trigger delayed backtracking
+      system.log.debug(s"Part 2 done")
+
+      // request remaining + 30
+      val requested3 = 120L * 4 - requested1 - requested2 + 30
+      probe.request(requested3)
+      probe.expectNextN(requested3 - 30)
+      probe.expectNoMsg(2.seconds)
+      system.log.debug(s"Part 3 done")
+
+      // delayed events from another persistenceId
+      // earlier timestamp than last retrieved event so these will be found by the "backtracking delayed query"
+      (1L to 200L).foreach { n =>
+        val eventC = PersistentRepr(s"C$n", n, "c", "", writerUuid = w3)
+        writeTestEvent(lastT.minus(1, ChronoUnit.SECONDS).plus(n, ChronoUnit.MILLIS), eventC, Set("T13"))
+      }
+      probe.expectNextN(30)
+      probe.expectNoMsg(200.millis)
+      probe.request(1000)
+      probe.expectNextN(200L - 30)
+
+      probe.cancel()
+    }
+
+    "not use more than then buffer capacity when looking for missing" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5).minusDays(1)
+      val w1 = UUID.randomUUID().toString
+      val w2 = UUID.randomUUID().toString
+      val w3 = UUID.randomUUID().toString
+
+      // max-buffer-size = 50
+      (1L to 100L).foreach { n =>
+        val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
+        val t = t1.plus(3 * n, ChronoUnit.MILLIS)
+        writeTestEvent(t, eventA, Set("T14"))
+      }
+
+      var missingEvent: PersistentRepr = null
+      var missingEventTime: LocalDateTime = null
+      (101L to 120L).foreach { n =>
+        val t = t1.plus(3 * n, ChronoUnit.MILLIS)
+        if (n <= 112) {
+          val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
+          writeTestEvent(t, eventA, Set("T14"))
+        }
+
+        val eventB = PersistentRepr(s"B$n", n, "b", "", writerUuid = w2)
+        val t2 = t.plus(1L, ChronoUnit.MILLIS)
+        if (n == 113) {
+          missingEvent = eventB
+          missingEventTime = t2
+        } else
+          writeTestEvent(t2, eventB, Set("T14"))
+      }
+
+      val src = queries.eventsByTag(tag = "T14", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+
+      val requested1 = 130L
+      probe.request(requested1)
+      val expected1 = 100L + 12 * 2
+      probe.expectNextN(expected1)
+      probe.expectNoMsg(2.seconds)
+
+      system.log.debug("writing missing event, 113, and a bunch of delayed from C")
+      (1L to 100L).foreach { n =>
+        val eventC = PersistentRepr(s"C$n", n, "c", "", writerUuid = w3)
+        val t = t1.plus(3 * n + 2, ChronoUnit.MILLIS)
+        writeTestEvent(t, eventC, Set("T14"))
+      }
+      writeTestEvent(missingEventTime, missingEvent, Set("T14"))
+      val expected2 = requested1 - expected1
+      probe.expectNextN(expected2)
+      probe.expectNoMsg(200.millis)
+
+      probe.request(1000)
+      probe.expectNextN(8 + 100 - expected2)
+      probe.expectNoMsg(200.millis)
+
+      probe.cancel()
     }
   }
 }
