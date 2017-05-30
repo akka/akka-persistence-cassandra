@@ -205,7 +205,10 @@ private[query] class EventsByTagPublisher(
   }
 
   def timeForReplay: Boolean =
-    !isToOffsetDone && (backtracking || buf.isEmpty || buf.size <= maxBufferSize / 2)
+    !isToOffsetDone && !isBufferFull && (backtracking || buf.isEmpty || buf.size <= maxBufferSize / 2)
+
+  private def isBufferFull: Boolean =
+    buf.size >= maxBufferSize
 
   def isToOffsetDone: Boolean = toOffset match {
     case None       => false
@@ -231,9 +234,7 @@ private[query] class EventsByTagPublisher(
   }
 
   def replay(): Unit = {
-    val limit =
-      if (backtracking) maxBufferSize
-      else maxBufferSize - buf.size
+    val limit = maxBufferSize - buf.size
     val toOffs = backtrackingMode match {
       case NoBacktracking               => UUIDs.endOf(System.currentTimeMillis() - eventualConsistencyDelayMillis)
       case LookingForDelayed            => highestOffset
@@ -260,7 +261,22 @@ private[query] class EventsByTagPublisher(
         stopIfDone()
       else
         buf :+= env
-      deliverBuf()
+
+      if (buf.size > maxBufferSize) {
+        val errMsg = s"${backtrackingLog}, buffer size exceeded. Shouldn't happen, please report issue. " +
+          s"Got event for tag [$tag] from pid [${env.persistentRepr.persistenceId}] with " +
+          s"seqNr [${env.persistentRepr.sequenceNr}] and offset [${formatOffset(env.offset)}], buffered [${buf.size}]"
+        log.error(errMsg)
+        onErrorThenStop(new IllegalStateException(errMsg))
+      } else {
+        // This is useful when debugging but too much logging to have enabled by default
+        // if (log.isDebugEnabled)
+        //   log.debug(
+        //     s"${backtrackingLog}got event for tag [{}] from pid [{}] with seqNr [{}] and offset [{}], buffered [${buf.size}]",
+        //     tag, env.persistentRepr.persistenceId, env.persistentRepr.sequenceNr, formatOffset(env.offset))
+
+        deliverBuf()
+      }
 
     case ReplayDone(retrievedCount, deliveredCount, seqN, highest, mightBeMore) =>
       if (log.isDebugEnabled)

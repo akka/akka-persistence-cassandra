@@ -61,13 +61,20 @@ private[query] class EventsByTagFetcher(
     serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
   }
 
+  // when backtracking most will be duplicates so then the maxBufferSize is used as limit
+  // but more than the requested `limit` will not be delivered
+  private val selectLimit = backtrackingMode match {
+    case NoBacktracking => limit
+    case _              => settings.maxBufferSize
+  }
+
   var highestOffset: UUID = fromOffset
   var retrievedCount = 0
   var deliveredCount = 0
   var seqNumbers = seqN
 
   override def preStart(): Unit = {
-    val boundStmt = preparedSelect.ps.bind(tag, timeBucket.key, fromOffset, toOffset, limit: Integer)
+    val boundStmt = preparedSelect.ps.bind(tag, timeBucket.key, fromOffset, toOffset, selectLimit: Integer)
     boundStmt.setFetchSize(settings.fetchSize)
     val init: Future[ResultSet] = preparedSelect.session.executeAsync(boundStmt)
     init.map(InitResultSet.apply).pipeTo(self)
@@ -90,14 +97,20 @@ private[query] class EventsByTagFetcher(
       throw e
   }
 
+  private def replayDone(): Unit = {
+    replyTo ! ReplayDone(retrievedCount, deliveredCount, seqNumbers, highestOffset, retrievedCount >= selectLimit)
+    context.stop(self)
+  }
+
   def continue(resultSet: ResultSet): Unit = {
-    if (resultSet.isExhausted()) {
-      replyTo ! ReplayDone(retrievedCount, deliveredCount, seqNumbers, highestOffset, retrievedCount >= limit)
-      context.stop(self)
+    if (deliveredCount == limit || resultSet.isExhausted()) {
+      replayDone()
     } else {
 
       @tailrec def loop(n: Int): Unit = {
-        if (n == 0) {
+        if (deliveredCount == limit)
+          replayDone()
+        else if (n == 0) {
           val more: Future[ResultSet] = resultSet.fetchMoreResults()
           more.map(_ => Fetched).pipeTo(self)
         } else {
@@ -108,8 +121,8 @@ private[query] class EventsByTagFetcher(
 
           val offs = row.getUUID("timestamp")
           if (compare(offs, highestOffset) <= 0)
-            log.debug("Events were not ordered by timestamp. Consider increasing eventual-consistency-delay " +
-              "if the order is of importance.")
+            log.debug("Event from [{}] with seqNr [{}] was not ordered by timestamp. Consider increasing eventual-consistency-delay " +
+              "if the order is of importance.", pid, seqNr)
           else
             highestOffset = offs
 
