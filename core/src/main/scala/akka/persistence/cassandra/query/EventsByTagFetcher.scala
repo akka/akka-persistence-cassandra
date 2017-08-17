@@ -53,9 +53,9 @@ private[query] class EventsByTagFetcher(
   import akka.persistence.cassandra.query.UUIDComparator.comparator.compare
   import EventsByTagFetcher._
   import EventsByTagPublisher._
-  import CassandraJournal.deserializeEvent
 
-  val serialization = SerializationExtension(context.system)
+  private val serialization = SerializationExtension(context.system)
+  private val eventDeserializer = new CassandraJournal.EventDeserializer(serialization)
 
   def persistentFromByteBuffer(b: ByteBuffer): PersistentRepr = {
     serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
@@ -176,14 +176,14 @@ private[query] class EventsByTagFetcher(
     }
   }
 
-  private def toPersistentRepr(row: Row, persistenceId: String, sequenceNr: Long): PersistentRepr =
+  private def toPersistentRepr(row: Row, persistenceId: String, sequenceNr: Long): PersistentRepr = {
     row.getBytes("message") match {
       case null =>
         PersistentRepr(
-          payload = deserializeEvent(serialization, row),
+          payload = eventDeserializer.deserializeEvent(row),
           sequenceNr = sequenceNr,
           persistenceId = persistenceId,
-          manifest = row.getString("event_manifest"),
+          manifest = row.getString("event_manifest"), // manifest for event adapters
           deleted = false,
           sender = null,
           writerUuid = row.getString("writer_uuid")
@@ -192,5 +192,6 @@ private[query] class EventsByTagFetcher(
         // for backwards compatibility
         persistentFromByteBuffer(b)
     }
+  }
 
 }

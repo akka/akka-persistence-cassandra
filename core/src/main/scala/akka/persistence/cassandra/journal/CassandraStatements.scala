@@ -25,6 +25,10 @@ trait CassandraStatements {
 
   // message is the serialized PersistentRepr that was used in v0.6 and earlier
   // event is the serialized application event that is used in v0.7 and later
+  // The event's serialization manifest is stored in ser_manifest and the
+  // PersistentRepr.manifest is stored in event_manifest (sorry for naming confusion).
+  // PersistentRepr.manifest is used by the event adapters (in akka-persistence).
+  // ser_manifest together with ser_id is used for the serialization of the event (payload).
   def createTable = s"""
       CREATE TABLE IF NOT EXISTS ${tableName} (
         used boolean static,
@@ -38,6 +42,9 @@ trait CassandraStatements {
         ser_manifest text,
         event_manifest text,
         event blob,
+        meta_ser_id int,
+        meta_ser_manifest text,
+        meta blob,
         tag1 text,
         tag2 text,
         tag3 text,
@@ -56,7 +63,8 @@ trait CassandraStatements {
 
   def createEventsByTagMaterializedView(tagId: Int) = s"""
       CREATE MATERIALIZED VIEW IF NOT EXISTS $eventsByTagViewName$tagId AS
-         SELECT tag$tagId, timebucket, timestamp, persistence_id, partition_nr, sequence_nr, writer_uuid, ser_id, ser_manifest, event_manifest, event, message
+         SELECT tag$tagId, timebucket, timestamp, persistence_id, partition_nr, sequence_nr, writer_uuid, ser_id, ser_manifest, event_manifest, event,
+           meta_ser_id, meta_ser_manifest, meta, message
          FROM $tableName
          WHERE persistence_id IS NOT NULL AND partition_nr IS NOT NULL AND sequence_nr IS NOT NULL
            AND tag$tagId IS NOT NULL AND timestamp IS NOT NULL AND timebucket IS NOT NULL
@@ -64,14 +72,18 @@ trait CassandraStatements {
          WITH CLUSTERING ORDER BY (timestamp ASC)
       """
 
-  def writeMessage = s"""
-      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event, tag1, tag2, tag3, used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , true)
+  def writeMessage(withMeta: Boolean) = s"""
+      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
+        ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
+        tag1, tag2, tag3, used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true)
     """
 
-  def writeMessage_noTags = s"""
-      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event, used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ? , true)
+  def writeMessageNoTags(withMeta: Boolean) = s"""
+      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
+        ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
+        used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true)
     """
 
   def deleteMessage = s"""

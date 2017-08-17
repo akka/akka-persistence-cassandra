@@ -37,6 +37,7 @@ import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.policies.LoggingRetryPolicy
 import akka.persistence.cassandra.journal.FixedRetryPolicy
 import com.datastax.driver.core.policies.RetryPolicy
+import akka.annotation.InternalApi
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -275,7 +276,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         createSource[EventEnvelope, PreparedStatement](selectStatement(tag), (s, ps) =>
           Source.actorPublisher[UUIDPersistentRepr](EventsByTagPublisher.props(tag, fromOffset,
             None, queryPluginConfig, s, ps))
-            .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
+            .mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
             .mapMaterializedValue(_ => NotUsed)
             .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
             .withAttributes(ActorAttributes.dispatcher(pluginDispatcher)))
@@ -332,7 +333,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         createSource[EventEnvelope, PreparedStatement](selectStatement(tag), (s, ps) =>
           Source.actorPublisher[UUIDPersistentRepr](EventsByTagPublisher.props(tag, fromOffset,
             toOffset, queryPluginConfig, s, ps))
-            .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
+            .mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
             .mapMaterializedValue(_ => NotUsed)
             .named("currentEventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
             .withAttributes(ActorAttributes.dispatcher(pluginDispatcher)))
@@ -447,9 +448,16 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         )
       )
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
+        .map(mapEvent)
         .mapMaterializedValue(_ => NotUsed)
         .named(name))
   }
+
+  /**
+   * INTERNAL API: Internal hook for amending the event payload. Called from all queries.
+   */
+  @InternalApi private[akka] def mapEvent(persistentRepr: PersistentRepr): PersistentRepr =
+    persistentRepr
 
   private[this] def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>

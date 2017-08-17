@@ -39,6 +39,9 @@ import akka.stream.ActorMaterializer
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.PersistenceQuery
 import akka.stream.scaladsl.Sink
+import scala.util.Success
+import scala.util.Failure
+import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 
 class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
 
@@ -86,7 +89,14 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       .flatMap(_ => initializePersistentConfig(session).map(_ => Done))
   )
 
-  def preparedWriteMessage = session.prepare(if (config.enableEventsByTagQuery) writeMessage else writeMessage_noTags).map(_.setIdempotent(true))
+  def preparedWriteMessage = session.prepare(
+    if (config.enableEventsByTagQuery) writeMessage(withMeta = false) else writeMessageNoTags(withMeta = false)
+  )
+    .map(_.setIdempotent(true))
+  def preparedWriteMessageWithMeta = session.prepare(
+    if (config.enableEventsByTagQuery) writeMessage(withMeta = true) else writeMessageNoTags(withMeta = true)
+  )
+    .map(_.setIdempotent(true))
   def preparedDeleteMessages = session.prepare(deleteMessages).map(_.setIdempotent(true))
   def preparedSelectMessages = session.prepare(selectMessages)
     .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
@@ -116,6 +126,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     case CassandraJournal.Init =>
       // try initialize early, to be prepared for first real request
       preparedWriteMessage
+      preparedWriteMessageWithMeta
       preparedDeleteMessages
       preparedSelectMessages
       preparedCheckInUse
@@ -233,7 +244,12 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       val nowUuid = UUIDs.timeBased()
       val now = UUIDs.unixTimestamp(nowUuid)
 
-      preparedWriteMessage.map { stmt =>
+      // using two separate statements with or without the meta data columns because
+      // then users doesn't have to alter table and add the new columns if they don't use
+      // the meta data feature
+      val stmt = if (m.meta.isDefined) preparedWriteMessageWithMeta else preparedWriteMessage
+
+      stmt.map { stmt =>
         val bs = stmt.bind()
         bs.setString("persistence_id", persistenceId)
         bs.setLong("partition_nr", maxPnr)
@@ -243,9 +259,19 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         bs.setString("writer_uuid", m.writerUuid)
         bs.setInt("ser_id", m.serId)
         bs.setString("ser_manifest", m.serManifest)
-        bs.setString("event_manifest", m.eventManifest)
+        bs.setString("event_manifest", m.eventAdapterManifest)
         bs.setBytes("event", m.serialized)
 
+        // meta data, if any
+        m.meta match {
+          case Some(meta) =>
+            bs.setInt("meta_ser_id", meta.serId)
+            bs.setString("meta_ser_manifest", meta.serManifest)
+            bs.setBytes("meta", meta.serialized)
+          case None =>
+        }
+
+        // tags, if any
         if (m.tags.nonEmpty) {
           var tagCounts = Array.ofDim[Int](maxTagsPerEvent)
           m.tags.foreach { tag =>
@@ -397,8 +423,32 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   }
 
   private def serializeEvent(p: PersistentRepr, tags: Set[String]): Serialized = {
+
+    def serializeMeta(): Option[SerializedMeta] = {
+      // meta data, if any
+      p.payload match {
+        case EventWithMetaData(_, m) =>
+          val m2 = m.asInstanceOf[AnyRef]
+          val serializer = serialization.findSerializerFor(m2)
+          val serManifest = serializer match {
+            case ser2: SerializerWithStringManifest ⇒
+              ser2.manifest(m2)
+            case _ ⇒
+              if (serializer.includeManifest) m2.getClass.getName
+              else PersistentRepr.Undefined
+          }
+          val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
+          Some(SerializedMeta(metaBuf, serManifest, serializer.identifier))
+        case evt => None
+      }
+    }
+
     def doSerializeEvent(): Serialized = {
-      val event: AnyRef = p.payload.asInstanceOf[AnyRef]
+      val event: AnyRef = (p.payload match {
+        case EventWithMetaData(evt, _) => evt // unwrap
+        case evt                       => evt
+      }).asInstanceOf[AnyRef]
+
       val serializer = serialization.findSerializerFor(event)
       val serManifest = serializer match {
         case ser2: SerializerWithStringManifest ⇒
@@ -408,8 +458,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
           else PersistentRepr.Undefined
       }
       val serEvent = ByteBuffer.wrap(serialization.serialize(event).get)
+
       Serialized(p.persistenceId, p.sequenceNr, serEvent, tags, p.manifest, serManifest,
-        serializer.identifier, p.writerUuid)
+        serializer.identifier, p.writerUuid, serializeMeta())
     }
 
     // serialize actor references with full address information (defaultAddress)
@@ -428,15 +479,57 @@ private[cassandra] object CassandraJournal {
   private case class MessageId(persistenceId: String, sequenceNr: Long)
   private case class SerializedAtomicWrite(persistenceId: String, payload: Seq[Serialized])
   private case class Serialized(persistenceId: String, sequenceNr: Long, serialized: ByteBuffer, tags: Set[String],
-                                eventManifest: String, serManifest: String, serId: Int, writerUuid: String)
+                                eventAdapterManifest: String, serManifest: String, serId: Int, writerUuid: String,
+                                meta: Option[SerializedMeta])
+  private case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
   private case class PartitionInfo(partitionNr: Long, minSequenceNr: Long, maxSequenceNr: Long)
 
-  def deserializeEvent(serialization: Serialization, row: Row): Any = {
-    serialization.deserialize(
-      row.getBytes("event").array,
-      row.getInt("ser_id"),
-      row.getString("ser_manifest")
-    ).get
+  class EventDeserializer(serialization: Serialization) {
+
+    // cache to avoid repeated check via ColumnDefinitions
+    @volatile private var _hasMetaColumns: Option[Boolean] = None
+
+    def hasMetaColumns(row: Row): Boolean = _hasMetaColumns match {
+      case Some(b) => b
+      case None =>
+        val b = row.getColumnDefinitions.contains("meta")
+        _hasMetaColumns = Some(b)
+        b
+    }
+
+    def deserializeEvent(row: Row): Any = {
+      val event = serialization.deserialize(
+        row.getBytes("event").array,
+        row.getInt("ser_id"),
+        row.getString("ser_manifest")
+      ).get
+
+      if (hasMetaColumns(row)) {
+        row.getBytes("meta") match {
+          case null =>
+            event // no meta data
+          case metaBytes =>
+            // has meta data, wrap in EventWithMetaData
+            val metaSerId = row.getInt("meta_ser_id")
+            val metaSerManifest = row.getString("meta_ser_manifest")
+            val meta = serialization.deserialize(
+              metaBytes.array,
+              metaSerId,
+              metaSerManifest
+            ) match {
+              case Success(m) => m
+              case Failure(_) =>
+                // don't fail replay/query because of deserialization problem with meta data
+                // see motivation in UnknownMetaData
+                UnknownMetaData(metaSerId, metaSerManifest)
+            }
+            EventWithMetaData(event, meta)
+        }
+      } else {
+        // for backwards compatibility, when table was not altered, meta columns not added
+        event // no meta data
+      }
+    }
   }
 }
 

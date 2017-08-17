@@ -17,6 +17,8 @@ trait CassandraStatements {
       WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
     """
 
+  // snapshot_data is the serialized snapshot payload
+  // snapshot is for backwards compatibility and not used for new rows
   def createTable = s"""
       CREATE TABLE IF NOT EXISTS ${tableName} (
         persistence_id text,
@@ -26,14 +28,18 @@ trait CassandraStatements {
         ser_manifest text,
         snapshot_data blob,
         snapshot blob,
+        meta_ser_id int,
+        meta_ser_manifest text,
+        meta blob,
         PRIMARY KEY (persistence_id, sequence_nr))
         WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${config.gcGraceSeconds}
         AND compaction = ${config.tableCompactionStrategy.asCQL}
     """
 
-  def writeSnapshot = s"""
-      INSERT INTO ${tableName} (persistence_id, sequence_nr, timestamp, ser_manifest, ser_id, snapshot_data)
-      VALUES (?, ?, ?, ?, ?, ?)
+  def writeSnapshot(withMeta: Boolean) = s"""
+      INSERT INTO ${tableName} (persistence_id, sequence_nr, timestamp, ser_manifest, ser_id, snapshot_data
+      ${if (withMeta) ", meta_ser_id, meta_ser_manifest, meta" else ""})
+      VALUES (?, ?, ?, ?, ?, ? ${if (withMeta) ", ?, ?, ?" else ""})
     """
 
   def deleteSnapshot = s"""

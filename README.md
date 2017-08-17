@@ -88,6 +88,17 @@ Persistence Query usage example to obtain a stream with all events tagged with "
 Migrations
 ----------
 
+### Migrations from 0.54 to 0.55
+
+In version 0.55 additional columns were added to be able to store meta data about an event without altering
+the actual domain event.
+
+The new columns `meta_ser_id`, `meta_ser_manifest`, and `meta` are defined in the [new journal table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.55/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L45-47 and [new snapshot table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.55/src/main/scala/akka/persistence/cassandra/snapshot/CassandraStatements.scala#L31-33
+
+These columns are used when the event is wrapped in `akka.persistence.cassandra.EventWithMetaData` or snapshot is wrapped in `akka.persistence.cassandra.SnapshotWithMetaData`. It is optional to alter the table and add the columns. It's only required to add the columns if such meta data is used.
+
+It is also not required to add the materialized views, not even if the meta data is stored in the journal table. If the materialized view is not changed the plain events are retrieved with the `eventsByTag` query and they are not wrapped in `EventWithMetaData`. Note that Cassandra [does not support](http://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlAlterMaterializedView.html) adding columns to an existing materialized view. 
+
 ### Migrations from 0.51 to 0.52
 
 `CassandraLauncher` has been pulled out into its own artifact, and now bundles Cassandra into a single fat jar, which is bundled into the launcher artifact. This has allowed Cassandra to be launched without it being on the classpath, which prevents classpath conflicts, but it also means that Cassandra can't be configured by changing files on the classpath, for example, a custom `logback.xml` in `src/test/resources` is no longer sufficient to configure Cassandra's logging. To address this, `CassandraLauncher.start` now accepts a list of classpath elements that will be added to the classpath, and provides a utility for locating classpath elements based on resource name.
