@@ -52,7 +52,10 @@ object CassandraReadJournal {
    */
   final val Identifier = "cassandra-query-journal"
 
-  private case class CombinedEventsByPersistenceIdStmts(
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] case class CombinedEventsByPersistenceIdStmts(
     preparedSelectEventsByPersistenceId: PreparedStatement,
     preparedSelectInUse:                 PreparedStatement,
     preparedSelectDeletedTo:             PreparedStatement
@@ -157,7 +160,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
         .setRetryPolicy(readRetryPolicy))
 
-  private def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
     for {
       ps1 <- preparedSelectEventsByPersistenceId
       ps2 <- preparedSelectInUse
@@ -290,7 +296,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     }
   }
 
-  private def createSource[T, P](
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def createSource[T, P](
     prepStmt: Future[P],
     source:   (Session, P) => Source[T, NotUsed]
   ): Source[T, NotUsed] = {
@@ -409,13 +418,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
-   * This is a low-level method that return journal events as they are persisted.
+   * INTERNAL API: This is a low-level method that return journal events as they are persisted.
    *
    * The fromJournal adaptation happens at higher level:
    *  - In the AsyncWriteJournal for the PersistentActor and PersistentView recovery.
    *  - In the public eventsByPersistenceId and currentEventsByPersistenceId queries.
    */
-  private[cassandra] def eventsByPersistenceId(
+  @InternalApi private[akka] def eventsByPersistenceId(
     persistenceId:          String,
     fromSequenceNr:         Long,
     toSequenceNr:           Long,

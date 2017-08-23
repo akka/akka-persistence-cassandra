@@ -24,8 +24,12 @@ import akka.actor.NoSerializationVerificationNeeded
 import akka.persistence.cassandra.PreparedStatementEnvelope
 import com.datastax.driver.core.Row
 import akka.persistence.cassandra.journal.CassandraJournal
+import akka.annotation.InternalApi
 
-private[query] object EventsByTagFetcher {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object EventsByTagFetcher {
 
   private final case class InitResultSet(rs: ResultSet)
     extends DeadLetterSuppression with NoSerializationVerificationNeeded
@@ -40,7 +44,10 @@ private[query] object EventsByTagFetcher {
 
 }
 
-private[query] class EventsByTagFetcher(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class EventsByTagFetcher(
   tag: String, timeBucket: TimeBucket, fromOffset: UUID, toOffset: UUID, limit: Int,
   backtrackingMode: EventsByTagPublisher.BacktrackingMode,
   replyTo:          ActorRef, preparedSelect: PreparedStatementEnvelope,

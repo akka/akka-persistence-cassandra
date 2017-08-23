@@ -6,12 +6,13 @@ package akka.persistence.cassandra.query
 import java.util.UUID
 
 import akka.persistence.PersistentRepr
+import akka.annotation.InternalApi
 
 /**
- * Wrap the [[PersistentRepr]] to add the UUID for
+ * INTERNAL API: Wrap the [[PersistentRepr]] to add the UUID for
  * `eventsByTag` query, or similar queries.
  */
-private[query] final case class UUIDPersistentRepr(
+@InternalApi private[akka] final case class UUIDPersistentRepr(
   offset:         UUID,
   persistentRepr: PersistentRepr
 )

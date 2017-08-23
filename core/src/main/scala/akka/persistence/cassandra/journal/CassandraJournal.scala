@@ -42,6 +42,7 @@ import akka.stream.scaladsl.Sink
 import scala.util.Success
 import scala.util.Failure
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
+import akka.annotation.InternalApi
 
 class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
 
@@ -110,8 +111,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   def preparedInsertDeletedTo = session.prepare(insertDeletedTo)
     .map(_.setConsistencyLevel(writeConsistency).setIdempotent(true))
 
-  private[cassandra] implicit val materializer = ActorMaterializer()
-  private[cassandra] lazy val queries =
+  private[akka] implicit val materializer = ActorMaterializer()
+  private[akka] lazy val queries =
     PersistenceQuery(context.system.asInstanceOf[ExtendedActorSystem])
       .readJournalFor[CassandraReadJournal](config.queryPlugin)
 
@@ -472,7 +473,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
 }
 
-private[cassandra] object CassandraJournal {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object CassandraJournal {
   private case object Init
 
   private case class WriteFinished(pid: String, f: Future[Done]) extends NoSerializationVerificationNeeded

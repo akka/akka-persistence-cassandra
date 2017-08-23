@@ -3,6 +3,7 @@
  */
 package akka.persistence.cassandra.query
 
+import scala.concurrent.duration._
 import scala.annotation.tailrec
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
@@ -16,22 +17,29 @@ import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.QueryActorPublisher._
 
 import scala.util.control.NonFatal
+import akka.annotation.InternalApi
+import java.util.concurrent.ThreadLocalRandom
 
-object QueryActorPublisher {
-  private[query] final case class ReplayFailed(cause: Throwable)
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object QueryActorPublisher {
+  final case class ReplayFailed(cause: Throwable)
     extends DeadLetterSuppression with NoSerializationVerificationNeeded
 
-  sealed trait Action extends NoSerializationVerificationNeeded
+  sealed trait Action extends DeadLetterSuppression with NoSerializationVerificationNeeded
   final case class NewResultSet(rs: ResultSet) extends Action
   final case class FetchedResultSet(rs: ResultSet) extends Action
   final case class Finished(resultSet: ResultSet) extends Action
 
-  private case object Continue
+  case object Continue extends DeadLetterSuppression
 }
 
 //TODO: Handle database timeout, retry and failure handling.
 //TODO: Write tests for buffer size, delivery buffer etc.
 /**
+ * INTERNAL API
+ *
  * Abstract Query publisher. Can be integrated with Akka Streams as a Source.
  * Intended to be extended by concrete Query publisher classes. This class manages the stream
  * lifecycle, live stream updates, refreshInterval, max buffer size and causal consistency given an
@@ -42,7 +50,7 @@ object QueryActorPublisher {
  * @tparam MessageType Type of message.
  * @tparam State Type of state.
  */
-private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
+@InternalApi private[akka] abstract class QueryActorPublisher[MessageType, State: ClassTag](
   refreshInterval: Option[FiniteDuration],
   config:          CassandraReadJournalConfig
 )
@@ -56,12 +64,15 @@ private[query] abstract class QueryActorPublisher[MessageType, State: ClassTag](
   import context.dispatcher
 
   private[this] val tickTask =
-    refreshInterval.map {
-      i => context.system.scheduler.schedule(i, i, self, Continue)(context.dispatcher)
+    refreshInterval.map { i =>
+      val initial =
+        if (i >= 2.seconds) ThreadLocalRandom.current().nextLong(i.toMillis).millis
+        else i
+      context.system.scheduler.schedule(initial, i, self, Continue)(context.dispatcher)
     }
 
   override def postStop(): Unit = {
-    tickTask.map(_.cancel())
+    tickTask.foreach(_.cancel())
     super.postStop()
   }
 

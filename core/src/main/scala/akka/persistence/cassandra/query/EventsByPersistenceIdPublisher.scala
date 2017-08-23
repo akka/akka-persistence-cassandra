@@ -19,9 +19,13 @@ import com.datastax.driver.core.utils.Bytes
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ ExecutionContext, Future }
 import com.datastax.driver.core.policies.RetryPolicy
+import akka.annotation.InternalApi
 
-private[query] object EventsByPersistenceIdPublisher {
-  private[query] final case class EventsByPersistenceIdSession(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object EventsByPersistenceIdPublisher {
+  final case class EventsByPersistenceIdSession(
     selectEventsByPersistenceIdQuery: PreparedStatement,
     selectInUseQuery:                 PreparedStatement,
     selectDeletedToQuery:             PreparedStatement,

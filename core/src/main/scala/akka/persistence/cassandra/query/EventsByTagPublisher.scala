@@ -30,8 +30,13 @@ import akka.cluster.pubsub.DistributedPubSubMediator
 import akka.persistence.cassandra.PreparedStatementEnvelope
 import java.time.format.DateTimeFormatter
 import java.time.Instant
+import akka.annotation.InternalApi
+import java.util.concurrent.ThreadLocalRandom
 
-private[query] object EventsByTagPublisher {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object EventsByTagPublisher {
 
   def props(tag: String, fromOffset: UUID, toOffset: Option[UUID], settings: CassandraReadJournalConfig,
             session: Session, preparedSelect: PreparedStatement): Props = {
@@ -39,16 +44,16 @@ private[query] object EventsByTagPublisher {
       settings, PreparedStatementEnvelope(session, preparedSelect))
   }
 
-  private[query] case object Continue extends DeadLetterSuppression
+  case object Continue extends DeadLetterSuppression
 
-  private[query] case class ReplayDone(retrievedCount: Int, deliveredCount: Int, seqNumbers: Option[SequenceNumbers],
-                                       highest: UUID, mightBeMore: Boolean)
-    extends DeadLetterSuppression
-  private[query] case class ReplayAborted(
+  final case class ReplayDone(retrievedCount: Int, deliveredCount: Int, seqNumbers: Option[SequenceNumbers],
+                              highest: UUID, mightBeMore: Boolean) extends DeadLetterSuppression
+
+  final case class ReplayAborted(
     seqNumbers: Option[SequenceNumbers], persistenceId: String, expectedSeqNr: Option[Long], gotSeqNr: Long
-  )
-    extends DeadLetterSuppression
-  private[query] final case class ReplayFailed(cause: Throwable)
+  ) extends DeadLetterSuppression
+
+  final case class ReplayFailed(cause: Throwable)
     extends DeadLetterSuppression with NoSerializationVerificationNeeded
 
   private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -58,16 +63,19 @@ private[query] object EventsByTagPublisher {
     s"$uuid (${timestampFormatter.format(time)})"
   }
 
-  private[query] sealed trait BacktrackingMode extends NoSerializationVerificationNeeded
-  private[query] case object NoBacktracking extends BacktrackingMode
-  private[query] case object LookingForDelayed extends BacktrackingMode
-  private[query] final case class LookingForMissing(
+  sealed trait BacktrackingMode extends NoSerializationVerificationNeeded
+  case object NoBacktracking extends BacktrackingMode
+  case object LookingForDelayed extends BacktrackingMode
+  final case class LookingForMissing(
     toOffset: UUID, abortDeadLine: Deadline
   ) extends BacktrackingMode
 
 }
 
-private[query] class EventsByTagPublisher(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class EventsByTagPublisher(
   tag: String, fromOffset: UUID, toOffset: Option[UUID],
   settings: CassandraReadJournalConfig, preparedSelect: PreparedStatementEnvelope
 )
@@ -104,8 +112,12 @@ private[query] class EventsByTagPublisher(
   private var backtrackingMode: BacktrackingMode = NoBacktracking
   var replayCountZero = false
 
-  val tickTask =
-    context.system.scheduler.schedule(refreshInterval, refreshInterval, self, Continue)(context.dispatcher)
+  val tickTask = {
+    val initial =
+      if (refreshInterval >= 2.seconds) ThreadLocalRandom.current().nextLong(refreshInterval.toMillis).millis
+      else refreshInterval
+    context.system.scheduler.schedule(initial, refreshInterval, self, Continue)(context.dispatcher)
+  }
 
   override def preRestart(reason: Throwable, message: Option[Any]): Unit =
     onErrorThenStop(reason)

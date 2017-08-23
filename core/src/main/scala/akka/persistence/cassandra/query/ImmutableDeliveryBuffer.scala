@@ -4,8 +4,12 @@
 package akka.persistence.cassandra.query
 
 import akka.stream.actor.ActorPublisher
+import akka.annotation.InternalApi
 
-private[query] trait ImmutableDeliveryBuffer[T] { _: ActorPublisher[T] ⇒
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] trait ImmutableDeliveryBuffer[T] { _: ActorPublisher[T] ⇒
 
   def deliverBuf(buf: Vector[T]): Vector[T] =
     if (buf.nonEmpty && totalDemand > 0) {
