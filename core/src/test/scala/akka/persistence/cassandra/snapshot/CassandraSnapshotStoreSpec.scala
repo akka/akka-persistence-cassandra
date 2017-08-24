@@ -16,6 +16,7 @@ import akka.testkit.TestProbe
 import com.datastax.driver.core._
 import com.typesafe.config.ConfigFactory
 import scala.concurrent.Await
+import akka.persistence.cassandra.SnapshotWithMetaData
 
 object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(
@@ -79,8 +80,8 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStor
       val expected = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
 
       // write two more snapshots that cannot be de-serialized.
-      session.execute(writeSnapshot, pid, 17L: JLong, 123L: JLong, serId, "", ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
-      session.execute(writeSnapshot, pid, 18L: JLong, 124L: JLong, serId, "", ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
+      session.execute(writeSnapshot(withMeta = false), pid, 17L: JLong, 123L: JLong, serId, "", ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
+      session.execute(writeSnapshot(withMeta = false), pid, 18L: JLong, 124L: JLong, serId, "", ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
 
       // load most recent snapshot, first two attempts will fail ...
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
@@ -98,15 +99,31 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStor
       probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
 
       // write three more snapshots that cannot be de-serialized.
-      session.execute(writeSnapshot, pid, 17L: JLong, 123L: JLong, serId, "", ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
-      session.execute(writeSnapshot, pid, 18L: JLong, 124L: JLong, serId, "", ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
-      session.execute(writeSnapshot, pid, 19L: JLong, 125L: JLong, serId, "", ByteBuffer.wrap("fail-3".getBytes("UTF-8")))
+      session.execute(writeSnapshot(withMeta = false), pid, 17L: JLong, 123L: JLong, serId, "", ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
+      session.execute(writeSnapshot(withMeta = false), pid, 18L: JLong, 124L: JLong, serId, "", ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
+      session.execute(writeSnapshot(withMeta = false), pid, 19L: JLong, 125L: JLong, serId, "", ByteBuffer.wrap("fail-3".getBytes("UTF-8")))
 
       // load most recent snapshot, first three attempts will fail ...
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
 
       // no 4th attempt has been made
       probe.expectMsgType[LoadSnapshotFailed]
+    }
+
+    "store and load additional meta" in {
+      val probe = TestProbe()
+
+      // Somewhat confusing that two things are called meta data, SnapshotMetadata and SnapshotWithMetaData.
+      // However, user facing is only SnapshotWithMetaData, and we can't change SnapshotMetadata because that
+      // is in akka-persistence
+      snapshotStore.tell(SaveSnapshot(SnapshotMetadata(pid, 100), SnapshotWithMetaData("snap", "meta")), probe.ref)
+      probe.expectMsgType[SaveSnapshotSuccess]
+
+      // load most recent snapshot
+      snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
+      // get most recent snapshot
+      val loaded = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
+      loaded.snapshot should equal(SnapshotWithMetaData("snap", "meta"))
     }
   }
 }

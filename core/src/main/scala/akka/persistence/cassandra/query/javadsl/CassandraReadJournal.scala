@@ -35,6 +35,8 @@ object CassandraReadJournal {
  *
  * Corresponding Scala API is in [[akka.persistence.cassandra.query.scaladsl.CassandraReadJournal]].
  *
+ *
+ *
  * Configuration settings can be defined in the configuration section with the
  * absolute path corresponding to the identifier, which is `"cassandra-query-journal"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.

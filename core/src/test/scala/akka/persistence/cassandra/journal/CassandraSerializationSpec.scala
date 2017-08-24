@@ -11,6 +11,8 @@ import akka.serialization.{ BaseSerializer, Serializer }
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ Matchers, WordSpecLike }
+import akka.persistence.cassandra.EventWithMetaData
+import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 
 object CassandraSerializationSpec {
   val config = ConfigFactory.parseString(
@@ -19,7 +21,7 @@ object CassandraSerializationSpec {
        |akka.actor.serializers.crap="akka.persistence.cassandra.journal.BrokenDeSerialization"
        |akka.actor.serialization-identifiers."akka.persistence.cassandra.journal.BrokenDeSerialization" = 666
        |akka.actor.serialization-bindings {
-       |  "akka.persistence.cassandra.journal.CassandraSerializationSpec$$PersistsEverythingButCantKeepAnythingToHimself$$Event" = crap
+       |  "akka.persistence.cassandra.journal.CassandraSerializationSpec$$Persister$$CrapEvent" = crap
        |}
        |akka.persistence.journal.max-deletion-batch-size = 3
        |akka.persistence.publish-confirmations = on
@@ -32,11 +34,11 @@ object CassandraSerializationSpec {
     """.stripMargin
   ).withFallback(CassandraLifecycle.config)
 
-  object PersistsEverythingButCantKeepAnythingToHimself {
-    case class Event(n: Int)
+  object Persister {
+    case class CrapEvent(n: Int)
   }
 
-  class PersistsEverythingButCantKeepAnythingToHimself(override val persistenceId: String, probe: ActorRef) extends PersistentActor {
+  class Persister(override val persistenceId: String, probe: ActorRef) extends PersistentActor {
     override def receiveRecover: Receive = {
       case msg => probe ! msg
     }
@@ -68,25 +70,59 @@ class CassandraSerializationSpec extends TestKit(ActorSystem("CassandraSerializa
   override def systemName: String = "CassandraSerializationSpec"
 
   import CassandraSerializationSpec._
-  import PersistsEverythingButCantKeepAnythingToHimself._
+  import Persister._
 
   "A Cassandra journal" should {
 
     "Fail recovery when deserialization fails" in {
       val probe = TestProbe()
-      val incarnation1 = system.actorOf(Props(new PersistsEverythingButCantKeepAnythingToHimself("id1", probe.ref)))
+      val incarnation1 = system.actorOf(Props(new Persister("id1", probe.ref)))
       probe.expectMsgType[RecoveryCompleted]
 
-      incarnation1 ! Event(1)
-      probe.expectMsg(Event(1))
+      incarnation1 ! CrapEvent(1)
+      probe.expectMsg(CrapEvent(1))
 
       probe.watch(incarnation1)
       system.stop(incarnation1)
       probe.expectTerminated(incarnation1)
 
-      val incarnation2 = system.actorOf(Props(new PersistsEverythingButCantKeepAnythingToHimself("id1", probe.ref)))
+      val incarnation2 = system.actorOf(Props(new Persister("id1", probe.ref)))
       probe.expectMsgType[RuntimeException].getMessage shouldBe "I can't deserialize a single thing"
 
+    }
+
+    "be able to store meta data" in {
+      val probe = TestProbe()
+      val incarnation1 = system.actorOf(Props(new Persister("id2", probe.ref)))
+      probe.expectMsgType[RecoveryCompleted]
+
+      val eventWithMeta = EventWithMetaData("TheActualEvent", "TheAdditionalMetaData")
+      incarnation1 ! eventWithMeta
+      probe.expectMsg(eventWithMeta)
+
+      probe.watch(incarnation1)
+      system.stop(incarnation1)
+      probe.expectTerminated(incarnation1)
+
+      val incarnation2 = system.actorOf(Props(new Persister("id2", probe.ref)))
+      probe.expectMsg(eventWithMeta) // from replay
+    }
+
+    "not fail replay due to deserialization problem of meta data" in {
+      val probe = TestProbe()
+      val incarnation1 = system.actorOf(Props(new Persister("id3", probe.ref)))
+      probe.expectMsgType[RecoveryCompleted]
+
+      val eventWithMeta = EventWithMetaData("TheActualEvent", CrapEvent(13))
+      incarnation1 ! eventWithMeta
+      probe.expectMsg(eventWithMeta)
+
+      probe.watch(incarnation1)
+      system.stop(incarnation1)
+      probe.expectTerminated(incarnation1)
+
+      val incarnation2 = system.actorOf(Props(new Persister("id3", probe.ref)))
+      probe.expectMsg(EventWithMetaData("TheActualEvent", UnknownMetaData(666, ""))) // from replay, no meta
     }
 
   }

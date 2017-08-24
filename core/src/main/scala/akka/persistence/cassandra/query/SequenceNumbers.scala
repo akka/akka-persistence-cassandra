@@ -3,7 +3,12 @@
  */
 package akka.persistence.cassandra.query
 
-private[query] object SequenceNumbers {
+import akka.annotation.InternalApi
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object SequenceNumbers {
   val empty = SequenceNumbers(Map.empty, Map.empty)
 
   sealed trait Answer
@@ -13,7 +18,10 @@ private[query] object SequenceNumbers {
   case object PossiblyFirst extends Answer
 }
 
-private[query] final case class SequenceNumbers(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] final case class SequenceNumbers(
   intNumbers: Map[String, Int], longNumbers: Map[String, Long]
 ) {
   import SequenceNumbers._

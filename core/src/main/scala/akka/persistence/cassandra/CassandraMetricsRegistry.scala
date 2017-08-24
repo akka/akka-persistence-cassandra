@@ -10,6 +10,7 @@ import akka.actor._
 import com.codahale.metrics.MetricRegistry
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.collection.JavaConverters._
+import akka.annotation.InternalApi
 
 /**
  * Retrieves Cassandra metrics registry for an actor system
@@ -19,10 +20,16 @@ class CassandraMetricsRegistry extends Extension {
 
   def getRegistry: MetricRegistry = metricRegistry
 
-  private[cassandra] def addMetrics(category: String, registry: MetricRegistry): Unit =
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def addMetrics(category: String, registry: MetricRegistry): Unit =
     metricRegistry.register(category, registry)
 
-  private[cassandra] def removeMetrics(category: String): Unit =
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def removeMetrics(category: String): Unit =
     metricRegistry.getNames.iterator.asScala.foreach { name =>
       if (name.startsWith(category))
         metricRegistry.remove(name)

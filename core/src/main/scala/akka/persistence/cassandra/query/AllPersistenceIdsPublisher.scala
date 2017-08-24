@@ -11,15 +11,19 @@ import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher._
 import akka.persistence.cassandra.query.QueryActorPublisher._
 import akka.actor.NoSerializationVerificationNeeded
+import akka.annotation.InternalApi
 
-private[query] object AllPersistenceIdsPublisher {
-  private[query] final case class AllPersistenceIdsSession(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object AllPersistenceIdsPublisher {
+  final case class AllPersistenceIdsSession(
     selectDistinctPersistenceIds: PreparedStatement,
     session:                      Session
   ) extends NoSerializationVerificationNeeded
-  private[query] final case class ReplayDone(resultSet: Option[ResultSet])
+  final case class ReplayDone(resultSet: Option[ResultSet])
     extends NoSerializationVerificationNeeded
-  private[query] final case class AllPersistenceIdsState(knownPersistenceIds: Set[String])
+  final case class AllPersistenceIdsState(knownPersistenceIds: Set[String])
 
   def props(
     refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
@@ -28,7 +32,10 @@ private[query] object AllPersistenceIdsPublisher {
     Props(new AllPersistenceIdsPublisher(refreshInterval, session, config))
 }
 
-private[query] class AllPersistenceIdsPublisher(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class AllPersistenceIdsPublisher(
   refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
   config: CassandraReadJournalConfig
 )

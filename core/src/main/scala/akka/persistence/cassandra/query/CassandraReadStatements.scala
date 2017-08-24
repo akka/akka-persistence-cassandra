@@ -3,7 +3,12 @@
  */
 package akka.persistence.cassandra.query
 
-private[query] trait CassandraReadStatements {
+import akka.annotation.InternalApi
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] trait CassandraReadStatements {
 
   def config: CassandraReadJournalConfig
 

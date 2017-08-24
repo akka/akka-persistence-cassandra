@@ -6,11 +6,12 @@ package akka.persistence.cassandra.journal
 import scala.concurrent.duration.FiniteDuration
 import akka.actor.{ Actor, ActorRef }
 import akka.actor.Props
+import akka.annotation.InternalApi
 
 /**
- * Proxies messages to another actor, only allowing identical messages through once every [interval].
+ * INTERNAL API: Proxies messages to another actor, only allowing identical messages through once every [interval].
  */
-private[journal] class PubSubThrottler(delegate: ActorRef, interval: FiniteDuration) extends Actor {
+@InternalApi private[akka] class PubSubThrottler(delegate: ActorRef, interval: FiniteDuration) extends Actor {
   import PubSubThrottler._
   import context.dispatcher
 
@@ -49,7 +50,10 @@ private[journal] class PubSubThrottler(delegate: ActorRef, interval: FiniteDurat
   }
 }
 
-private[journal] object PubSubThrottler {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object PubSubThrottler {
 
   def props(delegate: ActorRef, interval: FiniteDuration): Props =
     Props(new PubSubThrottler(delegate, interval))

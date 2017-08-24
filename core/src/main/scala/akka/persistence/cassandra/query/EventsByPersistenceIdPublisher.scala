@@ -19,9 +19,13 @@ import com.datastax.driver.core.utils.Bytes
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ ExecutionContext, Future }
 import com.datastax.driver.core.policies.RetryPolicy
+import akka.annotation.InternalApi
 
-private[query] object EventsByPersistenceIdPublisher {
-  private[query] final case class EventsByPersistenceIdSession(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object EventsByPersistenceIdPublisher {
+  final case class EventsByPersistenceIdSession(
     selectEventsByPersistenceIdQuery: PreparedStatement,
     selectInUseQuery:                 PreparedStatement,
     selectDeletedToQuery:             PreparedStatement,
@@ -84,10 +88,10 @@ private[query] class EventsByPersistenceIdPublisher(
 )
   extends QueryActorPublisher[PersistentRepr, EventsByPersistenceIdState](refreshInterval, config) {
 
-  import CassandraJournal.deserializeEvent
   import context.dispatcher
 
-  private[this] val serialization = SerializationExtension(context.system)
+  private val serialization = SerializationExtension(context.system)
+  private val eventDeserializer = new CassandraJournal.EventDeserializer(serialization)
 
   override protected def initialQuery(initialState: EventsByPersistenceIdState): Future[Action] =
     query(initialState.copy(partitionNr = initialState.partitionNr - 1))
@@ -117,10 +121,10 @@ private[query] class EventsByPersistenceIdPublisher(
     row.getBytes("message") match {
       case null =>
         PersistentRepr(
-          payload = deserializeEvent(serialization, row),
+          payload = eventDeserializer.deserializeEvent(row),
           sequenceNr = row.getLong("sequence_nr"),
           persistenceId = row.getString("persistence_id"),
-          manifest = row.getString("event_manifest"),
+          manifest = row.getString("event_manifest"), // manifest for event adapters
           deleted = false,
           sender = null,
           writerUuid = row.getString("writer_uuid")
@@ -133,8 +137,10 @@ private[query] class EventsByPersistenceIdPublisher(
   private[this] def persistentFromByteBuffer(
     serialization: Serialization,
     b:             ByteBuffer
-  ): PersistentRepr =
+  ): PersistentRepr = {
+    // we know that such old rows can't have meta data because that feature was added later
     serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
+  }
 
   override protected def requestNext(
     state:     EventsByPersistenceIdState,

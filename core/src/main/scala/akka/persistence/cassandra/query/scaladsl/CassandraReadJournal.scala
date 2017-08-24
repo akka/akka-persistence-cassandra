@@ -37,6 +37,7 @@ import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.policies.LoggingRetryPolicy
 import akka.persistence.cassandra.journal.FixedRetryPolicy
 import com.datastax.driver.core.policies.RetryPolicy
+import akka.annotation.InternalApi
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -51,7 +52,10 @@ object CassandraReadJournal {
    */
   final val Identifier = "cassandra-query-journal"
 
-  private case class CombinedEventsByPersistenceIdStmts(
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] case class CombinedEventsByPersistenceIdStmts(
     preparedSelectEventsByPersistenceId: PreparedStatement,
     preparedSelectInUse:                 PreparedStatement,
     preparedSelectDeletedTo:             PreparedStatement
@@ -156,7 +160,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
         .setRetryPolicy(readRetryPolicy))
 
-  private def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
     for {
       ps1 <- preparedSelectEventsByPersistenceId
       ps2 <- preparedSelectInUse
@@ -275,7 +282,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         createSource[EventEnvelope, PreparedStatement](selectStatement(tag), (s, ps) =>
           Source.actorPublisher[UUIDPersistentRepr](EventsByTagPublisher.props(tag, fromOffset,
             None, queryPluginConfig, s, ps))
-            .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
+            .mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
             .mapMaterializedValue(_ => NotUsed)
             .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
             .withAttributes(ActorAttributes.dispatcher(pluginDispatcher)))
@@ -289,7 +296,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     }
   }
 
-  private def createSource[T, P](
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def createSource[T, P](
     prepStmt: Future[P],
     source:   (Session, P) => Source[T, NotUsed]
   ): Source[T, NotUsed] = {
@@ -332,7 +342,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         createSource[EventEnvelope, PreparedStatement](selectStatement(tag), (s, ps) =>
           Source.actorPublisher[UUIDPersistentRepr](EventsByTagPublisher.props(tag, fromOffset,
             toOffset, queryPluginConfig, s, ps))
-            .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
+            .mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
             .mapMaterializedValue(_ => NotUsed)
             .named("currentEventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
             .withAttributes(ActorAttributes.dispatcher(pluginDispatcher)))
@@ -408,13 +418,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
-   * This is a low-level method that return journal events as they are persisted.
+   * INTERNAL API: This is a low-level method that return journal events as they are persisted.
    *
    * The fromJournal adaptation happens at higher level:
    *  - In the AsyncWriteJournal for the PersistentActor and PersistentView recovery.
    *  - In the public eventsByPersistenceId and currentEventsByPersistenceId queries.
    */
-  private[cassandra] def eventsByPersistenceId(
+  @InternalApi private[akka] def eventsByPersistenceId(
     persistenceId:          String,
     fromSequenceNr:         Long,
     toSequenceNr:           Long,
@@ -447,9 +457,16 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
         )
       )
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
+        .map(mapEvent)
         .mapMaterializedValue(_ => NotUsed)
         .named(name))
   }
+
+  /**
+   * INTERNAL API: Internal hook for amending the event payload. Called from all queries.
+   */
+  @InternalApi private[akka] def mapEvent(persistentRepr: PersistentRepr): PersistentRepr =
+    persistentRepr
 
   private[this] def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>

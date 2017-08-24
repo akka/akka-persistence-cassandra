@@ -10,8 +10,12 @@ import java.time.ZoneOffset
 import java.time.LocalDate
 import com.datastax.driver.core.utils.UUIDs
 import java.util.UUID
+import akka.annotation.InternalApi
 
-private[cassandra] object TimeBucket {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object TimeBucket {
   private val timeBucketFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
 
   def apply(key: String): TimeBucket =
@@ -32,7 +36,10 @@ private[cassandra] object TimeBucket {
 
 }
 
-private[cassandra] final case class TimeBucket(day: LocalDate, key: String) {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] final case class TimeBucket(day: LocalDate, key: String) {
 
   def next(): TimeBucket =
     TimeBucket(day.plusDays(1))

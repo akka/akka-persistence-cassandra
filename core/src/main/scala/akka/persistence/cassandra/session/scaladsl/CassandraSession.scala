@@ -47,6 +47,7 @@ import com.datastax.driver.core.Row
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.Statement
 import scala.annotation.varargs
+import akka.annotation.InternalApi
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
@@ -69,7 +70,7 @@ final class CassandraSession(
 ) {
   import settings._
 
-  implicit private[cassandra] val ec = executionContext
+  implicit private[akka] val ec = executionContext
   private lazy implicit val materializer = ActorMaterializer()(system)
 
   // cache of PreparedStatement (PreparedStatement should only be prepared once)
@@ -288,7 +289,7 @@ final class CassandraSession(
   /**
    * INTERNAL API
    */
-  private[cassandra] def selectResultSet(stmt: Statement): Future[ResultSet] = {
+  @InternalApi private[akka] def selectResultSet(stmt: Statement): Future[ResultSet] = {
     if (stmt.getConsistencyLevel == null)
       stmt.setConsistencyLevel(settings.readConsistency)
     underlying().flatMap { s =>
@@ -457,7 +458,7 @@ final class CassandraSession(
 /**
  * INTERNAL API
  */
-private[cassandra] final object CassandraSession {
+@InternalApi private[akka] final object CassandraSession {
   private val serializedExecutionProgress = new AtomicReference[Future[Done]](Future.successful(Done))
 
   def serializedExecution(recur: () => Future[Done], exec: () => Future[Done])(implicit ec: ExecutionContext): Future[Done] = {

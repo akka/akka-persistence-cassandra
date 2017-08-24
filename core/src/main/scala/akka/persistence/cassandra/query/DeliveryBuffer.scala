@@ -4,8 +4,12 @@
 package akka.persistence.cassandra.query
 
 import akka.stream.actor.ActorPublisher
+import akka.annotation.InternalApi
 
-private[query] trait DeliveryBuffer[T] { _: ActorPublisher[T] =>
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] trait DeliveryBuffer[T] { _: ActorPublisher[T] =>
 
   var buf = Vector.empty[T]
 
