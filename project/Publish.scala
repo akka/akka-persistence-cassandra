@@ -31,10 +31,12 @@ object Publish extends AutoPlugin {
   )
 
   def akkaPomExtra = {
+    /* The scm info is automatic from the sbt-git plugin
     <scm>
       <url>git@github.com:akka/akka-persistence-cassandra.git</url>
       <connection>scm:git:git@github.com:akka/akka-persistence-cassandra.git</connection>
     </scm>
+    */
     <developers>
       <developer>
         <id>contributors</id>
