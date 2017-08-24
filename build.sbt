@@ -4,7 +4,7 @@ import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
-val AkkaVersion = "2.5.1"
+val AkkaVersion = "2.5.4"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.2.0",
@@ -23,7 +23,7 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   organizationName := "Typesafe Inc.",
   licenses := Seq(("Apache License, Version 2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
 
-  crossScalaVersions := Seq("2.11.11", "2.12.2"),
+  crossScalaVersions := Seq("2.11.11", "2.12.3"),
   scalaVersion := crossScalaVersions.value.head,
   crossVersion := CrossVersion.binary,
 
