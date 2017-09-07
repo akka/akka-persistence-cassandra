@@ -37,7 +37,6 @@ import akka.testkit.TestKit
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{
-  BeforeAndAfterAll,
   BeforeAndAfterEach,
   Matchers,
   WordSpecLike
@@ -58,13 +57,10 @@ object EventsByTagSpec {
     akka.actor.serialize-messages = on
     akka.actor.serialize-creators = on
     akka.actor.warn-about-java-serializer-usage = off
-    cassandra-snapshot-store.port = 9042
-    cassandra-snapshot-store.host = 127.0.0.1
     cassandra-journal {
       #target-partition-size = 5
-      host = 127.0.0.1
-      port = 9042
-      keyspace=EventsByTagSpec${System.currentTimeMillis()}
+      port = ${CassandraLauncher.randomPort}
+      keyspace=EventsByTagSpec
       event-adapters {
         color-tagger  = akka.persistence.cassandra.query.ColorFruitTagger
       }
@@ -172,8 +168,7 @@ abstract class AbstractEventsByTagSpec(
   with ImplicitSender
   with WordSpecLike
   with Matchers
-  with BeforeAndAfterAll
-  //  with CassandraLifecycle
+  with CassandraLifecycle
   with BeforeAndAfterEach {
   import EventsByTagSpec._
 

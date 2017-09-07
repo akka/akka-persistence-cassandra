@@ -3,26 +3,17 @@
  */
 package akka.persistence.cassandra.query
 
-import java.time.{ LocalDateTime, ZoneOffset }
-import java.time.temporal.ChronoUnit
-import java.util.UUID
-
-import akka.persistence.PersistentRepr
-import akka.persistence.query.{ EventEnvelope, NoOffset, TimeBasedUUID }
-import akka.persistence.query.scaladsl.{
-  CurrentEventsByTagQuery,
-  EventsByTagQuery
-}
-import scala.concurrent.duration._
+import akka.persistence.query.scaladsl.{CurrentEventsByTagQuery, EventsByTagQuery}
+import akka.persistence.query.{EventEnvelope, NoOffset, TimeBasedUUID}
 import akka.stream.testkit.scaladsl.TestSink
 
-class EventsByTagWithTagPrefixEnablesSpec
+import scala.concurrent.duration._
+
+class EventsByTagWithTagPrefixEnabledSpec
   extends AbstractEventsByTagSpec(
     "EventsByTagWithTagPrefixEnablesSpec",
     EventsByTagSpec.tagPrefixConfig
   ) {
-
-  import EventsByTagSpec._
 
   "Cassandra query currentEventsByTag" must {
     "implement standard CurrentEventsByTagQuery" in {
@@ -33,7 +24,7 @@ class EventsByTagWithTagPrefixEnablesSpec
       val a = system.actorOf(TestActor.props("a"))
       val b = system.actorOf(TestActor.props("b"))
       a ! "green apple"
-      expectMsg(5.seconds, s"green apple-done")
+      expectMsg(20.seconds, s"green apple-done")
       a ! "black car"
       expectMsg(s"black car-done")
       b ! "yellow apple"
@@ -337,6 +328,4 @@ class EventsByTagWithTagPrefixEnablesSpec
       probe.expectNoMsg(100.millis)
     }
   }
-
-  override def remainingOrDefault = 2.seconds
 }
