@@ -192,7 +192,7 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
     bs.setUUID("timestamp", uuid(timestamp))
     bs.setString("timebucket", TimeBucket(timestamp).key)
     tags.foreach { tag =>
-      val tagId = writePluginConfig.tags.getOrElse(tag, 1)
+      val tagId = writePluginConfig.tagIndex(tag)
       bs.setString("tag" + tagId, tag)
     }
     bs.setInt("ser_id", serializer.identifier)

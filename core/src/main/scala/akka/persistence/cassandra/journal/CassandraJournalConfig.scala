@@ -12,32 +12,24 @@ import akka.persistence.cassandra.CassandraPluginConfig
 import akka.util.Helpers.Requiring
 import akka.actor.ActorSystem
 
-class CassandraJournalConfig(system: ActorSystem, config: Config)
-  extends CassandraPluginConfig(system, config) {
-  val targetPartitionSize: Int =
-    config.getInt(CassandraJournalConfig.TargetPartitionProperty)
+class CassandraJournalConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
+  val targetPartitionSize: Int = config.getInt(CassandraJournalConfig.TargetPartitionProperty)
   val maxResultSize: Int = config.getInt("max-result-size")
   val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
   val maxMessageBatchSize = config.getInt("max-message-batch-size")
   val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
-  val enableEventsByTagQuery: Boolean = !cassandra2xCompat && config.getBoolean(
-    "enable-events-by-tag-query"
-  )
+  val enableEventsByTagQuery: Boolean = !cassandra2xCompat && config.getBoolean("enable-events-by-tag-query")
   val eventsByTagView: String = config.getString("events-by-tag-view")
   val queryPlugin = config.getString("query-plugin")
   val pubsubMinimumInterval: Duration = {
     val key = "pubsub-minimum-interval"
     config.getString(key).toLowerCase(Locale.ROOT) match {
       case "off" ⇒ Duration.Undefined
-      case _ ⇒
-        config
-          .getDuration(key, MILLISECONDS)
-          .millis requiring (_ > Duration.Zero, key + " > 0s, or off")
+      case _     ⇒ config.getDuration(key, MILLISECONDS).millis requiring (_ > Duration.Zero, key + " > 0s, or off")
     }
   }
 
   val maxTagsPerEvent: Int = 3
-
   private def loadTagMap(key: String): HashMap[String, Int] = {
     import scala.collection.JavaConverters._
     config
@@ -57,12 +49,12 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
       }(collection.breakOut)
   }
 
-  val tags: HashMap[String, Int] = loadTagMap("tags")
+  private val tags: HashMap[String, Int] = loadTagMap("tags")
 
   val useTagPrefixes: Boolean = config
     .getBoolean("use-tag-prefixes")
 
-  val tagPrefixes: HashMap[String, Int] = loadTagMap("tag-prefixes")
+  private val tagPrefixes: HashMap[String, Int] = loadTagMap("tag-prefixes")
 
   def tagIndex(tag: String): Int =
     if (useTagPrefixes) {
