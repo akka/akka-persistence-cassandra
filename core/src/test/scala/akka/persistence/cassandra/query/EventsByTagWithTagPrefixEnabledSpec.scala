@@ -3,17 +3,14 @@
  */
 package akka.persistence.cassandra.query
 
-import akka.persistence.query.scaladsl.{CurrentEventsByTagQuery, EventsByTagQuery}
-import akka.persistence.query.{EventEnvelope, NoOffset, TimeBasedUUID}
+import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, EventsByTagQuery }
+import akka.persistence.query.{ EventEnvelope, NoOffset, TimeBasedUUID }
 import akka.stream.testkit.scaladsl.TestSink
 
 import scala.concurrent.duration._
 
 class EventsByTagWithTagPrefixEnabledSpec
-  extends AbstractEventsByTagSpec(
-    "EventsByTagWithTagPrefixEnablesSpec",
-    EventsByTagSpec.tagPrefixConfig
-  ) {
+  extends AbstractEventsByTagSpec("EventsByTagWithTagPrefixEnablesSpec", EventsByTagSpec.tagPrefixConfig) {
 
   "Cassandra query currentEventsByTag" must {
     "implement standard CurrentEventsByTagQuery" in {
