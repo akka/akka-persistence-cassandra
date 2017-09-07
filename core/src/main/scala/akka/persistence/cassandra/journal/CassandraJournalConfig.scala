@@ -47,8 +47,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
 
   private val tags: HashMap[String, Int] = loadTagMap("tags")
 
-  val useTagPrefixes: Boolean = config
-    .getBoolean("use-tag-prefixes")
+  private val useTagPrefixes: Boolean = config.getBoolean("use-tag-prefixes")
 
   private val tagPrefixes: HashMap[String, Int] = loadTagMap("tag-prefixes")
 
