@@ -56,7 +56,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
 
   private val tagPrefixes: HashMap[String, Int] = loadTagMap("tag-prefixes")
 
-  def tagIndex(tag: String): Int =
+  def idForTag(tag: String): Int =
     if (useTagPrefixes) {
       tagPrefixes
         .collectFirst {
