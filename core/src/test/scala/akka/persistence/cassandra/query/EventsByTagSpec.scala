@@ -326,7 +326,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
 
       val appleTimestamp = queries.timestampFrom(appleOffs)
       val bananaTimestamp = queries.timestampFrom(bananaOffs)
-      bananaTimestamp should be <= (bananaTimestamp)
+      appleTimestamp should be <= (bananaTimestamp)
 
       val greenSrc2 = queries.currentEventsByTag(tag = "green", queries.timeBasedUUIDFrom(bananaTimestamp))
       val probe2 = greenSrc2.runWith(TestSink.probe[Any])
