@@ -30,9 +30,10 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
   }
 
   val maxTagsPerEvent: Int = 3
-  private def loadTagMap(key: String): HashMap[String, Int] = {
+
+  private val (tags, tagPrefixes) = {
     import scala.collection.JavaConverters._
-    config.getConfig(key).entrySet.asScala.collect {
+    config.getConfig("tags").entrySet.asScala.collect {
       case entry if entry.getValue.valueType == ConfigValueType.NUMBER =>
         val tag = entry.getKey
         val tagId = entry.getValue.unwrapped.asInstanceOf[Number].intValue
@@ -42,26 +43,24 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
             s"Max $maxTagsPerEvent tags per event is supported."
         )
         tag -> tagId
-    }(collection.breakOut)
+    }.foldLeft((HashMap.empty[String, Int], HashMap.empty[String, Int])) {
+      case ((tagsAcc, prefixAcc), (tag, index)) =>
+        if (tag.startsWith("\"") && tag.endsWith("*\"")) {
+          (tagsAcc, prefixAcc + (tag.substring(1, tag.length - 2) -> index))
+        } else {
+          (tagsAcc + (tag -> index), prefixAcc)
+        }
+    }
   }
 
-  private val tags: HashMap[String, Int] = loadTagMap("tags")
-
-  private val useTagPrefixes: Boolean = config.getBoolean("use-tag-prefixes")
-
-  private val tagPrefixes: HashMap[String, Int] = loadTagMap("tag-prefixes")
-
   def idForTag(tag: String): Int =
-    if (useTagPrefixes) {
+    tags.get(tag).orElse {
       tagPrefixes
         .collectFirst {
           case (prefix, index) if tag.startsWith(prefix) =>
             index
         }
-        .getOrElse(1)
-    } else {
-      tags.getOrElse(tag, 1)
-    }
+    }.getOrElse(1)
 
   /**
    * Will be 0 if [[#enableEventsByTagQuery]] is disabled,
@@ -70,10 +69,8 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
    */
   def maxTagId: Int =
     if (!enableEventsByTagQuery) 0
-    else if (useTagPrefixes)
-      if (tagPrefixes.isEmpty) 1 else tagPrefixes.values.max
-    else if (tags.isEmpty) 1
-    else tags.values.max
+    else if (tagPrefixes.isEmpty && tags.isEmpty) 1
+    else (tags.values ++ tagPrefixes.values).max
 }
 
 object CassandraJournalConfig {

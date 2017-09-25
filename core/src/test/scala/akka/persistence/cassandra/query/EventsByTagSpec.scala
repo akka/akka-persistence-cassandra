@@ -91,11 +91,10 @@ object EventsByTagSpec {
       event-adapter-bindings = {
         "java.lang.String" = dynamic-tagger
       }
-      use-tag-prefixes = true
-      tag-prefixes {
-        fruit = 1
-        color = 2
-        kind = 3
+      tags {
+        "all" = 1
+        "color:*" = 2
+        "kind:*" = 3
       }
     }
     """).withFallback(config)
@@ -539,7 +538,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
 
 }
 
-class EventsByTagWithTagPrefixEnabledSpec
+class EventsByTagWithPrefixSpec
   extends AbstractEventsByTagSpec("EventsByTagWithTagPrefixEnablesSpec", EventsByTagSpec.tagPrefixConfig) {
 
   "Cassandra query currentEventsByTag" must {
