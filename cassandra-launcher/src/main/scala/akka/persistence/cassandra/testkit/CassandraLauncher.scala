@@ -166,7 +166,7 @@ object CassandraLauncher {
         try {
           Files.copy(is, cassandraBundleFile.toPath)
         } finally {
-          is.close()
+          if (is != null) is.close()
         }
       }
 

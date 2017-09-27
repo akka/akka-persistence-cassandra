@@ -40,6 +40,8 @@ object BaseCompactionStrategy extends CassandraCompactionStrategyConfig[BaseComp
     val className = if (config.hasPath("class")) config.getString("class") else ""
 
     className match {
+      case TimeWindowCompactionStrategy.ClassName =>
+        TimeWindowCompactionStrategy.fromConfig(config)
       case DateTieredCompactionStrategy.ClassName =>
         DateTieredCompactionStrategy.fromConfig(config)
       case LeveledCompactionStrategy.ClassName =>

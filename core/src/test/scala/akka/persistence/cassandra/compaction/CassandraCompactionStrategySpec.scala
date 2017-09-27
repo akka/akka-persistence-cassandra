@@ -18,8 +18,8 @@ import scala.concurrent.Await
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(
     s"""
-      |cassandra-journal.keyspace=CassandraCompactionStrategySpec
-      |cassandra-snapshot-store.keyspace=CassandraCompactionStrategySpecSnapshot
+       |cassandra-journal.keyspace=CassandraCompactionStrategySpec
+       |cassandra-snapshot-store.keyspace=CassandraCompactionStrategySpecSnapshot
     """.stripMargin
   ).withFallback(CassandraLifecycle.config)
 }
@@ -57,6 +57,41 @@ class CassandraCompactionStrategySpec extends TestKit(
   }
 
   "A CassandraCompactionStrategy" must {
+
+    "successfully create a TimeWindowCompactionStrategy" in {
+      val twConfig = ConfigFactory.parseString(
+        """table-compaction-strategy {
+          | class = "TimeWindowCompactionStrategy"
+          | compaction_window_size = 10
+          | compaction_window_unit = "DAYS"
+          |}
+        """.stripMargin
+      )
+
+      val compactionStrategy = CassandraCompactionStrategy(twConfig.getConfig("table-compaction-strategy")).asInstanceOf[TimeWindowCompactionStrategy]
+
+      compactionStrategy.compactionWindowSize mustEqual 10
+      compactionStrategy.compactionWindowUnit mustEqual TimeUnit.DAYS
+    }
+
+    "successfully create CQL from TimeWindowCompactionStrategy" in {
+      val twConfig = ConfigFactory.parseString(
+        """table-compaction-strategy {
+          | class = "TimeWindowCompactionStrategy"
+          | compaction_window_size = 1
+          | compaction_window_unit = "MINUTES"
+          |}
+        """.stripMargin
+      )
+
+      val cqlExpression =
+        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable1 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(twConfig.getConfig("table-compaction-strategy")).asCQL}"
+
+      noException must be thrownBy {
+        session.execute(cqlExpression)
+      }
+    }
+
     "successfully create a DateTieredCompactionStrategy" in {
       val uniqueConfig = ConfigFactory.parseString(
         """table-compaction-strategy {

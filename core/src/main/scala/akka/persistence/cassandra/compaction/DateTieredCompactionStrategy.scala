@@ -12,15 +12,17 @@ import scala.collection.JavaConverters._
 /*
  * Based upon https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/DateTieredCompactionStrategy.java
  */
+@deprecated("DateTieredCompaction is deprecated in Cassandra. Use TimeWindowCompaction.", "0.56")
 class DateTieredCompactionStrategy(config: Config) extends BaseCompactionStrategy(config) {
-  require(config.hasPath("class") && config.getString("class") == DateTieredCompactionStrategy.ClassName, s"Config does not specify a ${DateTieredCompactionStrategy.ClassName}")
+  import DateTieredCompactionStrategy._
+  require(config.hasPath("class") && config.getString("class") == ClassName, s"Config does not specify a $ClassName")
 
   require(
     config.entrySet()
       .asScala
       .map(_.getKey)
       .forall(DateTieredCompactionStrategy.propertyKeys.contains(_)),
-    s"Config contains properties not supported by a ${DateTieredCompactionStrategy.ClassName}"
+    s"Config contains properties not supported by a $ClassName"
   )
 
   val baseTimeSeconds: Long = if (config.hasPath("base_time_seconds")) config.getLong("base_time_seconds") else 3600
@@ -38,7 +40,7 @@ class DateTieredCompactionStrategy(config: Config) extends BaseCompactionStrateg
 
   override def asCQL: String =
     s"""{
-       |'class' : '${DateTieredCompactionStrategy.ClassName}',
+       |'class' : '$ClassName',
        |${super.asCQL},
        |'base_time_seconds' : $baseTimeSeconds,
        |'max_sstable_age_days' : $maxSSTableAgeDays,
