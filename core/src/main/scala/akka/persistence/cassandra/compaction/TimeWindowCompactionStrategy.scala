@@ -5,22 +5,10 @@ package akka.persistence.cassandra.compaction
 
 import java.util.concurrent.TimeUnit
 
+import akka.persistence.cassandra.compaction.TimeWindowCompactionStrategy._
 import com.typesafe.config.Config
 
-import scala.collection.JavaConverters._
-
-class TimeWindowCompactionStrategy(config: Config) extends BaseCompactionStrategy(config) {
-  import TimeWindowCompactionStrategy._
-
-  require(config.hasPath("class") && config.getString("class") == ClassName, s"Config does not specify a $ClassName")
-
-  require(
-    config.entrySet()
-      .asScala
-      .map(_.getKey)
-      .forall(propertyKeys.contains(_)),
-    s"Config contains properties not supported by a $ClassName. Supported: $propertyKeys. Supplied: ${config.entrySet().asScala.map(_.getKey)}"
-  )
+class TimeWindowCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, ClassName, propertyKeys) {
 
   val compactionWindowUnit: TimeUnit = if (config.hasPath("compaction_window_unit")) TimeUnit.valueOf(config.getString("compaction_window_unit")) else TimeUnit.DAYS
   val compactionWindowSize: Int = if (config.hasPath("compaction_window_size")) config.getInt("compaction_window_size") else 1

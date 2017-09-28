@@ -3,12 +3,23 @@
  */
 package akka.persistence.cassandra.compaction
 
-import com.typesafe.config.{ ConfigFactory, Config }
+import com.typesafe.config.{ Config, ConfigFactory }
+
+import scala.collection.JavaConverters._
 
 /*
  * Based upon https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/AbstractCompactionStrategy.java
  */
-abstract class BaseCompactionStrategy(config: Config) extends CassandraCompactionStrategy {
+abstract class BaseCompactionStrategy(config: Config, className: String, propertyKeys: List[String]) extends CassandraCompactionStrategy {
+  require(config.hasPath("class") && config.getString("class") == className, s"Config does not specify a $className")
+  require(
+    config.entrySet()
+      .asScala
+      .map(_.getKey)
+      .forall(propertyKeys.contains(_)),
+    s"Config contains properties not supported by a $className. Supported: $propertyKeys. Supplied: ${config.entrySet().asScala.map(_.getKey)}"
+  )
+
   val enabled: Boolean = if (config.hasPath("enabled")) config.getBoolean("enabled") else true
   val tombstoneCompactionInterval: Long = if (config.hasPath("tombstone_compaction_interval")) config.getLong("tombstone_compaction_interval") else 86400
   val tombstoneThreshold: Double = if (config.hasPath("tombstone_threshold")) config.getDouble("tombstone_threshold") else 0.2

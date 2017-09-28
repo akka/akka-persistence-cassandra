@@ -3,17 +3,17 @@
  */
 package akka.persistence.cassandra.compaction
 
-import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
+
 import akka.actor.ActorSystem
-import akka.persistence.cassandra.{ CassandraPluginConfig, CassandraLifecycle }
-import akka.persistence.cassandra.testkit.CassandraLauncher
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig }
 import akka.testkit.TestKit
-import com.datastax.driver.core.{ Session, Cluster }
+import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
-import org.scalatest.MustMatchers
-import org.scalatest.WordSpecLike
+import org.scalatest.{ MustMatchers, WordSpecLike }
+
 import scala.concurrent.Await
+import scala.concurrent.duration._
 
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(
@@ -36,8 +36,6 @@ class CassandraCompactionStrategySpec extends TestKit(
   val cassandraPluginConfig = new CassandraPluginConfig(system, defaultConfigs)
 
   var session: Session = _
-
-  import cassandraPluginConfig._
 
   override def systemName: String = "CassandraCompactionStrategySpec"
 
@@ -89,6 +87,21 @@ class CassandraCompactionStrategySpec extends TestKit(
 
       noException must be thrownBy {
         session.execute(cqlExpression)
+      }
+    }
+
+    "fail if unrecognised property for TimeWindowCompactionStrategy" in {
+      val twConfig = ConfigFactory.parseString(
+        """table-compaction-strategy {
+          | class = "TimeWindowCompactionStrategy"
+          | compaction_window_size = 10
+          | banana = "cherry"
+          |}
+        """.stripMargin
+      )
+
+      assertThrows[IllegalArgumentException] {
+        CassandraCompactionStrategy(twConfig.getConfig("table-compaction-strategy")).asInstanceOf[TimeWindowCompactionStrategy]
       }
     }
 

@@ -7,24 +7,13 @@ import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.Config
 
-import scala.collection.JavaConverters._
+import DateTieredCompactionStrategy._
 
 /*
  * Based upon https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/DateTieredCompactionStrategy.java
  */
 @deprecated("DateTieredCompaction is deprecated in Cassandra. Use TimeWindowCompaction.", "0.56")
-class DateTieredCompactionStrategy(config: Config) extends BaseCompactionStrategy(config) {
-  import DateTieredCompactionStrategy._
-  require(config.hasPath("class") && config.getString("class") == ClassName, s"Config does not specify a $ClassName")
-
-  require(
-    config.entrySet()
-      .asScala
-      .map(_.getKey)
-      .forall(DateTieredCompactionStrategy.propertyKeys.contains(_)),
-    s"Config contains properties not supported by a $ClassName"
-  )
-
+class DateTieredCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, ClassName, propertyKeys) {
   val baseTimeSeconds: Long = if (config.hasPath("base_time_seconds")) config.getLong("base_time_seconds") else 3600
   val maxSSTableAgeDays: Int = if (config.hasPath("max_sstable_age_days")) config.getInt("max_sstable_age_days") else 365
   val maxThreshold: Int = if (config.hasPath("max_threshold")) config.getInt("max_threshold") else 32

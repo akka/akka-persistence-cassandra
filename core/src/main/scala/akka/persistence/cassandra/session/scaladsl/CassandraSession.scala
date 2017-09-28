@@ -15,7 +15,6 @@ import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
-import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
@@ -46,7 +45,6 @@ import com.datastax.driver.core.ResultSet
 import com.datastax.driver.core.Row
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.Statement
-import scala.annotation.varargs
 import akka.annotation.InternalApi
 
 /**
