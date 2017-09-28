@@ -65,7 +65,7 @@ class EventsByPersistenceIdSpec
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("a-1", "a-2")
-        .expectNoMsg(500.millis)
+        .expectNoMsg(100.millis)
         .request(2)
         .expectNext("a-3")
         .expectComplete()
@@ -124,18 +124,18 @@ class EventsByPersistenceIdSpec
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("f-1", "f-2")
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
 
       probe
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
         .request(5)
         .expectNext("f-3", "f-4", "f-5", "f-6", "f-7")
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
 
       probe
         .request(5)
         .expectNext("f-8", "f-9", "f-10", "f-11", "f-12")
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
     }
 
     "stop if there are no events" in {
@@ -167,14 +167,51 @@ class EventsByPersistenceIdSpec
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
         .expectNextN((1 to 10).map(i => s"i-$i"))
-        .expectNoMsg(500.millis)
+        .expectNoMsg(100.millis)
         .request(10)
         .expectNextN((11 to 20).map(i => s"i-$i"))
+        .expectComplete()
+    }
+
+    "stop at last event in partition" in {
+      val ref = setup("i2", 15) // partition size is 15
+
+      val src = queries.currentEventsByPersistenceId("i2", 0L, Long.MaxValue)
+      src.map(_.event).runWith(TestSink.probe[Any])
+        .request(100)
+        .expectNextN((1 to 15).map(i => s"i2-$i"))
+        .expectComplete()
+    }
+
+    "find all events when PersistAll spans partition boundaries" in {
+      val ref = setup("i3", 10)
+      // partition 0
+      ref ! TestActor.PersistAll((11 to 15).map(i => s"i3-$i"))
+      expectMsg("PersistAll-done")
+      // partition 1
+      ref ! TestActor.PersistAll((16 to 17).map(i => s"i3-$i"))
+      expectMsg("PersistAll-done")
+      // all these go into partition 2
+      ref ! TestActor.PersistAll((18 to 31).map(i => s"i3-$i"))
+      expectMsg("PersistAll-done")
+      ref ! "i3-32"
+      expectMsg("i3-32-done")
+
+      val src = queries.currentEventsByPersistenceId("i3", 0L, Long.MaxValue)
+      src.map(_.event).runWith(TestSink.probe[Any])
+        .request(10)
+        .expectNextN((1 to 10).map(i => s"i3-$i"))
+        .expectNoMsg(100.millis)
+        .request(10)
+        .expectNextN((11 to 20).map(i => s"i3-$i"))
+        .request(100)
+        .expectNextN((21 to 32).map(i => s"i3-$i"))
         .expectComplete()
     }
   }
 
   "Cassandra live query EventsByPersistenceId" must {
+
     "find new events" in {
       val ref = setup("j", 3)
       val src = queries.eventsByPersistenceId("j", 0L, Long.MaxValue)
@@ -186,6 +223,7 @@ class EventsByPersistenceIdSpec
       expectMsg("j-4-done")
 
       probe.expectNext("j-4")
+      probe.cancel()
     }
 
     "find new events if the stream starts after current latest event" in {
@@ -193,7 +231,7 @@ class EventsByPersistenceIdSpec
       val src = queries.eventsByPersistenceId("k", 5L, Long.MaxValue)
       val probe = src.map(_.sequenceNr).runWith(TestSink.probe[Any])
         .request(5)
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
 
       ref ! "k-5"
       expectMsg("k-5-done")
@@ -206,6 +244,7 @@ class EventsByPersistenceIdSpec
       expectMsg("k-7-done")
 
       probe.expectNext(7)
+      probe.cancel()
     }
 
     "find new events up to a sequence number" in {
@@ -239,6 +278,8 @@ class EventsByPersistenceIdSpec
         .request(5)
         .expectNext("m-3")
         .expectNext("m-4")
+
+      probe.cancel()
     }
 
     "only deliver what requested if there is more in the buffer" in {
@@ -248,18 +289,20 @@ class EventsByPersistenceIdSpec
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("n-1", "n-2")
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
 
       probe
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
         .request(5)
         .expectNext("n-3", "n-4", "n-5", "n-6", "n-7")
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
 
       probe
         .request(5)
         .expectNext("n-8", "n-9", "n-10", "n-11", "n-12")
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
+
+      probe.cancel()
     }
 
     "not produce anything if there aren't any events" in {
@@ -268,7 +311,9 @@ class EventsByPersistenceIdSpec
 
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
+
+      probe.cancel()
     }
 
     "not produce anything until there are existing events" in {
@@ -277,13 +322,15 @@ class EventsByPersistenceIdSpec
 
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
 
       setup("p", 2)
 
       probe
         .expectNext("p-1", "p-2")
-        .expectNoMsg(1000.millis)
+        .expectNoMsg(100.millis)
+
+      probe.cancel()
     }
 
     "produce correct sequence of events across multiple partitions" in {
@@ -294,7 +341,7 @@ class EventsByPersistenceIdSpec
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(16)
         .expectNextN((1 to 15).map(i => s"q-$i"))
-        .expectNoMsg(500.millis)
+        .expectNoMsg(100.millis)
 
       for (i <- 16 to 21) {
         ref ! s"q-$i"
@@ -313,6 +360,36 @@ class EventsByPersistenceIdSpec
       probe
         .request(10)
         .expectNextN((22 to 31).map(i => s"q-$i"))
+
+      probe.cancel()
     }
+
+    "find all events when PersistAll spans partition boundaries" in {
+      val ref = setup("q2", 10)
+      // partition 0
+      ref ! TestActor.PersistAll((11 to 15).map(i => s"q2-$i"))
+      expectMsg("PersistAll-done")
+      // partition 1
+      ref ! TestActor.PersistAll((16 to 17).map(i => s"q2-$i"))
+      expectMsg("PersistAll-done")
+      // all these go into partition 2
+      ref ! TestActor.PersistAll((18 to 31).map(i => s"q2-$i"))
+      expectMsg("PersistAll-done")
+      ref ! "q2-32"
+      expectMsg("q2-32-done")
+
+      val src = queries.eventsByPersistenceId("q2", 0L, Long.MaxValue)
+      val probe = src.map(_.event).runWith(TestSink.probe[Any])
+        .request(10)
+        .expectNextN((1 to 10).map(i => s"q2-$i"))
+        .expectNoMsg(100.millis)
+        .request(10)
+        .expectNextN((11 to 20).map(i => s"q2-$i"))
+        .request(100)
+        .expectNextN((21 to 32).map(i => s"q2-$i"))
+
+      probe.cancel()
+    }
+
   }
 }

@@ -23,7 +23,6 @@ import akka.persistence.cassandra.journal.CassandraJournalConfig
 import akka.persistence.cassandra.journal.CassandraStatements
 import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
-import akka.persistence.cassandra.query.EventsByPersistenceIdPublisher.EventsByPersistenceIdSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
@@ -57,7 +56,6 @@ object CassandraReadJournal {
    */
   @InternalApi private[akka] case class CombinedEventsByPersistenceIdStmts(
     preparedSelectEventsByPersistenceId: PreparedStatement,
-    preparedSelectInUse:                 PreparedStatement,
     preparedSelectDeletedTo:             PreparedStatement
   )
 }
@@ -166,9 +164,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   @InternalApi private[akka] def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
     for {
       ps1 <- preparedSelectEventsByPersistenceId
-      ps2 <- preparedSelectInUse
-      ps3 <- preparedSelectDeletedTo
-    } yield CombinedEventsByPersistenceIdStmts(ps1, ps2, ps3)
+      ps2 <- preparedSelectDeletedTo
+    } yield CombinedEventsByPersistenceIdStmts(ps1, ps2)
 
   system.registerOnTermination {
     session.close()
@@ -435,27 +432,23 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     customConsistencyLevel: Option[ConsistencyLevel] = None,
     customRetryPolicy:      Option[RetryPolicy]      = None
   ): Source[PersistentRepr, NotUsed] = {
-
     createSource[PersistentRepr, CombinedEventsByPersistenceIdStmts](combinedEventsByPersistenceIdStmts, (s, c) =>
-      Source.actorPublisher[PersistentRepr](
-        EventsByPersistenceIdPublisher.props(
-          persistenceId,
-          fromSequenceNr,
-          toSequenceNr,
-          max,
-          fetchSize,
-          refreshInterval,
-          EventsByPersistenceIdSession(
-            c.preparedSelectEventsByPersistenceId,
-            c.preparedSelectInUse,
-            c.preparedSelectDeletedTo,
-            s,
-            customConsistencyLevel,
-            customRetryPolicy
-          ),
-          queryPluginConfig
-        )
-      )
+      Source.fromGraph(new EventsByPersistenceIdStage(
+        persistenceId,
+        fromSequenceNr,
+        toSequenceNr,
+        max,
+        fetchSize,
+        refreshInterval,
+        EventsByPersistenceIdStage.EventsByPersistenceIdSession(
+          c.preparedSelectEventsByPersistenceId,
+          c.preparedSelectDeletedTo,
+          s,
+          customConsistencyLevel,
+          customRetryPolicy
+        ),
+        queryPluginConfig
+      ))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
         .map(mapEvent)
         .mapMaterializedValue(_ => NotUsed)
