@@ -5,21 +5,12 @@ package akka.persistence.cassandra.compaction
 
 import com.typesafe.config.Config
 
-import scala.collection.JavaConverters._
+import SizeTieredCompactionStrategy._
 
 /*
  * Based upon https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/SizeTieredCompactionStrategy.java
  */
-class SizeTieredCompactionStrategy(config: Config) extends BaseCompactionStrategy(config) {
-  require(config.hasPath("class") && config.getString("class") == SizeTieredCompactionStrategy.ClassName, s"Config does not specify a ${SizeTieredCompactionStrategy.ClassName}")
-
-  require(
-    config.entrySet()
-      .asScala
-      .map(_.getKey)
-      .forall(SizeTieredCompactionStrategy.propertyKeys.contains(_)),
-    s"Config contains properties not supported by a ${SizeTieredCompactionStrategy.ClassName}"
-  )
+class SizeTieredCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, ClassName, propertyKeys) {
 
   val bucketHigh: Double = if (config.hasPath("bucket_high")) config.getDouble("bucket_high") else 1.5
   val bucketLow: Double = if (config.hasPath("bucket_low")) config.getDouble("bucket_low") else 0.5

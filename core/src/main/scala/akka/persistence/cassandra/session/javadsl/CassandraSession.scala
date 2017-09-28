@@ -13,7 +13,6 @@ import scala.collection.JavaConverters._
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
