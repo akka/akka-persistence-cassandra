@@ -175,7 +175,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
   }
 
   private def selectStatement(tag: String): Future[PreparedStatement] = {
-    val tagId = writePluginConfig.tags.getOrElse(tag, 1)
+    val tagId = writePluginConfig.idForTag(tag)
     preparedSelectEventsByTag(tagId)
   }
 

@@ -30,7 +30,8 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
   }
 
   val maxTagsPerEvent: Int = 3
-  val tags: HashMap[String, Int] = {
+
+  private val (tags, tagPrefixes) = {
     import scala.collection.JavaConverters._
     config.getConfig("tags").entrySet.asScala.collect {
       case entry if entry.getValue.valueType == ConfigValueType.NUMBER =>
@@ -42,15 +43,34 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
             s"Max $maxTagsPerEvent tags per event is supported."
         )
         tag -> tagId
-    }(collection.breakOut)
+    }.foldLeft((HashMap.empty[String, Int], HashMap.empty[String, Int])) {
+      case ((tagsAcc, prefixAcc), (tag, index)) =>
+        if (tag.startsWith("\"") && tag.endsWith("*\"")) {
+          (tagsAcc, prefixAcc + (tag.substring(1, tag.length - 2) -> index))
+        } else {
+          (tagsAcc + (tag -> index), prefixAcc)
+        }
+    }
   }
+
+  def idForTag(tag: String): Int =
+    tags.get(tag).orElse {
+      tagPrefixes
+        .collectFirst {
+          case (prefix, index) if tag.startsWith(prefix) =>
+            index
+        }
+    }.getOrElse(1)
 
   /**
    * Will be 0 if [[#enableEventsByTagQuery]] is disabled,
    * will be 1 if [[#tags]] is empty, otherwise the number of configured
    * distinct tag identifiers.
    */
-  def maxTagId: Int = if (!enableEventsByTagQuery) 0 else if (tags.isEmpty) 1 else tags.values.max
+  def maxTagId: Int =
+    if (!enableEventsByTagQuery) 0
+    else if (tagPrefixes.isEmpty && tags.isEmpty) 1
+    else (tags.values ++ tagPrefixes.values).max
 }
 
 object CassandraJournalConfig {

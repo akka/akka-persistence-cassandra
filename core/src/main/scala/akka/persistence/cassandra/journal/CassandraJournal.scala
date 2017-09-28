@@ -276,7 +276,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         if (m.tags.nonEmpty) {
           var tagCounts = Array.ofDim[Int](maxTagsPerEvent)
           m.tags.foreach { tag =>
-            val tagId = tags.getOrElse(tag, 1)
+            val tagId = idForTag(tag)
             bs.setString("tag" + tagId, tag)
             tagCounts(tagId - 1) = tagCounts(tagId - 1) + 1
             var i = 0
