@@ -228,6 +228,6 @@ trait CassandraStatements {
 
   }
 
-  private def assertCorrectPartitionSize(size: String) =
+  private def assertCorrectPartitionSize(size: String): Unit =
     require(size.toInt == config.targetPartitionSize, "Can't change target-partition-size")
 }

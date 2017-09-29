@@ -76,21 +76,22 @@ object CassandraReadJournal {
  * absolute path corresponding to the identifier, which is `"cassandra-query-journal"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  */
-class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
+class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   extends ReadJournal
   with PersistenceIdsQuery
   with CurrentPersistenceIdsQuery
   with EventsByPersistenceIdQuery
   with CurrentEventsByPersistenceIdQuery
   with EventsByTagQuery
-  with CurrentEventsByTagQuery {
+  with CurrentEventsByTagQuery
+  with CassandraStatements {
 
   import CassandraReadJournal.CombinedEventsByPersistenceIdStmts
 
   private val log = Logging.getLogger(system, getClass)
-  private val writePluginId = config.getString("write-plugin")
+  private val writePluginId = cfg.getString("write-plugin")
   private val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig(writePluginId))
-  private val queryPluginConfig = new CassandraReadJournalConfig(config, writePluginConfig)
+  private val queryPluginConfig = new CassandraReadJournalConfig(cfg, writePluginConfig)
   private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
   implicit private val ec = system.dispatchers.lookup(queryPluginConfig.pluginDispatcher)
 
@@ -104,12 +105,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     s"${CassandraReadJournal.Identifier}$categoryUid"
   }
 
-  private val writeStatements: CassandraStatements = new CassandraStatements {
-    def config: CassandraJournalConfig = writePluginConfig
-  }
   private val queryStatements: CassandraReadStatements = new CassandraReadStatements {
     override def config = queryPluginConfig
   }
+
+  def config: CassandraJournalConfig = writePluginConfig
 
   /**
    * Data Access Object for arbitrary queries or updates.
@@ -121,7 +121,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
     ec,
     log,
     metricsCategory,
-    init = session => writeStatements.executeCreateKeyspaceAndTables(
+    init = session => executeCreateKeyspaceAndTables(
     session,
     writePluginConfig, writePluginConfig.maxTagId
   )
@@ -138,19 +138,19 @@ class CassandraReadJournal(system: ExtendedActorSystem, config: Config)
 
   private def preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
     session
-      .prepare(writeStatements.selectMessages)
+      .prepare(selectMessages)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
         .setRetryPolicy(readRetryPolicy))
 
   private def preparedSelectInUse: Future[PreparedStatement] =
     session
-      .prepare(writeStatements.selectInUse)
+      .prepare(selectInUse)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
         .setRetryPolicy(readRetryPolicy))
 
   private def preparedSelectDeletedTo: Future[PreparedStatement] =
     session
-      .prepare(writeStatements.selectDeletedTo)
+      .prepare(selectDeletedTo)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
         .setRetryPolicy(readRetryPolicy))
 
