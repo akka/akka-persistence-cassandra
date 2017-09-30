@@ -151,6 +151,7 @@ import com.datastax.driver.core.utils.Bytes
             case Success(delSeqNr) =>
               // lowest possible seqNr is 1
               seqNr = math.max(delSeqNr + 1, math.max(fromSeqNr, 1))
+              partition = partitionNr(seqNr)
               // initial query
               queryState = QueryIdle
               query(switchPartition = false)
@@ -197,7 +198,7 @@ import com.datastax.driver.core.utils.Bytes
           case QueryResult(rs, empty, switchPartition) if isAvailable(out) =>
             def afterExhausted(): Unit = {
               queryState = QueryIdle
-              // When ResultSet is exhausted we we immediately look in next partition for more events.
+              // When ResultSet is exhausted we immediately look in next partition for more events.
               // We keep track of if the query was such switching partition and if result is empty
               // we complete the stage or wait until next Continue tick.
               if (empty && switchPartition) {
@@ -212,7 +213,7 @@ import com.datastax.driver.core.utils.Bytes
               completeStage()
             else if (rs.isExhausted())
               afterExhausted()
-            else if (rs.getAvailableWithoutFetching() <= 0) {
+            else if (rs.getAvailableWithoutFetching() == 0) {
               queryState = QueryInProgress(switchPartition, fetchMore = true)
               val rsFut = rs.fetchMoreResults().asScala
               rsFut.onComplete(newResultSetCb.invoke)
