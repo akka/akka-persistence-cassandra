@@ -22,13 +22,11 @@ import akka.persistence.query.Offset
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
-    akka.actor.serialize-messages = on
-    akka.actor.serialize-creators = on
     cassandra-journal.keyspace=EventsByPersistenceIdSpec
-    cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 2
     cassandra-journal.target-partition-size = 15
+    akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
     """).withFallback(CassandraLifecycle.config)
 }
 
@@ -78,7 +76,7 @@ class EventsByPersistenceIdSpec
       val src = queries.currentEventsByPersistenceId("b", 5L, Long.MaxValue)
 
       src.map(_.sequenceNr).runWith(TestSink.probe[Any])
-        .request(6)
+        .request(7)
         .expectNext(5, 6, 7, 8, 9, 10)
         .expectComplete()
     }
@@ -153,7 +151,7 @@ class EventsByPersistenceIdSpec
 
       val src = queries.currentEventsByPersistenceId("h", 0L, Long.MaxValue)
       src.map(x => (x.persistenceId, x.sequenceNr, x.offset)).runWith(TestSink.probe[Any])
-        .request(3)
+        .request(4)
         .expectNext(
           ("h", 1, Offset.sequence(1)),
           ("h", 2, Offset.sequence(2)),
@@ -170,7 +168,7 @@ class EventsByPersistenceIdSpec
         .request(10)
         .expectNextN((1 to 10).map(i => s"i-$i"))
         .expectNoMsg(noMsgTimeout)
-        .request(10)
+        .request(11)
         .expectNextN((11 to 20).map(i => s"i-$i"))
         .expectComplete()
     }
