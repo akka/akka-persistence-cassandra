@@ -4,7 +4,6 @@
 package akka.persistence.cassandra.journal
 
 import java.nio.ByteBuffer
-
 import java.util.{ HashMap => JHMap, Map => JMap }
 import java.lang.{ Long => JLong }
 
@@ -13,7 +12,6 @@ import scala.concurrent._
 import scala.concurrent.duration.FiniteDuration
 import scala.math.min
 import scala.util.Try
-
 import akka.Done
 import akka.actor.ExtendedActorSystem
 import akka.actor.NoSerializationVerificationNeeded
@@ -31,18 +29,18 @@ import com.datastax.driver.core.exceptions.DriverException
 import com.datastax.driver.core.policies.LoggingRetryPolicy
 import com.datastax.driver.core.policies.RetryPolicy
 import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
-import com.datastax.driver.core.utils.Bytes
 import com.datastax.driver.core.utils.UUIDs
-import com.typesafe.config.Config
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.stream.ActorMaterializer
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.PersistenceQuery
 import akka.stream.scaladsl.Sink
+
 import scala.util.Success
 import scala.util.Failure
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.annotation.InternalApi
+import com.typesafe.config.Config
 
 class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
 
