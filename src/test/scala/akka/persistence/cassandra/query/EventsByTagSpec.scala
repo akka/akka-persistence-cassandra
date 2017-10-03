@@ -1452,6 +1452,33 @@ class EventsByTagStrictBySeqMemoryIssueSpec
 
       probe.cancel()
     }
+
+    "find all events" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5).minusDays(5)
+      val w1 = UUID.randomUUID().toString
+
+      // max-buffer-size = 50
+      // start at seqNr 1 here to trigger the backtracking mode
+      (101L to 430L).foreach { n =>
+        val eventA = PersistentRepr(s"B$n", n, "b", "", writerUuid = w1)
+        val t = t1.plus(n, ChronoUnit.MILLIS)
+        writeTestEvent(t, eventA, Set("T15"))
+      }
+
+      val src = queries.currentEventsByTag(tag = "T15", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+
+      (1 to 10).foreach { _ =>
+        probe.request(30)
+        probe.expectNextN(30)
+        // reduce downstream demand, which will result in limit < maxBufferSize
+        probe.expectNoMsg(100.millis)
+      }
+
+      probe.request(100)
+      probe.expectNextN(30)
+      probe.expectComplete
+    }
   }
 }
 
