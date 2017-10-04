@@ -70,17 +70,19 @@ import com.datastax.driver.core.utils.Bytes
 
   final case class EventsByPersistenceIdSession(
     selectEventsByPersistenceIdQuery: PreparedStatement,
-    selectDeletedToQuery: PreparedStatement,
-    session: Session,
-    customConsistencyLevel: Option[ConsistencyLevel],
-    customRetryPolicy: Option[RetryPolicy]) {
+    selectDeletedToQuery:             PreparedStatement,
+    session:                          Session,
+    customConsistencyLevel:           Option[ConsistencyLevel],
+    customRetryPolicy:                Option[RetryPolicy]
+  ) {
 
     def selectEventsByPersistenceId(
       persistenceId: String,
-      partitionNr: Long,
-      progress: Long,
-      toSeqNr: Long,
-      fetchSize: Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
+      partitionNr:   Long,
+      progress:      Long,
+      toSeqNr:       Long,
+      fetchSize:     Int
+    )(implicit ec: ExecutionContext): Future[ResultSet] = {
       val boundStatement = selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
       executeStatement(boundStatement)
@@ -116,8 +118,8 @@ import com.datastax.driver.core.utils.Bytes
  * INTERNAL API
  */
 @InternalApi private[akka] class EventsByPersistenceIdStage(persistenceId: String, fromSeqNr: Long, toSeqNr: Long, max: Long,
-  fetchSize: Int, refreshInterval: Option[FiniteDuration], session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
-  config: CassandraReadJournalConfig)
+                                                            fetchSize: Int, refreshInterval: Option[FiniteDuration], session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
+                                                            config: CassandraReadJournalConfig)
   extends GraphStageWithMaterializedValue[SourceShape[PersistentRepr], EventsByPersistenceIdStage.Control] {
   import EventsByPersistenceIdStage._
 
@@ -266,7 +268,8 @@ import com.datastax.driver.core.utils.Bytes
         queryState = QueryInProgress(switchPartition, fetchMore = false, System.nanoTime())
         log.debug(
           "EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
-          persistenceId, seqNr, pnr)
+          persistenceId, seqNr, pnr
+        )
         session.selectEventsByPersistenceId(persistenceId, pnr, seqNr, toSeqNr, fetchSize)
           .onComplete(newResultSetCb.invoke)
       }
@@ -346,7 +349,8 @@ import com.datastax.driver.core.utils.Bytes
               manifest = row.getString("event_manifest"), // manifest for event adapters
               deleted = false,
               sender = null,
-              writerUuid = row.getString("writer_uuid"))
+              writerUuid = row.getString("writer_uuid")
+            )
           case b =>
             // for backwards compatibility
             persistentFromByteBuffer(b)

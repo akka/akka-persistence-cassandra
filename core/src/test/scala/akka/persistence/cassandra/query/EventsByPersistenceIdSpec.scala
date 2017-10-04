@@ -18,6 +18,7 @@ import scala.concurrent.duration._
 
 import akka.stream.testkit.scaladsl.TestSink
 import akka.persistence.query.Offset
+import akka.persistence.DeleteMessagesSuccess
 
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
@@ -206,6 +207,17 @@ class EventsByPersistenceIdSpec
         .expectNextN((11 to 20).map(i => s"i3-$i"))
         .request(100)
         .expectNextN((21 to 32).map(i => s"i3-$i"))
+        .expectComplete()
+    }
+
+    "start not in the first or second partition" in {
+      val ref: ActorRef = setup("i4", 50)
+      ref ! TestActor.DeleteTo(48)
+      expectMsg(DeleteMessagesSuccess(48))
+      val src = queries.currentEventsByPersistenceId("i4", 0, Long.MaxValue)
+      src.map(_.event).runWith(TestSink.probe[Any])
+        .request(2)
+        .expectNext("i4-49", "i4-50")
         .expectComplete()
     }
   }
