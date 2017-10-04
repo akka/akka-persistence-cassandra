@@ -70,19 +70,17 @@ import com.datastax.driver.core.utils.Bytes
 
   final case class EventsByPersistenceIdSession(
     selectEventsByPersistenceIdQuery: PreparedStatement,
-    selectDeletedToQuery:             PreparedStatement,
-    session:                          Session,
-    customConsistencyLevel:           Option[ConsistencyLevel],
-    customRetryPolicy:                Option[RetryPolicy]
-  ) {
+    selectDeletedToQuery: PreparedStatement,
+    session: Session,
+    customConsistencyLevel: Option[ConsistencyLevel],
+    customRetryPolicy: Option[RetryPolicy]) {
 
     def selectEventsByPersistenceId(
       persistenceId: String,
-      partitionNr:   Long,
-      progress:      Long,
-      toSeqNr:       Long,
-      fetchSize:     Int
-    )(implicit ec: ExecutionContext): Future[ResultSet] = {
+      partitionNr: Long,
+      progress: Long,
+      toSeqNr: Long,
+      fetchSize: Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
       val boundStatement = selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
       executeStatement(boundStatement)
@@ -117,9 +115,9 @@ import com.datastax.driver.core.utils.Bytes
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class EventsByPersistenceIdStage(persistenceId: String, fromSeqNr: Long, toSeqNr: Long, max: Long, fetchSize: Int,
-                                                            refreshInterval: Option[FiniteDuration], session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
-                                                            config: CassandraReadJournalConfig)
+@InternalApi private[akka] class EventsByPersistenceIdStage(persistenceId: String, fromSeqNr: Long, toSeqNr: Long, max: Long,
+  fetchSize: Int, refreshInterval: Option[FiniteDuration], session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
+  config: CassandraReadJournalConfig)
   extends GraphStageWithMaterializedValue[SourceShape[PersistentRepr], EventsByPersistenceIdStage.Control] {
   import EventsByPersistenceIdStage._
 
@@ -138,6 +136,7 @@ import com.datastax.driver.core.utils.Bytes
       lazy val serialization = SerializationExtension(system)
       lazy val eventDeserializer = new CassandraJournal.EventDeserializer(serialization)
       implicit def ec = materializer.executionContext
+      val fetchMoreThresholdRows = (fetchSize * config.fetchMoreThreshold).toInt
 
       val donePromise = Promise[Done]()
 
@@ -267,8 +266,7 @@ import com.datastax.driver.core.utils.Bytes
         queryState = QueryInProgress(switchPartition, fetchMore = false, System.nanoTime())
         log.debug(
           "EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
-          persistenceId, seqNr, pnr
-        )
+          persistenceId, seqNr, pnr)
         session.selectEventsByPersistenceId(persistenceId, pnr, seqNr, toSeqNr, fetchSize)
           .onComplete(newResultSetCb.invoke)
       }
@@ -306,6 +304,7 @@ import com.datastax.driver.core.utils.Bytes
             else if (rs.isExhausted())
               afterExhausted()
             else if (rs.getAvailableWithoutFetching() == 0) {
+              log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]", persistenceId, seqNr)
               queryState = QueryInProgress(switchPartition, fetchMore = true, System.nanoTime())
               val rsFut = rs.fetchMoreResults().asScala
               rsFut.onComplete(newResultSetCb.invoke)
@@ -326,6 +325,9 @@ import com.datastax.driver.core.utils.Bytes
                   completeStage()
                 else if (rs.isExhausted())
                   afterExhausted()
+                else if (rs.getAvailableWithoutFetching == fetchMoreThresholdRows)
+                  rs.fetchMoreResults() // trigger early async fetch of more rows
+
               }
             }
 
@@ -344,8 +346,7 @@ import com.datastax.driver.core.utils.Bytes
               manifest = row.getString("event_manifest"), // manifest for event adapters
               deleted = false,
               sender = null,
-              writerUuid = row.getString("writer_uuid")
-            )
+              writerUuid = row.getString("writer_uuid"))
           case b =>
             // for backwards compatibility
             persistentFromByteBuffer(b)
