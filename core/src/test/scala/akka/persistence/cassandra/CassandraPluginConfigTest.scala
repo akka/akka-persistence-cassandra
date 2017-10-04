@@ -81,7 +81,7 @@ class CassandraPluginConfigTest extends TestKit(ActorSystem("CassandraPluginConf
 
     "set the fetch size to the max result size" in {
       val config = new CassandraPluginConfig(system, defaultConfig)
-      config.sessionProvider.asInstanceOf[ConfigSessionProvider].fetchSize must be(50001)
+      config.sessionProvider.asInstanceOf[ConfigSessionProvider].fetchSize must be(250)
     }
 
     "set the metadata table" in {
