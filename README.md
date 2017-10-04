@@ -95,7 +95,7 @@ Migrations
 In version 0.55 additional columns were added to be able to store meta data about an event without altering
 the actual domain event.
 
-The new columns `meta_ser_id`, `meta_ser_manifest`, and `meta` are defined in the [new journal table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.55/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L45-47 and [new snapshot table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.55/src/main/scala/akka/persistence/cassandra/snapshot/CassandraStatements.scala#L31-33
+The new columns `meta_ser_id`, `meta_ser_manifest`, and `meta` are defined in the [new journal table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.55/core/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L45-L47) and [new snapshot table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.55/core/src/main/scala/akka/persistence/cassandra/snapshot/CassandraStatements.scala#L31-L33).
 
 These columns are used when the event is wrapped in `akka.persistence.cassandra.EventWithMetaData` or snapshot is wrapped in `akka.persistence.cassandra.SnapshotWithMetaData`. It is optional to alter the table and add the columns. It's only required to add the columns if such meta data is used.
 
