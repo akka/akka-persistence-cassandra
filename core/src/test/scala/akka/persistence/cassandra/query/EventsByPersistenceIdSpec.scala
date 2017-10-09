@@ -13,6 +13,7 @@ import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ Matchers, WordSpecLike }
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.time._
 
 import scala.concurrent.duration._
 
@@ -43,7 +44,6 @@ object EventsByPersistenceIdSpec {
 
 class EventsByPersistenceIdSpec
   extends TestKit(ActorSystem("EventsByPersistenceIdSpec", EventsByPersistenceIdSpec.config))
-  with ScalaFutures
   with ImplicitSender
   with WordSpecLike
   with CassandraLifecycle
@@ -119,7 +119,7 @@ class EventsByPersistenceIdSpec
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("a-1", "a-2")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
         .request(2)
         .expectNext("a-3")
         .expectComplete()
@@ -159,13 +159,13 @@ class EventsByPersistenceIdSpec
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("e-1", "e-2")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       ref ! "e-4"
       expectMsg("e-4-done")
 
       probe
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
         .request(5)
         .expectNext("e-3")
         .expectComplete() // e-4 not seen
@@ -178,18 +178,18 @@ class EventsByPersistenceIdSpec
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("f-1", "f-2")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       probe
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
         .request(5)
         .expectNext("f-3", "f-4", "f-5", "f-6", "f-7")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       probe
         .request(5)
         .expectNext("f-8", "f-9", "f-10", "f-11", "f-12")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
     }
 
     "stop if there are no events" in {
@@ -221,7 +221,7 @@ class EventsByPersistenceIdSpec
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
         .expectNextN((1 to 10).map(i => s"i-$i"))
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
         .request(11)
         .expectNextN((11 to 20).map(i => s"i-$i"))
         .expectComplete()
@@ -255,7 +255,7 @@ class EventsByPersistenceIdSpec
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
         .expectNextN((1 to 10).map(i => s"i3-$i"))
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
         .request(10)
         .expectNextN((11 to 20).map(i => s"i3-$i"))
         .request(100)
@@ -319,7 +319,7 @@ class EventsByPersistenceIdSpec
       val src = queries.eventsByPersistenceId("k", 5L, Long.MaxValue)
       val probe = src.map(_.sequenceNr).runWith(TestSink.probe[Any])
         .request(5)
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       ref ! "k-5"
       expectMsg("k-5-done")
@@ -356,13 +356,13 @@ class EventsByPersistenceIdSpec
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("m-1", "m-2")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       ref ! "m-4"
       expectMsg("m-4-done")
 
       probe
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
         .request(5)
         .expectNext("m-3")
         .expectNext("m-4")
@@ -377,18 +377,18 @@ class EventsByPersistenceIdSpec
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("n-1", "n-2")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       probe
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
         .request(5)
         .expectNext("n-3", "n-4", "n-5", "n-6", "n-7")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       probe
         .request(5)
         .expectNext("n-8", "n-9", "n-10", "n-11", "n-12")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       probe.cancel()
     }
@@ -399,7 +399,7 @@ class EventsByPersistenceIdSpec
 
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       probe.cancel()
     }
@@ -410,13 +410,13 @@ class EventsByPersistenceIdSpec
 
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       setup("p", 2)
 
       probe
         .expectNext("p-1", "p-2")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       probe.cancel()
     }
@@ -429,7 +429,7 @@ class EventsByPersistenceIdSpec
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(16)
         .expectNextN((1 to 15).map(i => s"q-$i"))
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       for (i <- 16 to 21) {
         ref ! s"q-$i"
@@ -470,7 +470,7 @@ class EventsByPersistenceIdSpec
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
         .expectNextN((1 to 10).map(i => s"q2-$i"))
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
         .request(10)
         .expectNextN((11 to 20).map(i => s"q2-$i"))
         .request(100)

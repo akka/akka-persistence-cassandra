@@ -13,6 +13,7 @@ import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ Matchers, WordSpecLike }
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.time._
 
 import scala.concurrent.duration._
 
@@ -21,6 +22,7 @@ import akka.persistence.query.Offset
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.TestSubscriber.Probe
 import scala.annotation.tailrec
+import scala.concurrent.Promise
 
 object EventsByPersistenceIdWithControlSpec {
   val config = ConfigFactory.parseString(s"""
@@ -44,6 +46,8 @@ class EventsByPersistenceIdWithControlSpec
   override def systemName: String = "EventsByPersistenceIdWithControlSpec"
 
   implicit val mat = ActorMaterializer()(system)
+
+  implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
 
   lazy val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
@@ -102,12 +106,12 @@ class EventsByPersistenceIdWithControlSpec
       probe
         .request(2)
         .expectNext("b-1", "b-2")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       ref ! "b-9"
       expectMsg("b-9-done")
       control.poll(9)
-      probe.expectNoMsg(noMsgTimeout)
+      probe.expectNoMessage(noMsgTimeout)
       probe.request(10)
       probe.expectNext("b-3", "b-4", "b-5", "b-6", "b-7", "b-8")
       probe.expectNext("b-9")
@@ -126,10 +130,10 @@ class EventsByPersistenceIdWithControlSpec
       probe
         .request(10)
         .expectNext("c-1", "c-2")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       control.fastForward(5)
-      probe.expectNoMsg(noMsgTimeout)
+      probe.expectNoMessage(noMsgTimeout)
       ref ! "c-3"
       expectMsg("c-3-done")
       ref ! "c-4"
@@ -138,7 +142,7 @@ class EventsByPersistenceIdWithControlSpec
       expectMsg("c-5-done")
       ref ! "c-6"
       expectMsg("c-6-done")
-      probe.expectNoMsg(noMsgTimeout)
+      probe.expectNoMessage(noMsgTimeout)
       control.poll(6)
       probe.expectNext("c-5", "c-6")
 
@@ -157,12 +161,12 @@ class EventsByPersistenceIdWithControlSpec
       probe
         .request(2)
         .expectNext("d-1", "d-2")
-        .expectNoMsg(noMsgTimeout)
+        .expectNoMessage(noMsgTimeout)
 
       ref ! "d-13"
       expectMsg("d-13-done")
       control.fastForward(12)
-      probe.expectNoMsg(noMsgTimeout)
+      probe.expectNoMessage(noMsgTimeout)
       control.poll(13)
       probe.request(10)
 
