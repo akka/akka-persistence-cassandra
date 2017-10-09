@@ -19,6 +19,16 @@ import scala.concurrent.duration._
 import akka.stream.testkit.scaladsl.TestSink
 import akka.persistence.query.Offset
 import akka.persistence.DeleteMessagesSuccess
+import akka.persistence.cassandra.journal.CassandraJournalConfig
+import scala.concurrent.Await
+import akka.persistence.cassandra.journal.CassandraStatements
+import akka.persistence.PersistentRepr
+import akka.serialization.SerializationExtension
+import java.nio.ByteBuffer
+import akka.serialization.SerializerWithStringManifest
+import com.datastax.driver.core.utils.UUIDs
+import akka.persistence.cassandra.journal.TimeBucket
+import java.util.UUID
 
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
@@ -56,6 +66,49 @@ class EventsByPersistenceIdSpec
     }
 
     ref
+  }
+
+  val serialization = SerializationExtension(system)
+  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+
+  lazy val session = {
+    import system.dispatcher
+    Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
+  }
+
+  lazy val preparedWriteMessage = {
+    val writeStatements: CassandraStatements = new CassandraStatements {
+      def config: CassandraJournalConfig = writePluginConfig
+    }
+    session.prepare(writeStatements.writeMessage(withMeta = false))
+  }
+
+  def writeTestEvent(persistent: PersistentRepr): Unit = {
+    val event = persistent.payload.asInstanceOf[AnyRef]
+    val serializer = serialization.findSerializerFor(event)
+    val serialized = ByteBuffer.wrap(serialization.serialize(event).get)
+
+    val serManifest = serializer match {
+      case ser2: SerializerWithStringManifest ⇒
+        ser2.manifest(persistent)
+      case _ ⇒
+        if (serializer.includeManifest) persistent.getClass.getName
+        else PersistentRepr.Undefined
+    }
+
+    val bs = preparedWriteMessage.bind()
+    bs.setString("persistence_id", persistent.persistenceId)
+    bs.setLong("partition_nr", 1L)
+    bs.setLong("sequence_nr", persistent.sequenceNr)
+    val nowUuid = UUIDs.timeBased()
+    val now = UUIDs.unixTimestamp(nowUuid)
+    bs.setUUID("timestamp", nowUuid)
+    bs.setString("timebucket", TimeBucket(now).key)
+    bs.setInt("ser_id", serializer.identifier)
+    bs.setString("ser_manifest", serManifest)
+    bs.setString("event_manifest", persistent.manifest)
+    bs.setBytes("event", serialized)
+    session.execute(bs)
   }
 
   "Cassandra query EventsByPersistenceId" must {
@@ -219,6 +272,29 @@ class EventsByPersistenceIdSpec
         .request(2)
         .expectNext("i4-49", "i4-50")
         .expectComplete()
+    }
+
+    "detect gaps" in {
+      val w1 = UUID.randomUUID().toString
+      val pr1 = PersistentRepr("e1", 1L, "i5", "", writerUuid = w1)
+      writeTestEvent(pr1)
+      val pr2 = PersistentRepr("e2", 2L, "i5", "", writerUuid = w1)
+      writeTestEvent(pr2)
+      val pr4 = PersistentRepr("e4", 4L, "i5", "", writerUuid = w1)
+      writeTestEvent(pr4)
+
+      val src = queries.currentEventsByPersistenceId("i5", 0L, Long.MaxValue)
+      val probe = src.map(_.event).runWith(TestSink.probe[Any])
+        .request(10)
+      probe.expectNextOrError() match {
+        case Right("e1") =>
+          probe.expectNextOrError() match {
+            case Right("e2") =>
+              probe.expectError()
+            case Left(_) =>
+          }
+        case Left(_) =>
+      }
     }
   }
 

@@ -17,6 +17,7 @@ import akka.annotation.InternalApi
 @InternalApi private[akka] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig)
   extends NoSerializationVerificationNeeded {
   val refreshInterval: FiniteDuration = config.getDuration("refresh-interval", MILLISECONDS).millis
+  val gapFreeSequenceNumbers: Boolean = config.getBoolean("gap-free-sequence-numbers")
   val maxBufferSize: Int = config.getInt("max-buffer-size")
   val fetchSize: Int = config.getInt("max-result-size-query")
   val fetchMoreThreshold: Double = config.getDouble("fetch-more-threshold")

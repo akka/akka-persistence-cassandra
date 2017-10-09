@@ -129,6 +129,8 @@ import com.datastax.driver.core.utils.Bytes
   override def createLogicAndMaterializedValue(inheritedAttributes: Attributes): (GraphStageLogic, Control) = {
     val logic = new TimerGraphStageLogic(shape) with OutHandler with StageLogging with Control {
 
+      override protected def logSource: Class[_] = classOf[EventsByPersistenceIdStage]
+
       // lazy because materializer not initialized in constructor
       lazy val system = materializer match {
         case a: ActorMaterializer => a.system
@@ -317,8 +319,10 @@ import com.datastax.driver.core.utils.Bytes
               if (event.sequenceNr < seqNr) {
                 // skip event due to fast forward
                 tryPushOne()
+              } else if (config.gapFreeSequenceNumbers && seqNr != event.sequenceNr) {
+                failStage(new IllegalStateException(s"Missing sequence number [$seqNr], got [${event.sequenceNr}] for " +
+                  s"persistenceId [$persistenceId]."))
               } else {
-                // FIXME perhaps we should add gap detection here
                 seqNr = event.sequenceNr + 1
                 partition = row.getLong("partition_nr")
                 count += 1
