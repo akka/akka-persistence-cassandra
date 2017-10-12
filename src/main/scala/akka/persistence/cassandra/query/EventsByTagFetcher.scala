@@ -98,7 +98,10 @@ private[query] class EventsByTagFetcher(
   }
 
   private def replayDone(): Unit = {
-    replyTo ! ReplayDone(retrievedCount, deliveredCount, seqNumbers, highestOffset, retrievedCount >= selectLimit)
+    // Note that we use different selectLimit depending on if it's a backtracking query or not,
+    // but replayDone may be triggered earlier than selectLimit if deliveredCount == limit.
+    val mightBeMore = retrievedCount >= math.min(selectLimit, limit)
+    replyTo ! ReplayDone(retrievedCount, deliveredCount, seqNumbers, highestOffset, mightBeMore)
     context.stop(self)
   }
 
