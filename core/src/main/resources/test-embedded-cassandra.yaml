@@ -31,7 +31,7 @@ partitioner: org.apache.cassandra.dht.Murmur3Partitioner
 
 endpoint_snitch: SimpleSnitch
 
-listen_address: 127.0.0.1
+listen_address: $HOST
 
 start_native_transport: true
 # port for the CQL native transport to listen for clients on
@@ -47,7 +47,7 @@ start_rpc: false
 seed_provider:
     - class_name: org.apache.cassandra.locator.SimpleSeedProvider
       parameters:
-          - seeds: "127.0.0.1"
+          - seeds: "$HOST"
 
 
 # The following settings were inspired by

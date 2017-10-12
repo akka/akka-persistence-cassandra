@@ -143,10 +143,31 @@ object CassandraLauncher {
    * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
    *   is `true` and removal of the directory fails
    */
-  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int, classpath: immutable.Seq[String]): Unit = this.synchronized {
+  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int, classpath: immutable.Seq[String]): Unit =
+    start(cassandraDirectory, configResource, clean, port, classpath, None)
+
+  /**
+   * Start Cassandra
+   *
+   * @param cassandraDirectory the data directory to use
+   * @param configResource yaml configuration loaded from classpath,
+   *   default configuration for testing is defined in [[CassandraLauncher#DefaultTestConfigResource]]
+   * @param clean if `true` all files in the data directory will be deleted
+   *   before starting Cassandra
+   * @param port the `native_transport_port` to use, if 0 a random
+   *   free port is used, which can be retrieved (before starting)
+   *   with [[CassandraLauncher.randomPort]].
+   * @param classpath Any additional jars/directories to add to the classpath. Use
+   *                  [[CassandraLauncher#classpathForResources]] to assist in calculating this.
+   * @param host the host to bind the embeded Cassandra to. If None, then 127.0.0.1 is used.
+   * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
+   *   is `true` and removal of the directory fails
+   */
+  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int, classpath: immutable.Seq[String], host: Option[String]): Unit = this.synchronized {
     if (cassandraDaemon.isEmpty) {
       prepareCassandraDirectory(cassandraDirectory, clean)
 
+      val realHost = host.getOrElse("127.0.0.1")
       val realPort = if (port == 0) randomPort else port
       val storagePort = freePort()
 
@@ -156,6 +177,7 @@ object CassandraLauncher {
         .replace("$PORT", realPort.toString)
         .replace("$STORAGE_PORT", storagePort.toString)
         .replace("$DIR", cassandraDirectory.getAbsolutePath)
+        .replace("$HOST", realHost)
       val configFile = new File(cassandraDirectory, configResource)
       writeToFile(configFile, amendedConf)
 
@@ -170,7 +192,7 @@ object CassandraLauncher {
         }
       }
 
-      startForked(configFile, cassandraBundleFile, classpath, realPort)
+      startForked(configFile, cassandraBundleFile, classpath, realHost, realPort)
     }
   }
 
@@ -189,7 +211,7 @@ object CassandraLauncher {
       require(cassandraDirectory.mkdirs(), s"Couldn't create Cassandra directory [$cassandraDirectory]")
   }
 
-  private def startForked(configFile: File, cassandraBundle: File, classpath: immutable.Seq[String], port: Int): Unit = {
+  private def startForked(configFile: File, cassandraBundle: File, classpath: immutable.Seq[String], host: String, port: Int): Unit = {
     // Calculate classpath
     val / = File.separator
     val javaBin = s"${System.getProperty("java.home")}${/}bin${/}java"
@@ -211,7 +233,7 @@ object CassandraLauncher {
 
     // We wait for Cassandra to start listening before we return, since running in non fork mode will also not
     // return until Cassandra has started listening.
-    waitForCassandraToListen(port)
+    waitForCassandraToListen(host, port)
 
     cassandraDaemon = Some(new Closeable {
       override def close(): Unit = {
@@ -266,12 +288,12 @@ object CassandraLauncher {
     }
   }
 
-  private def waitForCassandraToListen(port: Int) = {
+  private def waitForCassandraToListen(host: String, port: Int) = {
     val deadline = AwaitListenTimeout.fromNow
     @annotation.tailrec
     def tryConnect(): Unit = {
       val retry = try {
-        new Socket("localhost", port).close()
+        new Socket(host, port).close()
         false
       } catch {
         case ioe: IOException if deadline.hasTimeLeft() =>
