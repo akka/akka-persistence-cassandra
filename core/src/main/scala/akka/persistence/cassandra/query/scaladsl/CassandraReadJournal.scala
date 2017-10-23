@@ -439,9 +439,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * INTERNAL API
    */
   @InternalApi private[akka] def eventsByPersistenceIdWithControl(
-    persistenceId:  String,
-    fromSequenceNr: Long,
-    toSequenceNr:   Long
+    persistenceId:   String,
+    fromSequenceNr:  Long,
+    toSequenceNr:    Long,
+    refreshInterval: Option[FiniteDuration] = None
   ): Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] =
     eventsByPersistenceId(
       persistenceId,
@@ -449,7 +450,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       toSequenceNr,
       Long.MaxValue,
       queryPluginConfig.fetchSize,
-      Some(queryPluginConfig.refreshInterval),
+      refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId"
     )
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
