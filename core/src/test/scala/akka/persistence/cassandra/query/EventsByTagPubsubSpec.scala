@@ -88,7 +88,7 @@ class EventsByTagPubsubSpec extends TestKit(ActorSystem("EventsByTagPubsubSpec",
       val blackSrc = queries.eventsByTag(tag = "black", offset = NoOffset)
       val probe = blackSrc.runWith(TestSink.probe[Any])
       probe.request(2)
-      probe.expectNoMsg(300.millis)
+      probe.expectNoMessage(300.millis)
 
       actor ! "a black car"
       probe.within(5.seconds) { // long before refresh-interval, which is 10s

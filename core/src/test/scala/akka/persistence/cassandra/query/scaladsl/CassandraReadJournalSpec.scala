@@ -46,7 +46,6 @@ class TestTagger extends WriteEventAdapter {
 
 class CassandraReadJournalSpec
   extends TestKit(ActorSystem("ScalaCassandraReadJournalSpec", CassandraReadJournalSpec.config))
-  with ScalaFutures
   with ImplicitSender
   with WordSpecLike
   with CassandraLifecycle
@@ -55,8 +54,6 @@ class CassandraReadJournalSpec
   override def systemName: String = "ScalaCassandraReadJournalSpec"
 
   implicit val mat = ActorMaterializer()(system)
-
-  implicit val patience = PatienceConfig(Span(10, Seconds), Span(1, Second))
 
   lazy val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
@@ -91,7 +88,7 @@ class CassandraReadJournalSpec
       src.map(_.persistenceId).runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("a")
-        .expectNoMsg(100.millis)
+        .expectNoMessage(100.millis)
         .cancel()
     }
 

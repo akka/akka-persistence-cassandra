@@ -154,7 +154,7 @@ class AllPersistenceIdsSpec
 
       probe.request(1)
       probe.expectNext()
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
 
       setup("j", 1)
 
@@ -175,12 +175,12 @@ class AllPersistenceIdsSpec
       probe.request(2)
       probe.expectNext()
       probe.expectNext()
-      probe.expectNoMsg(1000.millis)
+      probe.expectNoMessage(1000.millis)
 
       probe.request(2)
       probe.expectNext()
       probe.expectNext()
-      probe.expectNoMsg(1000.millis)
+      probe.expectNoMessage(1000.millis)
     }
 
     "deliver persistenceId only once if there are multiple events spanning partitions" in {
@@ -192,14 +192,14 @@ class AllPersistenceIdsSpec
       probe
         .request(10)
         .expectNext("p")
-        .expectNoMsg(1000.millis)
+        .expectNoMessage(1000.millis)
 
       setup("q", 1000)
 
       probe
         .request(10)
         .expectNext("q")
-        .expectNoMsg(1000.millis)
+        .expectNoMessage(1000.millis)
     }
   }
 }

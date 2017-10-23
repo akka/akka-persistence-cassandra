@@ -92,7 +92,7 @@ class EventAdaptersReadSpec
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("a-1", "a-3")
-        .expectNoMsg(500.millis)
+        .expectNoMessage(500.millis)
         .request(2)
         .expectNext("a-5")
         .expectComplete()

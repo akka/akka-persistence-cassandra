@@ -233,7 +233,7 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
 
   override protected def afterEach(): Unit = {
     // check for the buffer exceeded log (and other issues)
-    logProbe.expectNoMsg(100.millis)
+    logProbe.expectNoMessage(100.millis)
     super.afterEach()
   }
 }
@@ -267,7 +267,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 2L, "a green apple") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 4L, "a green banana") => e }
-      probe.expectNoMsg(500.millis)
+      probe.expectNoMessage(500.millis)
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "a green leaf") => e }
       probe.expectComplete()
@@ -300,12 +300,12 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 2L, "a green apple") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 4L, "a green banana") => e }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
 
       c ! "a green cucumber"
       expectMsg(s"a green cucumber-done")
 
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
       probe.request(5)
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "a green leaf") => e }
       probe.expectComplete() // green cucumber not seen
@@ -372,7 +372,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
-      probe.expectNoMsg(500.millis)
+      probe.expectNoMessage(500.millis)
       probe.request(5)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "e3") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, "e4") => e }
@@ -392,7 +392,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       val probe = blackSrc.runWith(TestSink.probe[Any])
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "a black car") => e }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
 
       d ! "a black dog"
       expectMsg(s"a black dog-done")
@@ -400,7 +400,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       expectMsg(s"a black night-done")
 
       probe.expectNextPF { case e @ EventEnvelope(_, "d", 1L, "a black dog") => e }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
       probe.request(10)
       probe.expectNextPF { case e @ EventEnvelope(_, "d", 2L, "a black night") => e }
       probe.cancel()
@@ -430,7 +430,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       probe2.expectNextPF { case e @ EventEnvelope(_, "a", 4L, "a green banana") => e }
       probe2.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "a green leaf") => e }
       probe2.expectNextPF { case e @ EventEnvelope(_, "c", 1L, "a green cucumber") => e }
-      probe2.expectNoMsg(100.millis)
+      probe2.expectNoMessage(100.millis)
       probe2.cancel()
     }
 
@@ -447,7 +447,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       probe2.request(10)
       probe2.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "a green leaf") => e }
       probe2.expectNextPF { case e @ EventEnvelope(_, "c", 1L, "a green cucumber") => e }
-      probe2.expectNoMsg(100.millis)
+      probe2.expectNoMessage(100.millis)
       probe2.cancel()
     }
 
@@ -519,7 +519,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
         val Expected = s"yellow-$n"
         probe.expectNextPF { case e @ EventEnvelope(_, "e", _, Expected) => e }
       }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
 
       for (n <- 101 to 200)
         e ! s"yellow-$n"
@@ -528,10 +528,10 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
         val Expected = s"yellow-$n"
         probe.expectNextPF { case e @ EventEnvelope(_, "e", _, Expected) => e }
       }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
 
       probe.request(10)
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
     }
 
   }
@@ -574,7 +574,7 @@ class EventsByTagWithPrefixSpec
       probe.expectNextPF {
         case e @ EventEnvelope(_, "a", 2L, "black car") => e
       }
-      probe.expectNoMsg(500.millis)
+      probe.expectNoMessage(500.millis)
       probe.request(5)
       probe.expectNextPF {
         case e @ EventEnvelope(_, "b", 1L, "yellow apple") => e
@@ -642,12 +642,12 @@ class EventsByTagWithPrefixSpec
       probe.expectNextPF {
         case e @ EventEnvelope(_, "b", 2L, "green leaf") => e
       }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
 
       c ! "green cucumber"
       expectMsg(s"green cucumber-done")
 
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
       probe.request(5)
       probe.expectNextPF {
         case e @ EventEnvelope(_, "a", 4L, "green day") => e
@@ -734,7 +734,7 @@ class EventsByTagWithPrefixSpec
       probe.expectNextPF {
         case e @ EventEnvelope(_, "a", 2L, "black car") => e
       }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
 
       d ! "black dog"
       expectMsg(s"black dog-done")
@@ -744,7 +744,7 @@ class EventsByTagWithPrefixSpec
       probe.expectNextPF {
         case e @ EventEnvelope(_, "d", 1L, "black dog") => e
       }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
       probe.request(10)
       probe.expectNextPF {
         case e @ EventEnvelope(_, "d", 2L, "black night") => e
@@ -795,7 +795,7 @@ class EventsByTagWithPrefixSpec
       probe2.expectNextPF {
         case e @ EventEnvelope(_, "c", 1L, "green cucumber") => e
       }
-      probe2.expectNoMsg(100.millis)
+      probe2.expectNoMessage(100.millis)
       probe2.cancel()
     }
 
@@ -821,7 +821,7 @@ class EventsByTagWithPrefixSpec
       probe2.expectNextPF {
         case e @ EventEnvelope(_, "c", 1L, "green cucumber") => e
       }
-      probe2.expectNoMsg(100.millis)
+      probe2.expectNoMessage(100.millis)
       probe2.cancel()
     }
 
@@ -839,7 +839,7 @@ class EventsByTagWithPrefixSpec
         val Expected = s"purple $n"
         probe.expectNextPF { case e @ EventEnvelope(_, "e", _, Expected) => e }
       }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
 
       for (n <- 101 to 200)
         e ! s"purple $n"
@@ -848,10 +848,10 @@ class EventsByTagWithPrefixSpec
         val Expected = s"purple $n"
         probe.expectNextPF { case e @ EventEnvelope(_, "e", _, Expected) => e }
       }
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
 
       probe.request(10)
-      probe.expectNoMsg(100.millis)
+      probe.expectNoMessage(100.millis)
     }
   }
 }
@@ -922,7 +922,7 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       probe.request(10)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
-      probe.expectNoMsg(500.millis)
+      probe.expectNoMessage(500.millis)
 
       val t3 = t1.plusSeconds(2)
       val pr3 = PersistentRepr("e3", 3L, "p1", "", writerUuid = w1)
@@ -952,7 +952,7 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       probe.request(10)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
-      probe.expectNoMsg(1.seconds)
+      probe.expectNoMessage(1.seconds)
       probe.expectError().getClass should be(classOf[IllegalStateException])
     }
 
@@ -987,7 +987,7 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       val t5 = t1.plusSeconds(5)
       val pr5 = PersistentRepr("p1-e4", 4L, "p1", "", writerUuid = w1)
       writeTestEvent(t5, pr5, Set("T5"))
-      probe.expectNoMsg(500.millis)
+      probe.expectNoMessage(500.millis)
 
       // the delayed p1-e3, and the timeuuid is before p2-e2
       val t6 = t1.plusSeconds(3)
@@ -1147,7 +1147,7 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       writeTestEvent(t2.minus(100, ChronoUnit.MILLIS), eventB1, Set("T10"))
 
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B1") => e }
-      probe.expectNoMsg(2.second)
+      probe.expectNoMessage(2.second)
 
       val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
       writeTestEvent(t2.plusSeconds(1), eventB2, Set("T10"))
@@ -1193,7 +1193,7 @@ class EventsByTagStrictBySeqNoSpec extends AbstractEventsByTagSpec("EventsByTagS
       }
       probe.expectNextN(70)
 
-      probe.expectNoMsg(1.second)
+      probe.expectNoMessage(1.second)
       probe.cancel()
     }
 
@@ -1304,21 +1304,21 @@ class EventsByTagStrictBySeqMemoryIssueSpec
       val requested1 = 150L
       probe.request(requested1) // somewhere in day 2
       probe.expectNextN(requested1)
-      probe.expectNoMsg(200.millis)
+      probe.expectNoMessage(200.millis)
       system.log.debug(s"Part 1 done")
 
       // beginning of current day
       val requested2 = 120L * 4 - requested1 - 90
       probe.request(requested2)
       probe.expectNextN(requested2)
-      probe.expectNoMsg(2.seconds) // enough to trigger delayed backtracking
+      probe.expectNoMessage(2.seconds) // enough to trigger delayed backtracking
       system.log.debug(s"Part 2 done")
 
       // request remaining + 30
       val requested3 = 120L * 4 - requested1 - requested2 + 30
       probe.request(requested3)
       probe.expectNextN(requested3 - 30)
-      probe.expectNoMsg(2.seconds)
+      probe.expectNoMessage(2.seconds)
       system.log.debug(s"Part 3 done")
 
       // delayed events from another persistenceId
@@ -1328,7 +1328,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
         writeTestEvent(lastT.minus(1, ChronoUnit.SECONDS).plus(n, ChronoUnit.MILLIS), eventC, Set("T13"))
       }
       probe.expectNextN(30)
-      probe.expectNoMsg(200.millis)
+      probe.expectNoMessage(200.millis)
       probe.request(1000)
       probe.expectNextN(200L - 30)
 
@@ -1373,7 +1373,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
       probe.request(requested1)
       val expected1 = 100L + 12 * 2
       probe.expectNextN(expected1)
-      probe.expectNoMsg(2.seconds)
+      probe.expectNoMessage(2.seconds)
 
       system.log.debug("writing missing event, 113, and a bunch of delayed from C")
       (1L to 100L).foreach { n =>
@@ -1384,11 +1384,11 @@ class EventsByTagStrictBySeqMemoryIssueSpec
       writeTestEvent(missingEventTime, missingEvent, Set("T14"))
       val expected2 = requested1 - expected1
       probe.expectNextN(expected2)
-      probe.expectNoMsg(200.millis)
+      probe.expectNoMessage(200.millis)
 
       probe.request(1000)
       probe.expectNextN(8 + 100 - expected2)
-      probe.expectNoMsg(200.millis)
+      probe.expectNoMessage(200.millis)
 
       probe.cancel()
     }
@@ -1412,7 +1412,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
         probe.request(30)
         probe.expectNextN(30)
         // reduce downstream demand, which will result in limit < maxBufferSize
-        probe.expectNoMsg(100.millis)
+        probe.expectNoMessage(100.millis)
       }
 
       probe.request(100)
