@@ -3,7 +3,7 @@ Cassandra Plugins for Akka Persistence
 
 [![Join the chat at https://gitter.im/akka/akka-persistence-cassandra](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/akka/akka-persistence-cassandra?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Replicated [Akka Persistence](http://doc.akka.io/docs/akka/2.4/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](http://cassandra.apache.org/).
+Replicated [Akka Persistence](https://doc.akka.io/docs/akka/current/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](http://cassandra.apache.org/).
 
 [![Build Status](https://travis-ci.org/akka/akka-persistence-cassandra.svg?branch=master)](https://travis-ci.org/akka/akka-persistence-cassandra)
 
@@ -34,11 +34,11 @@ Journal plugin
 
 ### Features
 
-- All operations required by the Akka Persistence [journal plugin API](http://doc.akka.io/docs/akka/2.4/scala/persistence.html#journal-plugin-api) are fully supported.
+- All operations required by the Akka Persistence [journal plugin API](https://doc.akka.io/docs/akka/current/scala/persistence.html#journal-plugin-api) are fully supported.
 - The plugin uses Cassandra in a pure log-oriented way i.e. data are only ever inserted but never updated (deletions are made on user request only).
-- Writes of messages are batched to optimize throughput for `persistAsync`. See [batch writes](http://doc.akka.io/docs/akka/2.4/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
+- Writes of messages are batched to optimize throughput for `persistAsync`. See [batch writes](https://doc.akka.io/docs/akka/current/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
 - Messages written by a single persistent actor are partitioned across the cluster to achieve scalability with data volume by adding nodes.
-- [Persistence Query](http://doc.akka.io/docs/akka/current/scala/persistence-query.html) support by `CassandraReadJournal`
+- [Persistence Query](https://doc.akka.io/docs/akka/current/scala/persistence-query.html) support by `CassandraReadJournal`
 
 ### Configuration
 
@@ -63,7 +63,7 @@ Snapshot store plugin
 
 ### Features
 
-- Implements the Akka Persistence [snapshot store plugin API](http://doc.akka.io/docs/akka/2.4/scala/persistence.html#snapshot-store-plugin-api).
+- Implements the Akka Persistence [snapshot store plugin API](https://doc.akka.io/docs/akka/current/scala/persistence.html#snapshot-store-plugin-api).
 
 ### Configuration
 
@@ -76,7 +76,7 @@ This will run the snapshot store with its default settings. The default settings
 Persistence Queries
 -------------------
 
-It implements the following [Persistence Queries](http://doc.akka.io/docs/akka/2.4/scala/persistence-query.html):
+It implements the following [Persistence Queries](https://doc.akka.io/docs/akka/current/scala/persistence-query.html):
 
 * persistenceIds, currentPersistenceIds
 * eventsByPersistenceId, currentEventsByPersistenceId
@@ -132,7 +132,7 @@ CassandraLauncher.start(
 
 ### Migrations from 0.23 to 0.50
 
-The Persistence Query API changed slightly, see [migration guide for Akka 2.5](http://doc.akka.io/docs/akka/2.5-M1/project/migration-guide-2.4.x-2.5.x.html#Persistence_Query).
+The Persistence Query API changed slightly, see [migration guide for Akka 2.5](https://doc.akka.io/docs/akka/current/scala/project/migration-guide-2.4.x-2.5.x.html#persistence-query).
 
 ### Migrations from 0.11 to 0.12
 
