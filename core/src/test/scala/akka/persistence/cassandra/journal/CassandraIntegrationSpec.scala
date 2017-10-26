@@ -204,7 +204,6 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("CassandraIntegration
     }
     "write and replay with persistAll less than partition size" in {
       val persistenceId = UUID.randomUUID().toString
-      val probe = TestProbe()
       val processorAtomic = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
 
       processorAtomic ! List("a-1", "a-2", "a-3", "a-4")

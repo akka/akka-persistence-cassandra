@@ -13,6 +13,7 @@ import akka.annotation.InternalApi
  * `eventsByTag` query, or similar queries.
  */
 @InternalApi private[akka] final case class UUIDPersistentRepr(
-  offset:         UUID,
-  persistentRepr: PersistentRepr
+  offset:           UUID,
+  tagPidSequenceNr: Long,
+  persistentRepr:   PersistentRepr
 )

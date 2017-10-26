@@ -3,7 +3,7 @@
  */
 package akka.persistence.cassandra
 
-import java.io.{ File, FileInputStream, InputStream }
+import java.io.{ File, FileInputStream }
 import java.security.{ KeyStore, SecureRandom }
 import javax.net.ssl.{ KeyManagerFactory, SSLContext, TrustManagerFactory, TrustManager, KeyManager }
 import akka.annotation.InternalApi

@@ -3,53 +3,51 @@
  */
 package akka.persistence.cassandra.journal
 
-import java.time.format.DateTimeFormatter
-import java.time.LocalDateTime
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.LocalDate
-import com.datastax.driver.core.utils.UUIDs
 import java.util.UUID
+
 import akka.annotation.InternalApi
+import com.datastax.driver.core.utils.UUIDs
 
-/**
- * INTERNAL API
- */
 @InternalApi private[akka] object TimeBucket {
-  private val timeBucketFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
 
-  def apply(key: String): TimeBucket =
-    apply(LocalDate.parse(key, timeBucketFormatter), key)
+  def apply(timeuuid: UUID, bucketSize: BucketSize = Day): TimeBucket =
+    apply(UUIDs.unixTimestamp(timeuuid), bucketSize)
 
-  def apply(timeuuid: UUID): TimeBucket =
-    apply(UUIDs.unixTimestamp(timeuuid))
-
-  def apply(epochTimestamp: Long): TimeBucket = {
-    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(epochTimestamp), ZoneOffset.UTC)
-    apply(time.toLocalDate)
+  def apply(epochTimestamp: Long, bucketSize: BucketSize): TimeBucket = {
+    // round down to bucket size so the times are deterministic
+    new TimeBucket(roundDownBucketSize(epochTimestamp, bucketSize), bucketSize)
   }
 
-  def apply(day: LocalDate): TimeBucket = {
-    val key = day.format(timeBucketFormatter)
-    apply(day, key)
+  private def roundDownBucketSize(time: Long, bucketSize: BucketSize): Long = {
+    val key: Long = time / bucketSize.durationMillis
+    key * bucketSize.durationMillis
   }
-
 }
 
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] final case class TimeBucket(day: LocalDate, key: String) {
+@InternalApi private[akka] final class TimeBucket private (val startTimestamp: Long, bucketSize: BucketSize) {
+  val key: Long = startTimestamp
+
+  def inPast: Boolean =
+    startTimestamp < TimeBucket.roundDownBucketSize(System.currentTimeMillis(), bucketSize)
+
+  def isCurrent: Boolean = {
+    val now = System.currentTimeMillis()
+    now >= startTimestamp && now < (startTimestamp + bucketSize.durationMillis)
+  }
 
   def next(): TimeBucket =
-    TimeBucket(day.plusDays(1))
+    new TimeBucket(startTimestamp + bucketSize.durationMillis, bucketSize)
 
-  def isBefore(other: LocalDate): Boolean =
-    day.isBefore(other)
+  def previous(steps: Int): TimeBucket =
+    if (steps == 0) this
+    else new TimeBucket(startTimestamp - steps * bucketSize.durationMillis, bucketSize)
 
-  def startTimestamp: Long =
-    day.atStartOfDay.toInstant(ZoneOffset.UTC).toEpochMilli
+  def >(other: TimeBucket): Boolean = {
+    startTimestamp > other.startTimestamp
+  }
 
-  override def toString: String = key
-
+  def <(other: TimeBucket): Boolean = {
+    startTimestamp < other.startTimestamp
+  }
+  override def toString = s"TimeBucket($key, $startTimestamp, $inPast, $isCurrent)"
 }

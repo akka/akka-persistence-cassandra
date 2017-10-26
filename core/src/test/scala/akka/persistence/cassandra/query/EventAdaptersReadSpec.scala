@@ -3,14 +3,12 @@
  */
 package akka.persistence.cassandra.query
 
-import java.time.{ ZoneOffset, LocalDate }
+import java.time.{ LocalDateTime, ZoneOffset }
 
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.cassandra.CassandraLifecycle
-import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.persistence.query.PersistenceQuery
+import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.{ ImplicitSender, TestKit }
@@ -19,13 +17,12 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
-import akka.persistence.query.NoOffset
 
 object EventAdaptersReadSpec {
-  val today = LocalDate.now(ZoneOffset.UTC)
+  val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
+    akka.loglevel = DEBUG
     cassandra-journal.keyspace=EventAdaptersReadSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
@@ -35,15 +32,13 @@ object EventAdaptersReadSpec {
     cassandra-journal.event-adapter-bindings {
       "java.lang.String" = test
     }
-    cassandra-journal.tags {
-      red = 1
-      yellow = 1
-      green = 1
+    cassandra-journal.events-by-tag {
+      flush-interval = 0ms
     }
     cassandra-query-journal {
       refresh-interval = 500ms
       max-buffer-size = 50
-      first-time-bucket = ${TimeBucket(today.minusDays(5)).key}
+      first-time-bucket = ${today.minusDays(5).format(firstBucketFormat)}
       eventual-consistency-delay = 2s
     }
     """).withFallback(CassandraLifecycle.config)
@@ -82,8 +77,7 @@ class EventAdaptersReadSpec
   "Cassandra query EventsByPersistenceId" must {
 
     "not replay dropped events by the event-adapter" in {
-
-      val ref = setup("a", 6, {
+      setup("a", 6, {
         case x if x % 2 == 0 => "dropped:"
         case _               => ""
       })
@@ -114,9 +108,7 @@ class EventAdaptersReadSpec
 
     "duplicate events with prefix added by the event-adapter" in {
 
-      setup("c", 1, {
-        case _ => "prefixed:foo:"
-      })
+      setup("c", 1, _ => "prefixed:foo:")
 
       val src = queries.currentEventsByPersistenceId("c", 0L, Long.MaxValue)
       src.map(_.event).runWith(TestSink.probe[Any])
@@ -128,7 +120,6 @@ class EventAdaptersReadSpec
   }
 
   "Cassandra query EventsByTag" must {
-
     "not replay events dropped by the event-adapter" in {
 
       setup("d", 6, tagged("red") {

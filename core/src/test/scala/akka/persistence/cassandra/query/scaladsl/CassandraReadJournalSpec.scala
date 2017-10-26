@@ -4,24 +4,22 @@
 package akka.persistence.cassandra.query.scaladsl
 
 import scala.concurrent.duration._
-import akka.actor.{ Props, ActorSystem }
-import akka.stream.scaladsl.Sink
+import akka.actor.{ ActorSystem, Props }
 import akka.stream.ActorMaterializer
 import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time.{ Seconds, Second, Span }
 import org.scalatest.{ Matchers, WordSpecLike }
-import akka.persistence.cassandra.{ CassandraMetricsRegistry, CassandraLifecycle }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry }
 import akka.persistence.cassandra.query.TestActor
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.PersistenceQuery
 import akka.stream.testkit.scaladsl.TestSink
 import akka.persistence.query.NoOffset
+import com.datastax.driver.core.Cluster
 
 object CassandraReadJournalSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory.parseString(
+    s"""
     akka.loglevel = INFO
     cassandra-journal.keyspace=ScaladslCassandraReadJournalSpec
     cassandra-query-journal.max-buffer-size = 10
@@ -33,14 +31,18 @@ object CassandraReadJournalSpec {
     cassandra-journal.event-adapter-bindings = {
       "java.lang.String" = test-tagger
     }
-    """).withFallback(CassandraLifecycle.config)
+    cassandra-journal.log-queries = off
+    """
+  ).withFallback(CassandraLifecycle.config)
 }
 
 class TestTagger extends WriteEventAdapter {
   override def manifest(event: Any): String = ""
   override def toJournal(event: Any): Any = event match {
-    case s: String if s.startsWith("a") => Tagged(event, Set("a"))
-    case _                              => event
+    case s: String if s.startsWith("a") =>
+      Tagged(event, Set("a"))
+    case _ =>
+      event
   }
 }
 
@@ -50,6 +52,16 @@ class CassandraReadJournalSpec
   with WordSpecLike
   with CassandraLifecycle
   with Matchers {
+
+  override protected def externalCassandraCleanup(): Unit = {
+    val cluster = Cluster.builder()
+      .withClusterName("scaladslcassandrareadjournalspec")
+      .addContactPoint("localhost")
+      .withPort(9042)
+      .build()
+    cluster.connect().execute("drop keyspace scaladslcassandrareadjournalspec")
+    cluster.close()
+  }
 
   override def systemName: String = "ScalaCassandraReadJournalSpec"
 
@@ -83,6 +95,7 @@ class CassandraReadJournalSpec
         .expectComplete()
     }
 
+    // these tests rely on events written in previous tests
     "start eventsByTag query" in {
       val src = queries.eventsByTag("a", NoOffset)
       src.map(_.persistenceId).runWith(TestSink.probe[Any])

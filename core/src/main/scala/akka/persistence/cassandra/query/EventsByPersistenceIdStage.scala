@@ -111,8 +111,8 @@ import com.datastax.driver.core.utils.Bytes
   private sealed trait QueryState
   private case object QueryIdle extends QueryState
   private final case class QueryInProgress(switchPartition: Boolean, fetchMore: Boolean, startTime: Long) extends QueryState
-  private case class QueryResult(resultSet: ResultSet, empty: Boolean, switchPartition: Boolean) extends QueryState {
-    override def toString(): String = s"QueryResult($switchPartition)"
+  private final case class QueryResult(resultSet: ResultSet, empty: Boolean, switchPartition: Boolean) extends QueryState {
+    override def toString: String = s"QueryResult($switchPartition)"
   }
 
 }
@@ -121,8 +121,9 @@ import com.datastax.driver.core.utils.Bytes
  * INTERNAL API
  */
 @InternalApi private[akka] class EventsByPersistenceIdStage(persistenceId: String, fromSeqNr: Long, toSeqNr: Long, max: Long,
-                                                            fetchSize: Int, refreshInterval: Option[FiniteDuration], session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
-                                                            config: CassandraReadJournalConfig)
+                                                            fetchSize: Int, refreshInterval: Option[FiniteDuration],
+                                                            session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
+                                                            config:  CassandraReadJournalConfig)
   extends GraphStageWithMaterializedValue[SourceShape[PersistentRepr], EventsByPersistenceIdStage.Control] {
   import EventsByPersistenceIdStage._
 
@@ -288,7 +289,7 @@ import com.datastax.driver.core.utils.Bytes
           case QueryIdle          => // good
           case _: QueryInProgress => throw new IllegalStateException("Query already in progress")
           case QueryResult(rs, _, _) =>
-            if (!rs.isExhausted()) throw new IllegalStateException("Previous query was not exhausted")
+            if (!rs.isExhausted) throw new IllegalStateException("Previous query was not exhausted")
         }
         val pnr = if (switchPartition) partition + 1 else partition
         queryState = QueryInProgress(switchPartition, fetchMore = false, System.nanoTime())
@@ -348,13 +349,13 @@ import com.datastax.driver.core.utils.Bytes
 
             if (reachedEndCondition())
               completeStage()
-            else if (rs.isExhausted()) {
+            else if (rs.isExhausted) {
               if (lookingForMissingSeqNr.isEmpty) afterExhausted()
               else {
                 queryState = QueryIdle
                 scheduleOnce(LookForMissingSeqNr, 200.millis)
               }
-            } else if (rs.getAvailableWithoutFetching() == 0) {
+            } else if (rs.getAvailableWithoutFetching == 0) {
               log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]", persistenceId, seqNr)
               queryState = QueryInProgress(switchPartition, fetchMore = true, System.nanoTime())
               val rsFut = rs.fetchMoreResults().asScala
@@ -400,7 +401,7 @@ import com.datastax.driver.core.utils.Bytes
                   if (refreshInterval.isEmpty) query(false)
                   else afterExhausted()
 
-                } else if (rs.isExhausted())
+                } else if (rs.isExhausted)
                   afterExhausted()
                 else if (rs.getAvailableWithoutFetching == fetchMoreThresholdRows)
                   rs.fetchMoreResults() // trigger early async fetch of more rows
@@ -436,7 +437,7 @@ import com.datastax.driver.core.utils.Bytes
       }
 
       def reachedEndCondition(): Boolean =
-        (seqNr > toSeqNr || count >= max)
+        seqNr > toSeqNr || count >= max
 
       // external call via Control materialized value
       override def poll(knownSeqNr: Long): Unit =
@@ -460,8 +461,6 @@ import com.datastax.driver.core.utils.Bytes
 
       setHandler(out, this)
     }
-
     (logic, logic)
   }
-
 }

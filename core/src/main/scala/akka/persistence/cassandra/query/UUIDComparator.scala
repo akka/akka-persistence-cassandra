@@ -16,7 +16,7 @@ class UUIDComparator extends Comparator[UUID] {
   def compare(u1: UUID, u2: UUID): Int = {
     // First: major sorting by types
     val version = u1.version()
-    val diff = version - u2.version();
+    val diff = version - u2.version()
     if (diff != 0) {
       diff
     } else {
@@ -42,7 +42,7 @@ class UUIDComparator extends Comparator[UUID] {
   private def compareULongs(l1: Long, l2: Long): Int = {
     val diff = compareUInts((l1 >> 32).toInt, (l2 >> 32).toInt)
     if (diff == 0)
-      compareUInts(l1.toInt, l2.toInt);
+      compareUInts(l1.toInt, l2.toInt)
     else
       diff
   }

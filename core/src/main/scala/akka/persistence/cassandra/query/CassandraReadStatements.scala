@@ -12,20 +12,28 @@ import akka.annotation.InternalApi
 
   def config: CassandraReadJournalConfig
 
-  private def eventsByTagViewName = s"${config.keyspace}.${config.eventsByTagView}"
   private def tableName = s"${config.keyspace}.${config.table}"
-
-  def selectEventsByTag(tagId: Int) = s"""
-      SELECT * FROM $eventsByTagViewName$tagId WHERE
-        tag$tagId = ? AND
-        timebucket = ? AND
-        timestamp > ? AND
-        timestamp <= ?
-        ORDER BY timestamp ASC
-        LIMIT ?
-    """
+  private def tagViewTableName = s"${config.keyspace}.tag_views"
 
   def selectDistinctPersistenceIds = s"""
       SELECT DISTINCT persistence_id, partition_nr FROM $tableName
      """
+
+  def selectEventsFromTagView =
+    s"""
+      SELECT * FROM $tagViewTableName WHERE
+        tag_name = ?  AND
+        timebucket = ? AND
+        timestamp > ?
+        ORDER BY timestamp ASC
+     """.stripMargin
+
+  def selectEventsFromTagViewWithUpperBound =
+    s"""
+      SELECT * FROM $tagViewTableName WHERE
+        tag_name = ?  AND
+        timebucket = ? AND
+        timestamp > ? AND
+        timestamp < ?
+     """.stripMargin
 }

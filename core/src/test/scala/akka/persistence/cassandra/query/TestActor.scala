@@ -8,6 +8,7 @@ import akka.actor.Props
 import akka.persistence.PersistentActor
 import akka.actor.ActorRef
 import akka.persistence.DeleteMessagesSuccess
+import akka.persistence.journal.Tagged
 
 object TestActor {
   def props(persistenceId: String): Props =
@@ -29,6 +30,12 @@ class TestActor(override val persistenceId: String) extends PersistentActor {
     case cmd: String =>
       persist(cmd) { evt =>
         sender() ! evt + "-done"
+      }
+
+    case cmd: Tagged =>
+      persist(cmd) { evt =>
+        val msg = evt.payload + "-done"
+        sender() ! msg
       }
 
     case TestActor.PersistAll(events) =>

@@ -9,7 +9,7 @@ import com.google.common.util.concurrent.ListenableFuture
 
 import scala.concurrent._
 import scala.language.implicitConversions
-import scala.util.{ Failure, Success, Try }
+import scala.util.Try
 
 package object cassandra {
   // TODO we should use the more explicit ListenableFutureConverter asScala instead

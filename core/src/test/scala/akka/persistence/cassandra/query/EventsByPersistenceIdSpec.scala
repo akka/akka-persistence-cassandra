@@ -5,17 +5,17 @@ package akka.persistence.cassandra.query
 
 import java.util.UUID
 
-import akka.actor.{ ActorRef, ActorSystem }
-import akka.persistence.{ DeleteMessagesSuccess, PersistentRepr }
+import akka.actor.{ActorRef, ActorSystem}
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{ Offset, PersistenceQuery }
+import akka.persistence.query.{Offset, PersistenceQuery}
+import akka.persistence.{DeleteMessagesSuccess, PersistentRepr}
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.TestSink
-import akka.stream.{ ActorMaterializer, KillSwitches }
-import akka.testkit.{ ImplicitSender, TestKit }
+import akka.stream.{ActorMaterializer, KillSwitches}
+import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ Matchers, WordSpecLike }
+import org.scalatest.{Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 
@@ -60,7 +60,7 @@ class EventsByPersistenceIdSpec
 
   "Cassandra query EventsByPersistenceId" must {
     "find existing events" in {
-      val ref = setup("a", 3)
+      setup("a", 3)
 
       val src = queries.currentEventsByPersistenceId("a", 0L, Long.MaxValue)
       src.map(_.event).runWith(TestSink.probe[Any])
@@ -73,7 +73,7 @@ class EventsByPersistenceIdSpec
     }
 
     "find existing events from a sequence number" in {
-      val ref = setup("b", 10)
+      setup("b", 10)
       val src = queries.currentEventsByPersistenceId("b", 5L, Long.MaxValue)
 
       src.map(_.sequenceNr).runWith(TestSink.probe[Any])

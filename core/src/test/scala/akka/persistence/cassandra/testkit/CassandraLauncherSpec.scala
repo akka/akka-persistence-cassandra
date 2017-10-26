@@ -24,6 +24,7 @@ class CassandraLauncherSpec extends TestKit(ActorSystem("CassandraLauncherSpec")
   private def testCassandra(): Unit = {
     val session =
       Cluster.builder()
+        .withClusterName("CassandraLauncherSpec")
         .addContactPoints("localhost").withPort(CassandraLauncher.randomPort)
         .build().connect()
     try

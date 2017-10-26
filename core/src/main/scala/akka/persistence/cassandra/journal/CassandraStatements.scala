@@ -3,22 +3,24 @@
  */
 package akka.persistence.cassandra.journal
 
-import scala.collection.JavaConverters._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 import akka.Done
-import com.datastax.driver.core.Session
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import com.datastax.driver.core.Session
+
+import scala.collection.JavaConverters._
+import scala.concurrent.{ ExecutionContext, Future }
 
 trait CassandraStatements {
   def config: CassandraJournalConfig
 
-  def createKeyspace = s"""
+  def createKeyspace =
+    s"""
       CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
       WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
     """
 
-  def createConfigTable = s"""
+  def createConfigTable =
+    s"""
       CREATE TABLE IF NOT EXISTS ${configTableName} (
         property text primary key, value text)
      """
@@ -29,14 +31,14 @@ trait CassandraStatements {
   // PersistentRepr.manifest is stored in event_manifest (sorry for naming confusion).
   // PersistentRepr.manifest is used by the event adapters (in akka-persistence).
   // ser_manifest together with ser_id is used for the serialization of the event (payload).
-  def createTable = s"""
+  def createTable =
+    s"""
       CREATE TABLE IF NOT EXISTS ${tableName} (
         used boolean static,
         persistence_id text,
         partition_nr bigint,
         sequence_nr bigint,
         timestamp timeuuid,
-        timebucket text,
         writer_uuid text,
         ser_id int,
         ser_manifest text,
@@ -45,48 +47,106 @@ trait CassandraStatements {
         meta_ser_id int,
         meta_ser_manifest text,
         meta blob,
-        tag1 text,
-        tag2 text,
-        tag3 text,
         message blob,
-        PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
+        PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp))
         WITH gc_grace_seconds =${config.gcGraceSeconds}
         AND compaction = ${config.tableCompactionStrategy.asCQL}
     """
 
-  def createMetatdataTable = s"""
-      CREATE TABLE IF NOT EXISTS ${metadataTableName}(
+  def createTagsTable =
+    s"""
+      CREATE TABLE IF NOT EXISTS ${tagTableName} (
+        tag_name text,
+        persistence_id text,
+        sequence_nr bigint,
+        timebucket bigint,
+        timestamp timeuuid,
+        tag_pid_sequence_nr bigint,
+        writer_uuid text,
+        ser_id int,
+        ser_manifest text,
+        event_manifest text,
+        event blob,
+        meta_ser_id int,
+        meta_ser_manifest text,
+        meta blob,
+        PRIMARY KEY ((tag_name, timebucket), timestamp, persistence_id, tag_pid_sequence_nr))
+        WITH gc_grace_seconds =${config.tagTable.gcGraceSeconds}
+        AND compaction = ${config.tagTable.compactionStrategy.asCQL}
+    """
+
+  def createTagsProgressTable =
+    s"""
+       CREATE TABLE IF NOT EXISTS $tagProgressTableName(
+        persistence_id text,
+        tag text,
+        first_bucket bigint static,
+        sequence_nr bigint,
+        tag_pid_sequence_nr bigint,
+        offset timeuuid,
+        PRIMARY KEY (persistence_id, tag))
+       """
+
+  def createMetatdataTable =
+    s"""
+      CREATE TABLE IF NOT EXISTS $metadataTableName(
         persistence_id text PRIMARY KEY,
         deleted_to bigint,
         properties map<text,text>)
    """
 
-  def createEventsByTagMaterializedView(tagId: Int) = s"""
-      CREATE MATERIALIZED VIEW IF NOT EXISTS $eventsByTagViewName$tagId AS
-         SELECT tag$tagId, timebucket, timestamp, persistence_id, partition_nr, sequence_nr, writer_uuid, ser_id, ser_manifest, event_manifest, event,
-           ${if (config.metaInEventsByTagView) "meta_ser_id, meta_ser_manifest, meta, " else ""} message
-         FROM $tableName
-         WHERE persistence_id IS NOT NULL AND partition_nr IS NOT NULL AND sequence_nr IS NOT NULL
-           AND tag$tagId IS NOT NULL AND timestamp IS NOT NULL AND timebucket IS NOT NULL
-         PRIMARY KEY ((tag$tagId, timebucket), timestamp, persistence_id, partition_nr, sequence_nr)
-         WITH CLUSTERING ORDER BY (timestamp ASC)
-      """
-
-  def writeMessage(withMeta: Boolean) = s"""
-      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
-        ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
-        tag1, tag2, tag3, used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true)
-    """
-
-  def writeMessageNoTags(withMeta: Boolean) = s"""
-      INSERT INTO ${tableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
+  def writeMessage(withMeta: Boolean) =
+    s"""
+      INSERT INTO $tableName (persistence_id, partition_nr, sequence_nr, timestamp, writer_uuid, ser_id, ser_manifest, event_manifest, event,
         ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
         used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true)
     """
 
-  def deleteMessage = s"""
+  def writeTags =
+    s"""
+       INSERT INTO $tagTableName(
+        tag_name,
+        timebucket,
+        timestamp,
+        tag_pid_sequence_nr,
+        event,
+        event_manifest,
+        persistence_id,
+        sequence_nr,
+        ser_id,
+        ser_manifest,
+        writer_uuid) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+     """
+
+  def writeTagFirstBucket =
+    s"""
+      INSERT INTO $tagProgressTableName(
+        persistence_id,
+        tag,
+        first_bucket) VALUES (?, ?, ?)
+     """.stripMargin
+
+  def writeTagProgress =
+    s"""
+       INSERT INTO $tagProgressTableName(
+        persistence_id,
+        tag,
+        sequence_nr,
+        tag_pid_sequence_nr,
+        offset) VALUES (?, ?, ?, ?, ?)
+     """.stripMargin
+
+  // FIXME, use this for recovery
+  def selectTagProgress =
+    s"""
+       SELECT * from $tagProgressTableName WHERE
+       persistence_id = ? AND
+       tag = ?
+     """.stripMargin
+
+  def deleteMessage =
+    s"""
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND
         partition_nr = ? AND
@@ -110,7 +170,8 @@ trait CassandraStatements {
     """
   }
 
-  def selectMessages = s"""
+  def selectMessages =
+    s"""
       SELECT * FROM ${tableName} WHERE
         persistence_id = ? AND
         partition_nr = ? AND
@@ -118,20 +179,25 @@ trait CassandraStatements {
         sequence_nr <= ?
     """
 
-  def selectInUse = s"""
+  def selectInUse =
+    s"""
      SELECT used from ${tableName} WHERE
       persistence_id = ? AND
       partition_nr = ?
    """
-  def selectConfig = s"""
+
+  def selectConfig =
+    s"""
       SELECT * FROM ${configTableName}
     """
 
-  def writeConfig = s"""
+  def writeConfig =
+    s"""
       INSERT INTO ${configTableName}(property, value) VALUES(?, ?) IF NOT EXISTS
     """
 
-  def selectHighestSequenceNr = s"""
+  def selectHighestSequenceNr =
+    s"""
      SELECT sequence_nr, used FROM ${tableName} WHERE
        persistence_id = ? AND
        partition_nr = ?
@@ -139,12 +205,14 @@ trait CassandraStatements {
        DESC LIMIT 1
    """
 
-  def selectDeletedTo = s"""
+  def selectDeletedTo =
+    s"""
       SELECT deleted_to FROM ${metadataTableName} WHERE
         persistence_id = ?
     """
 
-  def insertDeletedTo = s"""
+  def insertDeletedTo =
+    s"""
       INSERT INTO ${metadataTableName} (persistence_id, deleted_to)
       VALUES ( ?, ? )
     """
@@ -156,9 +224,10 @@ trait CassandraStatements {
      """
 
   private def tableName = s"${config.keyspace}.${config.table}"
+  private def tagTableName = s"${config.keyspace}.${config.tagTable.name}"
+  private def tagProgressTableName = s"${config.keyspace}.tag_write_progress"
   private def configTableName = s"${config.keyspace}.${config.configTable}"
   private def metadataTableName = s"${config.keyspace}.${config.metadataTable}"
-  private def eventsByTagViewName = s"${config.keyspace}.${config.eventsByTagView}"
 
   /**
    * Execute creation of keyspace and tables is limited to one thread at a time
@@ -166,11 +235,8 @@ trait CassandraStatements {
    * when write and read-side plugins are started at the same time.
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
-   *
-   * The materialized view for eventsByTag query is not created if `maxTagId` is 0.
    */
-  def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig,
-                                     maxTagId: Int)(implicit ec: ExecutionContext): Future[Done] = {
+  def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(implicit ec: ExecutionContext): Future[Done] = {
     import akka.persistence.cassandra.listenableFutureToFuture
 
     def create(): Future[Done] = {
@@ -179,30 +245,20 @@ trait CassandraStatements {
         if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).map(_ => Done)
         else Future.successful(Done)
 
-      val tables =
-        if (config.tablesAutoCreate) {
-          for {
-            _ <- keyspace
-            _ <- session.executeAsync(createTable)
-            _ <- session.executeAsync(createMetatdataTable)
-            done <- session.executeAsync(createConfigTable).map(_ => Done)
-          } yield done
-        } else keyspace
-
-      def createTag(todo: List[String]): Future[Done] =
-        todo match {
-          case create :: remainder => session.executeAsync(create).flatMap(_ => createTag(remainder))
-          case Nil                 => Future.successful(Done)
-        }
-
       if (config.tablesAutoCreate) {
-        val createTagStmts = (1 to maxTagId).map(createEventsByTagMaterializedView).toList
-        tables.flatMap(_ => createTag(createTagStmts))
-      } else tables
+        for {
+          _ <- keyspace
+          _ <- session.executeAsync(createTable)
+          _ <- session.executeAsync(createMetatdataTable)
+          _ <- session.executeAsync(createTagsTable)
+          _ <- session.executeAsync(createTagsProgressTable)
+          done <- session.executeAsync(createConfigTable).map(_ => Done)
+        } yield done
+      } else keyspace
     }
 
     CassandraSession.serializedExecution(
-      recur = () => executeCreateKeyspaceAndTables(session, config, maxTagId),
+      recur = () => executeCreateKeyspaceAndTables(session, config),
       exec = () => create()
     )
   }

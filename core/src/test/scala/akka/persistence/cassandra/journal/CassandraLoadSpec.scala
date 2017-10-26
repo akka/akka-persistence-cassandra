@@ -3,7 +3,6 @@
  */
 package akka.persistence.cassandra.journal
 
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra.CassandraLifecycle
@@ -61,7 +60,7 @@ object CassandraLoadSpec {
     }
 
     def handle: Receive = {
-      case payload: String =>
+      case _: String =>
     }
   }
 
@@ -101,6 +100,7 @@ class CassandraLoadSpec extends TestKit(ActorSystem("CassandraLoadSpec", config)
       processor1 ! "stop"
       expectMsgPF(100 seconds) { case throughput: Double => println(f"\nthroughput = $throughput%.2f persistent commands per second") }
     }
+
     "work properly under load" in {
       val cycles = 1000L
 

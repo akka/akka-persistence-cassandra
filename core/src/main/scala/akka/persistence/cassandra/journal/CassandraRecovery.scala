@@ -7,8 +7,6 @@ import scala.concurrent._
 import java.lang.{ Long => JLong }
 import akka.actor.ActorLogging
 import akka.persistence.PersistentRepr
-import akka.stream.ActorMaterializer
-import akka.persistence.cassandra.listenableFutureToFuture
 
 trait CassandraRecovery extends ActorLogging {
   this: CassandraJournal =>

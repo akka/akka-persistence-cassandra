@@ -35,8 +35,6 @@ object CassandraReadJournal {
  *
  * Corresponding Scala API is in [[akka.persistence.cassandra.query.scaladsl.CassandraReadJournal]].
  *
- *
- *
  * Configuration settings can be defined in the configuration section with the
  * absolute path corresponding to the identifier, which is `"cassandra-query-journal"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
@@ -97,7 +95,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * The offset of each event is provided in the streamed envelopes returned,
    * which makes it possible to resume the stream at a later point from a given offset.
    *
-   * For querying events that happened after a long unix timestamp you can use [[#timeBasedUUIDFrom]]
+   * For querying events that happened after a long unix timestamp you can use [[timeBasedUUIDFrom]]
    * to create the offset to use with this method.
    *
    * In addition to the `offset` the envelope also provides `persistenceId` and `sequenceNr`
@@ -147,7 +145,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * stored after the query is completed are not included in the event stream.
    *
    * Use `NoOffset` when you want all events from the beginning of time.
-   * To acquire an offset from a long unix timestamp to use with this query, you can use [[#timeBasedUUIDFrom]].
+   * To acquire an offset from a long unix timestamp to use with this query, you can use [[timeBasedUUIDFrom]].
    *
    */
   override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] =

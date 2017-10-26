@@ -7,7 +7,6 @@ import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 
 import scala.collection.immutable
-import scala.concurrent.Await
 import scala.concurrent.Future
 
 import akka.actor._
