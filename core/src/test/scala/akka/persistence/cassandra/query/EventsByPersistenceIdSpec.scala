@@ -8,19 +8,18 @@ import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.query.PersistenceQuery
-import akka.stream.ActorMaterializer
+import akka.stream.{ ActorMaterializer, KillSwitches }
 import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ Matchers, WordSpecLike }
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time._
 
 import scala.concurrent.duration._
 
 import akka.stream.testkit.scaladsl.TestSink
 import akka.persistence.query.Offset
 import akka.persistence.DeleteMessagesSuccess
-import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements }
+
 import scala.concurrent.Await
 import akka.persistence.cassandra.journal.CassandraStatements
 import akka.persistence.PersistentRepr
@@ -31,12 +30,15 @@ import com.datastax.driver.core.utils.UUIDs
 import akka.persistence.cassandra.journal.TimeBucket
 import java.util.UUID
 
+import akka.stream.scaladsl.Keep
+
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
     cassandra-journal.keyspace=EventsByPersistenceIdSpec
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 2
+    cassandra-query-journal.events-by-persistence-id-gap-timeout = 4 seconds
     cassandra-journal.target-partition-size = 15
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
     """).withFallback(CassandraLifecycle.config)
@@ -227,6 +229,46 @@ class EventsByPersistenceIdSpec
         .expectComplete()
     }
 
+    "(eventually) produce correct sequence of sequence numbers when events appear out of order in cassandra" in {
+
+      writeTestEvent(PersistentRepr("jo-1", 1L, "jo"))
+      writeTestEvent(PersistentRepr("jo-1", 2L, "jo"))
+
+      val (killKill, probe) = queries.eventsByPersistenceId("jo", 0L, Long.MaxValue)
+        .viaMat(KillSwitches.single)(Keep.right)
+        .map(x => (x.persistenceId, x.sequenceNr, x.offset))
+        .toMat(TestSink.probe[Any])(Keep.both)
+        .run()
+
+      probe.request(4)
+
+      probe.expectNext(
+        ("jo", 1, Offset.sequence(1)),
+        ("jo", 2, Offset.sequence(2))
+      )
+      system.log.debug("Saw evt 1 and 2")
+
+      // 4 arrived out of order
+      writeTestEvent(PersistentRepr("jo-4", 4L, "jo"))
+      system.log.debug("Wrote evt 4, sleeping")
+
+      // give the source some time to see it, but less than
+      // the configured events-by-persistence-id-gap-timeout
+      Thread.sleep(3000)
+
+      // then 3 arrived and now everything is fine
+      writeTestEvent(PersistentRepr("jo-3", 3L, "jo"))
+      system.log.debug("Wrote evt 3")
+
+      probe.expectNext(
+        ("jo", 3, Offset.sequence(3)),
+        ("jo", 4, Offset.sequence(4))
+      )
+
+      killKill.shutdown()
+      probe.expectComplete()
+    }
+
     "stop at last event in partition" in {
       val ref = setup("i2", 15) // partition size is 15
 
@@ -286,14 +328,18 @@ class EventsByPersistenceIdSpec
       val src = queries.currentEventsByPersistenceId("i5", 0L, Long.MaxValue)
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
         .request(10)
-      probe.expectNextOrError() match {
-        case Right("e1") =>
-          probe.expectNextOrError() match {
-            case Right("e2") =>
-              probe.expectError()
-            case Left(_) =>
-          }
-        case Left(_) =>
+
+      // timeout dictated by events-by-persistence-id-gap-timeout above
+      within(5.seconds) {
+        probe.expectNextOrError() match {
+          case Right("e1") =>
+            probe.expectNextOrError() match {
+              case Right("e2") =>
+                probe.expectError()
+              case Left(_) =>
+            }
+          case Left(_) =>
+        }
       }
     }
   }

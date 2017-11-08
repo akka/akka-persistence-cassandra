@@ -104,6 +104,9 @@ import com.datastax.driver.core.utils.Bytes
   }
 
   private case object Continue
+  private case object LookForMissingSeqNr
+
+  private case class MissingSeqNr(deadline: Deadline, sawSeqNr: Long)
 
   private sealed trait QueryState
   private case object QueryIdle extends QueryState
@@ -150,6 +153,7 @@ import com.datastax.driver.core.utils.Bytes
 
       var pendingPoll: Option[Long] = None
       var pendingFastForward: Option[Long] = None
+      var lookingForMissingSeqNr: Option[MissingSeqNr] = None
 
       var queryState: QueryState = QueryIdle
 
@@ -248,7 +252,8 @@ import com.datastax.driver.core.utils.Bytes
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
-        case Continue => continue()
+        case Continue            => continue()
+        case LookForMissingSeqNr => lookForMissingSeqNr()
       }
 
       def continue(): Unit = {
@@ -256,6 +261,16 @@ import com.datastax.driver.core.utils.Bytes
           case QueryIdle          => query(switchPartition = false)
           case _: QueryResult     => tryPushOne()
           case _: QueryInProgress => // result will come
+        }
+      }
+
+      def lookForMissingSeqNr(): Unit = {
+        lookingForMissingSeqNr match {
+          case Some(m) if m.deadline.isOverdue() =>
+            failStage(new IllegalStateException(s"Missing sequence number [$seqNr], got [${m.sawSeqNr}] for " +
+              s"persistenceId [$persistenceId]."))
+          case Some(_) => query(false)
+          case None    => throw new IllegalStateException("Should not be able to get here")
         }
       }
 
@@ -268,11 +283,22 @@ import com.datastax.driver.core.utils.Bytes
         }
         val pnr = if (switchPartition) partition + 1 else partition
         queryState = QueryInProgress(switchPartition, fetchMore = false, System.nanoTime())
-        log.debug(
-          "EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
-          persistenceId, seqNr, pnr
-        )
-        session.selectEventsByPersistenceId(persistenceId, pnr, seqNr, toSeqNr, fetchSize)
+
+        val endNr = lookingForMissingSeqNr match {
+          case Some(_) =>
+            log.debug(
+              "EventsByPersistenceId [{}] Query for missing seqNr [{}] in partition [{}]",
+              persistenceId, seqNr, pnr
+            )
+            seqNr
+          case _ =>
+            log.debug(
+              "EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
+              persistenceId, seqNr, pnr
+            )
+            toSeqNr
+        }
+        session.selectEventsByPersistenceId(persistenceId, pnr, seqNr, endNr, fetchSize)
           .onComplete(newResultSetCb.invoke)
       }
 
@@ -290,7 +316,7 @@ import com.datastax.driver.core.utils.Bytes
               // When ResultSet is exhausted we immediately look in next partition for more events.
               // We keep track of if the query was such switching partition and if result is empty
               // we complete the stage or wait until next Continue tick.
-              if (empty && switchPartition) {
+              if (empty && switchPartition && lookingForMissingSeqNr.isEmpty) {
                 if (refreshInterval.isEmpty) {
                   completeStage()
                 }
@@ -306,9 +332,10 @@ import com.datastax.driver.core.utils.Bytes
 
             if (reachedEndCondition())
               completeStage()
-            else if (rs.isExhausted())
-              afterExhausted()
-            else if (rs.getAvailableWithoutFetching() == 0) {
+            else if (rs.isExhausted()) {
+              if (lookingForMissingSeqNr.isEmpty) afterExhausted()
+              else scheduleOnce(LookForMissingSeqNr, 200.millis)
+            } else if (rs.getAvailableWithoutFetching() == 0) {
               log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]", persistenceId, seqNr)
               queryState = QueryInProgress(switchPartition, fetchMore = true, System.nanoTime())
               val rsFut = rs.fetchMoreResults().asScala
@@ -320,13 +347,25 @@ import com.datastax.driver.core.utils.Bytes
                 // skip event due to fast forward
                 tryPushOne()
               } else if (config.gapFreeSequenceNumbers && seqNr != event.sequenceNr) {
-                failStage(new IllegalStateException(s"Missing sequence number [$seqNr], got [${event.sequenceNr}] for " +
-                  s"persistenceId [$persistenceId]."))
+                lookingForMissingSeqNr match {
+                  case Some(_) => throw new IllegalStateException(
+                    s"Should not be able to get here when already looking for missing seqNr [$seqNr] for entity [$persistenceId]"
+                  )
+                  case None =>
+                    lookingForMissingSeqNr = Some(
+                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, event.sequenceNr)
+                    )
+                    query(false)
+                }
               } else {
                 seqNr = event.sequenceNr + 1
                 partition = row.getLong("partition_nr")
                 count += 1
                 push(out, event)
+
+                // we found that missing seqNr
+                if (lookingForMissingSeqNr.isDefined)
+                  lookingForMissingSeqNr = None
 
                 if (reachedEndCondition())
                   completeStage()
