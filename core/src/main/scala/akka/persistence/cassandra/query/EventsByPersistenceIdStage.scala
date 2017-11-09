@@ -252,16 +252,18 @@ import com.datastax.driver.core.utils.Bytes
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
-        case Continue if lookingForMissingSeqNr.isDefined => // regular ticks disabled when looking for missing seqNr
-        case Continue                                     => continue()
-        case LookForMissingSeqNr                          => lookForMissingSeqNr()
+        case Continue            => continue()
+        case LookForMissingSeqNr => lookForMissingSeqNr()
       }
 
       def continue(): Unit = {
-        queryState match {
-          case QueryIdle          => query(switchPartition = false)
-          case _: QueryResult     => tryPushOne()
-          case _: QueryInProgress => // result will come
+        // regular continue-by-tick disabled when looking for missing seqNr
+        if (lookingForMissingSeqNr.isEmpty) {
+          queryState match {
+            case QueryIdle          => query(switchPartition = false)
+            case _: QueryResult     => tryPushOne()
+            case _: QueryInProgress => // result will come
+          }
         }
       }
 
