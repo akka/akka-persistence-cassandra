@@ -40,4 +40,6 @@ import akka.annotation.InternalApi
   val table: String = writePluginConfig.table
   val pubsubMinimumInterval: Duration = writePluginConfig.pubsubMinimumInterval
 
+  val eventsByPersistenceIdEventTimeout: FiniteDuration =
+    config.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 }
