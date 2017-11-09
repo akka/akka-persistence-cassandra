@@ -252,8 +252,9 @@ import com.datastax.driver.core.utils.Bytes
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
-        case Continue            => continue()
-        case LookForMissingSeqNr => lookForMissingSeqNr()
+        case Continue if lookingForMissingSeqNr.isDefined => // regular ticks disabled when looking for missing seqNr
+        case Continue                                     => continue()
+        case LookForMissingSeqNr                          => lookForMissingSeqNr()
       }
 
       def continue(): Unit = {
@@ -267,8 +268,10 @@ import com.datastax.driver.core.utils.Bytes
       def lookForMissingSeqNr(): Unit = {
         lookingForMissingSeqNr match {
           case Some(m) if m.deadline.isOverdue() =>
-            failStage(new IllegalStateException(s"Missing sequence number [$seqNr], got [${m.sawSeqNr}] for " +
-              s"persistenceId [$persistenceId]."))
+            import akka.util.PrettyDuration.PrettyPrintableDuration
+            onFailure(new IllegalStateException(s"Sequence number [$seqNr] still missing after " +
+              s"[${config.eventsByPersistenceIdEventTimeout.pretty}], " +
+              s"saw unexpected seqNr [${m.sawSeqNr}] for persistenceId [$persistenceId]."))
           case Some(_) => query(false)
           case None    => throw new IllegalStateException("Should not be able to get here")
         }
@@ -334,7 +337,10 @@ import com.datastax.driver.core.utils.Bytes
               completeStage()
             else if (rs.isExhausted()) {
               if (lookingForMissingSeqNr.isEmpty) afterExhausted()
-              else scheduleOnce(LookForMissingSeqNr, 200.millis)
+              else {
+                queryState = QueryIdle
+                scheduleOnce(LookForMissingSeqNr, 200.millis)
+              }
             } else if (rs.getAvailableWithoutFetching() == 0) {
               log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]", persistenceId, seqNr)
               queryState = QueryInProgress(switchPartition, fetchMore = true, System.nanoTime())
@@ -352,20 +358,26 @@ import com.datastax.driver.core.utils.Bytes
                     s"Should not be able to get here when already looking for missing seqNr [$seqNr] for entity [$persistenceId]"
                   )
                   case None =>
+                    log.debug(
+                      "EventsByPersistenceId [{}] Missing seqNr [{}], found [{}], looking for event eventually appear",
+                      persistenceId, seqNr, event.sequenceNr
+                    )
                     lookingForMissingSeqNr = Some(
                       MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, event.sequenceNr)
                     )
                     query(false)
                 }
               } else {
+                // we found that missing seqNr
+                if (lookingForMissingSeqNr.isDefined) {
+                  log.debug("EventsByPersistenceId [{}] Found missing seqNr [{}]", persistenceId, seqNr)
+                  lookingForMissingSeqNr = None
+                }
+
                 seqNr = event.sequenceNr + 1
                 partition = row.getLong("partition_nr")
                 count += 1
                 push(out, event)
-
-                // we found that missing seqNr
-                if (lookingForMissingSeqNr.isDefined)
-                  lookingForMissingSeqNr = None
 
                 if (reachedEndCondition())
                   completeStage()

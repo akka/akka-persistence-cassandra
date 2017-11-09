@@ -6,7 +6,6 @@ package akka.persistence.cassandra.query
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.query.PersistenceQuery
 import akka.stream.{ ActorMaterializer, KillSwitches }
 import akka.testkit.{ ImplicitSender, TestKit }
@@ -18,7 +17,7 @@ import scala.concurrent.duration._
 import akka.stream.testkit.scaladsl.TestSink
 import akka.persistence.query.Offset
 import akka.persistence.DeleteMessagesSuccess
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements }
+import akka.persistence.cassandra.journal.CassandraJournalConfig
 
 import scala.concurrent.Await
 import akka.persistence.cassandra.journal.CassandraStatements
@@ -330,7 +329,7 @@ class EventsByPersistenceIdSpec
         .request(10)
 
       // timeout dictated by events-by-persistence-id-gap-timeout above
-      within(5.seconds) {
+      probe.within(7.seconds) {
         probe.expectNextOrError() match {
           case Right("e1") =>
             probe.expectNextOrError() match {
