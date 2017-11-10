@@ -485,7 +485,7 @@ class EventsByPersistenceIdSpec
       probe.cancel()
     }
 
-    "complete when there is a gap" in {
+    "complete when there is a gap and timeout hits" in {
       val w1 = UUID.randomUUID().toString
       val pr1 = PersistentRepr("e1", 1L, "gap1", "", writerUuid = w1)
       writeTestEvent(pr1)
@@ -500,7 +500,34 @@ class EventsByPersistenceIdSpec
 
       probe.expectNext("e1")
       probe.expectNext("e2")
+
+      probe.expectNoMessage(3.seconds) // governed by the events-by-persistence-id-gap-timeout
+
       probe.expectError().getMessage should include("saw unexpected seqNr")
+    }
+
+    "complete after emitting all events when there is a gap less than the timeout" in {
+      val w1 = UUID.randomUUID().toString
+      val pr1 = PersistentRepr("e1", 1L, "gap2", "", writerUuid = w1)
+      writeTestEvent(pr1)
+      val pr2 = PersistentRepr("e2", 2L, "gap2", "", writerUuid = w1)
+      writeTestEvent(pr2)
+      val pr4 = PersistentRepr("e4", 4L, "gap2", "", writerUuid = w1)
+      writeTestEvent(pr4)
+
+      val src = queries.currentEventsByPersistenceId("gap2", 0L, Long.MaxValue)
+      val probe = src.map(_.event).runWith(TestSink.probe[Any])
+        .request(10)
+
+      probe.expectNext("e1")
+      probe.expectNext("e2")
+
+      probe.expectNoMessage(2.seconds) // governed by the events-by-persistence-id-gap-timeout
+      val pr3 = PersistentRepr("e3", 3L, "gap2", "", writerUuid = w1)
+      writeTestEvent(pr3)
+      probe.expectNext("e3")
+      probe.expectNext("e4")
+      probe.expectComplete()
     }
 
   }
