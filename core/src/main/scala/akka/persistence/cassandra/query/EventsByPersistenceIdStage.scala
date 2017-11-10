@@ -319,7 +319,7 @@ import com.datastax.driver.core.utils.Bytes
       @tailrec private def tryPushOne(): Unit = {
 
         queryState match {
-          case QueryResult(rs, empty, switchPartition) if isAvailable(out) =>
+          case p @ QueryResult(rs, empty, switchPartition) if isAvailable(out) =>
 
             def afterExhausted(): Unit = {
               queryState = QueryIdle
@@ -383,11 +383,6 @@ import com.datastax.driver.core.utils.Bytes
                     query(false)
                 }
               } else {
-                // we found that missing seqNr
-                if (lookingForMissingSeqNr.isDefined) {
-                  log.debug("EventsByPersistenceId [{}] Found missing seqNr [{}]", persistenceId, seqNr)
-                  lookingForMissingSeqNr = None
-                }
 
                 seqNr = event.sequenceNr + 1
                 partition = row.getLong("partition_nr")
@@ -396,7 +391,18 @@ import com.datastax.driver.core.utils.Bytes
 
                 if (reachedEndCondition())
                   completeStage()
-                else if (rs.isExhausted())
+                else if (lookingForMissingSeqNr.isDefined) {
+                  // we found that missing seqNr
+                  log.debug(
+                    "EventsByPersistenceId [{}] Found missing seqNr [{}]",
+                    persistenceId, event.sequenceNr
+                  )
+                  lookingForMissingSeqNr = None
+                  queryState = QueryIdle
+                  if (refreshInterval.isEmpty) query(false)
+                  else afterExhausted()
+
+                } else if (rs.isExhausted())
                   afterExhausted()
                 else if (rs.getAvailableWithoutFetching == fetchMoreThresholdRows)
                   rs.fetchMoreResults() // trigger early async fetch of more rows
