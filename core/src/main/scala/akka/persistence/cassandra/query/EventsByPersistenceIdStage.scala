@@ -329,19 +329,19 @@ import com.datastax.driver.core.utils.Bytes
               if (empty && switchPartition && lookingForMissingSeqNr.isEmpty) {
                 if (refreshInterval.isEmpty) {
                   completeStage()
+                } else {
+                  if (pendingFastForward.isDefined) {
+                    val nextNr = pendingFastForward.get
+                    if (nextNr > seqNr)
+                      internalFastForward(nextNr)
+                    pendingFastForward = None
+                  }
+                  if (pendingPoll.isDefined) {
+                    if (pendingPoll.get >= seqNr)
+                      query(switchPartition = false)
+                    pendingPoll = None
+                  }
                 }
-              } else if (pendingPoll.isDefined) {
-                if (pendingPoll.get >= seqNr)
-                  query(switchPartition = false)
-                pendingPoll = None
-              } else if (pendingFastForward.isDefined) {
-                val nextNr = pendingFastForward.get
-                if (nextNr > seqNr) {
-                  internalFastForward(nextNr)
-                  query(switchPartition = false) // FIXME should we switch here?
-                }
-
-                pendingFastForward = None
               } else {
                 // TODO if we are far from the partition boundary we could skip this query if refreshInterval.nonEmpty
                 query(switchPartition = true) // next partition

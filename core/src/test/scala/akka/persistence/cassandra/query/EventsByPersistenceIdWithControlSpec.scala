@@ -6,23 +6,19 @@ package akka.persistence.cassandra.query
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.query.PersistenceQuery
 import akka.stream.ActorMaterializer
-import akka.testkit.{ ImplicitSender, TestKit }
-import com.typesafe.config.ConfigFactory
-import org.scalatest.{ Matchers, WordSpecLike }
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time._
-
-import scala.concurrent.duration._
-
-import akka.stream.testkit.scaladsl.TestSink
-import akka.persistence.query.Offset
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.TestSubscriber.Probe
+import akka.stream.testkit.scaladsl.TestSink
+import akka.testkit.{ ImplicitSender, TestKit }
+import com.typesafe.config.ConfigFactory
+import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.time._
+import org.scalatest.{ Matchers, WordSpecLike }
+
 import scala.annotation.tailrec
-import scala.concurrent.Promise
+import scala.concurrent.duration._
 
 object EventsByPersistenceIdWithControlSpec {
   val config = ConfigFactory.parseString(s"""
