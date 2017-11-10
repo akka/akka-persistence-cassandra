@@ -1,4 +1,3 @@
-import de.heikoseeberger.sbtheader.HeaderPattern
 import com.typesafe.sbt.SbtScalariform
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import sbt.Keys._
@@ -21,9 +20,9 @@ val akkaPersistenceCassandraDependencies = Seq(
 
 def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   organization := "com.typesafe.akka",
-  organizationName := "Typesafe Inc.",
+  organizationName := "Lightbend Inc.",
+  startYear := Some(2016),
   licenses := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
-
   crossScalaVersions := Seq("2.11.11", "2.12.3"),
   scalaVersion := crossScalaVersions.value.head,
   crossVersion := CrossVersion.binary,
@@ -41,15 +40,9 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
     "-Xfuture"
   ),
 
-  headers := headers.value ++ Map(
-    "scala" -> (
-      HeaderPattern.cStyleBlockComment,
-      """|/*
-         | * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
-         | */
-         |""".stripMargin
-    )
-  ),
+  headerLicense := Some(HeaderLicense.Custom(
+    """Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>"""
+  )),
 
   releaseCrossBuild := true,
 
@@ -110,12 +103,12 @@ lazy val cassandraLauncher = (project in file("cassandra-launcher"))
 // resources
 lazy val cassandraBundle = (project in file("cassandra-bundle"))
   .enablePlugins(AutomateHeaderPlugin)
+  .settings(common: _*)
   .settings(
     name := "akka-persistence-cassandra-bundle",
     crossPaths := false,
     autoScalaLibrary := false,
     libraryDependencies += "org.apache.cassandra" % "cassandra-all" % "3.10" exclude("commons-logging", "commons-logging"),
-
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assemblyJarName in assembly := "cassandra-bundle.jar"
   )
