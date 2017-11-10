@@ -56,7 +56,7 @@ import akka.annotation.InternalApi
 
     try {
       ks.load(is, storePassword.toCharArray)
-    } finally (is.close())
+    } finally is.close()
 
     ks
   }

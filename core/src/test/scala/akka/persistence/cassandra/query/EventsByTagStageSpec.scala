@@ -10,7 +10,7 @@ import akka.NotUsed
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.CassandraLifecycle
-import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Minute, TimeBucket }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.journal.Tagged
 import akka.persistence.query.scaladsl.EventsByTagQuery
@@ -31,7 +31,7 @@ import scala.concurrent.duration._
 
 object EventsByTagStageSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
-  val fetchSize: Int = 3
+  val fetchSize = 3L
   val config = ConfigFactory.parseString(
     s"""
        | akka.loglevel = DEBUG
@@ -43,14 +43,16 @@ object EventsByTagStageSpec {
        |   log-queries = off
        |   events-by-tag {
        |    flush-interval = 0ms
-       |    bucket-size = Day
+       |    bucket-size = Minute
        |   }
        | }
        |
        | cassandra-query-journal {
-       |   first-time-bucket = ${today.minusDays(5).format(firstBucketFormat)}
+       |   first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormat)}"
        |   max-result-size-query = $fetchSize
        |   log-queries = on
+       |   refresh-interval = 250ms
+       |   events-by-tag-gap-timeout = 2s
        | }
     """.stripMargin
   ).withFallback(CassandraLifecycle.config)
@@ -81,17 +83,25 @@ class EventsByTagStageSpec
     cluster.close()
   }
 
-  val today = LocalDateTime.now(ZoneOffset.UTC)
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   val serialization: Serialization = SerializationExtension(system)
+
   lazy val session: Session = {
     import system.dispatcher
     Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
   }
 
+  override protected def afterAll(): Unit = {
+    session.close()
+    session.getCluster.close()
+    super.afterAll()
+  }
+
   implicit val mat = ActorMaterializer()(system)
+  private val shortWaitTime = 250.milliseconds
   private val waitTime = 500.milliseconds
   private val longWaitTime = 1000.milliseconds
+  private val bucketSize = Minute
 
   lazy val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
@@ -108,7 +118,7 @@ class EventsByTagStageSpec
       send(ref, Tagged("e-4", Set("tag-2")))
 
       val stream = queries.currentEventsByTag("tag-2", NoOffset)
-      val sub = stream.toMat(TestSink.probe)(Keep.right).run()
+      val sub = stream.toMat(TestSink.probe[EventEnvelope])(Keep.right).run()
 
       sub.request(2)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "e-1") => }
@@ -121,34 +131,35 @@ class EventsByTagStageSpec
     "empty tag completes" in {
       val stream: Source[EventEnvelope, NotUsed] =
         queries.currentEventsByTag("bogus", NoOffset)
-      val sub = stream.toMat(TestSink.probe)(Keep.right).run()
+      val sub = stream.toMat(TestSink.probe[EventEnvelope])(Keep.right).run()
       sub.request(1)
       sub.expectComplete()
     }
 
     "find events - paging" in {
       val ref = setup("p-2")
-      (1 to (fetchSize + 1)).foreach { i =>
+      (1L to (fetchSize + 1)).foreach { i =>
         send(ref, Tagged(s"e-$i", Set("paged")))
       }
 
       val stream = queries.currentEventsByTag("paged", NoOffset)
-      val sub = stream.runWith(TestSink.probe)
+      val sub = stream.runWith(TestSink.probe[EventEnvelope])
 
-      sub.request(fetchSize + 1)
-      (1 to (fetchSize + 1)).foreach { i =>
+      sub.request(fetchSize + 1L)
+      (1L to (fetchSize + 1)).foreach { i =>
         val id = s"e-$i"
         sub.expectNextPF { case EventEnvelope(_, "p-2", `i`, `id`) => }
       }
     }
 
     "see events in previous time buckets" in {
-      val lastBucket = today.minusDays(1)
-      writeTaggedEvent(lastBucket, PersistentRepr("e-1", 1, "p-3"), Set("CurrentPreviousBuckets"), 1)
-      writeTaggedEvent(lastBucket.plusSeconds(1), PersistentRepr("e-2", 2, "p-3"), Set("CurrentPreviousBuckets"), 2)
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      val lastBucket = nowTime.minusMinutes(1)
+      writeTaggedEvent(lastBucket, PersistentRepr("e-1", 1, "p-3"), Set("CurrentPreviousBuckets"), 1, bucketSize)
+      writeTaggedEvent(lastBucket.plusSeconds(1), PersistentRepr("e-2", 2, "p-3"), Set("CurrentPreviousBuckets"), 2, bucketSize)
 
       val tagStream = queries.currentEventsByTag("CurrentPreviousBuckets", NoOffset)
-      val sub = tagStream.runWith(TestSink.probe)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(2)
       sub.expectNextPF { case EventEnvelope(_, "p-3", 1, "e-1") => }
@@ -157,15 +168,16 @@ class EventsByTagStageSpec
     }
 
     "find events in previous time buckets spanning multiple buckets" in {
-      val twoBucketsAgo = today.minusDays(2)
-      val lastBucket = today.minusDays(1)
-      writeTaggedEvent(twoBucketsAgo, PersistentRepr("e-1", 1, "l-4"), Set("CurrentPreviousMultipleBuckets"), 1)
-      writeTaggedEvent(twoBucketsAgo.plusSeconds(1), PersistentRepr("e-2", 2, "l-4"), Set("CurrentPreviousMultipleBuckets"), 2)
-      writeTaggedEvent(lastBucket, PersistentRepr("e-3", 3, "l-4"), Set("CurrentPreviousMultipleBuckets"), 3)
-      writeTaggedEvent(lastBucket.plusSeconds(1), PersistentRepr("e-4", 4, "l-4"), Set("CurrentPreviousMultipleBuckets"), 4)
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      val twoBucketsAgo = nowTime.minusMinutes(2)
+      val lastBucket = nowTime.minusMinutes(1)
+      writeTaggedEvent(twoBucketsAgo, PersistentRepr("e-1", 1, "l-4"), Set("CurrentPreviousMultipleBuckets"), 1, bucketSize)
+      writeTaggedEvent(twoBucketsAgo.plusSeconds(1), PersistentRepr("e-2", 2, "l-4"), Set("CurrentPreviousMultipleBuckets"), 2, bucketSize)
+      writeTaggedEvent(lastBucket, PersistentRepr("e-3", 3, "l-4"), Set("CurrentPreviousMultipleBuckets"), 3, bucketSize)
+      writeTaggedEvent(lastBucket.plusSeconds(1), PersistentRepr("e-4", 4, "l-4"), Set("CurrentPreviousMultipleBuckets"), 4, bucketSize)
 
       val tagStream = queries.currentEventsByTag("CurrentPreviousMultipleBuckets", NoOffset)
-      val sub = tagStream.runWith(TestSink.probe)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(2)
       sub.expectNextPF { case EventEnvelope(_, "l-4", 1, "e-1") => }
@@ -184,13 +196,13 @@ class EventsByTagStageSpec
         UUIDs.timeBased()
       }
 
-      writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0))
-      writeTaggedEvent(PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, times(1))
-      writeTaggedEvent(PersistentRepr("p2e1", 1, "p-2"), Set(tag), 1, times(2))
-      writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4))
+      writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
+      writeTaggedEvent(PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, times(1), bucketSize)
+      writeTaggedEvent(PersistentRepr("p2e1", 1, "p-2"), Set(tag), 1, times(2), bucketSize)
+      writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4), bucketSize)
 
       val tagStream = queries.currentEventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(4)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -199,13 +211,102 @@ class EventsByTagStageSpec
       sub.expectNoMessage(longWaitTime)
 
       // We still expect the timeuuid to be ordered correctly as it comes from the same node
-      writeTaggedEvent(PersistentRepr("p1e3", 3, "p-1"), Set(tag), 3, times(3))
-      system.log.debug("p1e3 written")
+      writeTaggedEvent(PersistentRepr("p1e3", 3, "p-1"), Set(tag), 3, times(3), bucketSize)
+      system.log.debug("p1e3 written: Offset: {}. Bucket: {}", times(3), TimeBucket(times(3), bucketSize))
       sub.expectNextPF { case EventEnvelope(_, "p-1", 3, "p1e3") => }
 
       sub.expectNoMessage(waitTime)
       sub.request(2)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 4, "p1e4") => }
+      sub.expectComplete()
+    }
+
+    "timeout looking for missing events" in {
+      val tag = "CurrentMissingEventTimeout"
+      val times = (1 to 5).map { _ =>
+        UUIDs.timeBased()
+      }
+
+      writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
+      writeTaggedEvent(PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, times(1), bucketSize)
+      writeTaggedEvent(PersistentRepr("p2e1", 1, "p-2"), Set(tag), 1, times(2), bucketSize)
+      writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4), bucketSize)
+
+      val tagStream: Source[EventEnvelope, NotUsed] = queries.currentEventsByTag(tag, NoOffset)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+
+      sub.request(4)
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 2, "p1e2") => }
+      sub.expectNextPF { case EventEnvelope(_, "p-2", 1, "p2e1") => }
+      sub.expectNoMessage(longWaitTime)
+
+      sub.expectError().getMessage should equal(s"Unable to find missing tagged event: " +
+        s"PersistenceId: p-1. Tag: $tag. TagPidSequenceNr: Set(3). Previous offset: ${times(1)}")
+    }
+
+    "find multiple missing messages that span time buckets" in {
+      val tag = "CurrentMissingEventsInPreviousBucket"
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      val twoBucketsAgo = nowTime.minusMinutes(2)
+      val lastBucket = nowTime.minusMinutes(1)
+      val thisBucket = nowTime
+
+      writeTaggedEvent(twoBucketsAgo, PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, bucketSize)
+      writeTaggedEvent(thisBucket, PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, bucketSize)
+
+      val tagStream = queries.currentEventsByTag(tag, NoOffset)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      sub.request(5)
+
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
+      // make it switch between partitions a few times
+      sub.expectNoMessage(longWaitTime)
+
+      writeTaggedEvent(lastBucket, PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, bucketSize)
+      sub.expectNoMessage(longWaitTime)
+
+      writeTaggedEvent(lastBucket, PersistentRepr("p1e3", 3, "p-1"), Set(tag), 3, bucketSize)
+
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 2, "p1e2") => }
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 3, "p1e3") => }
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 4, "p1e4") => }
+      sub.expectComplete()
+    }
+
+    "not look for initial missing events for offset queries starting in old time buckets" in {
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      val twoBucketsAgo = nowTime.minusMinutes(2)
+      val tag = "CurrentOffsetMissingInOldBucket"
+
+      writeTaggedEvent(twoBucketsAgo, PersistentRepr("p1e10", 10, "p-1"), Set(tag), 10, bucketSize)
+      writeTaggedEvent(nowTime, PersistentRepr("p1e11", 11, "p-1"), Set(tag), 11, bucketSize)
+
+      val tagStream = queries.currentEventsByTag(tag, queries.timeBasedUUIDFrom(twoBucketsAgo.minusMinutes(1).toInstant(ZoneOffset.UTC).toEpochMilli))
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+
+      sub.request(3)
+      sub.expectNextWithTimeoutPF(shortWaitTime, { case EventEnvelope(_, "p-1", 10, "p1e10") => })
+      sub.expectNextWithTimeoutPF(shortWaitTime, { case EventEnvelope(_, "p-1", 11, "p1e11") => })
+      sub.expectComplete()
+    }
+
+    // TODO implement this via another stage that runs before this
+    "look for events in the initial bucket for only a short time" ignore {
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      val tag = "CurrentOffsetMissingInInitialBucket"
+
+      writeTaggedEvent(nowTime, PersistentRepr("p1e11", 11, "p-1"), Set(tag), 11, bucketSize)
+      writeTaggedEvent(nowTime, PersistentRepr("p2e21", 21, "p-2"), Set(tag), 21, bucketSize)
+      writeTaggedEvent(nowTime, PersistentRepr("p3e31", 31, "p-3"), Set(tag), 31, bucketSize)
+
+      val tagStream = queries.currentEventsByTag(tag, queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+
+      sub.request(4)
+      sub.expectNextWithTimeoutPF(waitTime, { case EventEnvelope(_, "p-1", 11, "p1e11") => })
+      sub.expectNextWithTimeoutPF(waitTime, { case EventEnvelope(_, "p-2", 21, "p1e21") => })
+      sub.expectNextWithTimeoutPF(waitTime, { case EventEnvelope(_, "p-3", 31, "p1e31") => })
       sub.expectComplete()
     }
   }
@@ -219,7 +320,7 @@ class EventsByTagStageSpec
       val stream: Source[EventEnvelope, NotUsed] =
         queries.eventsByTag("bogus", NoOffset)
 
-      val sub = stream.toMat(TestSink.probe)(Keep.right).run()
+      val sub = stream.toMat(TestSink.probe[EventEnvelope])(Keep.right).run()
       sub.request(1)
       sub.expectNoMessage(waitTime)
     }
@@ -229,7 +330,7 @@ class EventsByTagStageSpec
       send(ref, Tagged("e-1", Set("tag-3")))
 
       val blackSrc = queries.eventsByTag(tag = "tag-3", offset = NoOffset)
-      val probe = blackSrc.runWith(TestSink.probe)
+      val probe = blackSrc.runWith(TestSink.probe[EventEnvelope])
       probe.request(2)
       probe.expectNextPF { case EventEnvelope(_, "b", 1L, "e-1") => }
       probe.expectNoMessage(waitTime)
@@ -247,15 +348,16 @@ class EventsByTagStageSpec
     }
 
     "find events in previous time buckets spanning multiple buckets" in {
-      val twoBucketsAgo = today.minusDays(2)
-      val lastBucket = today.minusDays(1)
-      writeTaggedEvent(twoBucketsAgo, PersistentRepr("e-1", 1, "l-4"), Set("LivePreviousBuckets"), 1)
-      writeTaggedEvent(twoBucketsAgo.plusSeconds(1), PersistentRepr("e-2", 2, "l-4"), Set("LivePreviousBuckets"), 2)
-      writeTaggedEvent(lastBucket, PersistentRepr("e-3", 3, "l-4"), Set("LivePreviousBuckets"), 3)
-      writeTaggedEvent(lastBucket.plusSeconds(1), PersistentRepr("e-4", 4, "l-4"), Set("LivePreviousBuckets"), 4)
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      val twoBucketsAgo = nowTime.minusMinutes(2)
+      val lastBucket = nowTime.minusMinutes(1)
+      writeTaggedEvent(twoBucketsAgo, PersistentRepr("e-1", 1, "l-4"), Set("LivePreviousBuckets"), 1, bucketSize)
+      writeTaggedEvent(twoBucketsAgo.plusSeconds(1), PersistentRepr("e-2", 2, "l-4"), Set("LivePreviousBuckets"), 2, bucketSize)
+      writeTaggedEvent(lastBucket, PersistentRepr("e-3", 3, "l-4"), Set("LivePreviousBuckets"), 3, bucketSize)
+      writeTaggedEvent(lastBucket.plusSeconds(1), PersistentRepr("e-4", 4, "l-4"), Set("LivePreviousBuckets"), 4, bucketSize)
 
       val tagStream = queries.eventsByTag("LivePreviousBuckets", NoOffset)
-      val sub = tagStream.runWith(TestSink.probe)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(2)
       sub.expectNextPF { case EventEnvelope(_, "l-4", 1, "e-1") => }
@@ -266,8 +368,8 @@ class EventsByTagStageSpec
       sub.expectNextPF { case EventEnvelope(_, "l-4", 3, "e-3") => }
       sub.expectNextPF { case EventEnvelope(_, "l-4", 4, "e-4") => }
 
-      writeTaggedEvent(today, PersistentRepr("e-5", 5, "l-4"), Set("LivePreviousBuckets"), 5)
-      writeTaggedEvent(today.plusSeconds(1), PersistentRepr("e-6", 6, "l-4"), Set("LivePreviousBuckets"), 6)
+      writeTaggedEvent(nowTime, PersistentRepr("e-5", 5, "l-4"), Set("LivePreviousBuckets"), 5, bucketSize)
+      writeTaggedEvent(nowTime.plusSeconds(1), PersistentRepr("e-6", 6, "l-4"), Set("LivePreviousBuckets"), 6, bucketSize)
 
       sub.expectNoMessage(waitTime)
 
@@ -282,13 +384,13 @@ class EventsByTagStageSpec
       val times = (1 to 5).map { _ =>
         UUIDs.timeBased()
       }
-      writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0))
-      writeTaggedEvent(PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, times(1))
-      writeTaggedEvent(PersistentRepr("p2e1", 1, "p-2"), Set(tag), 1, times(2))
-      writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4))
+      writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
+      writeTaggedEvent(PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, times(1), bucketSize)
+      writeTaggedEvent(PersistentRepr("p2e1", 1, "p-2"), Set(tag), 1, times(2), bucketSize)
+      writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4), bucketSize)
 
       val tagStream = queries.eventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(4)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -297,7 +399,7 @@ class EventsByTagStageSpec
       sub.expectNoMessage(longWaitTime)
 
       // We still expect the timeuuid to be ordered correctly as it comes from the same node
-      writeTaggedEvent(PersistentRepr("p1e3", 3, "p-1"), Set(tag), 3, times(3))
+      writeTaggedEvent(PersistentRepr("p1e3", 3, "p-1"), Set(tag), 3, times(3), bucketSize)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 3, "p1e3") => }
       sub.expectNoMessage(waitTime)
       sub.request(2)
@@ -311,13 +413,13 @@ class EventsByTagStageSpec
       val times = (1 to 7).map { _ =>
         UUIDs.timeBased()
       }
-      writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0))
-      writeTaggedEvent(PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, times(1))
-      writeTaggedEvent(PersistentRepr("p2e1", 1, "p-2"), Set(tag), 1, times(2))
-      writeTaggedEvent(PersistentRepr("p1e6", 6, "p-1"), Set(tag), 6, times(6))
+      writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
+      writeTaggedEvent(PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, times(1), bucketSize)
+      writeTaggedEvent(PersistentRepr("p2e1", 1, "p-2"), Set(tag), 1, times(2), bucketSize)
+      writeTaggedEvent(PersistentRepr("p1e6", 6, "p-1"), Set(tag), 6, times(6), bucketSize)
 
       val tagStream = queries.eventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(4)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -326,12 +428,12 @@ class EventsByTagStageSpec
       sub.expectNoMessage(waitTime)
 
       // make the middle one available
-      writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4))
-      writeTaggedEvent(PersistentRepr("p1e5", 5, "p-1"), Set(tag), 5, times(5))
+      writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4), bucketSize)
+      writeTaggedEvent(PersistentRepr("p1e5", 5, "p-1"), Set(tag), 5, times(5), bucketSize)
       sub.expectNoMessage(waitTime)
 
       // now all the missing are available
-      writeTaggedEvent(PersistentRepr("p1e3", 3, "p-1"), Set(tag), 3, times(3))
+      writeTaggedEvent(PersistentRepr("p1e3", 3, "p-1"), Set(tag), 3, times(3), bucketSize)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 3, "p1e3") => }
       sub.expectNoMessage(waitTime)
       sub.request(3)
@@ -347,41 +449,83 @@ class EventsByTagStageSpec
       val times = (1 to 5).map { _ =>
         UUIDs.timeBased()
       }
-      writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0))
-      writeTaggedEvent(PersistentRepr("p2e3", 3, "p-2"), Set(tag), 3, times(3))
+      writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
+      writeTaggedEvent(PersistentRepr("p2e3", 3, "p-2"), Set(tag), 3, times(3), bucketSize)
 
       val tagStream = queries.eventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe)
-      sub.request(5)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      sub.request(10)
 
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
       sub.expectNoMessage(waitTime)
 
-      writeTaggedEvent(PersistentRepr("p2e2", 2, "p-2"), Set(tag), 2, times(2))
+      writeTaggedEvent(PersistentRepr("p2e2", 2, "p-2"), Set(tag), 2, times(2), bucketSize)
       sub.expectNoMessage(waitTime)
 
-      writeTaggedEvent(PersistentRepr("p2e1", 1, "p-2"), Set(tag), 1, times(1))
+      writeTaggedEvent(PersistentRepr("p2e1", 1, "p-2"), Set(tag), 1, times(1), bucketSize)
 
       sub.expectNextPF { case EventEnvelope(_, "p-2", 1, "p2e1") => }
       sub.expectNextPF { case EventEnvelope(_, "p-2", 2, "p2e2") => }
       sub.expectNextPF { case EventEnvelope(_, "p-2", 3, "p2e3") => }
 
-      writeTaggedEvent(PersistentRepr("p2e4", 4, "p-2"), Set(tag), 4, times(4))
+      writeTaggedEvent(PersistentRepr("p2e4", 4, "p-2"), Set(tag), 4, times(4), bucketSize)
+      writeTaggedEvent(PersistentRepr("p2e5", 5, "p-2"), Set(tag), 5, UUIDs.timeBased(), bucketSize)
       sub.expectNextPF { case EventEnvelope(_, "p-2", 4, "p2e4") => }
+      sub.expectNextPF { case EventEnvelope(_, "p-2", 5, "p2e5") => }
 
       sub.cancel()
     }
 
-    "multiple missing messages that span time buckets" in {
-      pending
+    "find missing first event in previous bucket" in {
+      val tag = "LiveMissingFirstInPreviousBucket"
+      val tagStream = queries.eventsByTag(tag, NoOffset)
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      val lastBucket = nowTime.minusMinutes(1)
+      writeTaggedEvent(nowTime.plusSeconds(1), PersistentRepr("e-3", 3, "p-1"), Set(tag), 3, bucketSize)
+
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      sub.request(5)
+      sub.expectNoMessage(waitTime)
+
+      writeTaggedEvent(lastBucket, PersistentRepr("e-1", 1, "p-1"), Set(tag), 1, bucketSize)
+      sub.expectNoMessage(waitTime)
+
+      writeTaggedEvent(nowTime, PersistentRepr("e-2", 2, "p-1"), Set(tag), 2, bucketSize)
+
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "e-1") => }
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 2, "e-2") => }
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 3, "e-3") => }
     }
 
-    "starting at offset, missing events, track back to offset for first event" in {
-      pending
-    }
+    "find multiple missing messages that span time buckets" in {
+      val tag = "LiveMissingEventsInPreviousBucket"
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      val twoBucketsAgo = nowTime.minusMinutes(2)
+      val lastBucket = nowTime.minusMinutes(1)
+      val thisBucket = nowTime
 
-    "no offset, missing events, track back a configured amount for first event" in {
-      pending
+      writeTaggedEvent(twoBucketsAgo, PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, bucketSize)
+      writeTaggedEvent(thisBucket, PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, bucketSize)
+
+      val tagStream = queries.eventsByTag(tag, NoOffset)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      sub.request(5)
+
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
+      // make it switch between partitions a few times
+      sub.expectNoMessage(longWaitTime)
+
+      writeTaggedEvent(lastBucket, PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, bucketSize)
+      sub.expectNoMessage(longWaitTime)
+
+      writeTaggedEvent(lastBucket, PersistentRepr("p1e3", 3, "p-1"), Set(tag), 3, bucketSize)
+
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 2, "p1e2") => }
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 3, "p1e3") => }
+      sub.expectNextPF { case EventEnvelope(_, "p-1", 4, "p1e4") => }
+      sub.expectNoMessage(waitTime)
+
+      sub.cancel()
     }
   }
 

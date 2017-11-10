@@ -7,11 +7,12 @@ package akka.persistence.cassandra.journal
 import java.util.UUID
 
 import akka.annotation.InternalApi
+import akka.util.HashCode
 import com.datastax.driver.core.utils.UUIDs
 
 @InternalApi private[akka] object TimeBucket {
 
-  def apply(timeuuid: UUID, bucketSize: BucketSize = Day): TimeBucket =
+  def apply(timeuuid: UUID, bucketSize: BucketSize): TimeBucket =
     apply(UUIDs.unixTimestamp(timeuuid), bucketSize)
 
   def apply(epochTimestamp: Long, bucketSize: BucketSize): TimeBucket = {
@@ -25,30 +26,48 @@ import com.datastax.driver.core.utils.UUIDs
   }
 }
 
-@InternalApi private[akka] final class TimeBucket private (val startTimestamp: Long, bucketSize: BucketSize) {
-  val key: Long = startTimestamp
-
+@InternalApi private[akka] final class TimeBucket private (val key: Long, val bucketSize: BucketSize) {
   def inPast: Boolean =
-    startTimestamp < TimeBucket.roundDownBucketSize(System.currentTimeMillis(), bucketSize)
+    key < TimeBucket.roundDownBucketSize(System.currentTimeMillis(), bucketSize)
 
   def isCurrent: Boolean = {
     val now = System.currentTimeMillis()
-    now >= startTimestamp && now < (startTimestamp + bucketSize.durationMillis)
+    now >= key && now < (key + bucketSize.durationMillis)
+  }
+
+  def within(uuid: UUID): Boolean = {
+    val when = UUIDs.unixTimestamp(uuid)
+    when >= key && when < (key + bucketSize.durationMillis)
   }
 
   def next(): TimeBucket =
-    new TimeBucket(startTimestamp + bucketSize.durationMillis, bucketSize)
+    new TimeBucket(key + bucketSize.durationMillis, bucketSize)
 
   def previous(steps: Int): TimeBucket =
     if (steps == 0) this
-    else new TimeBucket(startTimestamp - steps * bucketSize.durationMillis, bucketSize)
+    else new TimeBucket(key - steps * bucketSize.durationMillis, bucketSize)
 
   def >(other: TimeBucket): Boolean = {
-    startTimestamp > other.startTimestamp
+    key > other.key
   }
 
   def <(other: TimeBucket): Boolean = {
-    startTimestamp < other.startTimestamp
+    key < other.key
   }
-  override def toString = s"TimeBucket($key, $startTimestamp, $inPast, $isCurrent)"
+
+
+  override def equals(other: Any): Boolean = other match {
+    case that: TimeBucket =>
+      key == that.key &&
+        bucketSize == that.bucketSize
+    case _ => false
+  }
+
+  override def hashCode(): Int = {
+    var result = HashCode.SEED
+    result = HashCode.hash(result, key)
+    result = HashCode.hash(result, bucketSize)
+    result
+  }
+  override def toString = s"TimeBucket($key, $bucketSize, $inPast, $isCurrent)"
 }

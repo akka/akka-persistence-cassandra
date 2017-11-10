@@ -9,9 +9,9 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor.{ ActorSystem, Props }
 import akka.persistence.PersistentActor
-import akka.persistence.cassandra.CassandraLifecycle.{ Embedded, External }
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.testkit.{ TestKitBase, TestProbe }
+import com.datastax.driver.core.Cluster
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
@@ -38,17 +38,19 @@ object CassandraLifecycle {
     """
     )
 
-    mode match {
+    val port = mode match {
       case Embedded =>
-        always.withFallback(ConfigFactory.parseString(
-          s"""
-            cassandra-journal.port = ${CassandraLauncher.randomPort}
-            cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
-          """
-        ))
+        CassandraLauncher.randomPort
       case External =>
-        always
+        9042
     }
+
+    always.withFallback(ConfigFactory.parseString(
+      s"""
+      cassandra-journal.port = $port
+      cassandra-snapshot-store.port = $port
+    """
+    ))
   }
 
   def awaitPersistenceInit(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
@@ -88,11 +90,19 @@ object CassandraLifecycle {
 trait CassandraLifecycle extends BeforeAndAfterAll {
   this: TestKitBase with Suite =>
 
-  import CassandraLifecycle.mode
+  import CassandraLifecycle._
 
   def systemName: String
 
   def cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource
+
+  lazy val cluster = {
+    Cluster.builder()
+      .addContactPoint("localhost")
+      .withClusterName(systemName)
+      .withPort(config.getInt("cassandra-journal.port"))
+      .build()
+  }
 
   override protected def beforeAll(): Unit = {
     startCassandra()
@@ -100,7 +110,9 @@ trait CassandraLifecycle extends BeforeAndAfterAll {
     super.beforeAll()
   }
 
-  def startCassandra(port: Int = 0): Unit = {
+  def startCassandra(): Unit = startCassandra(0)
+
+  def startCassandra(port: Int): Unit = {
     mode match {
       case Embedded =>
         val cassandraDirectory = new File("target/" + systemName)

@@ -6,17 +6,17 @@ package akka.persistence.cassandra.query
 
 import java.util.UUID
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{Offset, PersistenceQuery}
-import akka.persistence.{DeleteMessagesSuccess, PersistentRepr}
+import akka.persistence.query.{ Offset, PersistenceQuery }
+import akka.persistence.{ DeleteMessagesSuccess, PersistentRepr }
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.TestSink
-import akka.stream.{ActorMaterializer, KillSwitches}
-import akka.testkit.{ImplicitSender, TestKit}
+import akka.stream.{ ActorMaterializer, KillSwitches }
+import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
 
@@ -36,8 +36,8 @@ class EventsByPersistenceIdSpec
   extends TestKit(ActorSystem("EventsByPersistenceIdSpec", EventsByPersistenceIdSpec.config))
   with ImplicitSender
   with WordSpecLike
-  with CassandraLifecycle
   with Matchers
+  with CassandraLifecycle
   with DirectWriting {
 
   override def systemName: String = "EventsByPersistenceIdSpec"
@@ -282,9 +282,11 @@ class EventsByPersistenceIdSpec
             probe.expectNextOrError() match {
               case Right("e2") =>
                 probe.expectError()
-              case Left(_) =>
+              case Right(e) => fail(s"Unexpected event: $e")
+              case Left(_)  =>
             }
-          case Left(_) =>
+          case Right(e) => fail(s"Unexpected msg: $e")
+          case Left(_)  =>
         }
       }
     }

@@ -62,14 +62,14 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
   def firstOffset: UUID = scaladslReadJournal.firstOffset
 
   /**
-   * Create a time based UUID that can be used as offset in `eventsByTag`
-   * queries. The `timestamp` is a unix timestamp (as returned by
+   * Create a time based UUID that can be used as offset in [[eventsByTag]]
+   * queries. The timestamp` is a unix timestamp (as returned by
    * `System#currentTimeMillis`.
    */
   def offsetUuid(timestamp: Long): UUID = scaladslReadJournal.offsetUuid(timestamp)
 
   /**
-   * Create a time based UUID that can be used as offset in `eventsByTag`
+   * Create a time based UUID that can be used as offset in [[eventsByTag]]
    * queries. The `timestamp` is a unix timestamp (as returned by
    * `System#currentTimeMillis`.
    */
@@ -88,10 +88,9 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * To tag events you create an `akka.persistence.journal.EventAdapter` that wraps the events
    * in a `akka.persistence.journal.Tagged` with the given `tags`.
    * The tags must be defined in the `tags` section of the `cassandra-journal` configuration.
-   * Max 3 tags per event is supported.
    *
-   * You can use `NoOffset` to retrieve all events with a given tag or
-   * retrieve a subset of all events by specifying a `TimeBasedUUID` `offset`.
+   * You can use [[akka.persistence.query.NoOffset]] to retrieve all events with a given tag or
+   * retrieve a subset of all events by specifying a [[TimeBasedUUID]] `offset`.
    *
    * The offset of each event is provided in the streamed envelopes returned,
    * which makes it possible to resume the stream at a later point from a given offset.
@@ -107,32 +106,20 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * The returned event stream is ordered by the offset (timestamp), which corresponds
    * to the same order as the write journal stored the events, with inaccuracy due to clock skew
    * between different nodes. The same stream elements (in same order) are returned for multiple
-   * executions of the query on a best effort basis. The query is using a Cassandra Materialized
-   * View for the query and that is eventually consistent, so different queries may see different
+   * executions of the query on a best effort basis. The query is using a batched writes to a
+   * separate table that so is eventually consistent.
+   * This means that different queries may see different
    * events for the latest events, but eventually the result will be ordered by timestamp
-   * (Cassandra timeuuid column). To compensate for the the eventual consistency the query is
-   * delayed to not read the latest events, see `cassandra-query-journal.eventual-consistency-delay`
-   * in reference.conf. However, this is only best effort and in case of network partitions
-   * or other things that may delay the updates of the Materialized View the events may be
-   * delivered in different order (not strictly by their timestamp).
+   * (Cassandra timeuuid column).
    *
-   * If you use the same tag for all events for a `persistenceId` it is possible to get
-   * a more strict delivery order than otherwise. This can be useful when all events of
-   * a PersistentActor class (all events of all instances of that PersistentActor class)
-   * are tagged with the same tag. Then the events for each `persistenceId` can be delivered
-   * strictly by sequence number. If a sequence number is missing the query is delayed up
-   * to the configured `delayed-event-timeout` and if the expected event is still not
-   * found the stream is completed with failure. This means that there must not be any
-   * holes in the sequence numbers for a given tag, i.e. all events must be tagged
-   * with the same tag. Set `delayed-event-timeout` to for example 30s to enable this
-   * feature. It is disabled by default.
-   *
-   * Deleted events are also deleted from the tagged event stream.
+   * However a strong guarantee is provided that events for a given persistenceId will
+   * be delivered in order, the eventual consistency is only for ordering of events
+   * from different persistenceIds.
    *
    * The stream is not completed when it reaches the end of the currently stored events,
    * but it continues to push new events when new events are persisted.
    * Corresponding query that is completed when it reaches the end of the currently
-   * stored events is provided by `currentEventsByTag`.
+   * stored events is provided by [[currentEventsByTag]].
    *
    * The stream is completed with failure if there is a failure in executing the query in the
    * backend journal.

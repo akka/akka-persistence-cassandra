@@ -40,6 +40,7 @@ trait CassandraStatements {
         partition_nr bigint,
         sequence_nr bigint,
         timestamp timeuuid,
+        timebucket text,
         writer_uuid text,
         ser_id int,
         ser_manifest text,
@@ -49,7 +50,8 @@ trait CassandraStatements {
         meta_ser_manifest text,
         meta blob,
         message blob,
-        PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp))
+        tags set<text>,
+        PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
         WITH gc_grace_seconds =${config.gcGraceSeconds}
         AND compaction = ${config.tableCompactionStrategy.asCQL}
     """
@@ -81,7 +83,6 @@ trait CassandraStatements {
        CREATE TABLE IF NOT EXISTS $tagProgressTableName(
         persistence_id text,
         tag text,
-        first_bucket bigint static,
         sequence_nr bigint,
         tag_pid_sequence_nr bigint,
         offset timeuuid,
@@ -98,10 +99,10 @@ trait CassandraStatements {
 
   def writeMessage(withMeta: Boolean) =
     s"""
-      INSERT INTO $tableName (persistence_id, partition_nr, sequence_nr, timestamp, writer_uuid, ser_id, ser_manifest, event_manifest, event,
+      INSERT INTO $tableName (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
         ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
-        used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true)
+        used, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true, ?)
     """
 
   def writeTags =
@@ -117,16 +118,8 @@ trait CassandraStatements {
         sequence_nr,
         ser_id,
         ser_manifest,
-        writer_uuid) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        writer_uuid) VALUES (?, ?,?,?,?,?,?,?,?,?,?)
      """
-
-  def writeTagFirstBucket =
-    s"""
-      INSERT INTO $tagProgressTableName(
-        persistence_id,
-        tag,
-        first_bucket) VALUES (?, ?, ?)
-     """.stripMargin
 
   def writeTagProgress =
     s"""
@@ -138,12 +131,17 @@ trait CassandraStatements {
         offset) VALUES (?, ?, ?, ?, ?)
      """.stripMargin
 
-  // FIXME, use this for recovery
   def selectTagProgress =
     s"""
        SELECT * from $tagProgressTableName WHERE
        persistence_id = ? AND
        tag = ?
+     """.stripMargin
+
+  def selectTagProgressForPersistenceId =
+    s"""
+       SELECT * from $tagProgressTableName WHERE
+       persistence_id = ?
      """.stripMargin
 
   def deleteMessage =

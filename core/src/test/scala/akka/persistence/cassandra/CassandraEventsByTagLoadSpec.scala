@@ -4,7 +4,10 @@
 
 package akka.persistence.cassandra
 
-import akka.actor.{ ActorRef, ActorSystem, Props }
+import java.time.{ LocalDateTime, ZoneOffset }
+
+import akka.actor.ActorSystem
+import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
@@ -21,7 +24,7 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 object CassandraEventsByTagLoadSpec {
-
+  val today = LocalDateTime.now(ZoneOffset.UTC)
   val keyspaceName = "CassandraEventsByTagLoadSpec"
 
   val config = ConfigFactory.parseString(
@@ -39,7 +42,7 @@ object CassandraEventsByTagLoadSpec {
        |}
        |cassandra-snapshot-store.keyspace=CassandraEventsByTagLoadSpecSnapshot
        |cassandra-query-journal = {
-       |  first-time-bucket = "20171105"
+       |   first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormat)}"
        |}
        |akka.actor.serialize-messages=off
     """.stripMargin
@@ -58,32 +61,21 @@ class CassandraEventsByTagLoadSpec extends TestKit(ActorSystem("CassandraEventsB
   implicit val materialiser = ActorMaterializer()(system)
   implicit override val patienceConfig = PatienceConfig(timeout = Span(60, Seconds), interval = Span(5, Seconds))
 
-  val nrPersistenceIds = 100
+  val nrPersistenceIds = 50L
   val eventTags = Set("orange", "green", "red")
-  val messagesPerPersistenceId = 1000
+  val messagesPerPersistenceId = 500L
   val veryLongWait = 60.seconds
 
   "Events by tag" must {
     "Events should come in sequence number order for each persistence id" in {
-      val refs: Vector[ActorRef] = (1 to nrPersistenceIds).map(i => {
-        system.actorOf(Props(classOf[TestTaggingActor], s"p-$i", eventTags))
-      }).toVector
+      val refs = (1L to nrPersistenceIds).map(i => {
+        system.actorOf(TestTaggingActor.props(s"p-$i", eventTags))
+      })
 
-      system.log.info("sending first half of events")
-      1L until (messagesPerPersistenceId / 2) foreach { i =>
+      1L to messagesPerPersistenceId foreach { i =>
         refs.foreach { ref =>
           ref ! s"e-$i"
-        }
-      }
-
-      // Make sure we go to at least two buckets
-      system.log.info("sleeping for one minute")
-      Thread.sleep(1000 * 60)
-
-      system.log.info("second load of events")
-      (messagesPerPersistenceId / 2) to messagesPerPersistenceId foreach { i =>
-        refs.foreach { ref =>
-          ref ! s"e-$i"
+          expectMsg(Ack)
         }
       }
 
@@ -113,12 +105,12 @@ class CassandraEventsByTagLoadSpec extends TestKit(ActorSystem("CassandraEventsB
     var allReceived = Map.empty[String, List[Long]].withDefaultValue(List.empty[Long])
     probe.request(messagesPerPersistenceId * nrPersistenceIds)
 
-    (1 to (messagesPerPersistenceId * nrPersistenceIds)) foreach { i: Int =>
+    (1L to (messagesPerPersistenceId * nrPersistenceIds)) foreach { i: Long =>
       val event = try {
         probe.expectNext(veryLongWait)
       } catch {
         case e: AssertionError =>
-          system.log.error(e, "Failed to get event")
+          system.log.error(e, s"Failed to get event: $i")
           allReceived.filter(_._2.size != messagesPerPersistenceId).foreach(p => system.log.info("{}", p))
           throw e
       }
@@ -141,6 +133,7 @@ class CassandraEventsByTagLoadSpec extends TestKit(ActorSystem("CassandraEventsB
 
   override protected def externalCassandraCleanup(): Unit = {
     val cluster = Cluster.builder()
+      .withClusterName("CassandraEventsByTagLoadSpecCleanup")
       .addContactPoint("localhost")
       .build()
     Try(cluster.connect().execute(s"drop keyspace ${CassandraEventsByTagLoadSpec.keyspaceName}"))

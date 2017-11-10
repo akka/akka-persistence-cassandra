@@ -8,26 +8,33 @@ how it works and what are the consistency guarantees.
 
 ## Bucket sizes 
 
-Another improvement the new eventByTag implementation will have is a configurable bucket so that
-high throughput tags are supported.
+Events by tag partitions are grouped into buckets to avoid a partition for a given tag
+getting to large. 
 
  1000s of events per day per tag -- DAY
  100,000s  of events per day per tag -- HOUR
  1,000,000s of events per day per tag -- MINUTE
+ 
+This setting can not be changed after data has been written.
  
 More billion per day per tag? You probably need a specialised schema rather than a general library like this.
 
 ### Migrating
 
 A one off manual run of a provided stream will take events from the messages table and
-save them to the tag views table. This may take a long time if you have a lot of events.
+save them to the tag views table. This can run while your application is running but be careful 
+as it will produce a large number of writes to Cassandra. 
+
+Once you restart with the new version of the plugin each time a persistent actor is recovered
+it will repair the tag views table for any event that was missed during the migration.
 
 ## Consistency
 
 Event by tag queries are eventually consistent, i.e. if a persist for an event has completed
 is does not guarantee that it will be visible in an events by tag query, but it will eventually.
 
-Order of the events is maintained per persistence id per tag by maintaining a sequenceId for tagged events.
+Order of the events is maintained per persistence id per tag by maintaining a sequence number for tagged events.
+If an event is missing then `eventByTag` queries will fail.
 
 ### Missing and delayed events.
 
@@ -40,39 +47,13 @@ persistenceId, tag combination. This sequence number can be generated as all the
 persistenceId are generated on the same node.
 
 If a gap is detected then the event is held back and the stream goes into a searching mode for the missing
-events. Depending on whether it is a live query and/or you have set an offset it might be possible
-to know for sure that an event is missing or it is just before the offset.
+events. If the missing event is not found then then stream is failed.
 
-Details for each of the four combinations of current/live and off set/no offset:
-* First event missing: The first found does not have sequence number 1
-* Event missing: Find some events in order then a sequence number jump
-* Omitted events: Can events be omitted or will the stream fail
-
-
-#### Current query / No offset
-
-* First event missing: Back track to `first-time-bucket`. N scans of each bucket.
-* Event missing: N scans from the previous event for this persistenceId/tag's offset to the current offset.
-* Omitted events: No, stream will fail if either of the above two scenarios don't find the missing event.
-
-#### Current query / Offset
-
-* First event missing: Back track to Offset. N scans of each bucket then assume it is the first event from this offset.
-* Event missing: N scans from the previous event for this persistenceId/tag's offset to the current offset.
-* Omitted events: Yes. If first event missing doesn't find an event that should be there.
-
-
-#### Live query / No Offset
-
-* First event missing: Back track to `first-time-bucket`. N scans of each bucket.
-* Event missing: N scans from the previous event for this persistenceId/tag's offset to the current offset.
-* Omitted events: No, stream will fail if either of the above two scenarios don't find the missing event.
-
-#### Live query / Offset
-
-* First event missing: Back track to Offset. N scans of each bucket then assume it is the first event from this offset.
-* Event missing: N scans from the previous event for this persistenceId/tag's offset to the current offset.
-* Omitted events: Yes. If first event missing doesn't find an event that should be there.
+When receiving the first event for a given persistenceId in an offset query it is not known 
+if that is actually the first event. If the offset query starts in a time bucket in the past then
+it is assumed to be the first. If the query is started with an offset in the current time bucket then
+the query starts with a scanning mode to look for the lowest sequence number per persistenceId
+before delivering any events. 
 
 ## Implementation
 
@@ -99,22 +80,16 @@ CREATE TABLE akka.tag_views_progress (
 )
 ```
 
-Part of recovery will then check that all events have been written by the tag writer.
+Part of recovery checks that all events have been written by the tag writer.
 
 On the happy path this table will be written to after the tag_view write is complete
 so it could be lost in a crash. In that event recovery will duplicate writes to the 
 tag_views table which is fine as they will be upserts.
-
-TODO:
-What happens if a persistenceId is not uses for a long time after a crash? eventsByTag queries 
-would remain out of date for a long time.
 
 ### Deletion of events
 
 *Deletes are not propagated to the events by tag table.*
 
 It is assumed that the eventsByTag query is used to populate a separate read view or
-events are never deleted. An optional TTL can be set on the tag_view table to clean up
-events assuming they have been written to another read view database, otherwise they are
-kept forever.
+events are never deleted. A future feature will be to TTL the table. 
 

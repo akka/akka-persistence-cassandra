@@ -7,7 +7,6 @@ package akka.persistence.cassandra.query
 import akka.actor.ExtendedActorSystem
 import akka.persistence.query.ReadJournalProvider
 import com.typesafe.config.Config
-import akka.persistence.query.javadsl.ReadJournal
 import scala.util.control.NonFatal
 
 class CassandraReadJournalProvider(system: ExtendedActorSystem, config: Config) extends ReadJournalProvider {

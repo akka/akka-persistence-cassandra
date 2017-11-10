@@ -5,11 +5,11 @@
 package akka.persistence.cassandra.query
 
 import java.time.format.DateTimeFormatter
-import java.time.{ LocalDate, ZoneOffset }
+import java.time.{ LocalDateTime, ZoneOffset }
 
 import akka.actor.NoSerializationVerificationNeeded
 import akka.annotation.InternalApi
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, TimeBucket }
+import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
 import com.datastax.driver.core.ConsistencyLevel
 import com.typesafe.config.Config
 
@@ -21,7 +21,8 @@ import scala.concurrent.duration._
 @InternalApi private[akka] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig)
   extends NoSerializationVerificationNeeded {
 
-  private val timeBucketFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC)
+  private val timeBucketFormat = "yyyyMMdd'T'HH:mm"
+  private val timeBucketFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern(timeBucketFormat).withZone(ZoneOffset.UTC)
 
   val refreshInterval: FiniteDuration = config.getDuration("refresh-interval", MILLISECONDS).millis
   val gapFreeSequenceNumbers: Boolean = config.getBoolean("gap-free-sequence-numbers")
@@ -38,9 +39,16 @@ import scala.concurrent.duration._
   val readRetries: Int = config.getInt("read-retries")
 
   val firstTimeBucket: TimeBucket = {
-    val date: LocalDate = LocalDate.parse(config.getString("first-time-bucket"), timeBucketFormatter)
+    val firstBucket = config.getString("first-time-bucket")
+    val firstBucketPadded = (writePluginConfig.bucketSize, firstBucket) match {
+      case (_, fb) if fb.length == 14    => fb
+      case (Hour, fb) if fb.length == 11 => s"${fb}:00"
+      case (Day, fb) if fb.length == 8   => s"${fb}T00:00"
+      case _                             => throw new IllegalArgumentException("Invalid first-time-bucket format. Use: " + timeBucketFormat)
+    }
+    val date: LocalDateTime = LocalDateTime.parse(firstBucketPadded, timeBucketFormatter)
     TimeBucket(
-      date.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli,
+      date.toInstant(ZoneOffset.UTC).toEpochMilli,
       writePluginConfig.bucketSize
     )
   }
@@ -52,4 +60,7 @@ import scala.concurrent.duration._
   val table: String = writePluginConfig.table
   val pubsubNotification: Boolean = writePluginConfig.tagWriterSettings.pubsubNotification
   val eventsByPersistenceIdEventTimeout: FiniteDuration = config.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
+
+  val eventsByTagTimeout: FiniteDuration = config.getDuration("events-by-tag.gap-timeout", MILLISECONDS).millis
+  val eventsByTagOffsetScanning: FiniteDuration = config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis
 }

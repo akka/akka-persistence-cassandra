@@ -8,6 +8,7 @@ import java.util.UUID
 
 import akka.persistence.PersistentRepr
 import akka.annotation.InternalApi
+import akka.persistence.cassandra.journal.CassandraJournal.TagPidSequenceNr
 
 /**
  * INTERNAL API: Wrap the [[PersistentRepr]] to add the UUID for
@@ -15,6 +16,6 @@ import akka.annotation.InternalApi
  */
 @InternalApi private[akka] final case class UUIDPersistentRepr(
   offset:           UUID,
-  tagPidSequenceNr: Long,
+  tagPidSequenceNr: TagPidSequenceNr,
   persistentRepr:   PersistentRepr
 )

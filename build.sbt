@@ -14,6 +14,7 @@ val akkaPersistenceCassandraDependencies = Seq(
   "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % "test",
   "ch.qos.logback"          % "logback-classic"                     % "1.2.3"         % "test",
   "org.scalatest"          %% "scalatest"                           % "3.0.0"         % "test",
+  "org.pegdown"             % "pegdown"                             % "1.6.0"         % "test",
   "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % "provided"
 )
 
@@ -88,7 +89,8 @@ lazy val core = (project in file("core"))
 
     OsgiKeys.exportPackage  := Seq("akka.persistence.cassandra.*"),
     OsgiKeys.importPackage  := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
-    OsgiKeys.privatePackage := Nil
+    OsgiKeys.privatePackage := Nil,
+    testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o"), Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports"))
   )
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))

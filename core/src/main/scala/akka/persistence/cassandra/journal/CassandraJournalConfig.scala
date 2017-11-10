@@ -4,8 +4,6 @@
 
 package akka.persistence.cassandra.journal
 
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
@@ -33,7 +31,7 @@ private[akka] case object Minute extends BucketSize {
 
 private[akka] object BucketSize {
   def fromString(value: String): BucketSize = {
-    Vector(Day, Hour, Minute).find(_.toString == value)
+    Vector(Day, Hour, Minute).find(_.toString.toLowerCase == value.toLowerCase)
       .getOrElse(throw new IllegalArgumentException("Invalid value for bucket size: " + value))
   }
 }

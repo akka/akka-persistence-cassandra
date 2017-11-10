@@ -90,25 +90,29 @@ Persistence Query usage example to obtain a stream with all events tagged with "
 Migrations
 ----------
 
-### Migrations to 0.59
+### Migrations to 0.80
 
-0.59 introduces a completely different way to manage tags for events. If you do not have eventsByTag enabled then no migration
-steps are required. If you do use eventsByTag then a number of steps are required.
-
+0.80 introduces a completely different way to manage tags for events.
+ 
 Migration requires some downtime but the new mechanism removes the restriction of only 3 tags 
 and improves performance, scalability and reliability of eventsByTag queries.
 
 * Migrate data to new table
 
-FIXME: Implement and document
+TODO: Implement and document
 
 * `pubsub-minimum-interval` has been removed. If using DistributedPubsub notifications for tag writes then set `pubsub-notification` to on
+
+* `delayed-event-timeout` has been replaces by `events-by-tag-gap-timeout` with the restriction removed that all
+events have to be tagged. 
+
+* `first-time-bucket` format has changed to: `yyyyMMddTHH:mm` e.g. `20151120T00:00`
+
 * Drop the materialized view
 
 ```cql
 DROP MATERIALIZED VIEW akka.eventsbytag;
 ```
-
 
 * Drop the tag columns on the messages table
 
@@ -118,6 +122,16 @@ ALTER TABLE akka.messages DROP tag2;
 ALTER TABLE akka.messages DROP tag3;
 
 ```
+
+* Add tags column
+
+```cql
+ALTER TABLE akka.messages ADD tags set<text>;
+```
+
+Note that this won't be back ported for old events it will only be populated for new events. This won't affect 
+your `eventsByTag` queries as they come from a different table. This column is used for recovering any missed
+writes to the `tag_views` table.
 
 
 ### Migrations from 0.54 to 0.59

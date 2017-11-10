@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.query
 
 import java.util.UUID
@@ -23,7 +24,7 @@ object EventsByPersistenceIdFastForwardSpec {
 
   // separate from EventsByPersistenceIdWithControlSpec since it needs the refreshing enabled
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
+    akka.loglevel = DEBUG
     cassandra-journal.keyspace=EventsByPersistenceIdFastForwardSpec
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 2

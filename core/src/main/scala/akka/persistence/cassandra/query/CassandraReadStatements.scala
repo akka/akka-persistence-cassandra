@@ -16,7 +16,8 @@ import akka.annotation.InternalApi
   private def tableName = s"${config.keyspace}.${config.table}"
   private def tagViewTableName = s"${config.keyspace}.tag_views"
 
-  def selectDistinctPersistenceIds = s"""
+  def selectDistinctPersistenceIds =
+    s"""
       SELECT DISTINCT persistence_id, partition_nr FROM $tableName
      """
 
@@ -37,4 +38,13 @@ import akka.annotation.InternalApi
         timestamp > ? AND
         timestamp < ?
      """.stripMargin
+
+  def selectTagSequenceNrs =
+    s"""
+    SELECT persistence_id, tag_pid_sequence_nr, timestamp
+    FROM $tagViewTableName WHERE
+    tag_name = ? AND
+    timebucket = ? AND
+    timestamp > ? AND
+    timestamp <= ?"""
 }

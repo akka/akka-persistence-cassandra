@@ -22,8 +22,10 @@ import scala.concurrent.duration._
 object EventAdaptersReadSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
-  val config = ConfigFactory.parseString(s"""
-    akka.loglevel = DEBUG
+  val config = ConfigFactory.parseString(
+    s"""
+    akka.loglevel = INFO
+    akka.actor.serialize-messages=off
     cassandra-journal.keyspace=EventAdaptersReadSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
@@ -39,10 +41,10 @@ object EventAdaptersReadSpec {
     cassandra-query-journal {
       refresh-interval = 500ms
       max-buffer-size = 50
-      first-time-bucket = ${today.minusDays(5).format(firstBucketFormat)}
-      eventual-consistency-delay = 2s
+      first-time-bucket = "${today.minusDays(5).format(firstBucketFormat)}"
     }
-    """).withFallback(CassandraLifecycle.config)
+    """
+  ).withFallback(CassandraLifecycle.config)
 }
 
 class EventAdaptersReadSpec
@@ -54,6 +56,8 @@ class EventAdaptersReadSpec
   with Matchers {
 
   override def systemName: String = "EventAdaptersReadSpec"
+
+  val waitTime = 25.millis
 
   implicit val mat = ActorMaterializer()(system)
 
@@ -128,11 +132,12 @@ class EventAdaptersReadSpec
         case _               => ""
       })
 
-      val src = queries.currentEventsByTag("red", NoOffset)
-      src.map(_.event).runWith(TestSink.probe[Any])
-        .request(10)
-        .expectNext("d-1", "d-3", "d-5")
-        .expectComplete()
+      val src = queries.eventsByTag("red", NoOffset)
+      val sub = src.map(_.event).runWith(TestSink.probe[Any])
+      sub.request(10)
+      sub.expectNext("d-1", "d-3", "d-5")
+      sub.expectNoMessage(waitTime)
+      sub.cancel()
     }
 
     "replay events duplicated by the event-adapter" in {
@@ -142,11 +147,13 @@ class EventAdaptersReadSpec
         case _               => ""
       })
 
-      val src = queries.currentEventsByTag("yellow", NoOffset)
-      src.map(_.event).runWith(TestSink.probe[Any])
-        .request(10)
+      val src = queries.eventsByTag("yellow", NoOffset)
+      val sub = src.map(_.event).runWith(TestSink.probe[Any])
+
+      sub.request(10)
         .expectNext("e-1", "e-2", "e-2", "e-3")
-        .expectComplete()
+        .expectNoMessage(waitTime)
+      sub.cancel()
     }
 
     "replay events transformed by the event-adapter" in {
@@ -156,12 +163,12 @@ class EventAdaptersReadSpec
         case _               => ""
       })
 
-      val src = queries.currentEventsByTag("green", NoOffset)
-      src.map(_.event).runWith(TestSink.probe[Any])
-        .request(10)
+      val src = queries.eventsByTag("green", NoOffset)
+      val sub = src.map(_.event).runWith(TestSink.probe[Any])
+      sub.request(10)
         .expectNext("e-1", "foo-e-2", "e-3")
-        .expectComplete()
+        .expectNoMessage(waitTime)
+      sub.cancel()
     }
   }
-
 }

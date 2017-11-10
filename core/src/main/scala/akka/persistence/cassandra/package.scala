@@ -4,8 +4,12 @@
 
 package akka.persistence
 
+import java.time.{ Instant, LocalDateTime, ZoneOffset }
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 import java.util.concurrent.Executor
 
+import com.datastax.driver.core.utils.UUIDs
 import com.google.common.util.concurrent.ListenableFuture
 
 import scala.concurrent._
@@ -13,6 +17,8 @@ import scala.language.implicitConversions
 import scala.util.Try
 
 package object cassandra {
+  private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
+
   // TODO we should use the more explicit ListenableFutureConverter asScala instead
   implicit def listenableFutureToFuture[A](lf: ListenableFuture[A])(implicit executionContext: ExecutionContext): Future[A] = {
     val promise = Promise[A]
@@ -28,4 +34,8 @@ package object cassandra {
     }
   }
 
+  def formatOffset(uuid: UUID): String = {
+    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(UUIDs.unixTimestamp(uuid)), ZoneOffset.UTC)
+    s"$uuid (${timestampFormatter.format(time)})"
+  }
 }

@@ -8,13 +8,16 @@ import java.nio.ByteBuffer
 import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.UUID
 
+import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Day, TimeBucket }
+import akka.persistence.cassandra.journal._
 import akka.serialization.{ Serialization, SerializerWithStringManifest }
 import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core.{ PreparedStatement, Session }
+import akka.persistence.cassandra.formatOffset
 
-trait TestTagWriter {
+private[akka] trait TestTagWriter {
+  def system: ActorSystem
   val session: Session
   val serialization: Serialization
   val writePluginConfig: CassandraJournalConfig
@@ -26,21 +29,21 @@ trait TestTagWriter {
     session.prepare(writeStatements.writeTags)
   }
 
-  def writeTaggedEvent(time: LocalDateTime, pr: PersistentRepr, tags: Set[String], tagPidSequenceNr: Long): Unit = {
+  def writeTaggedEvent(time: LocalDateTime, pr: PersistentRepr, tags: Set[String], tagPidSequenceNr: Long, bucketSize: BucketSize): Unit = {
     val timestamp = time.toInstant(ZoneOffset.UTC).toEpochMilli
-    write(pr, tags, tagPidSequenceNr, uuid(timestamp))
+    write(pr, tags, tagPidSequenceNr, uuid(timestamp), bucketSize)
   }
 
-  def writeTaggedEvent(persistent: PersistentRepr, tags: Set[String], tagPidSequenceNr: Long): Unit = {
+  def writeTaggedEvent(persistent: PersistentRepr, tags: Set[String], tagPidSequenceNr: Long, bucketSize: BucketSize): Unit = {
     val nowUuid = UUIDs.timeBased()
-    write(persistent, tags, tagPidSequenceNr, nowUuid)
+    write(persistent, tags, tagPidSequenceNr, nowUuid, bucketSize)
   }
 
-  def writeTaggedEvent(persistent: PersistentRepr, tags: Set[String], tagPidSequenceNr: Long, uuid: UUID): Unit = {
-    write(persistent, tags, tagPidSequenceNr, uuid)
+  def writeTaggedEvent(persistent: PersistentRepr, tags: Set[String], tagPidSequenceNr: Long, uuid: UUID, bucketSize: BucketSize): Unit = {
+    write(persistent, tags, tagPidSequenceNr, uuid, bucketSize)
   }
 
-  private def write(pr: PersistentRepr, tags: Set[String], tagPidSequenceNr: Long, uuid: UUID): Unit = {
+  private def write(pr: PersistentRepr, tags: Set[String], tagPidSequenceNr: Long, uuid: UUID, bucketSize: BucketSize): Unit = {
     val event = pr.payload.asInstanceOf[AnyRef]
     val serializer = serialization.findSerializerFor(event)
     val serialized = ByteBuffer.wrap(serialization.serialize(event).get)
@@ -53,7 +56,7 @@ trait TestTagWriter {
         else PersistentRepr.Undefined
     }
 
-    val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), Day)
+    val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), bucketSize)
 
     val bs = preparedWriteTagMessage.bind()
 
@@ -71,5 +74,7 @@ trait TestTagWriter {
       bs.setLong("sequence_nr", pr.sequenceNr)
       session.execute(bs)
     })
+
+    system.log.debug("Written event: {} Uuid: {} Timebucket: {}", pr.payload, formatOffset(uuid), timeBucket)
   }
 }

@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.immutable
 import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
 import akka.NotUsed
@@ -22,18 +22,22 @@ import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenc
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
-import akka.stream.ActorAttributes
+import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.datastax.driver.core.utils.UUIDs
-import com.datastax.driver.core.{ ConsistencyLevel, PreparedStatement, Session }
+import com.datastax.driver.core._
 import com.typesafe.config.Config
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.policies.LoggingRetryPolicy
 import com.datastax.driver.core.policies.RetryPolicy
 import akka.annotation.InternalApi
+import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
+import akka.persistence.cassandra.query.EventsByPersistenceIdStage.TaggedPersistentRepr
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.CombinedEventsByTagStmts
+
+import scala.util.control.NonFatal
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -94,6 +98,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private val queryPluginConfig = new CassandraReadJournalConfig(cfg, writePluginConfig)
   private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
   implicit private val ec = system.dispatchers.lookup(queryPluginConfig.pluginDispatcher)
+  implicit private val materializer = ActorMaterializer()(system)
 
   // TODO: change categoryUid to unique config path after akka/akka#19822 is fixed
   private val metricsCategory = {
@@ -144,7 +149,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
         .setRetryPolicy(readRetryPolicy))
 
-  // TODO consider only allowing Q/LQ consistnecy for all tag related things
   private def prepareSelectFromTagView: Future[PreparedStatement] =
     session
       .prepare(queryStatements.selectEventsFromTagView)
@@ -154,6 +158,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private def preparedSelectFromTagViewWithUpperBound: Future[PreparedStatement] =
     session
       .prepare(queryStatements.selectEventsFromTagViewWithUpperBound)
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
+        .setRetryPolicy(readRetryPolicy))
+
+  private def preparedSelectTagSequenceNrs: Future[PreparedStatement] =
+    session.prepare(queryStatements.selectTagSequenceNrs)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
         .setRetryPolicy(readRetryPolicy))
 
@@ -181,9 +190,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * events from the beginning of time.
    */
   val firstOffset: UUID = {
-    // TODO perhaps we can do something smarter, such as caching the highest offset retrieved
-    // from queries.
-    val timestamp = queryPluginConfig.firstTimeBucket.startTimestamp
+    // FIXME perhaps we can do something smarter, such as caching the highest offset retrieved
+    // from queries
+    val timestamp = queryPluginConfig.firstTimeBucket.key
     UUIDs.startOf(timestamp)
   }
 
@@ -219,9 +228,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * To tag events you create an `akka.persistence.journal.EventAdapter` that wraps the events
    * in a `akka.persistence.journal.Tagged` with the given `tags`.
    * The tags must be defined in the `tags` section of the `cassandra-journal` configuration.
-   * Max 3 tags per event is supported.
    *
-   * You can use `NoOffset` to retrieve all events with a given tag or
+   * You can use [[NoOffset]] to retrieve all events with a given tag or
    * retrieve a subset of all events by specifying a `TimeBasedUUID` `offset`.
    *
    * The offset of each event is provided in the streamed envelopes returned,
@@ -238,49 +246,70 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * The returned event stream is ordered by the offset (timestamp), which corresponds
    * to the same order as the write journal stored the events, with inaccuracy due to clock skew
    * between different nodes. The same stream elements (in same order) are returned for multiple
-   * executions of the query on a best effort basis. The query is using a Cassandra Materialized
-   * View for the query and that is eventually consistent, so different queries may see different
+   * executions of the query on a best effort basis. The query is using a batched writes to a
+   * separate table so is eventually consistent.
+   * This means that different queries may see different
    * events for the latest events, but eventually the result will be ordered by timestamp
-   * (Cassandra timeuuid column). To compensate for the the eventual consistency the query is
-   * delayed to not read the latest events, see `cassandra-query-journal.eventual-consistency-delay`
-   * in reference.conf. However, this is only best effort and in case of network partitions
-   * or other things that may delay the updates of the Materialized View the events may be
-   * delivered in different order (not strictly by their timestamp).
+   * (Cassandra timeuuid column).
    *
-   * If you use the same tag for all events for a `persistenceId` it is possible to get
-   * a more strict delivery order than otherwise. This can be useful when all events of
-   * a PersistentActor class (all events of all instances of that PersistentActor class)
-   * are tagged with the same tag. Then the events for each `persistenceId` can be delivered
-   * strictly by sequence number. If a sequence number is missing the query is delayed up
-   * to the configured `delayed-event-timeout` and if the expected event is still not
-   * found the stream is completed with failure. This means that there must not be any
-   * holes in the sequence numbers for a given tag, i.e. all events must be tagged
-   * with the same tag. Set `delayed-event-timeout` to for example 30s to enable this
-   * feature. It is disabled by default.
-   *
-   * Deleted events are also deleted from the tagged event stream.
+   * However a strong guarantee is provided that events for a given persistenceId will
+   * be delivered in order, the eventual consistency is only for ordering of events
+   * from different persistenceIds.
    *
    * The stream is not completed when it reaches the end of the currently stored events,
    * but it continues to push new events when new events are persisted.
    * Corresponding query that is completed when it reaches the end of the currently
-   * stored events is provided by `currentEventsByTag`.
+   * stored events is provided by [[currentEventsByTag]].
    *
    * The stream is completed with failure if there is a failure in executing the query in the
    * backend journal.
    */
   override def eventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
-    val fromOffset: UUID = offsetToInternalOffset(offset)
-    createFutureSource(combinedEventsByTagStmts) { (s, ps) =>
-      val session = TagStageSession(tag, s, ps, queryPluginConfig.fetchSize)
-      Source.fromGraph(EventsByTagStage(
-        session, fromOffset,
-        None, queryPluginConfig,
-        Some(queryPluginConfig.refreshInterval),
-        writePluginConfig.bucketSize
-      ))
-    }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
-      .mapMaterializedValue(_ => NotUsed)
-      .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+    try {
+      val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
+      val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
+      createFutureSource(prereqs) { (s, prereqs) =>
+        val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
+        Source.fromGraph(EventsByTagStage(
+          session, fromOffset,
+          None, queryPluginConfig,
+          Some(queryPluginConfig.refreshInterval),
+          writePluginConfig.bucketSize,
+          usingOffset,
+          prereqs._2
+        ))
+      }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
+        .mapMaterializedValue(_ => NotUsed)
+        .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+    } catch {
+      case NonFatal(e) =>
+        // e.g. from cassandraSession, or selectStatement
+        log.debug("Could not run eventsByTag [{}] query, due to: {}", tag, e.getMessage)
+        Source.failed(e)
+    }
+  }
+
+  private def eventsByTagPrereqs(
+    tag:         String,
+    usingOffset: Boolean,
+    fromOffset:  UUID
+  ): Future[(CombinedEventsByTagStmts, Map[Tag, (TagPidSequenceNr, UUID)])] = {
+    val currentBucket = TimeBucket(System.currentTimeMillis(), writePluginConfig.bucketSize)
+    val initialTagPidSequenceNrs = if (usingOffset && currentBucket.within(fromOffset))
+      scanTagSequenceNrs(tag, fromOffset)
+    else
+      Future.successful(Map.empty[Tag, (TagPidSequenceNr, UUID)])
+
+    for {
+      statements <- combinedEventsByTagStmts
+      tagSequenceNrs <- initialTagPidSequenceNrs
+    } yield (statements, tagSequenceNrs)
+  }
+
+  private[akka] def scanTagSequenceNrs(tag: String, fromOffset: UUID): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
+    val scanner = new TagViewSequenceNumberScanner(session, preparedSelectTagSequenceNrs)
+    val bucket = TimeBucket(fromOffset, writePluginConfig.bucketSize)
+    scanner.scan(tag, fromOffset, bucket, queryPluginConfig.eventsByTagOffsetScanning)
   }
 
   /**
@@ -309,11 +338,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
 
   }
 
-  // TODO perhaps use createFutureSource in all places
+  // FIXME perhaps use createFutureSource in all places
 
   /**
    * INTERNAL API
-   *
    */
   @InternalApi private[akka] def createFutureSource[T, P, M](
     prepStmt: Future[P]
@@ -329,9 +357,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
         Source.failed(e).mapMaterializedValue(_ => Future.failed(e))
       case None =>
         // completed later
-        Source.fromFutureSource(prepStmt.map(ps => {
-          source(getSession, ps)
-        }))
+        Source.fromFutureSource(prepStmt.map(ps => source(getSession, ps)))
     }
 
   }
@@ -346,15 +372,23 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    *
    */
   override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
-    val fromOffset: UUID = offsetToInternalOffset(offset)
-    val toOffset = Some(offsetUuid(System.currentTimeMillis()))
+    try {
+      val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
+      val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
+      val toOffset = Some(offsetUuid(System.currentTimeMillis()))
 
-    createFutureSource(combinedEventsByTagStmts) { (s, ps) =>
-      val session = TagStageSession(tag, s, ps, queryPluginConfig.fetchSize)
-      Source.fromGraph(EventsByTagStage(session, fromOffset, toOffset, queryPluginConfig, None, writePluginConfig.bucketSize))
-    }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
-      .mapMaterializedValue(_ => NotUsed)
-      .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+      createFutureSource(prereqs) { (s, prereqs) =>
+        val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
+        Source.fromGraph(EventsByTagStage(session, fromOffset, toOffset, queryPluginConfig, None, writePluginConfig.bucketSize, usingOffset, prereqs._2))
+      }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
+        .mapMaterializedValue(_ => NotUsed)
+        .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+    } catch {
+      case NonFatal(e) =>
+        // e.g. from cassandraSession, or selectStatement
+        log.debug("Could not run currentEventsByTag [{}] query, due to: {}", tag, e.getMessage)
+        Source.failed(e)
+    }
   }
 
   /**
@@ -395,6 +429,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       s"eventsByPersistenceId-$persistenceId"
     )
       .mapMaterializedValue(_ => NotUsed)
+      .map(_.pr)
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
@@ -417,6 +452,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       s"currentEventsByPersistenceId-$persistenceId"
     )
       .mapMaterializedValue(_ => NotUsed)
+      .map(_.pr)
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
@@ -436,7 +472,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId"
-    )
+    ).map(_.pr)
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
@@ -456,8 +492,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     name:                   String,
     customConsistencyLevel: Option[ConsistencyLevel] = None,
     customRetryPolicy:      Option[RetryPolicy]      = None
-  ): Source[PersistentRepr, Future[EventsByPersistenceIdStage.Control]] = {
-
+  ): Source[TaggedPersistentRepr, Future[EventsByPersistenceIdStage.Control]] = {
     createFutureSource(combinedEventsByPersistenceIdStmts) { (s, c) =>
       log.debug("Creating EventByPersistentIdState graph")
       Source.fromGraph(new EventsByPersistenceIdStage(
@@ -477,7 +512,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
         queryPluginConfig
       ))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
-        .map(mapEvent)
         .named(name)
     }
   }
@@ -502,10 +536,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     if (uuid == firstOffset) NoOffset
     else TimeBasedUUID(uuid)
 
-  private[this] def offsetToInternalOffset(offset: Offset): UUID =
+  private[this] def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =
     offset match {
-      case TimeBasedUUID(uuid) => uuid
-      case NoOffset            => firstOffset
+      case TimeBasedUUID(uuid) => (uuid, true)
+      case NoOffset            => (firstOffset, false)
       case unsupported =>
         throw new IllegalArgumentException("Cassandra does not support " + unsupported.getClass.getName + " offsets")
     }

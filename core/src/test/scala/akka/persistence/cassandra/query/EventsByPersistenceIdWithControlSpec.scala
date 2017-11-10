@@ -4,19 +4,19 @@
 
 package akka.persistence.cassandra.query
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{EventEnvelope, PersistenceQuery}
+import akka.persistence.query.{ EventEnvelope, PersistenceQuery }
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Keep, Source}
+import akka.stream.scaladsl.{ Keep, Source }
 import akka.stream.testkit.TestSubscriber.Probe
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ImplicitSender, TestKit}
+import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time._
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.annotation.tailrec
 import scala.concurrent.Future
@@ -24,7 +24,7 @@ import scala.concurrent.duration._
 
 object EventsByPersistenceIdWithControlSpec {
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = DEBUG
+    akka.loglevel = INFO
     cassandra-journal.keyspace=EventsByPersistenceIdWithControlSpec
     cassandra-query-journal.refresh-interval = 120s # effectively disabled
     cassandra-query-journal.max-result-size-query = 20
@@ -75,8 +75,7 @@ class EventsByPersistenceIdWithControlSpec
     "find new events" in {
       val ref = setup("a", 3)
 
-      val src: Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] =
-        queries.eventsByPersistenceIdWithControl("a", 0L, Long.MaxValue)
+      val src = queries.eventsByPersistenceIdWithControl("a", 0L, Long.MaxValue)
 
       val (futureControl, probe) = src.map(_.event).toMat(TestSink.probe[Any])(Keep.both).run()
       val control = futureControl.futureValue

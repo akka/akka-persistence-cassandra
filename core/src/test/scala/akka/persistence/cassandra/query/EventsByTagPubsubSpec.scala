@@ -27,7 +27,7 @@ object EventsByTagPubsubSpec {
 
   val config = ConfigFactory.parseString(s"""
     akka.actor.provider = "akka.cluster.ClusterActorRefProvider"
-    akka.actor.serialize-messages = on
+    akka.actor.serialize-messages = off
     akka.actor.serialize-creators = off
     cassandra-journal {
       pubsub-notification = on
@@ -38,7 +38,6 @@ object EventsByTagPubsubSpec {
     }
     cassandra-query-journal {
       refresh-interval = 10s
-      eventual-consistency-delay = 0s
     }
     """).withFallback(EventsByTagSpec.config)
 }

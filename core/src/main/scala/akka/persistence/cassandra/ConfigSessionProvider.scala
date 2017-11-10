@@ -109,6 +109,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
       val b = Cluster.builder
+        .withClusterName(system.name)
         .addContactPointsWithPorts(cp.asJava)
         .withPoolingOptions(poolingOptions)
         .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))

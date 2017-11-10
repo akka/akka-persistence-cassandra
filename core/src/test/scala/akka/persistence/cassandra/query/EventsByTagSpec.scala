@@ -12,7 +12,7 @@ import akka.actor.ActorSystem
 import akka.event.Logging.Warning
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.CassandraLifecycle
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements }
+import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Day }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, EventsByTagQuery }
@@ -34,8 +34,8 @@ object EventsByTagSpec {
 
   val config = ConfigFactory.parseString(
     s"""
-    akka.loglevel = DEBUG
-    akka.actor.serialize-messages = on
+    akka.loglevel = INFO
+    akka.actor.serialize-messages = off
     akka.actor.warn-about-java-serializer-usage = off
     cassandra-journal {
       #target-partition-size = 5
@@ -54,25 +54,21 @@ object EventsByTagSpec {
     cassandra-query-journal {
       refresh-interval = 500ms
       max-buffer-size = 50
-      first-time-bucket = ${today.minusDays(5).format(firstBucketFormat)}
-      eventual-consistency-delay = 2s
+      first-time-bucket = "${today.minusDays(5).format(firstBucketFormat)}"
     }
     """
   ).withFallback(CassandraLifecycle.config)
 
   val strictConfig = ConfigFactory.parseString(
     s"""
-    akka.loglevel = DEBUG
-    #FIXME not used atm
-    cassandra-query-journal.delayed-event-timeout = 5s
-    #FIXME not used atm
-    cassandra-query-journal.eventual-consistency-delay = 1s
+    akka.loglevel = INFO
+    cassandra-query-journal.events-by-tag-gap-timeout = 5s
     """
   ).withFallback(config)
 
   val strictConfigFirstOffset1001DaysAgo = ConfigFactory.parseString(
     s"""
-    cassandra-query-journal.first-time-bucket = ${today.minusDays(1001).format(firstBucketFormat)}
+    cassandra-query-journal.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormat)}"
     """
   ).withFallback(strictConfig)
 }
@@ -103,6 +99,7 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
   with TestTagWriter {
 
   implicit val mat = ActorMaterializer()(system)
+  val bucketSize = Day
 
   lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
@@ -140,6 +137,7 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
   override protected def externalCassandraCleanup(): Unit = {
     val cluster = Cluster.builder()
       .addContactPoint("localhost")
+      .withClusterName(systemName + "Cleanup")
       .build()
     Try(cluster.connect().execute(s"drop keyspace EventsByTagSpec"))
     cluster.close()
@@ -265,18 +263,18 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       val t1 = today.minusDays(5).toLocalDate.atStartOfDay.plusHours(13)
       val w1 = UUID.randomUUID().toString
       val pr1 = PersistentRepr("e1", 1L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t1, pr1, Set("T1"), 1)
+      writeTaggedEvent(t1, pr1, Set("T1-current"), 1, bucketSize)
       val t2 = t1.plusHours(1)
       val pr2 = PersistentRepr("e2", 2L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t2, pr2, Set("T1"), 2)
+      writeTaggedEvent(t2, pr2, Set("T1-current"), 2, bucketSize)
       val t3 = t1.plusDays(1)
       val pr3 = PersistentRepr("e3", 3L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t3, pr3, Set("T1"), 3)
+      writeTaggedEvent(t3, pr3, Set("T1-current"), 3, bucketSize)
       val t4 = t1.plusDays(3)
       val pr4 = PersistentRepr("e4", 4L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t4, pr4, Set("T1"), 4)
+      writeTaggedEvent(t4, pr4, Set("T1-current"), 4, bucketSize)
 
-      val src = queries.currentEventsByTag(tag = "T1", offset = NoOffset)
+      val src = queries.currentEventsByTag(tag = "T1-current", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
@@ -364,12 +362,12 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       val t1 = today.minusDays(5).toLocalDate.atStartOfDay.plusHours(13)
       val w1 = UUID.randomUUID().toString
       val pr1 = PersistentRepr("e1", 1L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t1, pr1, Set("T1"), 1)
+      writeTaggedEvent(t1, pr1, Set("T1-live"), 1, bucketSize)
       val t2 = t1.plusHours(1)
       val pr2 = PersistentRepr("e2", 2L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t2, pr2, Set("T1"), 2)
+      writeTaggedEvent(t2, pr2, Set("T1-live"), 2, bucketSize)
 
-      val src = queries.eventsByTag(tag = "T1", offset = NoOffset)
+      val src = queries.eventsByTag(tag = "T1-live", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(10)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
@@ -377,28 +375,27 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
 
       val t3 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
       val pr3 = PersistentRepr("e3", 3L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t3, pr3, Set("T1"), 3)
+      writeTaggedEvent(t3, pr3, Set("T1-live"), 3, bucketSize)
       val t4 = LocalDateTime.now(ZoneOffset.UTC)
       val pr4 = PersistentRepr("e4", 4L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t4, pr4, Set("T1"), 4)
+      writeTaggedEvent(t4, pr4, Set("T1-live"), 4, bucketSize)
 
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "e3") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, "e4") => e }
       probe.cancel()
     }
 
-    //FIXME to make this work we will need to add in the delayed publish
-    // note that the test below works, which requires another event from p2 to come
+    // note that the test below works if another event from p2 to come
     // then we go back and look for e1 from p1
     "sort events by timestamp" ignore {
       val t1 = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10)
       val w1 = UUID.randomUUID().toString
       val w2 = UUID.randomUUID().toString
       val pr1 = PersistentRepr("p1-e1", 1L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t1, pr1, Set("T2"), 1)
+      writeTaggedEvent(t1, pr1, Set("T2"), 1, bucketSize)
       val t3 = LocalDateTime.now(ZoneOffset.UTC)
       val pr3 = PersistentRepr("p1-e2", 2L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t3, pr3, Set("T2"), 2)
+      writeTaggedEvent(t3, pr3, Set("T2"), 2, bucketSize)
 
       val src = queries.eventsByTag(tag = "T2", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
@@ -409,7 +406,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       Thread.sleep(500)
       val t2 = t3.minus(1, ChronoUnit.MILLIS)
       val pr2 = PersistentRepr("p2-e1", 1L, "p2", "", writerUuid = w2)
-      writeTaggedEvent(t2, pr2, Set("T2"), 1)
+      writeTaggedEvent(t2, pr2, Set("T2"), 1, bucketSize)
 
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "p1-e1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "p2-e1") => e }
@@ -450,49 +447,6 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
 
 }
 
-//FIXME decide if this is still applicable with the new impl, I think we can offer this guarantee
-//all the time
-class EventsByTagZeroEventualConsistencyDelaySpec
-  extends AbstractEventsByTagSpec(
-    "EventsByTagZeroEventualConsistencyDelaySpec",
-    ConfigFactory.parseString("cassandra-query-journal.eventual-consistency-delay = 0s")
-      .withFallback(EventsByTagSpec.strictConfig)
-  ) {
-
-  "Cassandra query currentEventsByTag with zero eventual-consistency-delay" must {
-
-    "find existing events" in {
-      val a = system.actorOf(TestActor.props("a"))
-      val b = system.actorOf(TestActor.props("b"))
-      a ! "a green apple"
-      val NumberOfBananas = 5017
-      expectMsg(20.seconds, s"a green apple-done")
-      (1 to NumberOfBananas).foreach { n =>
-        a ! s"a green banana-$n"
-        expectMsg(s"a green banana-$n-done")
-      }
-
-      b ! "a green leaf"
-      expectMsg(s"a green leaf-done")
-
-      val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
-      val probe = greenSrc.runWith(TestSink.probe[Any])
-      probe.request(NumberOfBananas + 10L)
-      probe.expectNextPF { case e @ EventEnvelope(_, "a", 1L, "a green apple") => e }
-      (1 to NumberOfBananas).foreach { n =>
-        val SeqNr = 1L + n
-        val Description = s"a green banana-$n"
-        withClue(s"banana-$n") {
-          probe.expectNextPF { case e @ EventEnvelope(_, "a", SeqNr, Description) => e }
-        }
-      }
-      probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "a green leaf") => e }
-      probe.expectComplete()
-    }
-
-  }
-}
-
 // Manually writing events for same persistence id is no longer valid
 // tho new persistence ids from a node with a slow clocks is still applicable
 // and we pick them up by noticing that there is a tagPidSequenceNr gap
@@ -505,11 +459,11 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
       val w1 = UUID.randomUUID().toString
       val w2 = UUID.randomUUID().toString
       val p1e1 = PersistentRepr("p1-e1", 1L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t1, p1e1, Set("T6"), 1)
+      writeTaggedEvent(t1, p1e1, Set("T6"), 1, bucketSize)
 
       val t2 = t1.plusSeconds(2)
       val p2e1 = PersistentRepr("p2-e1", 1L, "p2", "", writerUuid = w2)
-      writeTaggedEvent(t2, p2e1, Set("T6"), 1)
+      writeTaggedEvent(t2, p2e1, Set("T6"), 1, bucketSize)
 
       val src = queries.eventsByTag(tag = "T6", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
@@ -520,9 +474,9 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
       // delayed, and timestamp is before p2-e1
       val t3 = t1.plusSeconds(1)
       val p1e2 = PersistentRepr("p1-e2", 2L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t3, p1e2, Set("T6"), 2)
+      writeTaggedEvent(t3, p1e2, Set("T6"), 2, bucketSize)
       val p1e3 = PersistentRepr("p1-e3", 3L, "p1", "", writerUuid = w1)
-      writeTaggedEvent(t2.plusSeconds(1), p1e3, Set("T6"), 3)
+      writeTaggedEvent(t2.plusSeconds(1), p1e3, Set("T6"), 3, bucketSize)
 
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "p1-e2") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "p1-e3") => e }
@@ -537,7 +491,7 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
 
       val t2 = t1.plusSeconds(1)
       val eventA1 = PersistentRepr("A1", 1L, "a", "", writerUuid = w1)
-      writeTaggedEvent(t2, eventA1, Set("T7"), 1)
+      writeTaggedEvent(t2, eventA1, Set("T7"), 1, bucketSize)
 
       val src = queries.eventsByTag(tag = "T7", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
@@ -546,10 +500,10 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
 
       // delayed, timestamp is before A1
       val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t1, eventB1, Set("T7"), 1)
+      writeTaggedEvent(t1, eventB1, Set("T7"), 1, bucketSize)
       val t3 = t1.plusSeconds(2)
       val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t3, eventB2, Set("T7"), 2)
+      writeTaggedEvent(t3, eventB2, Set("T7"), 2, bucketSize)
 
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B2") => e }
@@ -565,11 +519,11 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
       val w2 = UUID.randomUUID().toString
 
       val eventB0 = PersistentRepr("B0", 1L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t1.minusSeconds(1), eventB0, Set("T8"), 1)
+      writeTaggedEvent(t1.minusSeconds(1), eventB0, Set("T8"), 1, bucketSize)
 
       val t2 = t1.plusSeconds(1)
       val eventA1 = PersistentRepr("A1", 1L, "a", "", writerUuid = w1)
-      writeTaggedEvent(t2, eventA1, Set("T8"), 1)
+      writeTaggedEvent(t2, eventA1, Set("T8"), 1, bucketSize)
 
       val src = queries.eventsByTag(tag = "T8", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
@@ -579,10 +533,10 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
 
       // delayed, timestamp is before A1
       val eventB1 = PersistentRepr("B1", 2L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t1, eventB1, Set("T8"), 1)
+      writeTaggedEvent(t1, eventB1, Set("T8"), 1, bucketSize)
       val t3 = t1.plusSeconds(2)
       val eventB2 = PersistentRepr("B2", 3L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t3, eventB2, Set("T8"), 2)
+      writeTaggedEvent(t3, eventB2, Set("T8"), 2, bucketSize)
 
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 3L, "B2") => e }
@@ -596,7 +550,7 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
       val w2 = UUID.randomUUID().toString
 
       val eventA1 = PersistentRepr("A1", 1L, "a", "", writerUuid = w1)
-      writeTaggedEvent(t1.plusSeconds(2), eventA1, Set("T9"), 1)
+      writeTaggedEvent(t1.plusSeconds(2), eventA1, Set("T9"), 1, bucketSize)
 
       val src1 = queries.eventsByTag(tag = "T9", offset = NoOffset)
       val probe1 = src1.runWith(TestSink.probe[Any])
@@ -611,9 +565,9 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
 
       // delayed, timestamp is before A1, i.e. before the offset
       val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t1.plusSeconds(1), eventB1, Set("T9"), 1)
+      writeTaggedEvent(t1.plusSeconds(1), eventB1, Set("T9"), 1, bucketSize)
       val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t1.plusSeconds(3), eventB2, Set("T9"), 2)
+      writeTaggedEvent(t1.plusSeconds(3), eventB2, Set("T9"), 2, bucketSize)
 
       probe2.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B2") => e }
 
@@ -629,7 +583,7 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
 
       (1L to 100L).foreach { n =>
         val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
-        writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA, Set("T10"), n)
+        writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA, Set("T10"), n, bucketSize)
       }
 
       val src = queries.eventsByTag(tag = "T10", offset = NoOffset)
@@ -640,19 +594,19 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
       val t2 = t1.plusSeconds(1)
       (101L to 200L).foreach { n =>
         val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
-        writeTaggedEvent(t2.plus(n, ChronoUnit.MILLIS), eventA, Set("T10"), n)
+        writeTaggedEvent(t2.plus(n, ChronoUnit.MILLIS), eventA, Set("T10"), n, bucketSize)
       }
       probe.expectNextN(100)
 
       // delayed, timestamp is before A101 but after A100
       val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t2.minus(100, ChronoUnit.MILLIS), eventB1, Set("T10"), 1)
+      writeTaggedEvent(t2.minus(100, ChronoUnit.MILLIS), eventB1, Set("T10"), 1, bucketSize)
 
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B1") => e }
       probe.expectNoMessage(2.second)
 
       val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t2.plusSeconds(1), eventB2, Set("T10"), 2)
+      writeTaggedEvent(t2.plusSeconds(1), eventB2, Set("T10"), 2, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B2") => e }
 
       probe.cancel()
@@ -667,7 +621,7 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
       (1L to 70L).foreach { n =>
         val eventA2 = PersistentRepr(s"A$n-2", sequenceNr = 2, persistenceId = s"a$n", "",
           writerUuid = UUID.randomUUID().toString)
-        writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA2, Set("T11"), 1)
+        writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA2, Set("T11"), 1, bucketSize)
       }
 
       val src = queries.eventsByTag(tag = "T11", offset = NoOffset)
@@ -678,14 +632,14 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
       (101L to 200L).foreach { n =>
         val eventA2 = PersistentRepr(s"A$n-2", sequenceNr = 2, persistenceId = s"a$n", "",
           writerUuid = UUID.randomUUID().toString)
-        writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA2, Set("T11"), 1)
+        writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA2, Set("T11"), 1, bucketSize)
       }
       probe.expectNextN(100)
 
       (101L to 200L).foreach { n =>
         val eventA3 = PersistentRepr(s"A$n-3", sequenceNr = 3, persistenceId = s"a$n", "",
           writerUuid = UUID.randomUUID().toString)
-        writeTaggedEvent(t1.plus(500 + n, ChronoUnit.MILLIS), eventA3, Set("T11"), 2)
+        writeTaggedEvent(t1.plus(500 + n, ChronoUnit.MILLIS), eventA3, Set("T11"), 2, bucketSize)
       }
       probe.expectNextN(100)
 
@@ -693,7 +647,7 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
       (1L to 70L).foreach { n =>
         val eventA3 = PersistentRepr(s"A$n-3", sequenceNr = 3, persistenceId = s"a$n", "",
           writerUuid = UUID.randomUUID().toString)
-        writeTaggedEvent(t1.plus(200 + n, ChronoUnit.MILLIS), eventA3, Set("T11"), 2)
+        writeTaggedEvent(t1.plus(200 + n, ChronoUnit.MILLIS), eventA3, Set("T11"), 2, bucketSize)
       }
       probe.expectNextN(70)
 
@@ -720,8 +674,8 @@ class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
       (1L to 1000L).foreach { n =>
         val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
         val eventB = PersistentRepr(s"B$n", n, "b", "", writerUuid = w2)
-        writeTaggedEvent(t1.plus(n, ChronoUnit.DAYS), eventA, Set("T11"), n)
-        writeTaggedEvent(t2.plus(n, ChronoUnit.DAYS), eventB, Set("T11"), n)
+        writeTaggedEvent(t1.plus(n, ChronoUnit.DAYS), eventA, Set("T11"), n, bucketSize)
+        writeTaggedEvent(t2.plus(n, ChronoUnit.DAYS), eventB, Set("T11"), n, bucketSize)
       }
 
       // the search for delayed events should start before we get to the current timebucket
@@ -749,16 +703,16 @@ class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec
       (1L to 3L).foreach { n =>
         val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
         val eventB = PersistentRepr(s"B$n", n, "b", "", writerUuid = w2)
-        writeTaggedEvent(t1.plus(n, ChronoUnit.DAYS), eventA, Set("T12"), n)
-        writeTaggedEvent(t2.plus(n, ChronoUnit.DAYS), eventB, Set("T12"), n)
+        writeTaggedEvent(t1.plus(n, ChronoUnit.DAYS), eventA, Set("T12"), n, bucketSize)
+        writeTaggedEvent(t2.plus(n, ChronoUnit.DAYS), eventB, Set("T12"), n, bucketSize)
       }
 
       val t3 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1)
       (4L to 100).foreach { n =>
         val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
         val eventB = PersistentRepr(s"B$n", n, "b", "", writerUuid = w2)
-        writeTaggedEvent(t3.plus(n * 2, ChronoUnit.MILLIS), eventA, Set("T12"), n)
-        writeTaggedEvent(t3.plus(n * 2 + 1, ChronoUnit.MILLIS), eventB, Set("T12"), n)
+        writeTaggedEvent(t3.plus(n * 2, ChronoUnit.MILLIS), eventA, Set("T12"), n, bucketSize)
+        writeTaggedEvent(t3.plus(n * 2 + 1, ChronoUnit.MILLIS), eventB, Set("T12"), n, bucketSize)
       }
 
       // the search for delayed events should start before we get to the current timebucket
@@ -772,8 +726,6 @@ class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec
   }
 }
 
-// FIXME, will need to back track delayed query for this
-// we do not need the back tracking missing query
 class EventsByTagStrictBySeqMemoryIssueSpec
   extends AbstractEventsByTagSpec("EventsByTagStrictBySeqMemoryIssueSpec", EventsByTagSpec.strictConfig) {
 
@@ -796,8 +748,8 @@ class EventsByTagStrictBySeqMemoryIssueSpec
         val eventA = PersistentRepr(s"A$seqNr", seqNr, "a", "", writerUuid = w1)
         val eventB = PersistentRepr(s"B$n", seqNr, "b", "", writerUuid = w2)
         val t = t1.plus(day, ChronoUnit.DAYS).plus(2 * n, ChronoUnit.MILLIS)
-        writeTaggedEvent(t, eventA, Set("T13"), seqNr)
-        writeTaggedEvent(t.plus(1L, ChronoUnit.MILLIS), eventB, Set("T13"), seqNr)
+        writeTaggedEvent(t, eventA, Set("T13"), seqNr, bucketSize)
+        writeTaggedEvent(t.plus(1L, ChronoUnit.MILLIS), eventB, Set("T13"), seqNr, bucketSize)
         lastT = t
       }
 
@@ -828,7 +780,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
       // earlier timestamp than last retrieved event so these will be found by the "backtracking delayed query"
       (1L to 200L).foreach { n =>
         val eventC = PersistentRepr(s"C$n", n, "c", "", writerUuid = w3)
-        writeTaggedEvent(lastT.minus(1, ChronoUnit.SECONDS).plus(n, ChronoUnit.MILLIS), eventC, Set("T13"), n)
+        writeTaggedEvent(lastT.minus(1, ChronoUnit.SECONDS).plus(n, ChronoUnit.MILLIS), eventC, Set("T13"), n, bucketSize)
       }
       probe.expectNextN(30)
       probe.expectNoMessage(200.millis)
@@ -848,7 +800,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
       (1L to 100L).foreach { n =>
         val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
         val t = t1.plus(3 * n, ChronoUnit.MILLIS)
-        writeTaggedEvent(t, eventA, Set("T14"), n)
+        writeTaggedEvent(t, eventA, Set("T14"), n, bucketSize)
       }
 
       var missingEvent: PersistentRepr = null
@@ -857,7 +809,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
         val t = t1.plus(3 * n, ChronoUnit.MILLIS)
         if (n <= 112) {
           val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
-          writeTaggedEvent(t, eventA, Set("T14"), n)
+          writeTaggedEvent(t, eventA, Set("T14"), n, bucketSize)
         }
 
         val eventB = PersistentRepr(s"B$n", n, "b", "", writerUuid = w2)
@@ -866,7 +818,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
           missingEvent = eventB
           missingEventTime = t2
         } else
-          writeTaggedEvent(t2, eventB, Set("T14"), n - 112)
+          writeTaggedEvent(t2, eventB, Set("T14"), n - 112, bucketSize)
       }
 
       val src = queries.eventsByTag(tag = "T14", offset = NoOffset)
@@ -882,9 +834,9 @@ class EventsByTagStrictBySeqMemoryIssueSpec
       (1L to 100L).foreach { n =>
         val eventC = PersistentRepr(s"C$n", n, "c", "", writerUuid = w3)
         val t = t1.plus(3 * n + 2, ChronoUnit.MILLIS)
-        writeTaggedEvent(t, eventC, Set("T14"), n)
+        writeTaggedEvent(t, eventC, Set("T14"), n, bucketSize)
       }
-      writeTaggedEvent(missingEventTime, missingEvent, Set("T14"), 101)
+      writeTaggedEvent(missingEventTime, missingEvent, Set("T14"), 101, bucketSize)
       val expected2 = requested1 - expected1
       probe.expectNextN(expected2)
       probe.expectNoMessage(200.millis)
@@ -905,7 +857,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
       (101L to 430L).foreach { n =>
         val eventA = PersistentRepr(s"B$n", n, "b", "", writerUuid = w1)
         val t = t1.plus(n, ChronoUnit.MILLIS)
-        writeTaggedEvent(t, eventA, Set("T15"), n - 100)
+        writeTaggedEvent(t, eventA, Set("T15"), n - 100, bucketSize)
       }
 
       val src = queries.currentEventsByTag(tag = "T15", offset = NoOffset)

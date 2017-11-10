@@ -4,27 +4,41 @@
 
 package akka.persistence.cassandra
 
-import akka.actor.Props
-import akka.persistence.PersistentActor
-import akka.persistence.cassandra.TestTaggingActor.Ack
+import akka.actor.{ ActorLogging, ActorRef, Props }
+import akka.persistence.{ PersistentActor, SaveSnapshotSuccess }
+import akka.persistence.cassandra.TestTaggingActor.{ Ack, DoASnapshotPlease, SnapShotAck }
 import akka.persistence.journal.Tagged
 
 object TestTaggingActor {
   case object Ack
+  case object DoASnapshotPlease
+  case object SnapShotAck
 
   def props(pId: String, tags: Set[String]): Props =
     Props(classOf[TestTaggingActor], pId, tags)
 }
 
-class TestTaggingActor(val persistenceId: String, tags: Set[String]) extends PersistentActor {
+class TestTaggingActor(val persistenceId: String, tags: Set[String]) extends PersistentActor with ActorLogging {
   def receiveRecover: Receive = processEvent
 
-  def receiveCommand: Receive = {
+  def receiveCommand: Receive = normal
+
+  def normal: Receive = {
     case event: String =>
+      log.debug("Persisting {}", event)
       persist(Tagged(event, tags)) { e =>
         processEvent(e)
         sender() ! Ack
       }
+    case DoASnapshotPlease =>
+      saveSnapshot("i don't have any state :-/")
+      context.become(waitingForSnapshot(sender()))
+  }
+
+  def waitingForSnapshot(who: ActorRef): Receive = {
+    case SaveSnapshotSuccess(_) =>
+      who ! SnapShotAck
+      context.become(normal)
   }
 
   def processEvent: Receive = {

@@ -6,6 +6,7 @@ package akka.persistence.cassandra.query
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
+import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
 
 import scala.annotation.tailrec
@@ -14,15 +15,16 @@ import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration._
 import scala.concurrent.duration.FiniteDuration
+import scala.collection.JavaConversions._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-
 import akka.Done
 import akka.annotation.InternalApi
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.ListenableFutureConverter
 import akka.persistence.cassandra.journal.CassandraJournal
+import akka.persistence.cassandra.query.EventsByPersistenceIdStage.TaggedPersistentRepr
 import akka.serialization.SerializationExtension
 import akka.stream.ActorMaterializer
 import akka.stream.Attributes
@@ -46,6 +48,8 @@ import com.datastax.driver.core.utils.Bytes
  * INTERNAL API
  */
 @InternalApi private[akka] object EventsByPersistenceIdStage {
+
+  private[akka] case class TaggedPersistentRepr(pr: PersistentRepr, tags: Set[String], offset: UUID)
 
   // materialized value
   trait Control {
@@ -125,11 +129,11 @@ import com.datastax.driver.core.utils.Bytes
                                                             fetchSize: Int, refreshInterval: Option[FiniteDuration],
                                                             session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
                                                             config:  CassandraReadJournalConfig)
-  extends GraphStageWithMaterializedValue[SourceShape[PersistentRepr], EventsByPersistenceIdStage.Control] {
+  extends GraphStageWithMaterializedValue[SourceShape[TaggedPersistentRepr], EventsByPersistenceIdStage.Control] {
   import EventsByPersistenceIdStage._
 
-  val out: Outlet[PersistentRepr] = Outlet("EventsByPersistenceId.out")
-  override val shape: SourceShape[PersistentRepr] = SourceShape(out)
+  val out: Outlet[TaggedPersistentRepr] = Outlet("EventsByPersistenceId.out")
+  override val shape: SourceShape[TaggedPersistentRepr] = SourceShape(out)
 
   override def createLogicAndMaterializedValue(inheritedAttributes: Attributes): (GraphStageLogic, Control) = {
     val logic = new TimerGraphStageLogic(shape) with OutHandler with StageLogging with Control {
@@ -364,10 +368,10 @@ import com.datastax.driver.core.utils.Bytes
             } else {
               val row = rs.one()
               val event = extractEvent(row)
-              if (event.sequenceNr < seqNr || pendingFastForward.isDefined && pendingFastForward.get > event.sequenceNr) {
+              if (event.pr.sequenceNr < seqNr || pendingFastForward.isDefined && pendingFastForward.get > event.pr.sequenceNr) {
                 // skip event due to fast forward
                 tryPushOne()
-              } else if (pendingFastForward.isEmpty && (config.gapFreeSequenceNumbers && seqNr != event.sequenceNr)) {
+              } else if (pendingFastForward.isEmpty && (config.gapFreeSequenceNumbers && seqNr != event.pr.sequenceNr)) {
                 lookingForMissingSeqNr match {
                   case Some(_) => throw new IllegalStateException(
                     s"Should not be able to get here when already looking for missing seqNr [$seqNr] for entity [$persistenceId]"
@@ -375,16 +379,16 @@ import com.datastax.driver.core.utils.Bytes
                   case None =>
                     log.debug(
                       "EventsByPersistenceId [{}] Missing seqNr [{}], found [{}], looking for event eventually appear",
-                      persistenceId, seqNr, event.sequenceNr
+                      persistenceId, seqNr, event.pr.sequenceNr
                     )
                     lookingForMissingSeqNr = Some(
-                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, event.sequenceNr)
+                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, event.pr.sequenceNr)
                     )
                     query(false)
                 }
               } else {
 
-                seqNr = event.sequenceNr + 1
+                seqNr = event.pr.sequenceNr + 1
                 partition = row.getLong("partition_nr")
                 count += 1
                 push(out, event)
@@ -395,7 +399,7 @@ import com.datastax.driver.core.utils.Bytes
                   // we found that missing seqNr
                   log.debug(
                     "EventsByPersistenceId [{}] Found missing seqNr [{}]",
-                    persistenceId, event.sequenceNr
+                    persistenceId, event.pr.sequenceNr
                   )
                   lookingForMissingSeqNr = None
                   queryState = QueryIdle
@@ -415,10 +419,11 @@ import com.datastax.driver.core.utils.Bytes
         }
       }
 
-      def extractEvent(row: Row): PersistentRepr =
+      def extractEvent(row: Row): TaggedPersistentRepr =
         row.getBytes("message") match {
           case null =>
-            PersistentRepr(
+            val tags: Set[String] = row.getSet("tags", classOf[String]).toSet
+            TaggedPersistentRepr(PersistentRepr(
               payload = eventDeserializer.deserializeEvent(row),
               sequenceNr = row.getLong("sequence_nr"),
               persistenceId = row.getString("persistence_id"),
@@ -426,10 +431,10 @@ import com.datastax.driver.core.utils.Bytes
               deleted = false,
               sender = null,
               writerUuid = row.getString("writer_uuid")
-            )
+            ), tags, row.getUUID("timestamp"))
           case b =>
             // for backwards compatibility
-            persistentFromByteBuffer(b)
+            TaggedPersistentRepr(persistentFromByteBuffer(b), Set.empty[String], row.getUUID("timestamp"))
         }
 
       def persistentFromByteBuffer(b: ByteBuffer): PersistentRepr = {

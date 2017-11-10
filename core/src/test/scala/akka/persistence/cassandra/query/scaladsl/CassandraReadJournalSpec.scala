@@ -22,10 +22,10 @@ object CassandraReadJournalSpec {
   val config = ConfigFactory.parseString(
     s"""
     akka.loglevel = INFO
+    akka.actor.serialize-messages=off
     cassandra-journal.keyspace=ScaladslCassandraReadJournalSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
-    cassandra-query-journal.eventual-consistency-delay = 1s
     cassandra-journal.event-adapters {
       test-tagger = akka.persistence.cassandra.query.scaladsl.TestTagger
     }
@@ -60,8 +60,11 @@ class CassandraReadJournalSpec
       .addContactPoint("localhost")
       .withPort(9042)
       .build()
-    cluster.connect().execute("drop keyspace scaladslcassandrareadjournalspec")
-    cluster.close()
+    try {
+      cluster.connect().execute("drop keyspace scaladslcassandrareadjournalspec")
+    } finally {
+      cluster.close()
+    }
   }
 
   override def systemName: String = "ScalaCassandraReadJournalSpec"
