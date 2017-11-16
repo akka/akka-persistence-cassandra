@@ -13,8 +13,8 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
-
 import akka.actor.ActorSystem
+import akka.persistence.cassandra.session.CassandraSessionSettings
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 import com.datastax.driver.core.policies.ExponentialReconnectionPolicy
@@ -106,14 +106,13 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
     }
 
   def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
-    val readConsistency: ConsistencyLevel = Try(ConsistencyLevel.valueOf(config.getString("read-consistency"))).getOrElse(QueryOptions.DEFAULT_CONSISTENCY_LEVEL)
+    val sessionSettings: CassandraSessionSettings = CassandraSessionSettings(config)
     lookupContactPoints(clusterId).map { cp =>
       val b = Cluster.builder
         .addContactPointsWithPorts(cp.asJava)
         .withPoolingOptions(poolingOptions)
         .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
-        .withQueryOptions(new QueryOptions().setConsistencyLevel(readConsistency).setFetchSize(fetchSize))
-        .withQueryOptions(new QueryOptions().setConsistencyLevel(ConsistencyLevel.ONE).setFetchSize(fetchSize))
+        .withQueryOptions(new QueryOptions().setConsistencyLevel(sessionSettings.readConsistency).setFetchSize(fetchSize))
         .withPort(port)
 
       speculativeExecution match {
