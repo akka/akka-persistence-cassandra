@@ -21,8 +21,8 @@ object Publish extends AutoPlugin {
     pomExtra := akkaPomExtra,
     publishTo := akkaPublishTo.value,
     credentials ++= akkaCredentials,
-    organizationName := "Typesafe Inc.",
-    organizationHomepage := Some(url("http://www.typesafe.com")),
+    organizationName := "Lightbend Inc.",
+    organizationHomepage := Some(url("https://www.lightbend.com")),
     homepage := Some(url("https://github.com/akka/akka-persistence-cassandra")),
     publishMavenStyle := true,
     pomIncludeRepository := { x => false },
@@ -31,10 +31,12 @@ object Publish extends AutoPlugin {
   )
 
   def akkaPomExtra = {
+    /* The scm info is automatic from the sbt-git plugin
     <scm>
       <url>git@github.com:akka/akka-persistence-cassandra.git</url>
       <connection>scm:git:git@github.com:akka/akka-persistence-cassandra.git</connection>
     </scm>
+    */
     <developers>
       <developer>
         <id>contributors</id>
