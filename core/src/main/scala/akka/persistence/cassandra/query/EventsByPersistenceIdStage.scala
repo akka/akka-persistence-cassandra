@@ -107,7 +107,6 @@ import com.datastax.driver.core.utils.Bytes
   private case object LookForMissingSeqNr
 
   private case class MissingSeqNr(deadline: Deadline, sawSeqNr: Long)
-  private case class FastForward(seqNr: Long, partition: Int)
 
   private sealed trait QueryState
   private case object QueryIdle extends QueryState
@@ -330,14 +329,13 @@ import com.datastax.driver.core.utils.Bytes
                 if (refreshInterval.isEmpty) {
                   completeStage()
                 } else {
-                  if (pendingFastForward.isDefined) {
-                    val nextNr = pendingFastForward.get
+                  pendingFastForward.foreach { nextNr =>
                     if (nextNr > seqNr)
                       internalFastForward(nextNr)
                     pendingFastForward = None
                   }
-                  if (pendingPoll.isDefined) {
-                    if (pendingPoll.get >= seqNr)
+                  pendingPoll.foreach { pollNr =>
+                    if (pollNr >= seqNr)
                       query(switchPartition = false)
                     pendingPoll = None
                   }
