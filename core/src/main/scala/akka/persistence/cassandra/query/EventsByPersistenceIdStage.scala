@@ -57,7 +57,7 @@ import com.datastax.driver.core.utils.Bytes
      * The events before `nextSeqNr` was delivered via another
      * channel and don't have to be retrieved from Cassandra.
      * It is best effort. There might still be events in flight with
-     * lower sequence number that will be emitted downstreams, so
+     * lower sequence number that will be emitted downstream, so
      * the consumer have to handle de-duplication.
      */
     def fastForward(nextSeqNr: Long): Unit
@@ -193,18 +193,22 @@ import com.datastax.driver.core.utils.Bytes
           throw new IllegalStateException("Fast forward only possible for live queries")
 
         if (nextSeqNr > seqNr) {
-          log.debug("EventsByPersistenceId [{}] External fast-forward to seqNr [{}]", persistenceId, nextSeqNr)
-          seqNr = nextSeqNr
-          val nextPartition = partitionNr(nextSeqNr)
-          if (nextPartition > partition)
-            partition = nextPartition
-
           queryState match {
-            case QueryIdle => query(switchPartition = false)
-            case _: QueryResult | _: QueryInProgress =>
-              pendingFastForward = Some(nextSeqNr)
+            case QueryIdle => internalFastForward(nextSeqNr)
+            case _         => pendingFastForward = Some(nextSeqNr)
           }
         }
+      }
+
+      private def internalFastForward(nextSeqNr: Long): Unit = {
+        log.debug(
+          "EventsByPersistenceId [{}] External fast-forward to seqNr [{}] from current [{}]",
+          persistenceId, nextSeqNr, seqNr
+        )
+        seqNr = nextSeqNr
+        val nextPartition = partitionNr(nextSeqNr)
+        if (nextPartition > partition)
+          partition = nextPartition
       }
 
       def partitionNr(sequenceNr: Long): Long =
@@ -314,7 +318,7 @@ import com.datastax.driver.core.utils.Bytes
       @tailrec private def tryPushOne(): Unit = {
 
         queryState match {
-          case QueryResult(rs, empty, switchPartition) if isAvailable(out) =>
+          case p @ QueryResult(rs, empty, switchPartition) if isAvailable(out) =>
 
             def afterExhausted(): Unit = {
               queryState = QueryIdle
@@ -324,11 +328,18 @@ import com.datastax.driver.core.utils.Bytes
               if (empty && switchPartition && lookingForMissingSeqNr.isEmpty) {
                 if (refreshInterval.isEmpty) {
                   completeStage()
+                } else {
+                  pendingFastForward.foreach { nextNr =>
+                    if (nextNr > seqNr)
+                      internalFastForward(nextNr)
+                    pendingFastForward = None
+                  }
+                  pendingPoll.foreach { pollNr =>
+                    if (pollNr >= seqNr)
+                      query(switchPartition = false)
+                    pendingPoll = None
+                  }
                 }
-              } else if (pendingPoll.isDefined) {
-                if (pendingPoll.get >= seqNr)
-                  query(switchPartition = false)
-                pendingPoll = None
               } else {
                 // TODO if we are far from the partition boundary we could skip this query if refreshInterval.nonEmpty
                 query(switchPartition = true) // next partition
@@ -351,10 +362,10 @@ import com.datastax.driver.core.utils.Bytes
             } else {
               val row = rs.one()
               val event = extractEvent(row)
-              if (event.sequenceNr < seqNr) {
+              if (event.sequenceNr < seqNr || pendingFastForward.isDefined && pendingFastForward.get > event.sequenceNr) {
                 // skip event due to fast forward
                 tryPushOne()
-              } else if (config.gapFreeSequenceNumbers && seqNr != event.sequenceNr) {
+              } else if (pendingFastForward.isEmpty && (config.gapFreeSequenceNumbers && seqNr != event.sequenceNr)) {
                 lookingForMissingSeqNr match {
                   case Some(_) => throw new IllegalStateException(
                     s"Should not be able to get here when already looking for missing seqNr [$seqNr] for entity [$persistenceId]"
@@ -370,11 +381,6 @@ import com.datastax.driver.core.utils.Bytes
                     query(false)
                 }
               } else {
-                // we found that missing seqNr
-                if (lookingForMissingSeqNr.isDefined) {
-                  log.debug("EventsByPersistenceId [{}] Found missing seqNr [{}]", persistenceId, seqNr)
-                  lookingForMissingSeqNr = None
-                }
 
                 seqNr = event.sequenceNr + 1
                 partition = row.getLong("partition_nr")
@@ -383,7 +389,18 @@ import com.datastax.driver.core.utils.Bytes
 
                 if (reachedEndCondition())
                   completeStage()
-                else if (rs.isExhausted())
+                else if (lookingForMissingSeqNr.isDefined) {
+                  // we found that missing seqNr
+                  log.debug(
+                    "EventsByPersistenceId [{}] Found missing seqNr [{}]",
+                    persistenceId, event.sequenceNr
+                  )
+                  lookingForMissingSeqNr = None
+                  queryState = QueryIdle
+                  if (refreshInterval.isEmpty) query(false)
+                  else afterExhausted()
+
+                } else if (rs.isExhausted())
                   afterExhausted()
                 else if (rs.getAvailableWithoutFetching == fetchMoreThresholdRows)
                   rs.fetchMoreResults() // trigger early async fetch of more rows
