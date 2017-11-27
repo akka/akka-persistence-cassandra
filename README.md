@@ -12,20 +12,20 @@ Dependencies
 
 ### Latest release
 
+To include the latest release of the Cassandra plugins for **Akka 2.5.x** into your `sbt` project, add the following lines to your `build.sbt` file:
+
+    libraryDependencies += Seq(
+      "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.59",
+      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.59" % Test
+    )
+
+This version of `akka-persistence-cassandra` depends on Akka 2.5.6. It has been published for Scala 2.11 and 2.12.  The launcher artifact is a utility for starting an embedded Cassandra, useful for running tests. It can be removed if not needed.
+
 To include the latest release of the Cassandra plugins for **Akka 2.4.x** into your `sbt` project, add the following lines to your `build.sbt` file:
 
     libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.30"
 
 This version of `akka-persistence-cassandra` depends on Akka 2.4.20. It has been published for Scala 2.11 and 2.12.
-
-To include the latest release of the Cassandra plugins for **Akka 2.5.x** into your `sbt` project, add the following lines to your `build.sbt` file:
-
-    libraryDependencies += Seq(
-      "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.58",
-      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.58" % Test
-    )
-
-This version of `akka-persistence-cassandra` depends on Akka 2.5.6. It has been published for Scala 2.11 and 2.12.  The launcher artifact is a utility for starting an embedded Cassandra, useful for running tests. It can be removed if not needed.
 
 Those versions are compatible with Cassandra 3.0.0 or higher, and it is also compatible with Cassandra 2.1.6 or higher (versions < 2.1.6 have a static column bug) if you configure `cassandra-journal.cassandra-2x-compat=on` in your `application.conf`. With Cassandra 2.x compatibility some features will not be enabled, e.g. `eventsByTag`.
 
@@ -46,7 +46,7 @@ To activate the journal plugin, add the following line to your Akka `application
 
     akka.persistence.journal.plugin = "cassandra-journal"
 
-This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.58/core/src/main/resources/reference.conf):
+This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.59/core/src/main/resources/reference.conf):
 
 ### Caveats
 
@@ -71,7 +71,7 @@ To activate the snapshot-store plugin, add the following line to your Akka `appl
 
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
 
-This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.58/core/src/main/resources/reference.conf):
+This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.59/core/src/main/resources/reference.conf):
 
 Persistence Queries
 -------------------
@@ -138,7 +138,7 @@ The Persistence Query API changed slightly, see [migration guide for Akka 2.5](h
 
 ### Migrations from 0.11 to 0.12
 
-Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.58/core/src/main/resources/reference.conf):
+Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.59/core/src/main/resources/reference.conf):
 
 ### Migrations from 0.9 to 0.10
 
