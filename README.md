@@ -90,7 +90,7 @@ Persistence Query usage example to obtain a stream with all events tagged with "
 Migrations
 ----------
 
-### Migrations from 0.54 to 0.55
+### Migrations from 0.54 to 0.59
 
 In version 0.55 additional columns were added to be able to store meta data about an event without altering
 the actual domain event.
@@ -101,12 +101,14 @@ These columns are used when the event is wrapped in `akka.persistence.cassandra.
 
 It is also not required to add the materialized views, not even if the meta data is stored in the journal table. If the materialized view is not changed the plain events are retrieved with the `eventsByTag` query and they are not wrapped in `EventWithMetaData`. Note that Cassandra [does not support](http://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlAlterMaterializedView.html) adding columns to an existing materialized view.
 
-
-If you see exception "Undefined column name meta_ser_id" it is because Cassandra validates the ["CREATE MATERIALIZED VIEW IF NOT EXISTS"](https://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlCreateMaterializedView.html#cqlCreateMaterializedView__if-not-exists) even though the view already exists and will not be created. To work around that issue you can disable the `tables-autocreate`:
+If you don't alter existing messages table and still use `tables-autocreate=on` you have to set config:
 
 ```
-cassandra-journal.tables-autocreate = off
+cassandra-journal.meta-in-events-by-tag-view = off
 ``` 
+
+When trying to create the materialized view (tables-autocreate=on) with the meta columns before corresponding columns have been added the messages table an exception "Undefined column name meta_ser_id" is raised, because Cassandra validates the ["CREATE MATERIALIZED VIEW IF NOT EXISTS"](https://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlCreateMaterializedView.html#cqlCreateMaterializedView__if-not-exists) even though the view already exists and will not be created. To work around that issue you can disable the meta columns in the materialized view by setting `meta-in-events-by-tag-view=off`.
+
 
 ### Migrations from 0.51 to 0.52
 
