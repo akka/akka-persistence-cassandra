@@ -64,7 +64,7 @@ trait CassandraStatements {
   def createEventsByTagMaterializedView(tagId: Int) = s"""
       CREATE MATERIALIZED VIEW IF NOT EXISTS $eventsByTagViewName$tagId AS
          SELECT tag$tagId, timebucket, timestamp, persistence_id, partition_nr, sequence_nr, writer_uuid, ser_id, ser_manifest, event_manifest, event,
-           meta_ser_id, meta_ser_manifest, meta, message
+           ${if (config.metaInEventsByTagView) "meta_ser_id, meta_ser_manifest, meta, " else ""} message
          FROM $tableName
          WHERE persistence_id IS NOT NULL AND partition_nr IS NOT NULL AND sequence_nr IS NOT NULL
            AND tag$tagId IS NOT NULL AND timestamp IS NOT NULL AND timebucket IS NOT NULL
