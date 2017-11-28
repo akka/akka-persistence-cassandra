@@ -222,7 +222,7 @@ trait CassandraStatements {
        VALUES(?, ?, true)
      """
 
-  private def tableName = s"${config.keyspace}.${config.table}"
+  protected def tableName = s"${config.keyspace}.${config.table}"
   private def tagTableName = s"${config.keyspace}.${config.tagTable.name}"
   private def tagProgressTableName = s"${config.keyspace}.tag_write_progress"
   private def configTableName = s"${config.keyspace}.${config.configTable}"

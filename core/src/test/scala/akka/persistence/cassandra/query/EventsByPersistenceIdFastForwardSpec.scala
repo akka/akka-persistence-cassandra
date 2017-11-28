@@ -26,7 +26,7 @@ object EventsByPersistenceIdFastForwardSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = DEBUG
     cassandra-journal.keyspace=EventsByPersistenceIdFastForwardSpec
-    cassandra-query-journal.refresh-interval = 0.5s
+    cassandra-query-journal.refresh-interval = 250ms
     cassandra-query-journal.max-result-size-query = 2
     cassandra-journal.target-partition-size = 15
     """).withFallback(CassandraLifecycle.config)
@@ -74,7 +74,7 @@ class EventsByPersistenceIdFastForwardSpec
 
     val evt2 = PersistentRepr("e-2", 2L, "f", "", writerUuid = w1)
     val evt4 = PersistentRepr("e-4", 4L, "f", "", writerUuid = w1)
-    writeTestEvent(evt2)
+    //    writeTestEvent(evt2)
     writeTestEvent(evt4)
     probe.expectNext("e-4")
 

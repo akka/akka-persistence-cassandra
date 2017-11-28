@@ -23,7 +23,6 @@ trait DirectWriting extends BeforeAndAfterAll {
   private lazy val serialization = SerializationExtension(system)
   private lazy val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
 
-  // FIXME, this leaks a cassandra connection
   private lazy val session = {
     Await.result(writePluginConfig.sessionProvider.connect()(system.dispatcher), 5.seconds)
   }

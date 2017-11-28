@@ -18,7 +18,6 @@ import akka.persistence.cassandra.query.UUIDComparator
 import akka.persistence.cassandra.formatOffset
 import com.datastax.driver.core.{ BatchStatement, PreparedStatement, ResultSet, Statement }
 
-import scala.collection.immutable
 import scala.concurrent.duration.{ Duration, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.{ Failure, Success, Try }
@@ -43,8 +42,8 @@ import scala.util.{ Failure, Success, Try }
     settings: TagWriterSettings
   ): Props = Props(new TagWriter(session, tag, settings))
 
-  private[akka] case class TagWrite(tag: String, serialised: Vector[Serialized]) extends NoSerializationVerificationNeeded
-  private[akka] case class SetTagProgress(progress: TagProgress)
+  private[akka] case class TagWrite(tag: Tag, serialised: Vector[Serialized]) extends NoSerializationVerificationNeeded
+  private[akka] case class SetTagProgress(tag: Tag, progress: TagProgress)
   private[akka] case object SetTagProgressAck
 
   private[akka] case class TagWriterSettings(
@@ -165,7 +164,7 @@ import scala.util.{ Failure, Success, Try }
       flushIfRequired((buffer ++ payload).sortBy(_.timeUuid)(timeUuidOrdering), tagPidSequenceNrs)
     case TagWriteDone(_) =>
       log.error("Received Done when in idle state. This is a bug. Please report with DEBUG logs")
-    case SetTagProgress(tp @ TagProgress(pid, _, tagPidSequenceNr)) =>
+    case SetTagProgress(_, tp @ TagProgress(pid, _, tagPidSequenceNr)) =>
       log.debug("Updating tag progress: {}", tp)
       become(idle(buffer, tagPidSequenceNrs + (pid -> tagPidSequenceNr)))
       sender() ! SetTagProgressAck
@@ -216,7 +215,7 @@ import scala.util.{ Failure, Success, Try }
       timers.startSingleTimer(FlushKey, Flush, settings.flushInterval)
       context.become(idle(events ++ buffer, previousTagPidSequenceNrs ++ updatedTagProgress))
 
-    case SetTagProgress(tagProgress) =>
+    case SetTagProgress(_, tagProgress) =>
       log.debug("Updating tag progress: {}", tagProgress)
       become(writeInProgress(buffer, tagPidSequenceNrs, updatedTagProgress + (tagProgress.persistenceId -> tagProgress.pidTagSequenceNr)))
       sender() ! SetTagProgressAck

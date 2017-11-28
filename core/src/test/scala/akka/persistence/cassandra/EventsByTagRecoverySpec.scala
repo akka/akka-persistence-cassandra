@@ -22,11 +22,11 @@ import scala.concurrent.duration._
 object EventsByTagRecoverySpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   val keyspaceName = "EventsByTagRecovery"
-
   val config = ConfigFactory.parseString(
     s"""
        |akka {
        |  loglevel = DEBUG
+       |  actor.debug.unhandled = on
        |}
        |cassandra-journal {
        |  keyspace = $keyspaceName
@@ -76,6 +76,7 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
   val waitTime = 100.milliseconds
 
   "Events by tag recovery" must {
+
     "continue tag sequence nrs" in {
       val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
       val systemTwo = ActorSystem("s2", EventsByTagRecoverySpec.config)

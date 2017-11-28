@@ -105,7 +105,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll {
   }
 
   override protected def beforeAll(): Unit = {
-    startCassandra()
+    startCassandra(config.getInt("cassandra-journal.port"))
     awaitPersistenceInit()
     super.beforeAll()
   }
@@ -113,6 +113,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll {
   def startCassandra(): Unit = startCassandra(0)
 
   def startCassandra(port: Int): Unit = {
+    println("Starting cassandra on port: " + port)
     mode match {
       case Embedded =>
         val cassandraDirectory = new File("target/" + systemName)

@@ -9,13 +9,16 @@ import java.nio.ByteBuffer
 import java.util.{ UUID, HashMap => JHMap, Map => JMap }
 
 import akka.Done
-import akka.actor.{ ActorRef, ExtendedActorSystem, NoSerializationVerificationNeeded }
+import akka.actor.{ ExtendedActorSystem, NoSerializationVerificationNeeded }
 import akka.annotation.InternalApi
+import akka.event.Logging
 import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.journal.TagWriter.{ TagWriterSession, TagWrite }
+import akka.persistence.cassandra.journal.TagWriter.TagWrite
+import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWritersSession }
+import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
@@ -36,10 +39,14 @@ import scala.concurrent._
 import scala.math.min
 import scala.util.{ Failure, Success, Try }
 
-class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements with NoSerializationVerificationNeeded {
+class CassandraJournal(cfg: Config) extends AsyncWriteJournal
+  with CassandraRecovery
+  with CassandraStatements with NoSerializationVerificationNeeded {
 
   val config = new CassandraJournalConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
+  val ec: ExecutionContext = context.system.dispatcher
+  val log = Logging(context.system, getClass)
 
   import CassandraJournal._
   import config._
@@ -50,7 +57,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   // It seems like C* doesn't support session consistency so we handle it ourselves.
   // https://aphyr.com/posts/299-the-trouble-with-timestamps
   private val writeInProgress: JMap[String, Future[Done]] = new JHMap
-  private var tagActors = Map.empty[String, ActorRef]
 
   val session = new CassandraSession(
     context.system,
@@ -64,6 +70,11 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       .flatMap(_ => initializePersistentConfig(session).map(_ => Done))
   )
 
+  protected val tagWrites = context.system.actorOf(TagWriters.props(
+    TagWritersSession(preparedWriteToTagView, session.executeWrite, session.selectResultSet, preparedWriteToTagProgress),
+    config.tagWriterSettings
+  ))
+
   def preparedWriteMessage = session.prepare(
     writeMessage(withMeta = false)
   ).map(_.setIdempotent(true))
@@ -71,11 +82,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   def preparedWriteMessageWithMeta = session.prepare(
     writeMessage(withMeta = true)
   ).map(_.setIdempotent(true))
-
-  def preparedWriteToTagView: Future[PreparedStatement] = session.prepare(writeTags).map(_.setIdempotent(true))
-  def preparedWriteToTagProgress: Future[PreparedStatement] = session.prepare(writeTagProgress).map(_.setIdempotent(true))
-  def preparedSelectTagProgress: Future[PreparedStatement] = session.prepare(selectTagProgress).map(_.setIdempotent(true))
-  def preparedSelectTagProgressForPersistenceId: Future[PreparedStatement] = session.prepare(selectTagProgressForPersistenceId).map(_.setIdempotent(true))
 
   def preparedDeleteMessages = session.prepare(deleteMessages).map(_.setIdempotent(true))
   def preparedSelectMessages = session.prepare(selectMessages)
@@ -101,14 +107,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   }
 
   override def receivePluginInternal: Receive = {
-    case tw: TagWrite =>
-      tagActor(tw.tag) ! tw
-    case TagWrites(tws) =>
-      tws.foreach(tw => {
-        tagActor(tw.tag) ! tw
-      })
-    case akka.actor.Status.Failure(_) =>
-      log.debug("Failed tow write to Cassandra so will not do TagWrites")
 
     case WriteFinished(persistenceId, f) =>
       writeInProgress.remove(persistenceId, f)
@@ -193,17 +191,15 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
           rec(groups, Nil)
         }
 
-      val tagWrites = result.map(_ => extractTagWrites(serialized))
-
-      tagWrites pipeTo self
-
-      tagWrites.onComplete { _ =>
+      val tws = result.map(_ => extractTagWrites(serialized))
+      tws pipeTo tagWrites
+      tws.onComplete { _ =>
         self ! WriteFinished(pid, p.future)
         p.success(Done)
       }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
 
-      // Nil == all good
-      tagWrites.map(_ => Nil)(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
+      //Nil == all good
+      tws.map(_ => Nil)(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
     }
   }
 
@@ -214,32 +210,13 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
       .flatMap(s => s.tags.map((_, s)))
       .groupBy(_._1).mapValues(_.map(_._2))
 
-    TagWrites(
+    BulkTagWrite(
       messagesByTag.map {
       case (tag, writes) =>
         TagWrite(tag, writes.toVector)
     }.toVector
     )
   }
-
-  protected def tagActor(tag: String): ActorRef =
-    tagActors.get(tag) match {
-      case None =>
-        val tagSession = new TagWriterSession(
-          tag,
-          preparedWriteToTagView,
-          session.executeWrite,
-          session.selectResultSet,
-          preparedWriteToTagProgress
-        )
-        val ref = context.actorOf(
-          TagWriter.props(tagSession, tag, config.tagWriterSettings), s"tag-writer-$tag"
-        )
-
-        tagActors += (tag -> ref)
-        ref
-      case Some(ar) => ar
-    }
 
   private def writeMessages(atomicWrites: Seq[SerializedAtomicWrite]): Future[Unit] = {
     val boundStatements = statementGroup(atomicWrites)
@@ -398,6 +375,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     session.executeWrite(stmt).map(_ => ())
   }
 
+  // TODO create a custom extractor that doesn't deserialise the event
   private def asyncReadLowestSequenceNr(persistenceId: String, fromSequenceNr: Long, highestDeletedSequenceNumber: Long): Future[Long] = {
     queries
       .eventsByPersistenceId(
@@ -409,7 +387,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
         None,
         "asyncReadLowestSequenceNr",
         someReadConsistency,
-        someReadRetryPolicy
+        someReadRetryPolicy,
+        extractor = Extractors.taggedPersistentRepr
       )
       .map(_.pr.sequenceNr)
       .runWith(Sink.headOption)
@@ -494,7 +473,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
   private[akka]type TagPidSequenceNr = Long
 
   private case object Init
-  private case class TagWrites(tagWrites: Vector[TagWrite])
 
   private case class WriteFinished(pid: String, f: Future[Done]) extends NoSerializationVerificationNeeded
   private case class MessageId(persistenceId: String, sequenceNr: Long)
