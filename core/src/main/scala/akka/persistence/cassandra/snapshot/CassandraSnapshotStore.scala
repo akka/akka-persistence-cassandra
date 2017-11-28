@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.snapshot
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 
 import scala.collection.immutable
-import scala.concurrent.Await
 import scala.concurrent.Future
 
 import akka.actor._

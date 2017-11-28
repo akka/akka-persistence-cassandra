@@ -1,55 +1,73 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.journal
 
-import java.time.format.DateTimeFormatter
-import java.time.LocalDateTime
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.LocalDate
-import com.datastax.driver.core.utils.UUIDs
 import java.util.UUID
+
 import akka.annotation.InternalApi
+import akka.util.HashCode
+import com.datastax.driver.core.utils.UUIDs
 
-/**
- * INTERNAL API
- */
 @InternalApi private[akka] object TimeBucket {
-  private val timeBucketFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
 
-  def apply(key: String): TimeBucket =
-    apply(LocalDate.parse(key, timeBucketFormatter), key)
+  def apply(timeuuid: UUID, bucketSize: BucketSize): TimeBucket =
+    apply(UUIDs.unixTimestamp(timeuuid), bucketSize)
 
-  def apply(timeuuid: UUID): TimeBucket =
-    apply(UUIDs.unixTimestamp(timeuuid))
-
-  def apply(epochTimestamp: Long): TimeBucket = {
-    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(epochTimestamp), ZoneOffset.UTC)
-    apply(time.toLocalDate)
+  def apply(epochTimestamp: Long, bucketSize: BucketSize): TimeBucket = {
+    // round down to bucket size so the times are deterministic
+    new TimeBucket(roundDownBucketSize(epochTimestamp, bucketSize), bucketSize)
   }
 
-  def apply(day: LocalDate): TimeBucket = {
-    val key = day.format(timeBucketFormatter)
-    apply(day, key)
+  private def roundDownBucketSize(time: Long, bucketSize: BucketSize): Long = {
+    val key: Long = time / bucketSize.durationMillis
+    key * bucketSize.durationMillis
   }
-
 }
 
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] final case class TimeBucket(day: LocalDate, key: String) {
+@InternalApi private[akka] final class TimeBucket private (val key: Long, val bucketSize: BucketSize) {
+  def inPast: Boolean =
+    key < TimeBucket.roundDownBucketSize(System.currentTimeMillis(), bucketSize)
+
+  def isCurrent: Boolean = {
+    val now = System.currentTimeMillis()
+    now >= key && now < (key + bucketSize.durationMillis)
+  }
+
+  def within(uuid: UUID): Boolean = {
+    val when = UUIDs.unixTimestamp(uuid)
+    when >= key && when < (key + bucketSize.durationMillis)
+  }
 
   def next(): TimeBucket =
-    TimeBucket(day.plusDays(1))
+    new TimeBucket(key + bucketSize.durationMillis, bucketSize)
 
-  def isBefore(other: LocalDate): Boolean =
-    day.isBefore(other)
+  def previous(steps: Int): TimeBucket =
+    if (steps == 0) this
+    else new TimeBucket(key - steps * bucketSize.durationMillis, bucketSize)
 
-  def startTimestamp: Long =
-    day.atStartOfDay.toInstant(ZoneOffset.UTC).toEpochMilli
+  def >(other: TimeBucket): Boolean = {
+    key > other.key
+  }
 
-  override def toString: String = key
+  def <(other: TimeBucket): Boolean = {
+    key < other.key
+  }
 
+
+  override def equals(other: Any): Boolean = other match {
+    case that: TimeBucket =>
+      key == that.key &&
+        bucketSize == that.bucketSize
+    case _ => false
+  }
+
+  override def hashCode(): Int = {
+    var result = HashCode.SEED
+    result = HashCode.hash(result, key)
+    result = HashCode.hash(result, bucketSize)
+    result
+  }
+  override def toString = s"TimeBucket($key, $bucketSize, $inPast, $isCurrent)"
 }

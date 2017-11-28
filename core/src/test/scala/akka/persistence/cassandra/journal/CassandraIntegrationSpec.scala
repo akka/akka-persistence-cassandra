@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.journal
 
 import akka.persistence.cassandra.testkit.CassandraLauncher
@@ -204,7 +205,6 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("CassandraIntegration
     }
     "write and replay with persistAll less than partition size" in {
       val persistenceId = UUID.randomUUID().toString
-      val probe = TestProbe()
       val processorAtomic = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
 
       processorAtomic ! List("a-1", "a-2", "a-3", "a-4")

@@ -1,10 +1,12 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.query
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
+import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
 
 import scala.annotation.tailrec
@@ -13,15 +15,16 @@ import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.duration._
 import scala.concurrent.duration.FiniteDuration
+import scala.collection.JavaConversions._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-
 import akka.Done
 import akka.annotation.InternalApi
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.ListenableFutureConverter
 import akka.persistence.cassandra.journal.CassandraJournal
+import akka.persistence.cassandra.query.EventsByPersistenceIdStage.TaggedPersistentRepr
 import akka.serialization.SerializationExtension
 import akka.stream.ActorMaterializer
 import akka.stream.Attributes
@@ -45,6 +48,8 @@ import com.datastax.driver.core.utils.Bytes
  * INTERNAL API
  */
 @InternalApi private[akka] object EventsByPersistenceIdStage {
+
+  private[akka] case class TaggedPersistentRepr(pr: PersistentRepr, tags: Set[String], offset: UUID)
 
   // materialized value
   trait Control {
@@ -111,8 +116,8 @@ import com.datastax.driver.core.utils.Bytes
   private sealed trait QueryState
   private case object QueryIdle extends QueryState
   private final case class QueryInProgress(switchPartition: Boolean, fetchMore: Boolean, startTime: Long) extends QueryState
-  private case class QueryResult(resultSet: ResultSet, empty: Boolean, switchPartition: Boolean) extends QueryState {
-    override def toString(): String = s"QueryResult($switchPartition)"
+  private final case class QueryResult(resultSet: ResultSet, empty: Boolean, switchPartition: Boolean) extends QueryState {
+    override def toString: String = s"QueryResult($switchPartition)"
   }
 
 }
@@ -121,13 +126,14 @@ import com.datastax.driver.core.utils.Bytes
  * INTERNAL API
  */
 @InternalApi private[akka] class EventsByPersistenceIdStage(persistenceId: String, fromSeqNr: Long, toSeqNr: Long, max: Long,
-                                                            fetchSize: Int, refreshInterval: Option[FiniteDuration], session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
-                                                            config: CassandraReadJournalConfig)
-  extends GraphStageWithMaterializedValue[SourceShape[PersistentRepr], EventsByPersistenceIdStage.Control] {
+                                                            fetchSize: Int, refreshInterval: Option[FiniteDuration],
+                                                            session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
+                                                            config:  CassandraReadJournalConfig)
+  extends GraphStageWithMaterializedValue[SourceShape[TaggedPersistentRepr], EventsByPersistenceIdStage.Control] {
   import EventsByPersistenceIdStage._
 
-  val out: Outlet[PersistentRepr] = Outlet("EventsByPersistenceId.out")
-  override val shape: SourceShape[PersistentRepr] = SourceShape(out)
+  val out: Outlet[TaggedPersistentRepr] = Outlet("EventsByPersistenceId.out")
+  override val shape: SourceShape[TaggedPersistentRepr] = SourceShape(out)
 
   override def createLogicAndMaterializedValue(inheritedAttributes: Attributes): (GraphStageLogic, Control) = {
     val logic = new TimerGraphStageLogic(shape) with OutHandler with StageLogging with Control {
@@ -288,7 +294,7 @@ import com.datastax.driver.core.utils.Bytes
           case QueryIdle          => // good
           case _: QueryInProgress => throw new IllegalStateException("Query already in progress")
           case QueryResult(rs, _, _) =>
-            if (!rs.isExhausted()) throw new IllegalStateException("Previous query was not exhausted")
+            if (!rs.isExhausted) throw new IllegalStateException("Previous query was not exhausted")
         }
         val pnr = if (switchPartition) partition + 1 else partition
         queryState = QueryInProgress(switchPartition, fetchMore = false, System.nanoTime())
@@ -348,13 +354,13 @@ import com.datastax.driver.core.utils.Bytes
 
             if (reachedEndCondition())
               completeStage()
-            else if (rs.isExhausted()) {
+            else if (rs.isExhausted) {
               if (lookingForMissingSeqNr.isEmpty) afterExhausted()
               else {
                 queryState = QueryIdle
                 scheduleOnce(LookForMissingSeqNr, 200.millis)
               }
-            } else if (rs.getAvailableWithoutFetching() == 0) {
+            } else if (rs.getAvailableWithoutFetching == 0) {
               log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]", persistenceId, seqNr)
               queryState = QueryInProgress(switchPartition, fetchMore = true, System.nanoTime())
               val rsFut = rs.fetchMoreResults().asScala
@@ -362,10 +368,10 @@ import com.datastax.driver.core.utils.Bytes
             } else {
               val row = rs.one()
               val event = extractEvent(row)
-              if (event.sequenceNr < seqNr || pendingFastForward.isDefined && pendingFastForward.get > event.sequenceNr) {
+              if (event.pr.sequenceNr < seqNr || pendingFastForward.isDefined && pendingFastForward.get > event.pr.sequenceNr) {
                 // skip event due to fast forward
                 tryPushOne()
-              } else if (pendingFastForward.isEmpty && (config.gapFreeSequenceNumbers && seqNr != event.sequenceNr)) {
+              } else if (pendingFastForward.isEmpty && (config.gapFreeSequenceNumbers && seqNr != event.pr.sequenceNr)) {
                 lookingForMissingSeqNr match {
                   case Some(_) => throw new IllegalStateException(
                     s"Should not be able to get here when already looking for missing seqNr [$seqNr] for entity [$persistenceId]"
@@ -373,16 +379,16 @@ import com.datastax.driver.core.utils.Bytes
                   case None =>
                     log.debug(
                       "EventsByPersistenceId [{}] Missing seqNr [{}], found [{}], looking for event eventually appear",
-                      persistenceId, seqNr, event.sequenceNr
+                      persistenceId, seqNr, event.pr.sequenceNr
                     )
                     lookingForMissingSeqNr = Some(
-                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, event.sequenceNr)
+                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, event.pr.sequenceNr)
                     )
                     query(false)
                 }
               } else {
 
-                seqNr = event.sequenceNr + 1
+                seqNr = event.pr.sequenceNr + 1
                 partition = row.getLong("partition_nr")
                 count += 1
                 push(out, event)
@@ -393,14 +399,14 @@ import com.datastax.driver.core.utils.Bytes
                   // we found that missing seqNr
                   log.debug(
                     "EventsByPersistenceId [{}] Found missing seqNr [{}]",
-                    persistenceId, event.sequenceNr
+                    persistenceId, event.pr.sequenceNr
                   )
                   lookingForMissingSeqNr = None
                   queryState = QueryIdle
                   if (refreshInterval.isEmpty) query(false)
                   else afterExhausted()
 
-                } else if (rs.isExhausted())
+                } else if (rs.isExhausted)
                   afterExhausted()
                 else if (rs.getAvailableWithoutFetching == fetchMoreThresholdRows)
                   rs.fetchMoreResults() // trigger early async fetch of more rows
@@ -413,10 +419,11 @@ import com.datastax.driver.core.utils.Bytes
         }
       }
 
-      def extractEvent(row: Row): PersistentRepr =
+      def extractEvent(row: Row): TaggedPersistentRepr =
         row.getBytes("message") match {
           case null =>
-            PersistentRepr(
+            val tags: Set[String] = row.getSet("tags", classOf[String]).toSet
+            TaggedPersistentRepr(PersistentRepr(
               payload = eventDeserializer.deserializeEvent(row),
               sequenceNr = row.getLong("sequence_nr"),
               persistenceId = row.getString("persistence_id"),
@@ -424,10 +431,10 @@ import com.datastax.driver.core.utils.Bytes
               deleted = false,
               sender = null,
               writerUuid = row.getString("writer_uuid")
-            )
+            ), tags, row.getUUID("timestamp"))
           case b =>
             // for backwards compatibility
-            persistentFromByteBuffer(b)
+            TaggedPersistentRepr(persistentFromByteBuffer(b), Set.empty[String], row.getUUID("timestamp"))
         }
 
       def persistentFromByteBuffer(b: ByteBuffer): PersistentRepr = {
@@ -436,7 +443,7 @@ import com.datastax.driver.core.utils.Bytes
       }
 
       def reachedEndCondition(): Boolean =
-        (seqNr > toSeqNr || count >= max)
+        seqNr > toSeqNr || count >= max
 
       // external call via Control materialized value
       override def poll(knownSeqNr: Long): Unit =
@@ -460,8 +467,6 @@ import com.datastax.driver.core.utils.Bytes
 
       setHandler(out, this)
     }
-
     (logic, logic)
   }
-
 }

@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.query
 
 import java.util.Comparator
@@ -16,7 +17,7 @@ class UUIDComparator extends Comparator[UUID] {
   def compare(u1: UUID, u2: UUID): Int = {
     // First: major sorting by types
     val version = u1.version()
-    val diff = version - u2.version();
+    val diff = version - u2.version()
     if (diff != 0) {
       diff
     } else {
@@ -30,9 +31,9 @@ class UUIDComparator extends Comparator[UUID] {
           diff2
       } else {
         // note: java.util.UUIDs compares with sign extension, IMO that's wrong, so:
-        val diff2 = compareULongs(u1.getMostSignificantBits(), u2.getMostSignificantBits());
+        val diff2 = compareULongs(u1.getMostSignificantBits(), u2.getMostSignificantBits())
         if (diff2 == 0) {
-          compareULongs(u1.getLeastSignificantBits(), u2.getLeastSignificantBits());
+          compareULongs(u1.getLeastSignificantBits(), u2.getLeastSignificantBits())
         } else
           diff2
       }
@@ -42,7 +43,7 @@ class UUIDComparator extends Comparator[UUID] {
   private def compareULongs(l1: Long, l2: Long): Int = {
     val diff = compareUInts((l1 >> 32).toInt, (l2 >> 32).toInt)
     if (diff == 0)
-      compareUInts(l1.toInt, l2.toInt);
+      compareUInts(l1.toInt, l2.toInt)
     else
       diff
   }

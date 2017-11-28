@@ -1,9 +1,10 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra
 
-import java.io.{ File, FileInputStream, InputStream }
+import java.io.{ File, FileInputStream }
 import java.security.{ KeyStore, SecureRandom }
 import javax.net.ssl.{ KeyManagerFactory, SSLContext, TrustManagerFactory, TrustManager, KeyManager }
 import akka.annotation.InternalApi
@@ -55,7 +56,7 @@ import akka.annotation.InternalApi
 
     try {
       ks.load(is, storePassword.toCharArray)
-    } finally (is.close())
+    } finally is.close()
 
     ks
   }

@@ -1,21 +1,15 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra
 
-import scala.collection.immutable
-import java.util.concurrent.TimeUnit
-import java.net.InetSocketAddress
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
-import com.datastax.driver.core.policies.{ TokenAwarePolicy, DCAwareRoundRobinPolicy }
 import com.datastax.driver.core._
 import com.typesafe.config.Config
 import scala.collection.JavaConverters._
-import scala.concurrent.duration._
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
-import scala.util.Failure
-import scala.concurrent.Future
 import akka.persistence.cassandra.session.CassandraSessionSettings
 
 case class StorePathPasswordConfig(path: String, password: String)
@@ -89,13 +83,15 @@ object CassandraPluginConfig {
 
   /**
    * Validates that the supplied keyspace name is valid based on docs found here:
-   *   http://docs.datastax.com/en/cql/3.0/cql/cql_reference/create_keyspace_r.html
+   * http://docs.datastax.com/en/cql/3.0/cql/cql_reference/create_keyspace_r.html
+   *
    * @param keyspaceName - the keyspace name to validate.
    * @return - String if the keyspace name is valid, throws IllegalArgumentException otherwise.
    */
-  def validateKeyspaceName(keyspaceName: String): String = keyspaceName.matches(keyspaceNameRegex) match {
-    case true  => keyspaceName
-    case false => throw new IllegalArgumentException(s"Invalid keyspace name. A keyspace may 32 or fewer alpha-numeric characters and underscores. Value was: $keyspaceName")
+  def validateKeyspaceName(keyspaceName: String): String = if (keyspaceName.matches(keyspaceNameRegex)) {
+    keyspaceName
+  } else {
+    throw new IllegalArgumentException(s"Invalid keyspace name. A keyspace may have 32 or fewer alpha-numeric characters and underscores. Value was: $keyspaceName")
   }
 
   /**
@@ -105,8 +101,9 @@ object CassandraPluginConfig {
    * @param tableName - the table name to validate
    * @return - String if the tableName is valid, throws an IllegalArgumentException otherwise.
    */
-  def validateTableName(tableName: String): String = tableName.matches(keyspaceNameRegex) match {
-    case true  => tableName
-    case false => throw new IllegalArgumentException(s"Invalid table name. A table name may 32 or fewer alpha-numeric characters and underscores. Value was: $tableName")
+  def validateTableName(tableName: String): String = if (tableName.matches(keyspaceNameRegex)) {
+    tableName
+  } else {
+    throw new IllegalArgumentException(s"Invalid table name. A table name may have 32 or fewer alpha-numeric characters and underscores. Value was: $tableName")
   }
 }

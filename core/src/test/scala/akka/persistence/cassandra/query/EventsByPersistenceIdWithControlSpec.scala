@@ -1,14 +1,15 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.query
 
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.PersistenceQuery
+import akka.persistence.query.{ EventEnvelope, PersistenceQuery }
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.Keep
+import akka.stream.scaladsl.{ Keep, Source }
 import akka.stream.testkit.TestSubscriber.Probe
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.{ ImplicitSender, TestKit }
@@ -18,6 +19,7 @@ import org.scalatest.time._
 import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.annotation.tailrec
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object EventsByPersistenceIdWithControlSpec {
@@ -61,7 +63,7 @@ class EventsByPersistenceIdWithControlSpec
   }
 
   @tailrec private def fish(probe: Probe[Any], expect: String, found: Set[Any] = Set.empty): Set[Any] = {
-    found.size should be < (100)
+    found.size should be < 100
     val next = probe.expectNext()
     if (next == expect)
       found + expect
@@ -74,6 +76,7 @@ class EventsByPersistenceIdWithControlSpec
       val ref = setup("a", 3)
 
       val src = queries.eventsByPersistenceIdWithControl("a", 0L, Long.MaxValue)
+
       val (futureControl, probe) = src.map(_.event).toMat(TestSink.probe[Any])(Keep.both).run()
       val control = futureControl.futureValue
       control.poll(3)
@@ -167,7 +170,7 @@ class EventsByPersistenceIdWithControlSpec
       probe.request(10)
 
       // due to the async boundary there might be some in flight already before 12
-      fish(probe, "d-12") should not contain ("d-11")
+      fish(probe, "d-12") should not contain "d-11"
 
       probe.expectNext("d-13")
       probe.cancel()
@@ -175,7 +178,7 @@ class EventsByPersistenceIdWithControlSpec
 
     "be able to fast forward over partition boundaries" in {
       // partition size 15
-      val ref = setup("e", 35)
+      setup("e", 35)
 
       val src = queries.eventsByPersistenceIdWithControl("e", 0L, Long.MaxValue)
       val (futureControl, probe) = src.map(_.event).toMat(TestSink.probe[Any])(Keep.both).run()
@@ -188,11 +191,10 @@ class EventsByPersistenceIdWithControlSpec
       control.fastForward(20)
       control.poll(35)
       probe.request(100)
-      fish(probe, "e-20") should not contain ("e-19")
+      fish(probe, "e-20") should not contain "e-19"
       probe.expectNextN((21 to 35).map(i => s"e-$i"))
 
       probe.cancel()
     }
-
   }
 }

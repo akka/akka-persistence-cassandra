@@ -1,14 +1,11 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra
 
-import java.util.concurrent.atomic.AtomicLong
-
 import akka.actor._
-
 import com.codahale.metrics.MetricRegistry
-import scala.concurrent.{ ExecutionContext, Future }
 import scala.collection.JavaConverters._
 import akka.annotation.InternalApi
 

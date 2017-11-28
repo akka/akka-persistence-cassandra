@@ -1,32 +1,29 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.query.javadsl
 
-import scala.concurrent.duration._
-import akka.actor.{ Props, ActorSystem }
-import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.Sink
-import akka.testkit.{ ImplicitSender, TestKit }
-import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time.{ Seconds, Second, Span }
-import org.scalatest.{ Matchers, WordSpecLike }
+import akka.actor.{ ActorSystem, Props }
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.{ TestActor, javadsl, scaladsl }
-import akka.persistence.query.PersistenceQuery
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
+import akka.persistence.query.{ Offset, PersistenceQuery }
+import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
-import akka.persistence.query.Offset
+import akka.testkit.{ ImplicitSender, TestKit }
+import com.typesafe.config.ConfigFactory
+import org.scalatest.{ Matchers, WordSpecLike }
+
+import scala.concurrent.duration._
 
 object CassandraReadJournalSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
+    akka.actor.serialize-messages=off
     cassandra-journal.keyspace=JavadslCassandraReadJournalSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
-    cassandra-query-journal.eventual-consistency-delay = 1s
     cassandra-journal.event-adapters {
       test-tagger = akka.persistence.cassandra.query.javadsl.TestTagger
     }

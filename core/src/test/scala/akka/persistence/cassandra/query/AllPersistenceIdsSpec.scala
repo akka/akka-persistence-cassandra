@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.query
 
 import java.util.UUID
@@ -14,9 +15,7 @@ import org.scalatest.{ BeforeAndAfterEach, Matchers, WordSpecLike }
 import org.scalatest.concurrent.ScalaFutures
 import akka.persistence.cassandra.{ CassandraPluginConfig, CassandraLifecycle }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.query.PersistenceQuery
-import scala.util.Try
 import com.datastax.driver.core.Session
 import scala.concurrent.Await
 import akka.stream.scaladsl.Source

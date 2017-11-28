@@ -1,28 +1,37 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.query
 
 import java.nio.ByteBuffer
 
 import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, TimeBucket }
+import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
 import akka.serialization.{ SerializationExtension, SerializerWithStringManifest }
 import com.datastax.driver.core.utils.UUIDs
+import org.scalatest.{ BeforeAndAfterAll, Suite }
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-trait DirectWriting {
+trait DirectWriting extends BeforeAndAfterAll {
+  self: Suite =>
 
   def system: ActorSystem
   private lazy val serialization = SerializationExtension(system)
   private lazy val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
 
+  // FIXME, this leaks a cassandra connection
   private lazy val session = {
-
     Await.result(writePluginConfig.sessionProvider.connect()(system.dispatcher), 5.seconds)
+  }
+
+  override protected def afterAll(): Unit = {
+    session.close()
+    session.getCluster.close()
+    super.afterAll()
   }
 
   private lazy val preparedWriteMessage = {
@@ -52,7 +61,7 @@ trait DirectWriting {
     val nowUuid = UUIDs.timeBased()
     val now = UUIDs.unixTimestamp(nowUuid)
     bs.setUUID("timestamp", nowUuid)
-    bs.setString("timebucket", TimeBucket(now).key)
+    bs.setString("timebucket", TimeBucket(now, Hour).key.toString)
     bs.setInt("ser_id", serializer.identifier)
     bs.setString("ser_manifest", serManifest)
     bs.setString("event_manifest", persistent.manifest)

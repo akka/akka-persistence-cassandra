@@ -9,7 +9,9 @@
     </appender>
 
     <logger name="org.apache.cassandra" level="ERROR" />
+    <logger name="com.datastax.driver.core.QueryLogger.NORMAL" level="DEBUG" />
     <logger name="com.datastax.driver.core" level="WARN" />
+    <logger name="com.codahale.metrics.JmxReporter" level="INFO" />
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

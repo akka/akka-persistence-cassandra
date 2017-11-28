@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
@@ -29,7 +30,7 @@ import com.datastax.driver.core.policies.ConstantSpeculativeExecutionPolicy
  *
  * You may create a subclass of this that performs lookup the contact points
  * of the Cassandra cluster asynchronously instead of reading them in the
- * configuration. Such a subclass should override the [[#lookupContactPoints]]
+ * configuration. Such a subclass should override the [[lookupContactPoints]]
  * method.
  *
  * The implementation is defined in configuration `session-provider` property.
@@ -49,10 +50,11 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
     }
   }
 
-  protected def createQueryLogger(): Option[QueryLogger] =
+  protected def createQueryLogger(): Option[QueryLogger] = {
     if (config.getBoolean("log-queries"))
       Some(QueryLogger.builder().build())
     else None
+  }
 
   val fetchSize = config.getInt("max-result-size")
   val protocolVersion: Option[ProtocolVersion] = config.getString("protocol-version") match {
@@ -107,6 +109,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
       val b = Cluster.builder
+        .withClusterName(system.name)
         .addContactPointsWithPorts(cp.asJava)
         .withPoolingOptions(poolingOptions)
         .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))

@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.testkit
 
 import java.io.File
@@ -24,6 +25,7 @@ class CassandraLauncherSpec extends TestKit(ActorSystem("CassandraLauncherSpec")
   private def testCassandra(): Unit = {
     val session =
       Cluster.builder()
+        .withClusterName("CassandraLauncherSpec")
         .addContactPoints("localhost").withPort(CassandraLauncher.randomPort)
         .build().connect()
     try

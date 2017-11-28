@@ -1,15 +1,16 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.query
 
 import java.util.UUID
 
 import akka.actor.{ ActorRef, ActorSystem }
-import akka.persistence.{ DeleteMessagesSuccess, PersistentRepr }
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ Offset, PersistenceQuery }
+import akka.persistence.{ DeleteMessagesSuccess, PersistentRepr }
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.TestSink
 import akka.stream.{ ActorMaterializer, KillSwitches }
@@ -35,8 +36,8 @@ class EventsByPersistenceIdSpec
   extends TestKit(ActorSystem("EventsByPersistenceIdSpec", EventsByPersistenceIdSpec.config))
   with ImplicitSender
   with WordSpecLike
-  with CassandraLifecycle
   with Matchers
+  with CassandraLifecycle
   with DirectWriting {
 
   override def systemName: String = "EventsByPersistenceIdSpec"
@@ -60,7 +61,7 @@ class EventsByPersistenceIdSpec
 
   "Cassandra query EventsByPersistenceId" must {
     "find existing events" in {
-      val ref = setup("a", 3)
+      setup("a", 3)
 
       val src = queries.currentEventsByPersistenceId("a", 0L, Long.MaxValue)
       src.map(_.event).runWith(TestSink.probe[Any])
@@ -73,7 +74,7 @@ class EventsByPersistenceIdSpec
     }
 
     "find existing events from a sequence number" in {
-      val ref = setup("b", 10)
+      setup("b", 10)
       val src = queries.currentEventsByPersistenceId("b", 5L, Long.MaxValue)
 
       src.map(_.sequenceNr).runWith(TestSink.probe[Any])
@@ -281,9 +282,11 @@ class EventsByPersistenceIdSpec
             probe.expectNextOrError() match {
               case Right("e2") =>
                 probe.expectError()
-              case Left(_) =>
+              case Right(e) => fail(s"Unexpected event: $e")
+              case Left(_)  =>
             }
-          case Left(_) =>
+          case Right(e) => fail(s"Unexpected msg: $e")
+          case Left(_)  =>
         }
       }
     }

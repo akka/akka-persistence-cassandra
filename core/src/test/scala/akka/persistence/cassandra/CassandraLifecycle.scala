@@ -1,31 +1,57 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra
 
 import java.io.File
-import scala.concurrent.duration._
-import akka.actor.ActorSystem
-import akka.actor.Props
-import akka.persistence.PersistentActor
-import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.testkit.TestKitBase
-import akka.testkit.TestProbe
-import org.scalatest._
-import com.typesafe.config.ConfigFactory
 import java.util.concurrent.TimeUnit
 
-object CassandraLifecycle {
+import akka.actor.{ ActorSystem, Props }
+import akka.persistence.PersistentActor
+import akka.persistence.cassandra.testkit.CassandraLauncher
+import akka.testkit.{ TestKitBase, TestProbe }
+import com.datastax.driver.core.Cluster
+import com.typesafe.config.ConfigFactory
+import org.scalatest._
 
-  val config = ConfigFactory.parseString(s"""
+import scala.concurrent.duration._
+
+object CassandraLifecycle {
+  sealed trait CassandraMode
+  final case object Embedded extends CassandraMode
+  final case object External extends CassandraMode
+
+  // Set to external to use your own cassandra instance running on localhost:9042
+  // beware that most tests rely on the data directory being removed for clean up
+  // which won't happen for an external cassandra
+  val mode: CassandraMode = Embedded
+
+  val config = {
+    val always = ConfigFactory.parseString(
+      s"""
     akka.persistence.journal.plugin = "cassandra-journal"
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
-    cassandra-journal.port = ${CassandraLauncher.randomPort}
-    cassandra-snapshot-store.port = ${CassandraLauncher.randomPort}
     cassandra-journal.circuit-breaker.call-timeout = 30s
     akka.test.single-expect-default = 20s
     akka.actor.serialize-messages=on
-    """)
+    """
+    )
+
+    val port = mode match {
+      case Embedded =>
+        CassandraLauncher.randomPort
+      case External =>
+        9042
+    }
+
+    always.withFallback(ConfigFactory.parseString(
+      s"""
+      cassandra-journal.port = $port
+      cassandra-snapshot-store.port = $port
+    """
+    ))
+  }
 
   def awaitPersistenceInit(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
     val probe = TestProbe()(system)
@@ -61,11 +87,22 @@ object CassandraLifecycle {
   }
 }
 
-trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suite =>
+trait CassandraLifecycle extends BeforeAndAfterAll {
+  this: TestKitBase with Suite =>
+
+  import CassandraLifecycle._
 
   def systemName: String
 
   def cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource
+
+  lazy val cluster = {
+    Cluster.builder()
+      .addContactPoint("localhost")
+      .withClusterName(systemName)
+      .withPort(config.getInt("cassandra-journal.port"))
+      .build()
+  }
 
   override protected def beforeAll(): Unit = {
     startCassandra()
@@ -73,15 +110,21 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suit
     super.beforeAll()
   }
 
-  def startCassandra(): Unit = {
-    val cassandraDirectory = new File("target/" + systemName)
-    CassandraLauncher.start(
-      cassandraDirectory,
-      configResource = cassandraConfigResource,
-      clean = true,
-      port = 0,
-      CassandraLauncher.classpathForResources("logback-test.xml")
-    )
+  def startCassandra(): Unit = startCassandra(0)
+
+  def startCassandra(port: Int): Unit = {
+    mode match {
+      case Embedded =>
+        val cassandraDirectory = new File("target/" + systemName)
+        CassandraLauncher.start(
+          cassandraDirectory,
+          configResource = cassandraConfigResource,
+          clean = true,
+          port = port,
+          CassandraLauncher.classpathForResources("logback-test.xml")
+        )
+      case External =>
+    }
   }
 
   def awaitPersistenceInit(): Unit = {
@@ -90,8 +133,18 @@ trait CassandraLifecycle extends BeforeAndAfterAll { this: TestKitBase with Suit
 
   override protected def afterAll(): Unit = {
     shutdown(system, verifySystemShutdown = true)
-    CassandraLauncher.stop()
+    mode match {
+      case Embedded =>
+        CassandraLauncher.stop()
+      case External =>
+        externalCassandraCleanup()
+    }
     super.afterAll()
   }
 
+  /**
+   * Only called if using an external cassandra. Override to clean up
+   * keyspace etc
+   */
+  protected def externalCassandraCleanup(): Unit = {}
 }

@@ -1,79 +1,71 @@
 /*
- * Copyright (C) 2016 Typesafe Inc. <http://www.typesafe.com>
+ * Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>
  */
+
 package akka.persistence.cassandra.journal
 
-import java.util.Locale
-import java.util.concurrent.TimeUnit.MILLISECONDS
-import scala.collection.immutable.HashMap
-import scala.concurrent.duration._
-import com.typesafe.config.{ Config, ConfigValueType }
-import akka.persistence.cassandra.CassandraPluginConfig
-import akka.util.Helpers.Requiring
-import akka.actor.ActorSystem
+import java.util.concurrent.TimeUnit
 
-class CassandraJournalConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
+import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
+import akka.annotation.InternalApi
+import akka.persistence.cassandra.CassandraPluginConfig
+import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
+import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
+import com.typesafe.config.Config
+
+import scala.concurrent.duration._
+
+@InternalApi private[akka] sealed trait BucketSize {
+  val durationMillis: Long
+}
+
+private[akka] case object Day extends BucketSize {
+  override val durationMillis: Long = 1.day.toMillis
+}
+private[akka] case object Hour extends BucketSize {
+  override val durationMillis: Long = 1.hour.toMillis
+}
+private[akka] case object Minute extends BucketSize {
+  override val durationMillis: Long = 1.minute.toMillis
+}
+
+private[akka] object BucketSize {
+  def fromString(value: String): BucketSize = {
+    Vector(Day, Hour, Minute).find(_.toString.toLowerCase == value.toLowerCase)
+      .getOrElse(throw new IllegalArgumentException("Invalid value for bucket size: " + value))
+  }
+}
+
+case class TableSettings(name: String, compactionStrategy: CassandraCompactionStrategy, gcGraceSeconds: Long)
+
+class CassandraJournalConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) with NoSerializationVerificationNeeded {
   val targetPartitionSize: Int = config.getInt(CassandraJournalConfig.TargetPartitionProperty)
   val maxResultSize: Int = config.getInt("max-result-size")
   val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
   val maxMessageBatchSize = config.getInt("max-message-batch-size")
+
+  // TODO this is now only used when deciding how to delete, remove this config and just
+  // query what version of cassandra we're connected to and do the right thing
   val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
-  val enableEventsByTagQuery: Boolean = !cassandra2xCompat && config.getBoolean("enable-events-by-tag-query")
-  val eventsByTagView: String = config.getString("events-by-tag-view")
-  val metaInEventsByTagView: Boolean = config.getBoolean("meta-in-events-by-tag-view")
+
   val queryPlugin = config.getString("query-plugin")
-  val pubsubMinimumInterval: Duration = {
-    val key = "pubsub-minimum-interval"
-    config.getString(key).toLowerCase(Locale.ROOT) match {
-      case "off" ⇒ Duration.Undefined
-      case _     ⇒ config.getDuration(key, MILLISECONDS).millis requiring (_ > Duration.Zero, key + " > 0s, or off")
-    }
-  }
 
-  val maxTagsPerEvent: Int = 3
+  val bucketSize: BucketSize = BucketSize.fromString(config.getString("events-by-tag.bucket-size"))
 
-  private val (tags, tagPrefixes) = {
-    import scala.collection.JavaConverters._
-    config.getConfig("tags").entrySet.asScala.collect {
-      case entry if entry.getValue.valueType == ConfigValueType.NUMBER =>
-        val tag = entry.getKey
-        val tagId = entry.getValue.unwrapped.asInstanceOf[Number].intValue
-        require(
-          1 <= tagId && tagId <= 3,
-          s"Tag identifer for [$tag] must be a 1, 2, or 3, was [$tagId]. " +
-            s"Max $maxTagsPerEvent tags per event is supported."
-        )
-        tag -> tagId
-    }.foldLeft((HashMap.empty[String, Int], HashMap.empty[String, Int])) {
-      case ((tagsAcc, prefixAcc), (tag, index)) =>
-        if (tag.startsWith("\"") && tag.endsWith("*\"")) {
-          (tagsAcc, prefixAcc + (tag.substring(1, tag.length - 2) -> index))
-        } else {
-          (tagsAcc + (tag -> index), prefixAcc)
-        }
-    }
-  }
+  val tagTable = TableSettings(
+    config.getString("events-by-tag.table"),
+    CassandraCompactionStrategy(config.getConfig("events-by-tag.compaction-strategy")),
+    config.getLong("events-by-tag.gc-grace-seconds")
+  )
 
-  def idForTag(tag: String): Int =
-    tags.get(tag).orElse {
-      tagPrefixes
-        .collectFirst {
-          case (prefix, index) if tag.startsWith(prefix) =>
-            index
-        }
-    }.getOrElse(1)
-
-  /**
-   * Will be 0 if [[#enableEventsByTagQuery]] is disabled,
-   * will be 1 if [[#tags]] is empty, otherwise the number of configured
-   * distinct tag identifiers.
-   */
-  def maxTagId: Int =
-    if (!enableEventsByTagQuery) 0
-    else if (tagPrefixes.isEmpty && tags.isEmpty) 1
-    else (tags.values ++ tagPrefixes.values).max
+  val tagWriterSettings = TagWriterSettings(
+    config.getInt("events-by-tag.max-message-batch-size"),
+    config.getDuration("events-by-tag.flush-interval", TimeUnit.MILLISECONDS).millis,
+    config.getBoolean("pubsub-notification")
+  )
 }
 
 object CassandraJournalConfig {
   val TargetPartitionProperty: String = "target-partition-size"
 }
+
