@@ -33,7 +33,7 @@ object EventsByPersistenceIdFastForwardSpec {
 }
 
 class EventsByPersistenceIdFastForwardSpec
-  extends TestKit(ActorSystem("EventsByPersistenceIdSpec", EventsByPersistenceIdSpec.config))
+  extends TestKit(ActorSystem("EventsByPersistenceIdSpec", EventsByPersistenceIdFastForwardSpec.config))
   with ImplicitSender
   with WordSpecLike
   with CassandraLifecycle
