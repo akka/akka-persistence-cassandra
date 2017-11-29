@@ -71,7 +71,13 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
   )
 
   protected val tagWrites = context.system.actorOf(TagWriters.props(
-    TagWritersSession(preparedWriteToTagView, session.executeWrite, session.selectResultSet, preparedWriteToTagProgress),
+    TagWritersSession(
+      preparedWriteToTagViewWithoutMeta,
+      preparedWriteToTagViewWithMeta,
+      session.executeWrite,
+      session.selectResultSet,
+      preparedWriteToTagProgress
+    ),
     config.tagWriterSettings
   ))
 
@@ -125,7 +131,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       preparedSelectTagProgress
       preparedSelectTagProgressForPersistenceId
       preparedWriteToTagProgress
-      preparedWriteToTagView
+      preparedWriteToTagViewWithoutMeta
   }
 
   private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))

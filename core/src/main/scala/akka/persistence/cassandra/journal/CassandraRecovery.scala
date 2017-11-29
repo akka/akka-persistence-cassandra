@@ -33,7 +33,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
     toSequenceNr:   Long,
     max:            Long
   )(replayCallback: (PersistentRepr) => Unit): Future[Unit] = {
-    log.info("Recovering pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
+    log.debug("Recovering pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
 
     val recoveryPrep: Future[Map[String, TagProgress]] = for {
       tp <- lookupTagProgress(persistenceId)

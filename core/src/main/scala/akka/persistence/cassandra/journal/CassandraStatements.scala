@@ -105,7 +105,7 @@ trait CassandraStatements {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true, ?)
     """
 
-  def writeTags =
+  def writeTags(withMeta: Boolean) =
     s"""
        INSERT INTO $tagTableName(
         tag_name,
@@ -118,7 +118,11 @@ trait CassandraStatements {
         sequence_nr,
         ser_id,
         ser_manifest,
-        writer_uuid) VALUES (?, ?,?,?,?,?,?,?,?,?,?)
+        writer_uuid
+        ${if (withMeta) ", meta_ser_id, meta_ser_manifest, meta" else ""}
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,
+        ${if (withMeta) "?, ?, ?," else ""}
+        ?)
      """
 
   def writeTagProgress =

@@ -145,6 +145,7 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
   "Events by tag migration with no metadata" must {
     val pidOne = "p-1"
     val pidTwo = "p-2"
+    val pidWithMeta = "pidMeta"
 
     "have some existing tagged messages" in {
       writeOldTestEventWithTags(PersistentRepr("e-1", 1L, pidOne), Set("blue", "green", "orange"))
@@ -153,6 +154,7 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
       writeOldTestEventWithTags(PersistentRepr("e-4", 4L, pidOne), Set("blue", "green"))
       writeOldTestEventWithTags(PersistentRepr("f-1", 1L, pidTwo), Set("green"))
       writeOldTestEventWithTags(PersistentRepr("f-2", 2L, pidTwo), Set("blue"))
+      writeOldTestEventWithTags(PersistentRepr("g-1", 1L, pidWithMeta), Set("blue"), Some("This is the best event ever"))
     }
 
     "allow creation of the new tags view table" in {
@@ -175,6 +177,7 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 2, "e-2") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 4, "e-4") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 2, "f-2") => }
+      blueProbe.expectNextPF { case EventEnvelope(_, `pidWithMeta`, 1, EventWithMetaData("g-1", "This is the best event ever")) => }
       blueProbe.expectNoMessage(waitTime)
       blueProbe.cancel()
 
@@ -228,6 +231,7 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 2, "e-2") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 4, "e-4") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 2, "f-2") => }
+      blueProbe.expectNextPF { case EventEnvelope(_, `pidWithMeta`, 1, EventWithMetaData("g-1", "This is the best event ever")) => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 5, "new-event-1") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 6, "new-event-2") => }
       blueProbe.expectNoMessage(waitTime)
@@ -263,13 +267,8 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
     }
   }
 
+  // these probably need to be separate classes with their own keyspcae
   "Events by tag migration with messages in the message column" must {
-    "work" in {
-      pending
-    }
-  }
-
-  "Events by tag migration metadata" must {
     "work" in {
       pending
     }
@@ -298,18 +297,22 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
   }
 
   // Write used before 0.80
-  val writeMessage =
-    s"""
+  def writeMessage(withMeta: Boolean) = s"""
       INSERT INTO ${messagesTableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
+        ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
         tag1, tag2, tag3, used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true)
     """
 
-  private lazy val preparedWriteMessage = {
-    session.prepare(writeMessage)
+  private lazy val preparedWriteMessageWithMeta = {
+    session.prepare(writeMessage(true))
   }
 
-  protected def writeOldTestEventWithTags(persistent: PersistentRepr, tags: Set[String]): Unit = {
+  private lazy val preparedWriteMessageWithoutMeta = {
+    session.prepare(writeMessage(false))
+  }
+
+  protected def writeOldTestEventWithTags(persistent: PersistentRepr, tags: Set[String], metadata: Option[String] = None): Unit = {
     require(tags.size <= 3)
     val event = persistent.payload.asInstanceOf[AnyRef]
     val serializer = serialization.findSerializerFor(event)
@@ -323,12 +326,12 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
         else PersistentRepr.Undefined
     }
 
-    val bs = preparedWriteMessage.bind()
+    val ps = if (metadata.isDefined) preparedWriteMessageWithMeta else preparedWriteMessageWithoutMeta
+    val bs = ps.bind()
     tags.zipWithIndex.foreach {
       case (tag, index) =>
         bs.setString(s"tag${index + 1}", tag)
     }
-
     bs.setString("persistence_id", persistent.persistenceId)
     bs.setLong("partition_nr", 0L)
     bs.setLong("sequence_nr", persistent.sequenceNr)
@@ -340,6 +343,23 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
     bs.setString("ser_manifest", serManifest)
     bs.setString("event_manifest", persistent.manifest)
     bs.setBytes("event", serialized)
+
+    metadata.foreach { m =>
+      val meta = m.asInstanceOf[AnyRef]
+      val metaSerialiser = serialization.findSerializerFor(meta)
+      val metaSerialised = ByteBuffer.wrap(serialization.serialize(meta).get)
+      bs.setBytes("meta", metaSerialised)
+      bs.setInt("meta_ser_id", metaSerialiser.identifier)
+      val serManifest: String = serializer match {
+        case ser2: SerializerWithStringManifest ⇒
+          ser2.manifest(meta)
+        case _ ⇒
+          if (serializer.includeManifest) meta.getClass.getName
+          else PersistentRepr.Undefined
+      }
+      bs.setString("meta_ser_manifest", serManifest)
+    }
+
     session.execute(bs)
     system.log.debug("Directly wrote payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
   }

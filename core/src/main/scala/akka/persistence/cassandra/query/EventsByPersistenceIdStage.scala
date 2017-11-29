@@ -24,7 +24,7 @@ import akka.annotation.InternalApi
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.ListenableFutureConverter
 import akka.persistence.cassandra.journal.{ BucketSize, CassandraJournal, TimeBucket }
-import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, Serialized }
+import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, Serialized, SerializedMeta }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extracted
 import akka.serialization.{ Serialization, SerializationExtension }
 import akka.stream.ActorMaterializer
@@ -150,10 +150,14 @@ import com.datastax.driver.core.utils.Bytes
           TaggedPersistentRepr(persistentFromByteBuffer(s, b), Set.empty[String], row.getUUID("timestamp"))
       }
 
-    // FIXME deal with tag columns not being there
-    // move to migration as this is for the old schema
-    val rawPayloadCurrentSchema = (bucketSize: BucketSize) => (row: Row, _: EventDeserializer, _: Serialization) => {
+    val rawPayloadCurrentSchema: BucketSize => Extractor[RawEvent] = (bucketSize: BucketSize) => (row: Row, _: EventDeserializer, _: Serialization) => {
       val timeUuid = row.getUUID("timestamp")
+      // TODO could cache this
+      val meta = if (row.getColumnDefinitions.contains("meta")) {
+        Some(SerializedMeta(row.getBytes("meta"), row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
+      } else {
+        None
+      }
       RawEvent(
         row.getLong("sequence_nr"),
         Serialized(
@@ -165,7 +169,7 @@ import com.datastax.driver.core.utils.Bytes
           row.getString("ser_manifest"),
           row.getInt("ser_id"),
           row.getString("writer_uuid"),
-          None, // FIXME, deal with meta being there
+          meta,
           timeUuid,
           timeBucket = TimeBucket(timeUuid, bucketSize) // FIXME, pass this in
         )
@@ -177,7 +181,6 @@ import com.datastax.driver.core.utils.Bytes
       serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
     }
   }
-
 }
 
 /**

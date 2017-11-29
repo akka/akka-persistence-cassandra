@@ -59,34 +59,47 @@ import scala.util.{ Failure, Success, Try }
   )
 
   private[akka] class TagWriterSession(
-    tag:              String,
-    tagWritePs:       Future[PreparedStatement],
-    executeStatement: Statement => Future[Done],
-    selectStatement:  Statement => Future[ResultSet],
-    tagProgressPs:    Future[PreparedStatement]
+    tag:                String,
+    tagWritePs:         Future[PreparedStatement],
+    tagWriteWithMetaPs: Future[PreparedStatement],
+    executeStatement:   Statement => Future[Done],
+    selectStatement:    Statement => Future[ResultSet],
+    tagProgressPs:      Future[PreparedStatement]
   ) {
     def writeBatch(events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext): Future[Done] = {
       val batch = new BatchStatement(BatchStatement.Type.UNLOGGED)
-      tagWritePs.map { ps =>
-        events.foreach {
-          case (event, pidTagSequenceNr) => {
-            val bound = ps.bind(
-              tag,
-              event.timeBucket.key: JLong,
-              event.timeUuid,
-              pidTagSequenceNr: JLong,
-              event.serialized,
-              event.eventAdapterManifest,
-              event.persistenceId,
-              event.sequenceNr: JLong,
-              event.serId: JInt,
-              event.serManifest,
-              event.writerUuid
-            )
-            batch.add(bound)
+      val tagWritePSs = for {
+        withMeta <- tagWriteWithMetaPs
+        withoutMeta <- tagWritePs
+      } yield (withMeta, withoutMeta)
+
+      tagWritePSs.map {
+        case (withMeta, withoutMeta) =>
+          events.foreach {
+            case (event, pidTagSequenceNr) => {
+              val ps = if (event.meta.isDefined) withMeta else withoutMeta
+              val bound = ps.bind(
+                tag,
+                event.timeBucket.key: JLong,
+                event.timeUuid,
+                pidTagSequenceNr: JLong,
+                event.serialized,
+                event.eventAdapterManifest,
+                event.persistenceId,
+                event.sequenceNr: JLong,
+                event.serId: JInt,
+                event.serManifest,
+                event.writerUuid
+              )
+              event.meta.foreach { m =>
+                bound.setBytes("meta", m.serialized)
+                bound.setString("meta_ser_manifest", m.serManifest)
+                bound.setInt("meta_ser_id", m.serId)
+              }
+              batch.add(bound)
+            }
           }
-        }
-        batch
+          batch
       }.flatMap(executeStatement)
     }
 

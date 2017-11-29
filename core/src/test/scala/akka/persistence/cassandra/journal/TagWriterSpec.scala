@@ -58,7 +58,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     shutdown()
   }
 
-  val fakePreparedStatement: Future[PreparedStatement] = Future.successful(null)
+  val fakePs: Future[PreparedStatement] = Future.successful(null)
   val successfulWrite: Statement => Future[Done] = _ => Future.successful(Done)
   val defaultSettings = TagWriterSettings(
     maxBatchSize = 10,
@@ -492,7 +492,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
-    val session = new TagWriterSession(tag, fakePreparedStatement, successfulWrite, null, fakePreparedStatement) {
+    val session = new TagWriterSession(tag, fakePs, fakePs, successfulWrite, null, fakePs) {
 
       override def writeBatch(events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
         probe.ref ! events.map {

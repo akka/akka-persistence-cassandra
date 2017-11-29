@@ -16,10 +16,11 @@ import scala.concurrent.Future
 @InternalApi private[akka] object TagWriters {
 
   case class TagWritersSession(
-    tagWritePs:       Future[PreparedStatement],
-    executeStatement: Statement => Future[Done],
-    selectStatement:  Statement => Future[ResultSet],
-    tagProgressPs:    Future[PreparedStatement]
+    tagWritePs:         Future[PreparedStatement],
+    tagWriteWithMetaPs: Future[PreparedStatement],
+    executeStatement:   Statement => Future[Done],
+    selectStatement:    Statement => Future[ResultSet],
+    tagProgressPs:      Future[PreparedStatement]
   )
 
   private[akka] case class BulkTagWrite(tagWrites: Vector[TagWrite])
@@ -52,6 +53,7 @@ import scala.concurrent.Future
         val tagSession = new TagWriterSession(
           tag,
           session.tagWritePs,
+          session.tagWriteWithMetaPs,
           session.executeStatement,
           session.selectStatement,
           session.tagProgressPs

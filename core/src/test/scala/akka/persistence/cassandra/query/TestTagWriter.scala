@@ -10,11 +10,11 @@ import java.util.UUID
 
 import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
+import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal._
 import akka.serialization.{ Serialization, SerializerWithStringManifest }
+import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.UUIDs
-import com.datastax.driver.core.{ PreparedStatement, Session }
-import akka.persistence.cassandra.formatOffset
 
 private[akka] trait TestTagWriter {
   def system: ActorSystem
@@ -22,11 +22,11 @@ private[akka] trait TestTagWriter {
   val serialization: Serialization
   val writePluginConfig: CassandraJournalConfig
 
-  lazy val preparedWriteTagMessage: PreparedStatement = {
+  lazy val (preparedWriteTagMessage, preparedWriteTagMessageWithMeta) = {
     val writeStatements: CassandraStatements = new CassandraStatements {
       def config: CassandraJournalConfig = writePluginConfig
     }
-    session.prepare(writeStatements.writeTags)
+    (session.prepare(writeStatements.writeTags(false)), session.prepare(writeStatements.writeTags(true)))
   }
 
   def writeTaggedEvent(time: LocalDateTime, pr: PersistentRepr, tags: Set[String], tagPidSequenceNr: Long, bucketSize: BucketSize): Unit = {

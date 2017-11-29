@@ -13,7 +13,8 @@ trait TaggedPreparedStatements extends CassandraStatements {
   val session: CassandraSession
   implicit val ec: ExecutionContext
 
-  def preparedWriteToTagView: Future[PreparedStatement] = session.prepare(writeTags).map(_.setIdempotent(true))
+  def preparedWriteToTagViewWithoutMeta: Future[PreparedStatement] = session.prepare(writeTags(false)).map(_.setIdempotent(true))
+  def preparedWriteToTagViewWithMeta: Future[PreparedStatement] = session.prepare(writeTags(true)).map(_.setIdempotent(true))
   def preparedWriteToTagProgress: Future[PreparedStatement] = session.prepare(writeTagProgress).map(_.setIdempotent(true))
   def preparedSelectTagProgress: Future[PreparedStatement] = session.prepare(selectTagProgress).map(_.setIdempotent(true))
   def preparedSelectTagProgressForPersistenceId: Future[PreparedStatement] = session.prepare(selectTagProgressForPersistenceId).map(_.setIdempotent(true))

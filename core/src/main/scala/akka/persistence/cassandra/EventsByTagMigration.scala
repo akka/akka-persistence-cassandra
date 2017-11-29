@@ -6,7 +6,7 @@ package akka.persistence.cassandra
 
 import akka.actor.ActorSystem
 import akka.event.Logging
-import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, SequenceNr, Serialized, Tag }
+import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
 import akka.persistence.cassandra.journal._
@@ -38,6 +38,12 @@ object EventsByTagMigration {
         }
     }
     val timeUuid = row.getUUID("timestamp")
+    // TODO could cache this
+    val meta = if (row.getColumnDefinitions.contains("meta")) {
+      Some(SerializedMeta(row.getBytes("meta"), row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
+    } else {
+      None
+    }
     RawEvent(
       row.getLong("sequence_nr"),
       Serialized(
@@ -49,7 +55,7 @@ object EventsByTagMigration {
         row.getString("ser_manifest"),
         row.getInt("ser_id"),
         row.getString("writer_uuid"),
-        None, // FIXME, deal with meta being there
+        meta,
         timeUuid,
         timeBucket = TimeBucket(timeUuid, Hour) // FIXME, make configurable for migration or just pick it up from normal config
       )
@@ -78,7 +84,13 @@ class EventsByTagMigration(system: ActorSystem)
     init = _ => Future.successful(Done)
   )
   private val tagWriters = system.actorOf(TagWriters.props(
-    TagWritersSession(preparedWriteToTagView, session.executeWrite, session.selectResultSet, preparedWriteToTagProgress),
+    TagWritersSession(
+      preparedWriteToTagViewWithoutMeta,
+      preparedWriteToTagViewWithMeta,
+      session.executeWrite,
+      session.selectResultSet,
+      preparedWriteToTagProgress
+    ),
     config.tagWriterSettings
   ))
 
