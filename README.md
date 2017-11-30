@@ -141,6 +141,17 @@ the actual domain event.
 
 The new columns `meta_ser_id`, `meta_ser_manifest`, and `meta` are defined in the [new journal table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.55/core/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L45-L47) and [new snapshot table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.55/core/src/main/scala/akka/persistence/cassandra/snapshot/CassandraStatements.scala#L31-L33).
 
+You can add the to existing tables by executing the following in `cqlsh`:
+
+```
+alter table akka.messages add meta_ser_id int;
+alter table akka.messages add meta_ser_manifest text;
+alter table akka.messages add meta blob;
+alter table akka_snapshot.snapshots add meta_ser_id int;
+alter table akka_snapshot.snapshots add meta_ser_manifest text;
+alter table akka_snapshot.snapshots add meta blob;
+```
+
 These columns are used when the event is wrapped in `akka.persistence.cassandra.EventWithMetaData` or snapshot is wrapped in `akka.persistence.cassandra.SnapshotWithMetaData`. It is optional to alter the table and add the columns. It's only required to add the columns if such meta data is used.
 
 It is also not required to add the materialized views, not even if the meta data is stored in the journal table. If the materialized view is not changed the plain events are retrieved with the `eventsByTag` query and they are not wrapped in `EventWithMetaData`. Note that Cassandra [does not support](http://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlAlterMaterializedView.html) adding columns to an existing materialized view.
