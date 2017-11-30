@@ -188,7 +188,9 @@ Dispatcher configuration was changed, see [reference.conf](https://github.com/ak
 
 The event data, snapshot data and meta data are stored in a separate columns instead of being wrapped in blob. Run the following statements in `cqlsh`:
 
-    drop materialized view akka.eventsbytag;
+    drop materialized view if exists akka.eventsbytag1;
+    drop materialized view if exists akka.eventsbytag2;
+    drop materialized view if exists akka.eventsbytag3;
     alter table akka.messages add writer_uuid text;
     alter table akka.messages add ser_id int;
     alter table akka.messages add ser_manifest text;
