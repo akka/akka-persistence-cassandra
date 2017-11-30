@@ -19,6 +19,19 @@ This setting can not be changed after data has been written.
  
 More billion per day per tag? You probably need a specialised schema rather than a general library like this.
 
+### Justification for bucket sizes
+
+The old implementation put all tags for each day in a single cassandra partition. 
+If a cassandra partition gets too large it starts to perform badly (and has a hard limit of 2 billion cells, a cell being similar to a column). 
+Given we have ~10 columns in the table there was a hard limit previously of 200million but it would have performed terribly before getting any where near this.
+
+The support for `Minute` bucket size means that there are 1440 partitions per day. 
+Given a large C* cluster this should work until you have in the order of 10s of millions per minute
+when the write rate to that partition could become the bottleneck rather than partition size.
+
+The increased scalability comes at the cost of having to query more partitions on the read side so don't 
+use `Minute` unless necessary.
+
 ### Migrating
 
 A one off manual run of a provided stream will take events from the messages table and
