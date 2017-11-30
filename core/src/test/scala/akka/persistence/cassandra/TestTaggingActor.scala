@@ -5,7 +5,7 @@
 package akka.persistence.cassandra
 
 import akka.actor.{ ActorLogging, ActorRef, Props }
-import akka.persistence.{ PersistentActor, SaveSnapshotSuccess }
+import akka.persistence.{ PersistentActor, RecoveryCompleted, SaveSnapshotSuccess }
 import akka.persistence.cassandra.TestTaggingActor.{ Ack, DoASnapshotPlease, SnapShotAck }
 import akka.persistence.journal.Tagged
 
@@ -14,12 +14,16 @@ object TestTaggingActor {
   case object DoASnapshotPlease
   case object SnapShotAck
 
-  def props(pId: String, tags: Set[String]): Props =
-    Props(classOf[TestTaggingActor], pId, tags)
+  def props(pId: String, tags: Set[String] = Set(), probe: Option[ActorRef] = None): Props =
+    Props(classOf[TestTaggingActor], pId, tags, probe)
 }
 
-class TestTaggingActor(val persistenceId: String, tags: Set[String]) extends PersistentActor with ActorLogging {
-  def receiveRecover: Receive = processEvent
+class TestTaggingActor(val persistenceId: String, tags: Set[String], probe: Option[ActorRef]) extends PersistentActor with ActorLogging {
+  def receiveRecover: Receive = {
+    case RecoveryCompleted =>
+      probe.foreach(_ ! RecoveryCompleted)
+    case _ =>
+  }
 
   def receiveCommand: Receive = normal
 

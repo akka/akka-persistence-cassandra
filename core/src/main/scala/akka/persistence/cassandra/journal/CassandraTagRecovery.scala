@@ -4,14 +4,18 @@
 
 package akka.persistence.cassandra.journal
 
+import akka.Done
 import akka.actor.ActorRef
+import akka.pattern.ask
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ SequenceNr, Tag }
-import akka.persistence.cassandra.journal.TagWriter.{ TagProgress, TagWrite }
+import akka.persistence.cassandra.journal.TagWriter.{ SetTagProgress, TagProgress, TagWrite }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
+import akka.util.Timeout
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.duration._
 
 trait CassandraTagRecovery {
   self: TaggedPreparedStatements =>
@@ -53,4 +57,13 @@ trait CassandraTagRecovery {
     })
     rawEvent
   }
+
+  private[akka] def sendTagProgress(tp: Map[Tag, TagProgress], ref: ActorRef): Future[Done] = {
+    implicit val timeout = Timeout(1.second)
+    val progressSets = tp.map {
+      case (tag, progress) => (ref ? SetTagProgress(tag, progress)).mapTo[TagWriter.SetTagProgressAck.type]
+    }
+    Future.sequence(progressSets).map(_ => Done)
+  }
+
 }

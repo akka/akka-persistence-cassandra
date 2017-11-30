@@ -74,7 +74,7 @@ class EventsByPersistenceIdFastForwardSpec
 
     val evt2 = PersistentRepr("e-2", 2L, "f", "", writerUuid = w1)
     val evt4 = PersistentRepr("e-4", 4L, "f", "", writerUuid = w1)
-    //    writeTestEvent(evt2)
+    writeTestEvent(evt2)
     writeTestEvent(evt4)
     probe.expectNext("e-4")
 

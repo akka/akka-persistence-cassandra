@@ -99,18 +99,19 @@ Migrations
 It is very important that you test this migration in a pre-production environment as once you drop the materialized view
 and tag columns you can not roll back.
  
-Migration requires some downtime but the new mechanism removes the restriction of only 3 tags 
-and improves performance, scalability and reliability of eventsByTag queries.
-
-`EventsByTagMigration` provides a set of tools to assist in the migration.
+Most of the migration can be done while the old version of your application is running. The remaining steps happen automatically
+when a persistent actor is recovered which may slow down actor recovery but only by a small amount if you follow the offline steps.
+ 
+The `EventsByTagMigration` class provides a set of tools to assist in the migration.
 
 The first two are schema changes that should be performed once and can be done while your application is running with the old version of this plugin:
 * `createTables` creates the two new tables required
 * `addTagsColumn` adds a `set<text>` column to the `messages` table 
  
-Next is the data migration into a new table that. This will be a slow process as it needs
+Next is the data migration into a new table that stores events indexed by tag. This will be a slow process as it needs
 to scan over all existing events. It can be run while your application is running but beware that it will
 produce a lot of writes to your C* cluster so should be done during a quiet period.
+
 
 * `migrateToTagViews` scans over all your persistence ids and writes the tagged events to the `tag_views` table. At the same
 time it keeps track of its progress in the `tag_write_progress` table so if this were to fail due to say a C* issue you can resume
@@ -126,7 +127,7 @@ The following configuration changes. See `reference.conf` for full details:
 * `delayed-event-timeout` has been replaces by `events-by-tag.gap-timeout` with the restriction removed that all
 events have to be tagged. 
 * `first-time-bucket` format has changed to: `yyyyMMddTHH:mm` e.g. `20151120T00:00`
-* `eventutal-consistency` has been removed. It may be re-added see [#263](https://github.com/akka/akka-persistence-cassandra/issues/263)
+* `eventual-consistency` has been removed. It may be re-added see [#263](https://github.com/akka/akka-persistence-cassandra/issues/263)
 
 After you have migrated your data you can now remove the materialized view and `tagN` columns from the 
 `messages` table. It is *highly* recommended you do this as maintaining a materialized view is expensive
@@ -146,6 +147,14 @@ ALTER TABLE akka.messages DROP tag3;
 Note that the new `tags` column won't be back filled for old events. This won't affect 
 your `eventsByTag` queries as they come from a different table. This column is used for recovering any missed
 writes to the `tag_views` table when running persistent actors with the new version.
+
+#### Gotchas
+
+# Changing schema while your application is running
+
+Cassandra can generally handle schema changes to non-primary key columns. However all of the Journal's prepared statements
+that bind columns that you remove become invalid. So any migration step that involves dropping columns requires ActorSystems
+to be restarted.
 
 ### Migrations from 0.54 to 0.59
 

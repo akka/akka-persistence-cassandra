@@ -7,17 +7,16 @@ package akka.persistence.cassandra.journal
 import java.lang.{ Long => JLong }
 
 import akka.Done
-import akka.actor.{ ActorLogging, ActorRef }
+import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.persistence.PersistentRepr
+import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.CassandraJournal.Tag
 import akka.persistence.cassandra.journal.TagWriter.{ SetTagProgress, TagProgress, TagWrite }
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extractors, RawEvent, TaggedPersistentRepr }
+import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extractors, TaggedPersistentRepr }
 import akka.stream.scaladsl.{ Sink, Source }
-import akka.util.Timeout
 
 import scala.concurrent._
-import scala.concurrent.duration._
 
 trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatements {
   this: CassandraJournal =>
@@ -37,14 +36,14 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
 
     val recoveryPrep: Future[Map[String, TagProgress]] = for {
       tp <- lookupTagProgress(persistenceId)
-      _ <- sendTagProgress(tp)
+      _ <- sendTagProgress(tp, tagWrites)
       startingSequenceNr = calculateStartingSequenceNr(tp)
       _ <- sendPreSnapshotTagWrites(startingSequenceNr, fromSequenceNr, persistenceId, max, tp)
     } yield tp
 
     Source.fromFutureSource(
       recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
-        log.debug("Starting recovery with tag progress: {}", tp)
+        log.debug("Starting recovery with tag progress: {}. From {} to {}", tp, fromSequenceNr, toSequenceNr)
         queries
           .eventsByPersistenceId(
             persistenceId,
@@ -83,45 +82,35 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
       "asyncReplayMessagesPreSnapshot",
       someReadConsistency,
       someReadRetryPolicy,
-      Extractors.rawPayloadCurrentSchema(config.bucketSize)
-    ).map(sendMissingTagWriteRaw(tp, tagWrites)).runWith(Sink.ignore)
+      Extractors.taggedPersistentRepr
+    ).map(sendMissingTagWrite(tp, tagWrites)).runWith(Sink.ignore)
   } else {
-    log.debug("Recovery is starting before the latest tag writes tag progress")
+    log.debug("Recovery is starting before the latest tag writes tag progress. Min progress for pid {}. " +
+      "From sequence nr of recovery: {}", minProgressNr, fromSequenceNr)
     Future.successful(Done)
   }
 
-  private def sendTagProgress(tp: Map[Tag, TagProgress]): Future[Done] = {
-    implicit val timeout = Timeout(1.second)
-    val progressSets = tp.map {
-      case (tag, progress) => (tagWrites ? SetTagProgress(tag, progress)).mapTo[TagWriter.SetTagProgressAck.type]
-    }
-    Future.sequence(progressSets).map(_ => Done)
-  }
-
-  // TODO remove this and always use raw? Add a RawEvent => TaggedPersistentRepr
+  // TODO migrate this to using raw, maybe after offering a way to migrate old events in message?
   private def sendMissingTagWrite(tp: Map[Tag, TagProgress], to: ActorRef)(tpr: TaggedPersistentRepr): TaggedPersistentRepr = {
     tpr.tags.foreach(tag => {
       tp.get(tag) match {
         case None =>
           log.debug("Tag write not in progress. Sending to TagWriter. Tag {} Sequence Nr {}.", tag, tpr.sequenceNr)
-          to ! TagWrite(tag, Vector(serializeEvent(tpr.pr, tpr.tags, tpr.offset)))
+          to ! TagWrite(tag, Vector(serializeEvent(tpr.pr, tpr.tags, tpr.offset, bucketSize, serialization, transportInformation)))
         case Some(progress) =>
           if (tpr.sequenceNr > progress.sequenceNr) {
             log.debug("Sequence nr > than write progress. Sending to TagWriter. Tag {} Sequence Nr {}. ", tag, tpr.sequenceNr)
-            to ! TagWrite(tag, Vector(serializeEvent(tpr.pr, tpr.tags, tpr.offset)))
+            to ! TagWrite(tag, Vector(serializeEvent(tpr.pr, tpr.tags, tpr.offset, bucketSize, serialization, transportInformation)))
           }
       }
     })
     tpr
   }
 
-  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
-    val x = asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
+  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] =
+    asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
       asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h))
     }
-    x.onComplete(l => log.debug("highest seq nr: {} for pid {}", l, persistenceId))
-    x
-  }
 
   private def asyncFindHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
 

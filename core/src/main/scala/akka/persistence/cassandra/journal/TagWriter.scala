@@ -140,16 +140,24 @@ import scala.util.{ Failure, Success, Try }
     None
   }
 
+  // TODO remove once stable, or make part of the state in stack rather than a var
   var sequenceNrs = Map.empty[String, Long]
 
   override def receive: Receive = idle(Vector.empty[Serialized], Map.empty[String, Long])
 
-  def validate(payload: Vector[Serialized]): Unit = {
+  def validate(payload: Vector[Serialized], buffer: Vector[Serialized]): Unit = {
     payload.foreach { s =>
       sequenceNrs.get(s.persistenceId) match {
         case Some(seqNr) =>
           if (seqNr >= s.sequenceNr) {
-            throw new IllegalStateException(s"Not received sequence numbers in order: ${s.persistenceId}, currently highest sequenceNr: ${sequenceNrs(s.persistenceId)}")
+            val currentBuffer = buffer.map(s => (s.persistenceId, s.sequenceNr, formatOffset(s.timeUuid)))
+            val newEvents = buffer.map(s => (s.persistenceId, s.sequenceNr, formatOffset(s.timeUuid)))
+            log.error(
+              "Not received sequence numbers in order. Pid: {}. HighestSeq: {}. New events: {}. Buffered events: {}",
+              s.persistenceId, seqNr, newEvents, currentBuffer
+            )
+            throw new IllegalStateException(s"Not received sequence numbers in order for pid:${s.persistenceId}, " +
+              s"current highest sequenceNr: ${sequenceNrs(s.persistenceId)}.")
           }
           sequenceNrs += (s.persistenceId -> s.sequenceNr)
         case None =>
@@ -173,12 +181,13 @@ import scala.util.{ Failure, Success, Try }
         write(buffer, Vector.empty[Serialized], tagPidSequenceNrs)
       }
     case TagWrite(_, payload) =>
-      validate(payload)
+      validate(payload, buffer)
       flushIfRequired((buffer ++ payload).sortBy(_.timeUuid)(timeUuidOrdering), tagPidSequenceNrs)
     case TagWriteDone(_) =>
       log.error("Received Done when in idle state. This is a bug. Please report with DEBUG logs")
-    case SetTagProgress(_, tp @ TagProgress(pid, _, tagPidSequenceNr)) =>
+    case SetTagProgress(_, tp @ TagProgress(pid, sequenceNr, tagPidSequenceNr)) =>
       log.debug("Updating tag progress: {}", tp)
+      sequenceNrs += (pid -> sequenceNr)
       become(idle(buffer, tagPidSequenceNrs + (pid -> tagPidSequenceNr)))
       sender() ! SetTagProgressAck
   }
@@ -191,7 +200,7 @@ import scala.util.{ Failure, Success, Try }
     case Flush =>
     // Ignore, we will check when the write is done
     case TagWrite(_, payload) =>
-      validate(payload)
+      validate(payload, buffer)
       // buffer until current query is finished
       become(writeInProgress((buffer ++ payload).sortBy(_.timeUuid)(timeUuidOrdering), tagPidSequenceNrs, updatedTagProgress))
     case TagWriteDone(summary) =>
@@ -252,7 +261,10 @@ import scala.util.{ Failure, Success, Try }
     } else {
       timers.startSingleTimer(FlushKey, Flush, settings.flushInterval)
       // FIXME, remove the time buckets
-      log.debug("Batch size not reached, buffering. Current buffer size: {}. First timebucket: {} Last timebucket: {}", buffer.size, buffer.head.timeBucket, buffer.last.timeBucket)
+      if (log.isDebugEnabled) {
+        log.debug("Batch size not reached, buffering. Current buffer size: {}. First timebucket: {} Last timebucket: {}",
+          buffer.size, buffer.head.timeBucket, buffer.last.timeBucket)
+      }
       context.become(idle(buffer, tagSequenceNrs))
     }
   }

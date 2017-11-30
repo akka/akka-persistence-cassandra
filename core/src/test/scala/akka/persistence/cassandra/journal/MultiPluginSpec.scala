@@ -25,7 +25,7 @@ object MultiPluginSpec {
     s"""
        |akka.test.single-expect-default = 20s
        |
-        |cassandra-journal.keyspace = $journalKeyspace
+       |cassandra-journal.keyspace = $journalKeyspace
        |cassandra-journal.port=$cassandraPort
        |cassandra-journal.keyspace-autocreate=false
        |cassandra-journal.circuit-breaker.call-timeout = 30s

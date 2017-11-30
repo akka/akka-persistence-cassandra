@@ -7,19 +7,19 @@ package akka.persistence.cassandra
 import java.nio.ByteBuffer
 import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.{ Done, NotUsed }
 import akka.actor.{ ActorSystem, PoisonPill }
-import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
 import akka.persistence.cassandra.query.DirectWriting
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
+import akka.persistence.{ PersistentRepr, RecoveryCompleted }
 import akka.serialization.{ SerializationExtension, SerializerWithStringManifest }
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
+import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.{ Done, NotUsed }
 import com.datastax.driver.core.Cluster
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
@@ -62,7 +62,7 @@ object EventsByTagMigrationSpec {
        | PRIMARY KEY((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
     """.stripMargin
 
-  val oldMaterlializedView =
+  val oldMateterializedView =
     s"""
       CREATE MATERIALIZED VIEW $eventsByTagViewName AS
          SELECT tag1, timebucket, timestamp, persistence_id, partition_nr, sequence_nr, writer_uuid, ser_id, ser_manifest, event_manifest, event,
@@ -99,7 +99,13 @@ object EventsByTagMigrationSpec {
 
 }
 
-class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationSpec.keyspaceName, EventsByTagMigrationSpec.config))
+class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigrationSpec {
+
+}
+
+class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec
+
+class AbstractEventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationSpec.keyspaceName, EventsByTagMigrationSpec.config))
   with WordSpecLike
   with CassandraLifecycle
   with DirectWriting
@@ -138,7 +144,7 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
     // Drop the messages table as we want to start with the old one
     session.execute(s"drop table ${messagesTableName}")
     session.execute(oldMessagesTable)
-    session.execute(oldMaterlializedView)
+    session.execute(oldMateterializedView)
     system.log.debug("Old tables created")
   }
 
@@ -148,12 +154,14 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
     val pidWithMeta = "pidMeta"
 
     "have some existing tagged messages" in {
-      writeOldTestEventWithTags(PersistentRepr("e-1", 1L, pidOne), Set("blue", "green", "orange"))
+      // this one uses the 0.7 schema, soo old.
+      writeOldTestEventInMessagesColumn(PersistentRepr("e-1", 1L, pidOne), Set("blue", "green", "orange"))
       writeOldTestEventWithTags(PersistentRepr("e-2", 2L, pidOne), Set("blue"))
       writeOldTestEventWithTags(PersistentRepr("e-3", 3L, pidOne), Set())
       writeOldTestEventWithTags(PersistentRepr("e-4", 4L, pidOne), Set("blue", "green"))
       writeOldTestEventWithTags(PersistentRepr("f-1", 1L, pidTwo), Set("green"))
       writeOldTestEventWithTags(PersistentRepr("f-2", 2L, pidTwo), Set("blue"))
+      writeOldTestEventWithTags(PersistentRepr("g-1", 1L, pidWithMeta), Set("blue"), Some("This is the best event ever"))
       writeOldTestEventWithTags(PersistentRepr("g-1", 1L, pidWithMeta), Set("blue"), Some("This is the best event ever"))
     }
 
@@ -163,6 +171,23 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
 
     "migrate tags to the new table" in {
       migrator.migrateToTagViews().futureValue shouldEqual Done
+    }
+
+    "be idempotent so it can be restarted" in {
+      // add some more events to be picked up
+      writeOldTestEventWithTags(PersistentRepr("f-1", 1L, pidTwo), Set("green"))
+      writeOldTestEventWithTags(PersistentRepr("f-2", 2L, pidTwo), Set("blue"))
+      writeOldTestEventWithTags(PersistentRepr("g-1", 1L, pidWithMeta), Set("blue"), Some("This is the best event ever"))
+    }
+
+    "allow a second migration to resume from where the last one got to" in {
+      migrator.migrateToTagViews().futureValue shouldEqual Done
+    }
+
+    "migrate events missed during the large migration as part of actor recovery" in {
+      // these events mimic the old version still running and persisting events
+      writeOldTestEventWithTags(PersistentRepr("f-3", 3L, pidTwo), Set("green"))
+      writeOldTestEventWithTags(PersistentRepr("f-4", 4L, pidTwo), Set("blue"))
     }
 
     "allow adding of the new tags column" in {
@@ -203,6 +228,31 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
       bananaProbe.expectNoMessage(waitTime)
       bananaProbe.cancel()
     }
+
+    "see events missed by migration if the persistent actor is started" in {
+      val probe = TestProbe()
+      systemTwo.actorOf(TestTaggingActor.props(pidTwo, probe = Some(probe.ref)))
+      probe.expectMsg(RecoveryCompleted)
+
+      val blueSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("blue", NoOffset)
+      val blueProbe = blueSrc.runWith(TestSink.probe[Any])
+      blueProbe.request(6)
+      blueProbe.expectNextN(5) // ignore the ones we've already validated
+      // This event wasn't migrated, should have been fixed on actor start up
+      blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 4, "f-4") => }
+      blueProbe.expectNoMessage(waitTime)
+      blueProbe.cancel()
+
+      val greenSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("green", NoOffset)
+      val greenProbe = greenSrc.runWith(TestSink.probe[Any])
+      greenProbe.request(6)
+      greenProbe.expectNextN(3) // ignore the ones we've already validated
+      // This event wasn't migrated, should have been fixed on actor start up
+      greenProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 3, "f-3") => }
+      greenProbe.expectNoMessage(waitTime)
+      greenProbe.cancel()
+
+    }
     // This will be left as a manual step for the user as it stops
     // rolling back to the old version
     "allow dropping of the materialized view" in {
@@ -226,12 +276,13 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
 
       val blueSrc: Source[EventEnvelope, NotUsed] = queriesTwo.eventsByTag("blue", NoOffset)
       val blueProbe = blueSrc.runWith(TestSink.probe[Any])(materialiserTwo)
-      blueProbe.request(7)
+      blueProbe.request(10)
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 2, "e-2") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 4, "e-4") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 2, "f-2") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidWithMeta`, 1, EventWithMetaData("g-1", "This is the best event ever")) => }
+      blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 4, "f-4") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 5, "new-event-1") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 6, "new-event-2") => }
       blueProbe.expectNoMessage(waitTime)
@@ -258,31 +309,12 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
       val orangeProbe = orangeSrc.runWith(TestSink.probe[Any])(materialiserThree)
       orangeProbe.request(3)
       orangeProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1") => }
-      orangeProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 3, "new-event-1") => }
-      orangeProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 4, "new-event-2") => }
+      orangeProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 5, "new-event-1") => }
+      orangeProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 6, "new-event-2") => }
       orangeProbe.expectNoMessage(waitTime)
       orangeProbe.expectNoMessage(waitTime)
       orangeProbe.cancel()
       pidTwoPA ! PoisonPill
-    }
-  }
-
-  // these probably need to be separate classes with their own keyspcae
-  "Events by tag migration with messages in the message column" must {
-    "work" in {
-      pending
-    }
-  }
-
-  "Events by tag resuming migration" must {
-    "work" in {
-      pending
-    }
-  }
-
-  "Events by tag partial migration with recovery fixing the rest" must {
-    "work" in {
-      pending
     }
   }
 
@@ -297,22 +329,47 @@ class EventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationS
   }
 
   // Write used before 0.80
-  def writeMessage(withMeta: Boolean) = s"""
+  private def writeMessage(withMeta: Boolean) =
+    s"""
       INSERT INTO ${messagesTableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
         ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
         tag1, tag2, tag3, used)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true)
     """
 
-  private lazy val preparedWriteMessageWithMeta = {
-    session.prepare(writeMessage(true))
+  private lazy val preparedWriteMessageWithMeta = session.prepare(writeMessage(true))
+
+  private lazy val preparedWriteMessageWithoutMeta = session.prepare(writeMessage(false))
+
+  private val writeMessageVersion0p7 =
+    s"""
+      INSERT INTO ${messagesTableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, tag1, tag2, tag3, message, used)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, true)
+
+    """
+
+  private lazy val preparedWriteVersion0p7 = session.prepare(writeMessageVersion0p7)
+
+  private def writeOldTestEventInMessagesColumn(pr: PersistentRepr, tags: Set[String]): Unit = {
+    require(tags.size <= 3)
+    val bound = preparedWriteVersion0p7.bind()
+    bound.setString("persistence_id", pr.persistenceId)
+    bound.setLong("partition_nr", 0L)
+    bound.setLong("sequence_nr", pr.sequenceNr)
+    val nowUuid = UUIDs.timeBased()
+    val now = UUIDs.unixTimestamp(nowUuid)
+    bound.setUUID("timestamp", nowUuid)
+    bound.setString("timebucket", TimeBucket(now, Hour).key.toString)
+    val bytes: Array[Byte] = serialization.serialize(pr).get
+    bound.setBytes("message", ByteBuffer.wrap(bytes))
+    tags.zipWithIndex foreach {
+      case (tag, index) =>
+        bound.setString(s"tag${index + 1}", tag)
+    }
+    session.execute(bound)
   }
 
-  private lazy val preparedWriteMessageWithoutMeta = {
-    session.prepare(writeMessage(false))
-  }
-
-  protected def writeOldTestEventWithTags(persistent: PersistentRepr, tags: Set[String], metadata: Option[String] = None): Unit = {
+  private def writeOldTestEventWithTags(persistent: PersistentRepr, tags: Set[String], metadata: Option[String] = None): Unit = {
     require(tags.size <= 3)
     val event = persistent.payload.asInstanceOf[AnyRef]
     val serializer = serialization.findSerializerFor(event)

@@ -23,7 +23,7 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
 import akka.persistence.query.PersistenceQuery
-import akka.serialization.{ Serialization, SerializationExtension, SerializerWithStringManifest }
+import akka.serialization.{ Serialization, SerializationExtension }
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import com.datastax.driver.core._
@@ -113,7 +113,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
   }
 
   override def receivePluginInternal: Receive = {
-
     case WriteFinished(persistenceId, f) =>
       writeInProgress.remove(persistenceId, f)
 
@@ -132,6 +131,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       preparedSelectTagProgressForPersistenceId
       preparedWriteToTagProgress
       preparedWriteToTagViewWithoutMeta
+      preparedWriteToTagViewWithMeta
   }
 
   private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
@@ -167,7 +167,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
               case _ =>
                 (pr, Set.empty[String])
             }
-            serializeEvent(pr2, tags, uuid)
+            serializeEvent(pr2, tags, uuid, config.bucketSize, serialization, transportInformation)
         }
       )
     }
@@ -410,63 +410,12 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
   private def minSequenceNr(partitionNr: Long): Long =
     partitionNr * targetPartitionSize + 1
 
-  private lazy val transportInformation: Option[Serialization.Information] = {
+  protected lazy val transportInformation: Option[Serialization.Information] = {
     val address = context.system.asInstanceOf[ExtendedActorSystem].provider.getDefaultAddress
     if (address.hasLocalScope) None
     else Some(Serialization.Information(address, context.system))
   }
 
-  protected def serializeEvent(p: PersistentRepr, tags: Set[String], uuid: UUID): Serialized = {
-    // use same clock source as the UUID for the timeBucket
-    val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), config.bucketSize)
-
-    def serializeMeta(): Option[SerializedMeta] = {
-      // meta data, if any
-      p.payload match {
-        case EventWithMetaData(_, m) =>
-          val m2 = m.asInstanceOf[AnyRef]
-          val serializer = serialization.findSerializerFor(m2)
-          val serManifest = serializer match {
-            case ser2: SerializerWithStringManifest ⇒
-              ser2.manifest(m2)
-            case _ ⇒
-              if (serializer.includeManifest) m2.getClass.getName
-              else PersistentRepr.Undefined
-          }
-          val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
-          Some(SerializedMeta(metaBuf, serManifest, serializer.identifier))
-        case _ => None
-      }
-    }
-
-    def doSerializeEvent(): Serialized = {
-      val event: AnyRef = (p.payload match {
-        case EventWithMetaData(evt, _) => evt // unwrap
-        case evt                       => evt
-      }).asInstanceOf[AnyRef]
-
-      val serializer = serialization.findSerializerFor(event)
-      val serManifest = serializer match {
-        case ser2: SerializerWithStringManifest ⇒
-          ser2.manifest(event)
-        case _ ⇒
-          if (serializer.includeManifest) event.getClass.getName
-          else PersistentRepr.Undefined
-      }
-      val serEvent = ByteBuffer.wrap(serialization.serialize(event).get)
-
-      Serialized(p.persistenceId, p.sequenceNr, serEvent, tags, p.manifest, serManifest,
-        serializer.identifier, p.writerUuid, serializeMeta(), uuid, timeBucket)
-    }
-
-    // serialize actor references with full address information (defaultAddress)
-    transportInformation match {
-      case Some(ti) ⇒ Serialization.currentTransportInformation.withValue(ti) {
-        doSerializeEvent()
-      }
-      case None ⇒ doSerializeEvent()
-    }
-  }
 }
 
 /**

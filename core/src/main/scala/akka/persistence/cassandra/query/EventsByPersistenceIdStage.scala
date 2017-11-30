@@ -9,41 +9,25 @@ import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
 
-import scala.annotation.tailrec
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.Promise
-import scala.concurrent.duration._
-import scala.concurrent.duration.FiniteDuration
-import scala.collection.JavaConverters._
-import scala.util.Failure
-import scala.util.Success
-import scala.util.Try
 import akka.Done
 import akka.annotation.InternalApi
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.ListenableFutureConverter
-import akka.persistence.cassandra.journal.{ BucketSize, CassandraJournal, TimeBucket }
-import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, Serialized, SerializedMeta }
+import akka.persistence.cassandra.journal.CassandraJournal
+import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, Serialized }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extracted
 import akka.serialization.{ Serialization, SerializationExtension }
-import akka.stream.ActorMaterializer
-import akka.stream.Attributes
-import akka.stream.Outlet
-import akka.stream.SourceShape
-import akka.stream.stage.GraphStageLogic
-import akka.stream.stage.GraphStageWithMaterializedValue
-import akka.stream.stage.OutHandler
-import akka.stream.stage.StageLogging
-import akka.stream.stage.TimerGraphStageLogic
-import com.datastax.driver.core.ConsistencyLevel
-import com.datastax.driver.core.PreparedStatement
-import com.datastax.driver.core.ResultSet
-import com.datastax.driver.core.Row
-import com.datastax.driver.core.Session
-import com.datastax.driver.core.Statement
+import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
+import akka.stream.stage._
+import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RetryPolicy
 import com.datastax.driver.core.utils.Bytes
+
+import scala.annotation.tailrec
+import scala.collection.JavaConverters._
+import scala.concurrent.{ ExecutionContext, Future, Promise }
+import scala.concurrent.duration.{ FiniteDuration, _ }
+import scala.util.{ Failure, Success, Try }
 
 /**
  * INTERNAL API
@@ -132,10 +116,10 @@ import com.datastax.driver.core.utils.Bytes
 
     type Extractor[T <: Extracted] = (Row, EventDeserializer, Serialization) => T
 
-    val taggedPersistentRepr: Extractor[TaggedPersistentRepr] = (row, ed, s) =>
+    val taggedPersistentRepr: Extractor[TaggedPersistentRepr] = (row, ed, s) => {
+      val tags = extractTags(row)
       row.getBytes("message") match {
         case null =>
-          val tags: Set[String] = row.getSet("tags", classOf[String]).asScala.toSet
           TaggedPersistentRepr(PersistentRepr(
             payload = ed.deserializeEvent(row),
             sequenceNr = row.getLong("sequence_nr"),
@@ -147,33 +131,27 @@ import com.datastax.driver.core.utils.Bytes
           ), tags, row.getUUID("timestamp"))
         case b =>
           // for backwards compatibility
-          TaggedPersistentRepr(persistentFromByteBuffer(s, b), Set.empty[String], row.getUUID("timestamp"))
+          TaggedPersistentRepr(persistentFromByteBuffer(s, b), tags, row.getUUID("timestamp"))
       }
+    }
 
-    val rawPayloadCurrentSchema: BucketSize => Extractor[RawEvent] = (bucketSize: BucketSize) => (row: Row, _: EventDeserializer, _: Serialization) => {
-      val timeUuid = row.getUUID("timestamp")
-      // TODO could cache this
-      val meta = if (row.getColumnDefinitions.contains("meta")) {
-        Some(SerializedMeta(row.getBytes("meta"), row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
-      } else {
-        None
+    private def extractTags(row: Row): Set[String] = {
+      // TODO can be removed in 0.81, this is only used during migration from the old version on initial recovery
+      // we could make this a config flag to disable looking for the old or the new
+      val oldTags = (1 to 3).foldLeft(Set.empty[String]) {
+        case (acc, i) =>
+          if (row.getColumnDefinitions.contains(s"tag$i")) {
+            val tag = row.getString(s"tag$i")
+            if (tag != null) acc + tag
+            else acc
+          } else {
+            acc
+          }
       }
-      RawEvent(
-        row.getLong("sequence_nr"),
-        Serialized(
-          row.getString("persistence_id"),
-          row.getLong("sequence_nr"),
-          row.getBytes("event"),
-          row.getSet("tags", classOf[String]).asScala.toSet,
-          row.getString("event_manifest"),
-          row.getString("ser_manifest"),
-          row.getInt("ser_id"),
-          row.getString("writer_uuid"),
-          meta,
-          timeUuid,
-          timeBucket = TimeBucket(timeUuid, bucketSize) // FIXME, pass this in
-        )
-      )
+      val newTags = if (row.getColumnDefinitions.contains("tags")) {
+        row.getSet("tags", classOf[String]).asScala.toSet
+      } else Set.empty[String]
+      oldTags ++ newTags
     }
 
     def persistentFromByteBuffer(serialization: Serialization, b: ByteBuffer): PersistentRepr = {
@@ -260,13 +238,12 @@ import com.datastax.driver.core.utils.Bytes
       val fastForwardCb = getAsyncCallback[Long] { nextSeqNr =>
         if (refreshInterval.isEmpty)
           throw new IllegalStateException("Fast forward only possible for live queries")
-
-        log.debug("Fast forward request being processed: {} {}", nextSeqNr, seqNr)
+        log.debug("Fast forward request being processed: Next Sequence Nr: {} Current Sequence Nr: {}", nextSeqNr, seqNr)
         if (nextSeqNr > seqNr) {
           queryState match {
             case QueryIdle => internalFastForward(nextSeqNr)
             case _ =>
-              log.debug("Query in progress. Setting fast forward afterward.")
+              log.debug("Query in progress. Fast forward pending.")
               pendingFastForward = Some(nextSeqNr)
           }
         }
@@ -411,17 +388,6 @@ import com.datastax.driver.core.utils.Bytes
                     pendingPoll = None
                   }
                 }
-              } else if (empty && switchPartition && pendingFastForward.isDefined && lookingForMissingSeqNr.isDefined) {
-                // both fast forward and missing
-                (pendingFastForward, lookingForMissingSeqNr) match {
-                  case (Some(ffNextSequenceNr), Some(MissingSeqNr(_, missingSeqNr))) if ffNextSequenceNr > missingSeqNr =>
-                    log.debug("Aborting looking for missed sequenceNr [{}] as fast forwarded to [{}]", missingSeqNr, ffNextSequenceNr)
-                    internalFastForward(ffNextSequenceNr)
-                    pendingFastForward = None
-                    lookingForMissingSeqNr = None
-                  case _ =>
-                    query(switchPartition = true)
-                }
               } else {
                 // TODO if we are far from the partition boundary we could skip this query if refreshInterval.nonEmpty
                 query(switchPartition = true) // next partition
@@ -513,7 +479,6 @@ import com.datastax.driver.core.utils.Bytes
         log.debug("Received fast forward request {}", nextSeqNr)
         try fastForwardCb.invoke(nextSeqNr) catch {
           case e: IllegalStateException =>
-            log.debug("Unable to do fast forward request: {}", e.getMessage)
           // not initialized, see Akka issue #20503, but that is ok since this
           // is just best effort
         }
