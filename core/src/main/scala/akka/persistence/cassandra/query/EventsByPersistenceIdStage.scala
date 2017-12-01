@@ -197,11 +197,13 @@ import com.datastax.driver.core.utils.Bytes
       val fastForwardCb = getAsyncCallback[Long] { nextSeqNr =>
         if (refreshInterval.isEmpty)
           throw new IllegalStateException("Fast forward only possible for live queries")
-
+        log.debug("Fast forward request being processed: Next Sequence Nr: {} Current Sequence Nr: {}", nextSeqNr, seqNr)
         if (nextSeqNr > seqNr) {
           queryState match {
             case QueryIdle => internalFastForward(nextSeqNr)
-            case _         => pendingFastForward = Some(nextSeqNr)
+            case _ =>
+              log.debug("Query in progress. Fast forward pending.")
+              pendingFastForward = Some(nextSeqNr)
           }
         }
       }
@@ -355,10 +357,19 @@ import com.datastax.driver.core.utils.Bytes
             if (reachedEndCondition())
               completeStage()
             else if (rs.isExhausted) {
-              if (lookingForMissingSeqNr.isEmpty) afterExhausted()
-              else {
-                queryState = QueryIdle
-                scheduleOnce(LookForMissingSeqNr, 200.millis)
+              (lookingForMissingSeqNr, pendingFastForward) match {
+                case (Some(MissingSeqNr(_, sawSeqNr)), Some(fastForwardTo)) if fastForwardTo >= sawSeqNr =>
+                  log.debug("Aborting missing sequence search: {} nr due to fast forward to next sequence nr: {}",
+                    lookingForMissingSeqNr, fastForwardTo)
+                  internalFastForward(fastForwardTo)
+                  pendingFastForward = None
+                  lookingForMissingSeqNr = None
+                  afterExhausted()
+                case (Some(_), None) =>
+                  queryState = QueryIdle
+                  scheduleOnce(LookForMissingSeqNr, 200.millis)
+                case _ =>
+                  afterExhausted()
               }
             } else if (rs.getAvailableWithoutFetching == 0) {
               log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]", persistenceId, seqNr)
