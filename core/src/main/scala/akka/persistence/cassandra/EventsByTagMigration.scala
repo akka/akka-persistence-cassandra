@@ -115,11 +115,44 @@ class EventsByTagMigration(system: ActorSystem)
     } yield Done
   }
 
-  // TODO offer a version that takes in the persistenceIds in case user has a more efficient way
-  // of getting them
   // TODO might be nice to return a summary of what was done rather than just Done
   // TODO add a final flush to the tag writers and shut them down
+
+  /**
+   * Migrates the given persistenceIds from the `messages` table to the
+   * new `tags_view` table. `tag_view` table must exist before calling this
+   * and can be created manually or via [createTagsTable]
+   *
+   * This is useful if there there is a more efficient way of getting all the
+   * persistenceIds than [CassandraReadJournal.currentPersistenceIds] which does
+   * a distinct query on the `messages` table.
+   *
+   * This can also be used to do partial migrations e.g. test a persistenceId in
+   * production before migrating everything.
+   *
+   * It is recommended you use this if the `messages` table is large.
+   *
+   * @param pids PersistenceIds to migrate
+   * @return A Future that completes when the migration is complete
+   */
+  def migrateToTagViews(pids: Seq[PersistenceId]): Future[Done] = {
+    migrateToTagViewsInternal(Source.fromIterator(() => pids.iterator))
+  }
+
+  /**
+   * Migrates the entire `messages` table to the the new `tag_views` table.
+   *
+   * Uses [CassandraReadJournal.currentPersistenceIds] to find all persistenceIds.
+   * Note that this is a very inefficient cassandra query so might timeout. If so
+   * the version of this method can be used where the persistenceIds are provided.
+   *
+   * @return A Future that completes when the migration is complete.
+   */
   def migrateToTagViews(): Future[Done] = {
+    migrateToTagViewsInternal(queries.currentPersistenceIds())
+  }
+
+  private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed]): Future[Done] = {
     log.info("Beginning migration of data to tag_views table")
     val tagWriters = system.actorOf(TagWriters.props(
       TagWritersSession(
@@ -132,12 +165,11 @@ class EventsByTagMigration(system: ActorSystem)
       config.tagWriterSettings
     ))
 
-    val allPids: Source[RawEvent, NotUsed] = queries.currentPersistenceIds()
+    val allPids: Source[RawEvent, NotUsed] = src
       .map { pids =>
         log.info("Migrating the following persistence ids {}", pids)
         pids
       }.flatMapConcat(pid => {
-
         val prereqs: Future[(Map[Tag, TagProgress], SequenceNr)] = for {
           tp <- lookupTagProgress(pid)
           _ <- sendTagProgress(tp, tagWriters)

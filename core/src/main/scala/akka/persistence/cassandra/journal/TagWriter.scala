@@ -262,8 +262,10 @@ import scala.util.{ Failure, Success, Try }
       timers.startSingleTimer(FlushKey, Flush, settings.flushInterval)
       // FIXME, remove the time buckets
       if (log.isDebugEnabled) {
-        log.debug("Batch size not reached, buffering. Current buffer size: {}. First timebucket: {} Last timebucket: {}",
-          buffer.size, buffer.head.timeBucket, buffer.last.timeBucket)
+        log.debug(
+          "Batch size not reached, buffering. Current buffer size: {}. First timebucket: {} Last timebucket: {}",
+          buffer.size, buffer.head.timeBucket, buffer.last.timeBucket
+        )
       }
       context.become(idle(buffer, tagSequenceNrs))
     }

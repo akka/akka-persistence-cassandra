@@ -46,7 +46,7 @@ import scala.util.{ Failure, Success, Try }
   // materialized value
   trait Control {
     /**
-     * Trigger a request to fetch more events.
+     * Trigger a request to fetch more eventEvens.
      */
     def poll(knownSeqNr: Long): Unit
 

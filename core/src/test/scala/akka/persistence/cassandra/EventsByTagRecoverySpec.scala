@@ -152,15 +152,16 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
         }
 
         val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
-        val greenTags = queryJournal.currentEventsByTag(tag = "red", offset = NoOffset)
+        val greenTags = queryJournal.eventsByTag(tag = "red", offset = NoOffset)
         val probe = greenTags.runWith(TestSink.probe[Any](system))
         probe.request(9)
         (1 to 8) foreach { i =>
           val event = s"e-$i"
-          system.log.info("Expecting event {}", event)
+          system.log.debug("Expecting event {}", event)
           probe.expectNextPF { case EventEnvelope(_, "p2", `i`, `event`) => }
         }
-        probe.expectComplete()
+        probe.expectNoMessage(waitTime)
+        probe.cancel()
       } finally {
         systemTwo.terminate().futureValue
       }
