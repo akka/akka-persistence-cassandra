@@ -11,7 +11,7 @@ import java.util.UUID
 import akka.actor.ActorSystem
 import akka.event.Logging.Warning
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.{ CassandraLifecycle, EventWithMetaData }
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Day }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
@@ -40,17 +40,23 @@ object EventsByTagSpec {
     cassandra-journal {
       #target-partition-size = 5
       keyspace=EventsByTagSpec
+
       event-adapters {
         color-tagger  = akka.persistence.cassandra.query.ColorFruitTagger
+        metadata-tagger  = akka.persistence.cassandra.query.EventWithMetaDataTagger
       }
+
       event-adapter-bindings = {
         "java.lang.String" = color-tagger
+        "akka.persistence.cassandra.EventWithMetaData" = metadata-tagger
       }
+
       events-by-tag {
         flush-interval = 0ms
         bucket-size = Day
       }
     }
+
     cassandra-query-journal {
       refresh-interval = 500ms
       max-buffer-size = 50
@@ -71,6 +77,16 @@ object EventsByTagSpec {
     cassandra-query-journal.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormat)}"
     """
   ).withFallback(strictConfig)
+}
+
+class EventWithMetaDataTagger extends WriteEventAdapter {
+  override def manifest(event: Any) = ""
+  override def toJournal(event: Any) = event match {
+    case evm: EventWithMetaData =>
+      println("Tagging evm: " + evm)
+      Tagged(evm, Set("gotmeta"))
+    case _ => event
+  }
 }
 
 class ColorFruitTagger extends WriteEventAdapter {
@@ -100,6 +116,7 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
 
   implicit val mat = ActorMaterializer()(system)
   val bucketSize = Day
+  val waitTime = 100.millis
 
   lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
@@ -130,7 +147,7 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
 
   override protected def afterEach(): Unit = {
     // check for the buffer exceeded log (and other issues)
-    logProbe.expectNoMessage(100.millis)
+    logProbe.expectNoMessage(waitTime)
     super.afterEach()
   }
 
@@ -207,12 +224,12 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 2L, "a green apple") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 4L, "a green banana") => e }
-      probe.expectNoMessage(100.millis)
+      probe.expectNoMessage(waitTime)
 
       c ! "a green cucumber"
       expectMsg(s"a green cucumber-done")
 
-      probe.expectNoMessage(100.millis)
+      probe.expectNoMessage(waitTime)
       probe.request(5)
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "a green leaf") => e }
       probe.expectComplete() // green cucumber not seen
@@ -299,7 +316,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       val probe = blackSrc.runWith(TestSink.probe[Any])
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "a black car") => e }
-      probe.expectNoMessage(100.millis)
+      probe.expectNoMessage(waitTime)
 
       d ! "a black dog"
       expectMsg(s"a black dog-done")
@@ -307,7 +324,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       expectMsg(s"a black night-done")
 
       probe.expectNextPF { case e @ EventEnvelope(_, "d", 1L, "a black dog") => e }
-      probe.expectNoMessage(100.millis)
+      probe.expectNoMessage(waitTime)
       probe.request(10)
       probe.expectNextPF { case e @ EventEnvelope(_, "d", 2L, "a black night") => e }
       probe.cancel()
@@ -337,7 +354,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       probe2.expectNextPF { case e @ EventEnvelope(_, "a", 4L, "a green banana") => e }
       probe2.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "a green leaf") => e }
       probe2.expectNextPF { case e @ EventEnvelope(_, "c", 1L, "a green cucumber") => e }
-      probe2.expectNoMessage(100.millis)
+      probe2.expectNoMessage(waitTime)
       probe2.cancel()
     }
 
@@ -354,7 +371,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
       probe2.request(10)
       probe2.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "a green leaf") => e }
       probe2.expectNextPF { case e @ EventEnvelope(_, "c", 1L, "a green cucumber") => e }
-      probe2.expectNoMessage(100.millis)
+      probe2.expectNoMessage(waitTime)
       probe2.cancel()
     }
 
@@ -428,7 +445,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
         val Expected = s"yellow-$n"
         probe.expectNextPF { case e @ EventEnvelope(_, "e", _, Expected) => e }
       }
-      probe.expectNoMessage(100.millis)
+      probe.expectNoMessage(waitTime)
 
       for (n <- 101 to 200)
         e ! s"yellow-$n"
@@ -437,14 +454,25 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
         val Expected = s"yellow-$n"
         probe.expectNextPF { case e @ EventEnvelope(_, "e", _, Expected) => e }
       }
-      probe.expectNoMessage(100.millis)
+      probe.expectNoMessage(waitTime)
 
       probe.request(10)
-      probe.expectNoMessage(100.millis)
+      probe.expectNoMessage(waitTime)
     }
 
-  }
+    "return events with their metadata" in {
+      val w1 = system.actorOf(TestActor.props("W1"))
+      val src = queries.eventsByTag(tag = "gotmeta", offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
 
+      w1 ! EventWithMetaData("e1", "this is such a good message")
+
+      probe.request(2)
+      probe.expectNextPF { case EventEnvelope(_, "W1", 1L, EventWithMetaData("e1", "this is such a good message")) => }
+      probe.expectNoMessage(waitTime)
+      probe.cancel()
+    }
+  }
 }
 
 // Manually writing events for same persistence id is no longer valid
@@ -867,7 +895,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
         probe.request(30)
         probe.expectNextN(30)
         // reduce downstream demand, which will result in limit < maxBufferSize
-        probe.expectNoMessage(100.millis)
+        probe.expectNoMessage(waitTime)
       }
 
       probe.request(100)

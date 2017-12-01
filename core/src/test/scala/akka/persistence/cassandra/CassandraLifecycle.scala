@@ -105,7 +105,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll {
   }
 
   override protected def beforeAll(): Unit = {
-    startCassandra()
+    startCassandra(config.getInt("cassandra-journal.port"))
     awaitPersistenceInit()
     super.beforeAll()
   }

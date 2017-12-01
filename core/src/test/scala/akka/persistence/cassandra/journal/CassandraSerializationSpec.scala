@@ -105,7 +105,7 @@ class CassandraSerializationSpec extends TestKit(ActorSystem("CassandraSerializa
       system.stop(incarnation1)
       probe.expectTerminated(incarnation1)
 
-      val incarnation2 = system.actorOf(Props(new Persister("id2", probe.ref)))
+      system.actorOf(Props(new Persister("id2", probe.ref)))
       probe.expectMsg(eventWithMeta) // from replay
     }
 
@@ -122,7 +122,7 @@ class CassandraSerializationSpec extends TestKit(ActorSystem("CassandraSerializa
       system.stop(incarnation1)
       probe.expectTerminated(incarnation1)
 
-      val incarnation2 = system.actorOf(Props(new Persister("id3", probe.ref)))
+      system.actorOf(Props(new Persister("id3", probe.ref)))
       probe.expectMsg(EventWithMetaData("TheActualEvent", UnknownMetaData(666, ""))) // from replay, no meta
     }
 

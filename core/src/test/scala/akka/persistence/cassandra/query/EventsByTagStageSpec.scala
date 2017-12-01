@@ -291,7 +291,6 @@ class EventsByTagStageSpec
       sub.expectComplete()
     }
 
-    // TODO implement this via another stage that runs before this
     "look for events in the initial bucket for only a short time" ignore {
       val nowTime = LocalDateTime.now(ZoneOffset.UTC)
       val tag = "CurrentOffsetMissingInInitialBucket"

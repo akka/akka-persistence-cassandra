@@ -58,7 +58,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     shutdown()
   }
 
-  val fakePreparedStatement: Future[PreparedStatement] = Future.successful(null)
+  val fakePs: Future[PreparedStatement] = Future.successful(null)
   val successfulWrite: Statement => Future[Done] = _ => Future.successful(Done)
   val defaultSettings = TagWriterSettings(
     maxBatchSize = 10,
@@ -319,7 +319,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
         settings = defaultSettings.copy(maxBatchSize = 1)
       )
       val bucket = nowBucket()
-      ref ! SetTagProgress(progress)
+      ref ! SetTagProgress(tagName, progress)
 
       val e1 = event("p1", 101L, "e-1", bucket)
       ref ! TagWrite(tagName, Vector(e1))
@@ -367,7 +367,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       )
       val bucket = nowBucket()
 
-      ref ! SetTagProgress(initialProgress)
+      ref ! SetTagProgress(tagName, initialProgress)
       expectMsg(SetTagProgressAck)
 
       val e11 = event(pid, 11L, "e-11", bucket)
@@ -375,7 +375,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       probe.expectMsg(Vector(toEw(e11, 11)))
       probe.expectMsg(ProgressWrite(pid, 11, 11, e11.timeUuid))
 
-      ref ! SetTagProgress(refreshedProgress)
+      ref ! SetTagProgress(tagName, refreshedProgress)
       expectMsg(SetTagProgressAck)
 
       // second sequence nr lookup returns 20
@@ -396,13 +396,13 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       )
       val bucket = nowBucket()
 
-      ref ! SetTagProgress(initialProgress)
+      ref ! SetTagProgress(tagName, initialProgress)
       expectMsg(SetTagProgressAck)
       val e11 = event(pid, 11L, "e-11", bucket)
       ref ! TagWrite(tagName, Vector(e11))
       probe.expectMsg(Vector(toEw(e11, 11)))
 
-      ref ! SetTagProgress(refreshedProgress)
+      ref ! SetTagProgress(tagName, refreshedProgress)
       expectMsg(SetTagProgressAck)
 
       // second sequence nr lookup returns 20
@@ -492,7 +492,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
-    val session = new TagWriterSession(tag, fakePreparedStatement, successfulWrite, null, fakePreparedStatement) {
+    val session = new TagWriterSession(tag, fakePs, fakePs, successfulWrite, null, fakePs) {
 
       override def writeBatch(events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
         probe.ref ! events.map {

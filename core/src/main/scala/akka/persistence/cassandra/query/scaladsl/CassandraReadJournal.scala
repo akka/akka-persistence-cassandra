@@ -8,35 +8,34 @@ import java.net.URLEncoder
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
-import scala.collection.immutable
-import scala.concurrent.Future
-import scala.concurrent.duration._
-import scala.util.Failure
-import scala.util.Success
 import akka.NotUsed
 import akka.actor.ExtendedActorSystem
+import akka.annotation.InternalApi
 import akka.event.Logging
+import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
 import akka.persistence.cassandra.journal._
-import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
+import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extracted, Extractors }
+import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
+import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
+import akka.persistence.cassandra.query._
+import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.CombinedEventsByTagStmts
+import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
-import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.stream.scaladsl.Source
+import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.util.ByteString
-import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core._
+import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
+import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import com.datastax.driver.core.policies.LoggingRetryPolicy
-import com.datastax.driver.core.policies.RetryPolicy
-import akka.annotation.InternalApi
-import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.TaggedPersistentRepr
-import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.CombinedEventsByTagStmts
 
+import scala.collection.immutable
+import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
 
 object CassandraReadJournal {
@@ -426,7 +425,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       Long.MaxValue,
       queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
-      s"eventsByPersistenceId-$persistenceId"
+      s"eventsByPersistenceId-$persistenceId",
+      extractor = Extractors.taggedPersistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
       .map(_.pr)
@@ -449,7 +449,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       Long.MaxValue,
       queryPluginConfig.fetchSize,
       None,
-      s"currentEventsByPersistenceId-$persistenceId"
+      s"currentEventsByPersistenceId-$persistenceId",
+      extractor = Extractors.taggedPersistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
       .map(_.pr)
@@ -471,7 +472,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       Long.MaxValue,
       queryPluginConfig.fetchSize,
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
-      s"eventsByPersistenceId-$persistenceId"
+      s"eventsByPersistenceId-$persistenceId",
+      extractor = Extractors.taggedPersistentRepr
     ).map(_.pr)
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
@@ -482,7 +484,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    *  - In the AsyncWriteJournal for the PersistentActor and PersistentView recovery.
    *  - In the public eventsByPersistenceId and currentEventsByPersistenceId queries.
    */
-  @InternalApi private[akka] def eventsByPersistenceId(
+  @InternalApi private[akka] def eventsByPersistenceId[T <: Extracted](
     persistenceId:          String,
     fromSequenceNr:         Long,
     toSequenceNr:           Long,
@@ -491,11 +493,12 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     refreshInterval:        Option[FiniteDuration],
     name:                   String,
     customConsistencyLevel: Option[ConsistencyLevel] = None,
-    customRetryPolicy:      Option[RetryPolicy]      = None
-  ): Source[TaggedPersistentRepr, Future[EventsByPersistenceIdStage.Control]] = {
+    customRetryPolicy:      Option[RetryPolicy]      = None,
+    extractor:              Extractor[T]
+  ): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
     createFutureSource(combinedEventsByPersistenceIdStmts) { (s, c) =>
       log.debug("Creating EventByPersistentIdState graph")
-      Source.fromGraph(new EventsByPersistenceIdStage(
+      Source.fromGraph(new EventsByPersistenceIdStage[T](
         persistenceId,
         fromSequenceNr,
         toSequenceNr,
@@ -509,7 +512,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
           customConsistencyLevel,
           customRetryPolicy
         ),
-        queryPluginConfig
+        queryPluginConfig,
+        extractor
       ))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
         .named(name)

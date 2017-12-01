@@ -12,15 +12,15 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 
 trait CassandraStatements {
-  def config: CassandraJournalConfig
+  private[akka] def config: CassandraJournalConfig
 
-  def createKeyspace =
+  private[akka] def createKeyspace =
     s"""
       CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
       WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
     """
 
-  def createConfigTable =
+  private[akka] def createConfigTable =
     s"""
       CREATE TABLE IF NOT EXISTS ${configTableName} (
         property text primary key, value text)
@@ -32,7 +32,7 @@ trait CassandraStatements {
   // PersistentRepr.manifest is stored in event_manifest (sorry for naming confusion).
   // PersistentRepr.manifest is used by the event adapters (in akka-persistence).
   // ser_manifest together with ser_id is used for the serialization of the event (payload).
-  def createTable =
+  private[akka] def createTable =
     s"""
       CREATE TABLE IF NOT EXISTS ${tableName} (
         used boolean static,
@@ -56,7 +56,7 @@ trait CassandraStatements {
         AND compaction = ${config.tableCompactionStrategy.asCQL}
     """
 
-  def createTagsTable =
+  private[akka] def createTagsTable =
     s"""
       CREATE TABLE IF NOT EXISTS ${tagTableName} (
         tag_name text,
@@ -89,7 +89,7 @@ trait CassandraStatements {
         PRIMARY KEY (persistence_id, tag))
        """
 
-  def createMetatdataTable =
+  private[akka] def createMetatdataTable =
     s"""
       CREATE TABLE IF NOT EXISTS $metadataTableName(
         persistence_id text PRIMARY KEY,
@@ -97,7 +97,7 @@ trait CassandraStatements {
         properties map<text,text>)
    """
 
-  def writeMessage(withMeta: Boolean) =
+  private[akka] def writeMessage(withMeta: Boolean) =
     s"""
       INSERT INTO $tableName (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
         ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
@@ -105,7 +105,7 @@ trait CassandraStatements {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true, ?)
     """
 
-  def writeTags =
+  private[akka] def writeTags(withMeta: Boolean) =
     s"""
        INSERT INTO $tagTableName(
         tag_name,
@@ -118,10 +118,14 @@ trait CassandraStatements {
         sequence_nr,
         ser_id,
         ser_manifest,
-        writer_uuid) VALUES (?, ?,?,?,?,?,?,?,?,?,?)
+        writer_uuid
+        ${if (withMeta) ", meta_ser_id, meta_ser_manifest, meta" else ""}
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,
+        ${if (withMeta) "?, ?, ?," else ""}
+        ?)
      """
 
-  def writeTagProgress =
+  private[akka] def writeTagProgress =
     s"""
        INSERT INTO $tagProgressTableName(
         persistence_id,
@@ -131,20 +135,20 @@ trait CassandraStatements {
         offset) VALUES (?, ?, ?, ?, ?)
      """.stripMargin
 
-  def selectTagProgress =
+  private[akka] def selectTagProgress =
     s"""
        SELECT * from $tagProgressTableName WHERE
        persistence_id = ? AND
        tag = ?
      """.stripMargin
 
-  def selectTagProgressForPersistenceId =
+  private[akka] def selectTagProgressForPersistenceId =
     s"""
        SELECT * from $tagProgressTableName WHERE
        persistence_id = ?
      """.stripMargin
 
-  def deleteMessage =
+  private[akka] def deleteMessage =
     s"""
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND
@@ -152,7 +156,7 @@ trait CassandraStatements {
         sequence_nr = ?
     """
 
-  def deleteMessages = {
+  private[akka] def deleteMessages = {
     if (config.cassandra2xCompat)
       s"""
       DELETE FROM ${tableName} WHERE
@@ -169,7 +173,7 @@ trait CassandraStatements {
     """
   }
 
-  def selectMessages =
+  private[akka] def selectMessages =
     s"""
       SELECT * FROM ${tableName} WHERE
         persistence_id = ? AND
@@ -178,24 +182,24 @@ trait CassandraStatements {
         sequence_nr <= ?
     """
 
-  def selectInUse =
+  private[akka] def selectInUse =
     s"""
      SELECT used from ${tableName} WHERE
       persistence_id = ? AND
       partition_nr = ?
    """
 
-  def selectConfig =
+  private[akka] def selectConfig =
     s"""
       SELECT * FROM ${configTableName}
     """
 
-  def writeConfig =
+  private[akka] def writeConfig =
     s"""
       INSERT INTO ${configTableName}(property, value) VALUES(?, ?) IF NOT EXISTS
     """
 
-  def selectHighestSequenceNr =
+  private[akka] def selectHighestSequenceNr =
     s"""
      SELECT sequence_nr, used FROM ${tableName} WHERE
        persistence_id = ? AND
@@ -204,25 +208,25 @@ trait CassandraStatements {
        DESC LIMIT 1
    """
 
-  def selectDeletedTo =
+  private[akka] def selectDeletedTo =
     s"""
       SELECT deleted_to FROM ${metadataTableName} WHERE
         persistence_id = ?
     """
 
-  def insertDeletedTo =
+  private[akka] def insertDeletedTo =
     s"""
       INSERT INTO ${metadataTableName} (persistence_id, deleted_to)
       VALUES ( ?, ? )
     """
 
-  def writeInUse =
+  private[akka] def writeInUse =
     s"""
        INSERT INTO ${tableName} (persistence_id, partition_nr, used)
        VALUES(?, ?, true)
      """
 
-  private def tableName = s"${config.keyspace}.${config.table}"
+  protected def tableName = s"${config.keyspace}.${config.table}"
   private def tagTableName = s"${config.keyspace}.${config.tagTable.name}"
   private def tagProgressTableName = s"${config.keyspace}.tag_write_progress"
   private def configTableName = s"${config.keyspace}.${config.configTable}"
@@ -235,7 +239,7 @@ trait CassandraStatements {
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
    */
-  def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(implicit ec: ExecutionContext): Future[Done] = {
+  private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(implicit ec: ExecutionContext): Future[Done] = {
     import akka.persistence.cassandra.listenableFutureToFuture
 
     def create(): Future[Done] = {
@@ -262,7 +266,7 @@ trait CassandraStatements {
     )
   }
 
-  def initializePersistentConfig(session: Session)(implicit ec: ExecutionContext): Future[Map[String, String]] = {
+  private[akka] def initializePersistentConfig(session: Session)(implicit ec: ExecutionContext): Future[Map[String, String]] = {
     import akka.persistence.cassandra.listenableFutureToFuture
     session.executeAsync(selectConfig)
       .flatMap { rs =>
