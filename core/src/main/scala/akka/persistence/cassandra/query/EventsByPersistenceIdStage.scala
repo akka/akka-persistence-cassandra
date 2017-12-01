@@ -399,8 +399,10 @@ import scala.util.{ Failure, Success, Try }
             else if (rs.isExhausted) {
               (lookingForMissingSeqNr, pendingFastForward) match {
                 case (Some(MissingSeqNr(_, sawSeqNr)), Some(fastForwardTo)) if fastForwardTo >= sawSeqNr =>
-                  log.debug("Aborting missing sequence search: {} nr due to fast forward to next sequence nr: {}",
-                    lookingForMissingSeqNr, fastForwardTo)
+                  log.debug(
+                    "Aborting missing sequence search: {} nr due to fast forward to next sequence nr: {}",
+                    lookingForMissingSeqNr, fastForwardTo
+                  )
                   internalFastForward(fastForwardTo)
                   pendingFastForward = None
                   lookingForMissingSeqNr = None

@@ -70,15 +70,16 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       .flatMap(_ => initializePersistentConfig(session).map(_ => Done))
   )
 
+  private val tagWriterSession = TagWritersSession(
+    preparedWriteToTagViewWithoutMeta,
+    preparedWriteToTagViewWithMeta,
+    session.executeWrite,
+    session.selectResultSet,
+    preparedWriteToTagProgress
+  )
+
   protected val tagWrites = context.system.actorOf(TagWriters.props(
-    TagWritersSession(
-      preparedWriteToTagViewWithoutMeta,
-      preparedWriteToTagViewWithMeta,
-      session.executeWrite,
-      session.selectResultSet,
-      preparedWriteToTagProgress
-    ),
-    config.tagWriterSettings
+    (arf, tag) => arf.actorOf(TagWriter.props(tagWriterSession, tag, config.tagWriterSettings))
   ))
 
   def preparedWriteMessage = session.prepare(
