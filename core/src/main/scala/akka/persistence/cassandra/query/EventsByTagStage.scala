@@ -304,8 +304,10 @@ import com.datastax.driver.core.utils.UUIDs
           push(out, repr)
           false
         } else {
-          log.info("{}: Missing event for new persistence id: {}. Expected sequence nr: {}, actual: {}.",
-            session.tag, repr.persistentRepr.persistenceId, expectedSequenceNr, repr.tagPidSequenceNr)
+          log.info(
+            "{}: Missing event for new persistence id: {}. Expected sequence nr: {}, actual: {}.",
+            session.tag, repr.persistentRepr.persistenceId, expectedSequenceNr, repr.tagPidSequenceNr
+          )
           val previousBucketStart = UUIDs.startOf(currTimeBucket.previous(1).key)
           val startingOffset: UUID = if (UUIDComparator.comparator.compare(previousBucketStart, fromOffset) < 0) {
             log.debug("Starting at fromOffset")

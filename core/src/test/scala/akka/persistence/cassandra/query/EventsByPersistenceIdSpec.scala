@@ -84,7 +84,7 @@ class EventsByPersistenceIdSpec
     }
 
     "not see any events if the stream starts after current latest event" in {
-      val ref = setup("c", 3)
+      setup("c", 3)
       val src = queries.currentEventsByPersistenceId("c", 5L, Long.MaxValue)
       src.map(_.event).runWith(TestSink.probe[Any])
         .request(5)
@@ -92,7 +92,7 @@ class EventsByPersistenceIdSpec
     }
 
     "find existing events up to a sequence number" in {
-      val ref = setup("d", 3)
+      setup("d", 3)
       val src = queries.currentEventsByPersistenceId("d", 0L, 2L)
       src.map(_.sequenceNr).runWith(TestSink.probe[Any])
         .request(5)
@@ -120,7 +120,7 @@ class EventsByPersistenceIdSpec
     }
 
     "only deliver what requested if there is more in the buffer" in {
-      val ref = setup("f", 1000)
+      setup("f", 1000)
 
       val src = queries.currentEventsByPersistenceId("f", 0L, Long.MaxValue)
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
@@ -149,7 +149,7 @@ class EventsByPersistenceIdSpec
     }
 
     "produce correct sequence of sequence numbers and offsets" in {
-      val ref = setup("h", 3)
+      setup("h", 3)
 
       val src = queries.currentEventsByPersistenceId("h", 0L, Long.MaxValue)
       src.map(x => (x.persistenceId, x.sequenceNr, x.offset)).runWith(TestSink.probe[Any])
@@ -163,7 +163,7 @@ class EventsByPersistenceIdSpec
     }
 
     "produce correct sequence of events across multiple partitions" in {
-      val ref = setup("i", 20)
+      setup("i", 20)
 
       val src = queries.currentEventsByPersistenceId("i", 0L, Long.MaxValue)
       src.map(_.event).runWith(TestSink.probe[Any])
@@ -216,7 +216,7 @@ class EventsByPersistenceIdSpec
     }
 
     "stop at last event in partition" in {
-      val ref = setup("i2", 15) // partition size is 15
+      setup("i2", 15) // partition size is 15
 
       val src = queries.currentEventsByPersistenceId("i2", 0L, Long.MaxValue)
       src.map(_.event).runWith(TestSink.probe[Any])
@@ -365,7 +365,7 @@ class EventsByPersistenceIdSpec
     }
 
     "only deliver what requested if there is more in the buffer" in {
-      val ref = setup("n", 1000)
+      setup("n", 1000)
 
       val src = queries.eventsByPersistenceId("n", 0L, Long.MaxValue)
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
@@ -388,7 +388,7 @@ class EventsByPersistenceIdSpec
     }
 
     "not produce anything if there aren't any events" in {
-      val ref = setup("o2", 1) // Database init.
+      setup("o2", 1) // Database init.
       val src = queries.eventsByPersistenceId("o", 0L, Long.MaxValue)
 
       val probe = src.map(_.event).runWith(TestSink.probe[Any])
@@ -399,7 +399,7 @@ class EventsByPersistenceIdSpec
     }
 
     "not produce anything until there are existing events" in {
-      val ref = setup("p2", 1) // Database init.
+      setup("p2", 1) // Database init.
       val src = queries.eventsByPersistenceId("p", 0L, Long.MaxValue)
 
       val probe = src.map(_.event).runWith(TestSink.probe[Any])

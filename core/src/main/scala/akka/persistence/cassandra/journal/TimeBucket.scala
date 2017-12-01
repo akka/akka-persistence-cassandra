@@ -55,7 +55,6 @@ import com.datastax.driver.core.utils.UUIDs
     key < other.key
   }
 
-
   override def equals(other: Any): Boolean = other match {
     case that: TimeBucket =>
       key == that.key &&
