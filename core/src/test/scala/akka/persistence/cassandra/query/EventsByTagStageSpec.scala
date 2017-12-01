@@ -51,8 +51,10 @@ object EventsByTagStageSpec {
        |   first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormat)}"
        |   max-result-size-query = $fetchSize
        |   log-queries = on
-       |   refresh-interval = 250ms
-       |   events-by-tag-gap-timeout = 2s
+       |   refresh-interval = 200ms
+       |   events-by-tag {
+       |     gap-timeout = 2s
+       |   }
        | }
     """.stripMargin
   ).withFallback(CassandraLifecycle.config)
@@ -98,9 +100,8 @@ class EventsByTagStageSpec
   }
 
   implicit val mat = ActorMaterializer()(system)
-  private val shortWaitTime = 250.milliseconds
-  private val waitTime = 500.milliseconds
-  private val longWaitTime = 1000.milliseconds
+  private val waitTime = 150.milliseconds
+  private val longWaitTime = waitTime * 3
   private val bucketSize = Minute
 
   lazy val queries: CassandraReadJournal =
@@ -286,8 +287,8 @@ class EventsByTagStageSpec
       val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(3)
-      sub.expectNextWithTimeoutPF(shortWaitTime, { case EventEnvelope(_, "p-1", 10, "p1e10") => })
-      sub.expectNextWithTimeoutPF(shortWaitTime, { case EventEnvelope(_, "p-1", 11, "p1e11") => })
+      sub.expectNextWithTimeoutPF(waitTime, { case EventEnvelope(_, "p-1", 10, "p1e10") => })
+      sub.expectNextWithTimeoutPF(waitTime, { case EventEnvelope(_, "p-1", 11, "p1e11") => })
       sub.expectComplete()
     }
 
@@ -478,15 +479,15 @@ class EventsByTagStageSpec
     "find missing first event in previous bucket" in {
       val tag = "LiveMissingFirstInPreviousBucket"
       val tagStream = queries.eventsByTag(tag, NoOffset)
-      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
-      val lastBucket = nowTime.minusMinutes(1)
+      val (nowTime, previousBucket) = currentAndPreviousBucket()
+
       writeTaggedEvent(nowTime.plusSeconds(1), PersistentRepr("e-3", 3, "p-1"), Set(tag), 3, bucketSize)
 
       val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
       sub.request(5)
       sub.expectNoMessage(waitTime)
 
-      writeTaggedEvent(lastBucket, PersistentRepr("e-1", 1, "p-1"), Set(tag), 1, bucketSize)
+      writeTaggedEvent(previousBucket, PersistentRepr("e-1", 1, "p-1"), Set(tag), 1, bucketSize)
       sub.expectNoMessage(waitTime)
 
       writeTaggedEvent(nowTime, PersistentRepr("e-2", 2, "p-1"), Set(tag), 2, bucketSize)
@@ -526,6 +527,21 @@ class EventsByTagStageSpec
 
       sub.cancel()
     }
+  }
+
+  private def currentAndPreviousBucket(): (LocalDateTime, LocalDateTime) = {
+    def nowTime(): LocalDateTime = {
+      val now = LocalDateTime.now(ZoneOffset.UTC)
+      // If too close to the end of bucket the query might span 3 buckets and events by tag only goes
+      // back one bucket
+      if (now.getSecond >= 58) {
+        Thread.sleep(1000)
+        nowTime()
+      } else now
+    }
+
+    val now = nowTime()
+    (now, now.minusMinutes(1))
   }
 
   private def send(ref: ActorRef, a: Tagged): Unit = {
