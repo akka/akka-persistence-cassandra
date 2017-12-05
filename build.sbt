@@ -70,7 +70,7 @@ lazy val root = (project in file("."))
   .aggregate(core, cassandraLauncher)
   .settings(common: _*)
   .settings(
-    name := "akka-peristence-cassandra-root",
+    name := "akka-persistence-cassandra-root",
 
     publishArtifact := false,
     publishTo := Some(Resolver.file("Unused transient repository", file("target/unusedrepo"))),
