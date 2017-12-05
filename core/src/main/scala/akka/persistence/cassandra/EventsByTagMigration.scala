@@ -5,11 +5,12 @@
 package akka.persistence.cassandra
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
+import akka.pattern.ask
 import akka.event.Logging
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
-import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
+import akka.persistence.cassandra.journal.TagWriters.{ AllFlushed, FlushAllTagWriters, TagWritersSession }
 import akka.persistence.cassandra.journal._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
@@ -18,11 +19,13 @@ import akka.persistence.query.PersistenceQuery
 import akka.serialization.Serialization
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Sink, Source }
+import akka.util.Timeout
 import akka.{ Done, NotUsed }
 import com.datastax.driver.core.Row
 import com.datastax.driver.core.utils.Bytes
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 object EventsByTagMigration {
   def apply(system: ActorSystem): EventsByTagMigration = new EventsByTagMigration(system)
@@ -116,7 +119,6 @@ class EventsByTagMigration(system: ActorSystem)
   }
 
   // TODO might be nice to return a summary of what was done rather than just Done
-  // TODO add a final flush to the tag writers and shut them down
 
   /**
    * Migrates the given persistenceIds from the `messages` table to the
@@ -154,15 +156,15 @@ class EventsByTagMigration(system: ActorSystem)
 
   private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed]): Future[Done] = {
     log.info("Beginning migration of data to tag_views table")
+    val tagWriterSession = TagWritersSession(
+      preparedWriteToTagViewWithoutMeta,
+      preparedWriteToTagViewWithMeta,
+      session.executeWrite,
+      session.selectResultSet,
+      preparedWriteToTagProgress
+    )
     val tagWriters = system.actorOf(TagWriters.props(
-      TagWritersSession(
-        preparedWriteToTagViewWithoutMeta,
-        preparedWriteToTagViewWithMeta,
-        session.executeWrite,
-        session.selectResultSet,
-        preparedWriteToTagProgress
-      ),
-      config.tagWriterSettings
+      (arf, tag) => arf.actorOf(TagWriter.props(tagWriterSession, tag, config.tagWriterSettings))
     ))
 
     val allPids: Source[RawEvent, NotUsed] = src
@@ -195,7 +197,12 @@ class EventsByTagMigration(system: ActorSystem)
         }
       })
 
-    allPids.runWith(Sink.ignore)
+    // A bit arbitrary, but we could be waiting on many Cassandra writes during the flush
+    implicit val timeout = Timeout(30.seconds)
+    for {
+      _ <- allPids.runWith(Sink.ignore)
+      _ <- (tagWriters ? FlushAllTagWriters).mapTo[AllFlushed.type]
+    } yield Done
   }
 
   private lazy val transportInformation: Option[Serialization.Information] = {

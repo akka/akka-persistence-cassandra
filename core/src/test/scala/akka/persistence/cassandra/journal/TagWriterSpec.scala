@@ -10,10 +10,11 @@ import java.util.UUID
 import akka.Done
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.event.Logging.{ Error, Warning }
-import akka.persistence.cassandra.journal.CassandraJournal.Serialized
+import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriterSpec.{ EventWrite, ProgressWrite, TestEx }
 import akka.persistence.cassandra.formatOffset
+import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core.{ PreparedStatement, Statement }
@@ -81,6 +82,45 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
   }
 
   "Tag writer batching" must {
+
+    "flush on demand when idle" in {
+      val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 100, flushInterval = 1.hour))
+      val bucket = nowBucket()
+      val e1 = event("p1", 1L, "e-1", bucket)
+      ref ! TagWrite(tagName, Vector(e1))
+      probe.expectNoMessage(waitDuration)
+      ref ! Flush
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      probe.expectMsg(ProgressWrite("p1", 1, 1, e1.timeUuid))
+      expectMsg(Flushed)
+    }
+
+    "flush on demand when query in progress" in {
+      val promiseForWrite = Promise[Done]()
+      val (probe, ref) = setup(
+        writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
+        settings = defaultSettings.copy(maxBatchSize = 2)
+      )
+      val bucket = nowBucket()
+      val e1 = event("p1", 1L, "e-1", bucket)
+      val e2 = event("p1", 2L, "e-2", bucket)
+      val e3 = event("p1", 3L, "e-3", bucket)
+
+      ref ! TagWrite(tagName, Vector(e1, e2))
+      probe.expectMsg(Vector(toEw(e1, 1), toEw(e2, 2)))
+      probe.expectNoMessage(waitDuration)
+
+      ref ! TagWrite(tagName, Vector(e3))
+      ref ! Flush
+      probe.expectNoMessage(waitDuration)
+      promiseForWrite.success(Done)
+      probe.expectMsg(ProgressWrite("p1", 2, 2, e2.timeUuid))
+      // only happened due to the flush
+      probe.expectMsg(Vector(toEw(e3, 3)))
+      probe.expectMsg(ProgressWrite("p1", 3, 3, e3.timeUuid))
+      expectMsg(Flushed)
+    }
+
     "not write until batch has reached capacity" in {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
@@ -492,9 +532,9 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
-    val session = new TagWriterSession(tag, fakePs, fakePs, successfulWrite, null, fakePs) {
+    val session = new TagWritersSession(fakePs, fakePs, successfulWrite, null, fakePs) {
 
-      override def writeBatch(events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
+      override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
         probe.ref ! events.map {
           case (event, tagPidSequenceNr) => toEw(event, tagPidSequenceNr)
         }
@@ -503,7 +543,13 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
         result
       }
 
-      override def writeProgress(pid: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
+      override def writeProgress(
+        tag:              Tag,
+        pid:              PersistenceId,
+        seqNr:            SequenceNr,
+        tagPidSequenceNr: TagPidSequenceNr,
+        offset:           UUID
+      )(implicit ec: ExecutionContext): Future[Done] = {
         val (head, tail) = (progressWriteResponseStream.head, progressWriteResponseStream.tail)
         probe.ref ! ProgressWrite(pid, seqNr, tagPidSequenceNr, offset)
         progressWriteResponseStream = tail

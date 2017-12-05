@@ -101,7 +101,7 @@ object EventsByTagMigrationSpec {
 
 class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigrationSpec {
 
-  implicit val patience = PatienceConfig(timeout = Span(10, Seconds), interval = Span(500, Milliseconds))
+  implicit val patience = PatienceConfig(timeout = Span(45, Seconds), interval = Span(500, Milliseconds))
 
   "Partial events by tag migration" must {
     val pidOne = "pOne"
