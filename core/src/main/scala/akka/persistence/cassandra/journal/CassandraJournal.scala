@@ -180,7 +180,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
     val pid = messages.head.persistenceId
     writeInProgress.put(pid, p.future)
 
-    Future(writesWithUuids.map(serialize)).flatMap { serialized: Seq[SerializedAtomicWrite] =>
+    val tws = Future(writesWithUuids.map(serialize)).flatMap { serialized: Seq[SerializedAtomicWrite] =>
       val result: Future[Any] =
         if (messages.size <= config.maxMessageBatchSize) {
           // optimize for the common case
@@ -197,17 +197,17 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
 
           rec(groups, Nil)
         }
-
-      val tws = result.map(_ => extractTagWrites(serialized))
-      tws pipeTo tagWrites
-      tws.onComplete { _ =>
-        self ! WriteFinished(pid, p.future)
-        p.success(Done)
-      }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
-
-      //Nil == all good
-      tws.map(_ => Nil)(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
+      result.map(_ => extractTagWrites(serialized))
     }
+
+    tws pipeTo tagWrites
+    tws.onComplete { _ =>
+      self ! WriteFinished(pid, p.future)
+      p.success(Done)
+    }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
+
+    //Nil == all good
+    tws.map(_ => Nil)(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
   }
 
   // FIXME optimize case where there is only one write/tag

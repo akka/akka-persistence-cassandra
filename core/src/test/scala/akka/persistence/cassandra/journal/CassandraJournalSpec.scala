@@ -4,10 +4,14 @@
 
 package akka.persistence.cassandra.journal
 
+import akka.actor.Actor
+import akka.persistence.{ AtomicWrite, PersistentRepr }
+import akka.persistence.JournalProtocol.{ ReplayMessages, WriteMessageFailure, WriteMessages, WriteMessagesFailed }
+
 import scala.concurrent.duration._
 import akka.persistence.journal._
-import akka.persistence.cassandra.{ CassandraMetricsRegistry, CassandraLifecycle }
-
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry }
+import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 
 object CassandraJournalConfiguration {
@@ -53,7 +57,30 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
       val registry = CassandraMetricsRegistry(system).getRegistry
       val snapshots = registry.getNames.toArray()
       snapshots.length should be > 0
+    }
+    "be able to replay messages after serialization failure" in {
+      // there is no chance that a journal could create a data representation for type of event
+      val notSerializableEvent = new Object {
+        override def toString = "not serializable"
+      }
+      val msg = PersistentRepr(
+        payload = notSerializableEvent,
+        sequenceNr = 6,
+        persistenceId = pid,
+        sender = Actor.noSender,
+        writerUuid = writerUuid
+      )
 
+      val probe = TestProbe()
+
+      journal ! WriteMessages(List(AtomicWrite(msg)), probe.ref, actorInstanceId)
+      val err = probe.expectMsgPF() {
+        case WriteMessagesFailed(cause) => cause
+      }
+      probe.expectMsg(WriteMessageFailure(msg, err, actorInstanceId))
+
+      journal ! ReplayMessages(5, 5, 1, pid, probe.ref)
+      probe.expectMsg(replayedMessage(5))
     }
   }
 }
