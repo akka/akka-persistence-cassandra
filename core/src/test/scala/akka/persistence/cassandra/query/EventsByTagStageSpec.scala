@@ -53,7 +53,7 @@ object EventsByTagStageSpec {
        |   log-queries = on
        |   refresh-interval = 200ms
        |   events-by-tag {
-       |     gap-timeout = 2s
+       |     gap-timeout = 3s
        |   }
        | }
     """.stripMargin
