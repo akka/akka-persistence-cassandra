@@ -429,7 +429,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       extractor = Extractors.taggedPersistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
-      .map(_.pr)
+      .map(te => mapEvent(te.pr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
@@ -453,7 +453,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       extractor = Extractors.taggedPersistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
-      .map(_.pr)
+      .map(te => mapEvent(te.pr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
@@ -474,7 +474,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.taggedPersistentRepr
-    ).map(_.pr)
+    ).map(te => mapEvent(te.pr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
