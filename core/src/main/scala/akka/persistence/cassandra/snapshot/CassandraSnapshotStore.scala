@@ -303,7 +303,7 @@ private[snapshot] object CassandraSnapshotStore {
 
     def deserializeSnapshot(row: Row): Any = {
       val payload = serialization.deserialize(
-        row.getBytes("snapshot_data").array,
+        Bytes.getArray(row.getBytes("snapshot_data")),
         row.getInt("ser_id"),
         row.getString("ser_manifest")
       ).get
@@ -317,7 +317,7 @@ private[snapshot] object CassandraSnapshotStore {
             val metaSerId = row.getInt("meta_ser_id")
             val metaSerManifest = row.getString("meta_ser_manifest")
             val meta = serialization.deserialize(
-              metaBytes.array,
+              Bytes.getArray(metaBytes),
               metaSerId,
               metaSerManifest
             ) match {

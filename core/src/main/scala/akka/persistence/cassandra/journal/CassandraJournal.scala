@@ -472,7 +472,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
             val metaSerId = row.getInt("meta_ser_id")
             val metaSerManifest = row.getString("meta_ser_manifest")
             val meta = serialization.deserialize(
-              metaBytes.array,
+              Bytes.getArray(metaBytes),
               metaSerId,
               metaSerManifest
             ) match {
