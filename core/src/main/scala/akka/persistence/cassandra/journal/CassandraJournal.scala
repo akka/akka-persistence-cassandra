@@ -30,7 +30,7 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.exceptions.DriverException
 import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.driver.core.utils.{ Bytes, UUIDs }
 import com.typesafe.config.Config
 
 import scala.collection.JavaConversions._
@@ -458,7 +458,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
 
     def deserializeEvent(row: Row): Any = {
       val event = serialization.deserialize(
-        row.getBytes("event").array,
+        Bytes.getArray(row.getBytes("event")),
         row.getInt("ser_id"),
         row.getString("ser_manifest")
       ).get
