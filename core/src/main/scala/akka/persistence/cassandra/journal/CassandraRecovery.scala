@@ -58,7 +58,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
             extractor = Extractors.taggedPersistentRepr
           ).map(sendMissingTagWrite(tp, tagWrites))
       })
-    ).map(_.pr)
+    ).map(te => queries.mapEvent(te.pr))
       .runForeach(replayCallback)
       .map(_ => ())
   }
