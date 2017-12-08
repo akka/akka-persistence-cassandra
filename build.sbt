@@ -3,17 +3,17 @@ import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
-val AkkaVersion = "2.5.6"
+val AkkaVersion = "2.5.8"
 
 val akkaPersistenceCassandraDependencies = Seq(
-  "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.2.0",
+  "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.3.1",
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query"              % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion     % "test",
   "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % "test",
   "ch.qos.logback"          % "logback-classic"                     % "1.2.3"         % "test",
-  "org.scalatest"          %% "scalatest"                           % "3.0.0"         % "test",
+  "org.scalatest"          %% "scalatest"                           % "3.0.4"         % "test",
   "org.pegdown"             % "pegdown"                             % "1.6.0"         % "test",
   "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % "provided"
 )
