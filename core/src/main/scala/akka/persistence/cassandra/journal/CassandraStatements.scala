@@ -89,7 +89,7 @@ trait CassandraStatements {
         PRIMARY KEY (persistence_id, tag))
        """
 
-  private[akka] def createMetatdataTable =
+  private[akka] def createMetadataTable =
     s"""
       CREATE TABLE IF NOT EXISTS $metadataTableName(
         persistence_id text PRIMARY KEY,
@@ -252,7 +252,7 @@ trait CassandraStatements {
         for {
           _ <- keyspace
           _ <- session.executeAsync(createTable)
-          _ <- session.executeAsync(createMetatdataTable)
+          _ <- session.executeAsync(createMetadataTable)
           _ <- session.executeAsync(createTagsTable)
           _ <- session.executeAsync(createTagsProgressTable)
           done <- session.executeAsync(createConfigTable).map(_ => Done)
