@@ -321,12 +321,12 @@ private[snapshot] object CassandraSnapshotStore {
               metaSerId,
               metaSerManifest
             ) match {
-              case Success(m) => m
-              case Failure(_) =>
-                // don't fail query because of deserialization problem with meta data
-                // see motivation in UnknownMetaData
-                SnapshotWithMetaData.UnknownMetaData(metaSerId, metaSerManifest)
-            }
+                case Success(m) => m
+                case Failure(_) =>
+                  // don't fail query because of deserialization problem with meta data
+                  // see motivation in UnknownMetaData
+                  SnapshotWithMetaData.UnknownMetaData(metaSerId, metaSerManifest)
+              }
             SnapshotWithMetaData(payload, meta)
         }
       } else {

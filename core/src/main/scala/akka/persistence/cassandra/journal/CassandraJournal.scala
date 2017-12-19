@@ -476,12 +476,12 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
               metaSerId,
               metaSerManifest
             ) match {
-              case Success(m) => m
-              case Failure(_) =>
-                // don't fail replay/query because of deserialization problem with meta data
-                // see motivation in UnknownMetaData
-                UnknownMetaData(metaSerId, metaSerManifest)
-            }
+                case Success(m) => m
+                case Failure(_) =>
+                  // don't fail replay/query because of deserialization problem with meta data
+                  // see motivation in UnknownMetaData
+                  UnknownMetaData(metaSerId, metaSerManifest)
+              }
             EventWithMetaData(event, meta)
         }
       } else {
