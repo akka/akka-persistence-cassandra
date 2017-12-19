@@ -1,18 +1,26 @@
-# Contributing to Akka Persistence Cassandra Plugin
+# Welcome! Thank you for contributing to the Akka Persistence Cassandra Plugin
+
+We follow the standard GitHub [fork & pull](https://help.github.com/articles/using-pull-requests/#fork--pull) approach to pull requests. Just fork the official repo, develop in a branch, and submit a PR!
+
+You're always welcome to submit your PR straight away and start the discussion (without reading the rest of this wonderful doc, or the README.md). The goal of these notes is to make your experience contributing to Akka as smooth and pleasant as possible. We're happy to guide you through the process once you've submitted your PR.
+
+# The Akka Community
 
 In case of questions about the contribution process or for discussion of specific issues please visit the [akka/dev gitter chat](https://gitter.im/akka/dev).
 
+You may also check out these [other resources](https://akka.io/get-involved/).
+
 ## Infrastructure
 
-* [Typesafe Contributor License Agreement](http://www.typesafe.com/contribute/cla)
+* [Lightbend Contributor License Agreement](http://www.lightbend.com/contribute/cla)
 * [Issue Tracker](https://github.com/akka/akka-persistence-cassandra/issues)
 * [CI](https://travis-ci.org/akka/akka-persistence-cassandra)
 
-# Typesafe Project & Developer Guidelines
+# Lightbend Project & Developer Guidelines
 
 These guidelines are meant to be a living document that should be changed and adapted as needed. We encourage changes that makes it easier to achieve our goals in an efficient way.
 
-These guidelines mainly apply to Typesafe’s “mature” projects - not necessarily to projects of the type ‘collection of scripts’ etc.
+These guidelines mainly apply to Lightbend's "mature" projects - not necessarily to projects of the type 'collection of scripts' etc.
 
 ## Branches summary
 
@@ -26,17 +34,15 @@ Depending on which version (or sometimes module) you want to work on, you should
 
 This is the process for committing code into master. There are of course exceptions to these rules, for example minor changes to comments and documentation, fixing a broken build etc.
 
-1. Make sure you have signed the Typesafe CLA, if not, [sign it online](http://www.typesafe.com/contribute/cla).
-2. Before starting to work on a feature or a fix, make sure that:
-    1. There is a ticket for your work in the project's issue tracker. If not, create it first.
-    2. The ticket has been scheduled for the current milestone.
-    3. The ticket have been discussed and prioritized by the team.
+1. To avoid duplicated effort, it might be good to check the [issue tracker](https://github.com/akka/akka/issues) and [existing pull requests](https://github.com/akka/akka/pulls) for existing work.
+   - If there is no ticket yet, feel free to [create one](https://github.com/akka/akka/issues/new) to discuss the problem and the approach you want to take to solve it.
+1. Make sure you have signed the Lightbend CLA, if not, [sign it online](http://www.lightbend.com/contribute/cla).
 3. You should always perform your work in a Git feature branch. The branch should be given a descriptive name that explains its intent. Some teams also like adding the ticket number and/or the [GitHub](http://github.com) user ID to the branch name, these details is up to each of the individual teams.
 
     akka-persistence-cassandra prefers the committer name as part of the branch name, the ticket number is optional.
 
 4. When the feature or fix is completed you should open a [Pull Request](https://help.github.com/articles/using-pull-requests) on GitHub.
-5. The Pull Request should be reviewed by other maintainers (as many as feasible/practical). Note that the maintainers can consist of outside contributors, both within and outside Typesafe. Outside contributors (for example from EPFL or independent committers) are encouraged to participate in the review process, it is not a closed process.
+5. The Pull Request should be reviewed by other maintainers (as many as feasible/practical). Note that the maintainers can consist of outside contributors, both within and outside Lightbend. Outside contributors (for example from EPFL or independent committers) are encouraged to participate in the review process, it is not a closed process.
 6. After the review you should fix the issues as needed (pushing a new commit for new review etc.), iterating until the reviewers give their thumbs up.
 
     When the branch conflicts with its merge target (either by way of git merge conflict or failing CI tests), do **not** merge the target branch into your feature branch. Instead rebase your branch onto the target branch. Merges complicate the git history, especially for the squashing which is necessary later (see below).
@@ -59,18 +65,18 @@ For a Pull Request to be considered at all it has to meet these requirements:
    - Not violate [DRY](http://programmer.97things.oreilly.com/wiki/index.php/Don%27t_Repeat_Yourself).
    - [Boy Scout Rule](http://programmer.97things.oreilly.com/wiki/index.php/The_Boy_Scout_Rule) needs to have been applied.
 2. Regardless if the code introduces new features or fixes bugs or regressions, it must have comprehensive tests.
-3. The code must be well documented in the Typesafe's standard documentation format (see the ‘Documentation’ section below).
+3. The code must be well documented in the Lightbend's standard documentation format (see the 'Documentation' section below).
 4. The commit messages must properly describe the changes, see further below.
-5. All Typesafe projects must include Typesafe copyright notices.  Each project can choose between one of two approaches:
+5. All Lightbend projects must include Lightbend copyright notices.  Each project can choose between one of two approaches:
 
-    1. All source files in the project must have a Typesafe copyright notice in the file header.
-    2. The Notices file for the project includes the Typesafe copyright notice and no other files contain copyright notices.  See http://www.apache.org/legal/src-headers.html for instructions for managing this approach for copyrights.
+    1. All source files in the project must have a Lightbend copyright notice in the file header.
+    2. The Notices file for the project includes the Lightbend copyright notice and no other files contain copyright notices.  See http://www.apache.org/legal/src-headers.html for instructions for managing this approach for copyrights.
 
     akka-persistence-cassandra uses the first choice, having copyright notices in every file header.
 
     Other guidelines to follow for copyright notices:
 
-    - Use a form of ``Copyright (C) 2011-2015 Typesafe Inc. <http://www.typesafe.com>``, where the start year is when the project or file was first created and the end year is the last time the project or file was modified.
+    - Use a form of ``Copyright (C) 2011-2018 Lightbend Inc. <https://www.lightbend.com>``, where the start year is when the project or file was first created and the end year is the last time the project or file was modified.
     - Never delete or change existing copyright notices, just add additional info.
     - Do not use ``@author`` tags since it does not encourage [Collective Code Ownership](http://www.extremeprogramming.org/rules/collective.html). However, each project should make sure that the contributors gets the credit they deserve—in a text file or page on the project website and in the release notes etc.
 
@@ -80,24 +86,14 @@ Whether or not a pull request (or parts of it) shall be back- or forward-ported 
 
 ## Continuous Integration
 
-Each project should be configured to use a continuous integration (CI) tool (i.e. a build server à la Jenkins). Typesafe has a [Jenkins server farm](https://jenkins.akka.io/) that can be used. The CI tool should, on each push to master, build the **full** distribution and run **all** tests, and if something fails it should email out a notification with the failure report to the committer and the core team. The CI tool should also be used in conjunction with a Pull Request validator (discussed below).
+Each project should be configured to use a continuous integration (CI) tool (i.e. a build server à la Jenkins). Lightbend has a [Jenkins server farm](https://jenkins.akka.io/) that can be used. The CI tool should, on each push to master, build the **full** distribution and run **all** tests, and if something fails it should email out a notification with the failure report to the committer and the core team. The CI tool should also be used in conjunction with a Pull Request validator (discussed below).
 
 ## Documentation
 
-All documentation should be generated using the sbt-site-plugin, *or* publish artifacts to a repository that can be consumed by the Typesafe stack.
-
-All documentation must abide by the following maxims:
-
-- Example code should be run as part of an automated test suite.
-- Version should be **programmatically** specifiable to the build.
-- Generation should be **completely automated** and available for scripting.
-- Artifacts that must be included in the Typesafe stack should be published to a maven “documentation” repository as documentation artifacts.
-
-All documentation is preferred to be in Typesafe's standard documentation format [reStructuredText](http://doc.akka.io/docs/akka/snapshot/dev/documentation.html) compiled using Typesafe's customized [Sphinx](http://sphinx.pocoo.org/) based documentation generation system, which among other things allows all code in the documentation to be externalized into compiled files and imported into the documentation.
-
-For more info, or for a starting point for new projects, look at the [Typesafe Documentation Template project](https://github.com/typesafehub/doc-template).
-
-For larger projects that have invested a lot of time and resources into their current documentation and samples scheme (like for example Play), it is understandable that it will take some time to migrate to this new model. In these cases someone from the project needs to take the responsibility of manual QA and verifier for the documentation and samples.
+akka-persistence-cassandra is currently documented in the README.md. If we
+were to provide more extensive documentation,
+[paradox](https://github.com/lightbend/paradox) would be the tool of choice.
+See the [alpakka](https://github.com/akka/alpakka) project for an example.
 
 ## External Dependencies
 
