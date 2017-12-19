@@ -178,7 +178,7 @@ class EventsByPersistenceIdSpec
     "(eventually) produce correct sequence of sequence numbers when events appear out of order in cassandra" in {
 
       writeTestEvent(PersistentRepr("jo-1", 1L, "jo"))
-      writeTestEvent(PersistentRepr("jo-1", 2L, "jo"))
+      writeTestEvent(PersistentRepr("jo-2", 2L, "jo"))
 
       val (killKill, probe) = queries.eventsByPersistenceId("jo", 0L, Long.MaxValue)
         .viaMat(KillSwitches.single)(Keep.right)
@@ -186,7 +186,7 @@ class EventsByPersistenceIdSpec
         .toMat(TestSink.probe[Any])(Keep.both)
         .run()
 
-      probe.request(4)
+      probe.request(5)
 
       probe.expectNext(
         ("jo", 1, Offset.sequence(1)),
@@ -196,7 +196,9 @@ class EventsByPersistenceIdSpec
 
       // 4 arrived out of order
       writeTestEvent(PersistentRepr("jo-4", 4L, "jo"))
-      system.log.debug("Wrote evt 4, sleeping")
+      system.log.debug("Wrote evt 4")
+      writeTestEvent(PersistentRepr("jo-5", 5L, "jo"))
+      system.log.debug("Wrote evt 5, sleeping")
 
       // give the source some time to see it, but less than
       // the configured events-by-persistence-id-gap-timeout
@@ -208,7 +210,8 @@ class EventsByPersistenceIdSpec
 
       probe.expectNext(
         ("jo", 3, Offset.sequence(3)),
-        ("jo", 4, Offset.sequence(4))
+        ("jo", 4, Offset.sequence(4)),
+        ("jo", 5, Offset.sequence(5))
       )
 
       killKill.shutdown()
