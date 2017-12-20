@@ -327,7 +327,9 @@ import scala.util.{ Failure, Success, Try }
             onFailure(new IllegalStateException(s"Sequence number [$seqNr] still missing after " +
               s"[${config.eventsByPersistenceIdEventTimeout.pretty}], " +
               s"saw unexpected seqNr [${m.sawSeqNr}] for persistenceId [$persistenceId]."))
-          case Some(_) => query(false)
+          case Some(_) =>
+            queryState = QueryIdle
+            query(false)
           case None    => throw new IllegalStateException("Should not be able to get here")
         }
       }
@@ -443,7 +445,6 @@ import scala.util.{ Failure, Success, Try }
                     query(false)
                 }
               } else {
-
                 seqNr = event.sequenceNr + 1
                 partition = row.getLong("partition_nr")
                 count += 1
