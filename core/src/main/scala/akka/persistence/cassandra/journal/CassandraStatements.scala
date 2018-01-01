@@ -76,6 +76,7 @@ trait CassandraStatements {
         PRIMARY KEY ((tag_name, timebucket), timestamp, persistence_id, tag_pid_sequence_nr))
         WITH gc_grace_seconds =${config.tagTable.gcGraceSeconds}
         AND compaction = ${config.tagTable.compactionStrategy.asCQL}
+        ${if (config.tagTable.ttl.isDefined) "AND default_time_to_live = " + config.tagTable.ttl.get.toSeconds else ""}
     """
 
   def createTagsProgressTable =

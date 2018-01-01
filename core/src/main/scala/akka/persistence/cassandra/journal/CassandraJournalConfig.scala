@@ -36,7 +36,7 @@ private[akka] object BucketSize {
   }
 }
 
-case class TableSettings(name: String, compactionStrategy: CassandraCompactionStrategy, gcGraceSeconds: Long)
+case class TableSettings(name: String, compactionStrategy: CassandraCompactionStrategy, gcGraceSeconds: Long, ttl: Option[Duration])
 
 class CassandraJournalConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) with NoSerializationVerificationNeeded {
   val targetPartitionSize: Int = config.getInt(CassandraJournalConfig.TargetPartitionProperty)
@@ -55,7 +55,8 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
   val tagTable = TableSettings(
     config.getString("events-by-tag.table"),
     CassandraCompactionStrategy(config.getConfig("events-by-tag.compaction-strategy")),
-    config.getLong("events-by-tag.gc-grace-seconds")
+    config.getLong("events-by-tag.gc-grace-seconds"),
+    if (config.hasPath("events-by-tag.time-to-live")) Some(config.getDuration("events-by-tag.time-to-live", TimeUnit.MILLISECONDS).millis) else None
   )
 
   val tagWriterSettings = TagWriterSettings(
