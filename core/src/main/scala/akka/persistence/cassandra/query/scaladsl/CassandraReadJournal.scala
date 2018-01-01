@@ -264,27 +264,31 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * backend journal.
    */
   override def eventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
-    try {
-      val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
-      val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
-      createFutureSource(prereqs) { (s, prereqs) =>
-        val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
-        Source.fromGraph(EventsByTagStage(
-          session, fromOffset,
-          None, queryPluginConfig,
-          Some(queryPluginConfig.refreshInterval),
-          writePluginConfig.bucketSize,
-          usingOffset,
-          prereqs._2
-        ))
-      }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
-        .mapMaterializedValue(_ => NotUsed)
-        .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
-    } catch {
-      case NonFatal(e) =>
-        // e.g. from cassandraSession, or selectStatement
-        log.debug("Could not run eventsByTag [{}] query, due to: {}", tag, e.getMessage)
-        Source.failed(e)
+    if (!config.eventsByTagEnabled)
+      Source.failed(new IllegalStateException("Events by tag queries are disabled"))
+    else {
+      try {
+        val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
+        val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
+        createFutureSource(prereqs) { (s, prereqs) =>
+          val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
+          Source.fromGraph(EventsByTagStage(
+            session, fromOffset,
+            None, queryPluginConfig,
+            Some(queryPluginConfig.refreshInterval),
+            writePluginConfig.bucketSize,
+            usingOffset,
+            prereqs._2
+          ))
+        }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
+          .mapMaterializedValue(_ => NotUsed)
+          .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+      } catch {
+        case NonFatal(e) =>
+          // e.g. from cassandraSession, or selectStatement
+          log.debug("Could not run eventsByTag [{}] query, due to: {}", tag, e.getMessage)
+          Source.failed(e)
+      }
     }
   }
 
@@ -371,22 +375,26 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    *
    */
   override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
-    try {
-      val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
-      val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
-      val toOffset = Some(offsetUuid(System.currentTimeMillis()))
+    if (!config.eventsByTagEnabled)
+      Source.failed(new IllegalStateException("Events by tag queries are disabled"))
+    else {
+      try {
+        val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
+        val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
+        val toOffset = Some(offsetUuid(System.currentTimeMillis()))
 
-      createFutureSource(prereqs) { (s, prereqs) =>
-        val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
-        Source.fromGraph(EventsByTagStage(session, fromOffset, toOffset, queryPluginConfig, None, writePluginConfig.bucketSize, usingOffset, prereqs._2))
-      }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
-        .mapMaterializedValue(_ => NotUsed)
-        .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
-    } catch {
-      case NonFatal(e) =>
-        // e.g. from cassandraSession, or selectStatement
-        log.debug("Could not run currentEventsByTag [{}] query, due to: {}", tag, e.getMessage)
-        Source.failed(e)
+        createFutureSource(prereqs) { (s, prereqs) =>
+          val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
+          Source.fromGraph(EventsByTagStage(session, fromOffset, toOffset, queryPluginConfig, None, writePluginConfig.bucketSize, usingOffset, prereqs._2))
+        }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
+          .mapMaterializedValue(_ => NotUsed)
+          .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+      } catch {
+        case NonFatal(e) =>
+          // e.g. from cassandraSession, or selectStatement
+          log.debug("Could not run currentEventsByTag [{}] query, due to: {}", tag, e.getMessage)
+          Source.failed(e)
+      }
     }
   }
 

@@ -244,6 +244,14 @@ trait CassandraStatements {
 
     def create(): Future[Done] = {
 
+      def tagStatements: Future[Done] =
+        if (config.eventsByTagEnabled) {
+          for {
+            _ <- session.executeAsync(createTagsTable)
+            _ <- session.executeAsync(createTagsProgressTable)
+          } yield Done
+        } else Future.successful(Done)
+
       val keyspace: Future[Done] =
         if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).map(_ => Done)
         else Future.successful(Done)
@@ -253,8 +261,7 @@ trait CassandraStatements {
           _ <- keyspace
           _ <- session.executeAsync(createTable)
           _ <- session.executeAsync(createMetadataTable)
-          _ <- session.executeAsync(createTagsTable)
-          _ <- session.executeAsync(createTagsProgressTable)
+          _ <- tagStatements
           done <- session.executeAsync(createConfigTable).map(_ => Done)
         } yield done
       } else keyspace

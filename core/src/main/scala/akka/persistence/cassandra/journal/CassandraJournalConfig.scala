@@ -50,8 +50,9 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
 
   val queryPlugin = config.getString("query-plugin")
 
-  val bucketSize: BucketSize = BucketSize.fromString(config.getString("events-by-tag.bucket-size"))
+  val eventsByTagEnabled = config.getBoolean("events-by-tag.enabled")
 
+  val bucketSize: BucketSize = BucketSize.fromString(config.getString("events-by-tag.bucket-size"))
   val tagTable = TableSettings(
     config.getString("events-by-tag.table"),
     CassandraCompactionStrategy(config.getConfig("events-by-tag.compaction-strategy")),
