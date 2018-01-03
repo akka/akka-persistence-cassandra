@@ -32,6 +32,8 @@ import scala.util.Try
 object EventsByTagSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
+  val keyspaceName = "EventsByTagSpec"
+
   val config = ConfigFactory.parseString(
     s"""
     akka.loglevel = INFO
@@ -39,7 +41,7 @@ object EventsByTagSpec {
     akka.actor.warn-about-java-serializer-usage = off
     cassandra-journal {
       #target-partition-size = 5
-      keyspace=EventsByTagSpec
+      keyspace=$keyspaceName
 
       event-adapters {
         color-tagger  = akka.persistence.cassandra.query.ColorFruitTagger
@@ -54,6 +56,7 @@ object EventsByTagSpec {
       events-by-tag {
         flush-interval = 0ms
         bucket-size = Day
+        time-to-live = 1d
       }
     }
 
@@ -176,6 +179,10 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
   import EventsByTagSpec._
 
   "Cassandra query currentEventsByTag" must {
+    "set ttl on table" in {
+      session.getCluster.getMetadata.getKeyspace(keyspaceName).getTable("tag_views").getOptions.getDefaultTimeToLive shouldEqual 86400
+    }
+
     "implement standard CurrentEventsByTagQuery" in {
       queries.isInstanceOf[CurrentEventsByTagQuery] should ===(true)
     }
