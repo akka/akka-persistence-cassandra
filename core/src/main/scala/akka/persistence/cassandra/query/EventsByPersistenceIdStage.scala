@@ -330,7 +330,7 @@ import scala.util.{ Failure, Success, Try }
           case Some(_) =>
             queryState = QueryIdle
             query(false)
-          case None    => throw new IllegalStateException("Should not be able to get here")
+          case None => throw new IllegalStateException("Should not be able to get here")
         }
       }
 

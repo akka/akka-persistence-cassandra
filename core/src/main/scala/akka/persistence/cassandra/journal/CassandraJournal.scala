@@ -9,7 +9,7 @@ import java.nio.ByteBuffer
 import java.util.{ UUID, HashMap => JHMap, Map => JMap }
 
 import akka.Done
-import akka.actor.{ ExtendedActorSystem, NoSerializationVerificationNeeded }
+import akka.actor.{ ActorRef, ExtendedActorSystem, NoSerializationVerificationNeeded }
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.pattern.pipe
@@ -78,9 +78,10 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
     preparedWriteToTagProgress
   )
 
-  protected val tagWrites = context.system.actorOf(TagWriters.props(
-    (arf, tag) => arf.actorOf(TagWriter.props(tagWriterSession, tag, config.tagWriterSettings))
-  ))
+  protected val tagWrites: Option[ActorRef] =
+    if (config.eventsByTagEnabled)
+      Some(context.system.actorOf(TagWriters.props((arf, tag) => arf.actorOf(TagWriter.props(tagWriterSession, tag, config.tagWriterSettings)))))
+    else None
 
   def preparedWriteMessage = session.prepare(
     writeMessage(withMeta = false)
@@ -128,11 +129,14 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       preparedSelectHighestSequenceNr
       preparedSelectDeletedTo
       preparedInsertDeletedTo
-      preparedSelectTagProgress
-      preparedSelectTagProgressForPersistenceId
-      preparedWriteToTagProgress
-      preparedWriteToTagViewWithoutMeta
-      preparedWriteToTagViewWithMeta
+
+      if (config.eventsByTagEnabled) {
+        preparedSelectTagProgress
+        preparedSelectTagProgressForPersistenceId
+        preparedWriteToTagProgress
+        preparedWriteToTagViewWithoutMeta
+        preparedWriteToTagViewWithMeta
+      }
   }
 
   private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
@@ -200,7 +204,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       result.map(_ => extractTagWrites(serialized))
     }
 
-    tws pipeTo tagWrites
+    tagWrites.foreach(tws pipeTo _)
+
     tws.onComplete { _ =>
       self ! WriteFinished(pid, p.future)
       p.success(Done)

@@ -8,9 +8,9 @@ import java.time.{ LocalDateTime, ZoneOffset }
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
-import akka.actor.ActorSystem
+import akka.actor.{ ActorSystem, PoisonPill, Props }
 import akka.event.Logging.Warning
-import akka.persistence.PersistentRepr
+import akka.persistence.{ PersistentActor, PersistentRepr }
 import akka.persistence.cassandra.{ CassandraLifecycle, EventWithMetaData }
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Day }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
@@ -77,6 +77,16 @@ object EventsByTagSpec {
     cassandra-query-journal.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormat)}"
     """
   ).withFallback(strictConfig)
+
+  val disabledConfig = ConfigFactory.parseString(
+    """
+      akka.loglevel = DEBUG
+      cassandra-journal {
+        keyspace=EventsByTagDisabled
+        events-by-tag.enabled = false
+      }
+    """
+  ).withFallback(config)
 }
 
 class EventWithMetaDataTagger extends WriteEventAdapter {
@@ -905,3 +915,59 @@ class EventsByTagStrictBySeqMemoryIssueSpec
   }
 }
 
+object EventsByTagDisabled {
+  class CounterActor(val persistenceId: String) extends PersistentActor {
+    var state = 0
+    override def receiveRecover = {
+      case i: Int =>
+        state += i
+    }
+
+    override def receiveCommand = {
+      case i: Int => persist(i) { i =>
+        state += i
+        sender() ! state
+      }
+    }
+  }
+
+  def props(pid: String): Props = Props(new CounterActor(pid))
+}
+
+class EventsByTagDisabled extends AbstractEventsByTagSpec("EventsByTagDisabled", EventsByTagSpec.disabledConfig) {
+
+  "Events by tag disabled" must {
+    "stop tag_views being created" in {
+      session.getCluster.getMetadata.getKeyspace("EventsByTagDisabled").getTable("tag_views") shouldEqual null
+    }
+
+    "stop tag_progress being created" in {
+      session.getCluster.getMetadata.getKeyspace("EventsByTagDisabled").getTable("tag_write_progress") shouldEqual null
+    }
+
+    "fail current events by tag queries" in {
+      val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
+      val probe = greenSrc.runWith(TestSink.probe[Any])
+      probe.request(1)
+      probe.expectError().getMessage shouldEqual "Events by tag queries are disabled"
+    }
+
+    "fail live events by tag queries" in {
+      val greenSrc = queries.eventsByTag(tag = "green", offset = NoOffset)
+      val probe = greenSrc.runWith(TestSink.probe[Any])
+      probe.request(1)
+      probe.expectError().getMessage shouldEqual "Events by tag queries are disabled"
+    }
+
+    "allow recovery" in {
+      val a = system.actorOf(EventsByTagDisabled.props("a"))
+      a ! 2
+      expectMsg(20.seconds, 2)
+      a ! PoisonPill
+
+      val aMk2 = system.actorOf(EventsByTagDisabled.props("a"))
+      aMk2 ! 4
+      expectMsg(20.seconds, 6)
+    }
+  }
+}

@@ -34,33 +34,50 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
   )(replayCallback: (PersistentRepr) => Unit): Future[Unit] = {
     log.debug("Recovering pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
 
-    val recoveryPrep: Future[Map[String, TagProgress]] = for {
-      tp <- lookupTagProgress(persistenceId)
-      _ <- sendTagProgress(tp, tagWrites)
-      startingSequenceNr = calculateStartingSequenceNr(tp)
-      _ <- sendPreSnapshotTagWrites(startingSequenceNr, fromSequenceNr, persistenceId, max, tp)
-    } yield tp
+    if (config.eventsByTagEnabled) {
+      val recoveryPrep: Future[Map[String, TagProgress]] = for {
+        tp <- lookupTagProgress(persistenceId)
+        _ <- sendTagProgress(tp, tagWrites.get)
+        startingSequenceNr = calculateStartingSequenceNr(tp)
+        _ <- sendPreSnapshotTagWrites(startingSequenceNr, fromSequenceNr, persistenceId, max, tp)
+      } yield tp
 
-    Source.fromFutureSource(
-      recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
-        log.debug("Starting recovery with tag progress: {}. From {} to {}", tp, fromSequenceNr, toSequenceNr)
-        queries
-          .eventsByPersistenceId(
-            persistenceId,
-            fromSequenceNr,
-            toSequenceNr,
-            max,
-            replayMaxResultSize,
-            None,
-            "asyncReplayMessages",
-            someReadConsistency,
-            someReadRetryPolicy,
-            extractor = Extractors.taggedPersistentRepr
-          ).map(sendMissingTagWrite(tp, tagWrites))
-      })
-    ).map(te => queries.mapEvent(te.pr))
-      .runForeach(replayCallback)
-      .map(_ => ())
+      Source.fromFutureSource(
+        recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
+          log.debug("Starting recovery with tag progress: {}. From {} to {}", tp, fromSequenceNr, toSequenceNr)
+          queries
+            .eventsByPersistenceId(
+              persistenceId,
+              fromSequenceNr,
+              toSequenceNr,
+              max,
+              replayMaxResultSize,
+              None,
+              "asyncReplayMessages",
+              someReadConsistency,
+              someReadRetryPolicy,
+              extractor = Extractors.taggedPersistentRepr
+            ).map(sendMissingTagWrite(tp, tagWrites.get))
+        })
+      ).map(te => queries.mapEvent(te.pr))
+        .runForeach(replayCallback)
+        .map(_ => ())
+    } else {
+      queries
+        .eventsByPersistenceId(
+          persistenceId,
+          fromSequenceNr,
+          toSequenceNr,
+          max,
+          replayMaxResultSize,
+          None,
+          "asyncReplayMessages",
+          someReadConsistency,
+          someReadRetryPolicy,
+          extractor = Extractors.taggedPersistentRepr
+        ).map(te => queries.mapEvent(te.pr))
+        .runForeach(replayCallback).map(_ => ())
+    }
   }
 
   private def sendPreSnapshotTagWrites(
@@ -83,7 +100,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
       someReadConsistency,
       someReadRetryPolicy,
       Extractors.taggedPersistentRepr
-    ).map(sendMissingTagWrite(tp, tagWrites)).runWith(Sink.ignore)
+    ).map(sendMissingTagWrite(tp, tagWrites.get)).runWith(Sink.ignore)
   } else {
     log.debug("Recovery is starting before the latest tag writes tag progress. Min progress for pid {}. " +
       "From sequence nr of recovery: {}", minProgressNr, fromSequenceNr)
