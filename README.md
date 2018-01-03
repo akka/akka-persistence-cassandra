@@ -100,7 +100,7 @@ See `events-by-tag.time-to-live` in reference.conf for how to set this.
 Migrations
 ----------
 
-### Migrations to 0.80
+### Migrations to 0.80-RC3
 
 0.80 introduces a completely different way to manage tags for events.
 
