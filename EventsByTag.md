@@ -6,14 +6,30 @@ views which have been reported to unstable. See [here](https://github.com/akka/a
 Events by tag is a hard query to execute efficiently in Cassandra. This page documents
 how it works and what are the consistency guarantees.
 
+## How it workss
+
+A separate table is maintained for events by tag queries to that is written to in batches.
+
+It is partitioned via tag and a time bucket. The timebucket causes a hot spot for writes but
+this is kept to a minimum by making the bucket small enough and by batching the writes into
+unlogged batches.
+
+Each events by tag query starts at the offset you provide and query back all the events. 
+Events for a particular tag are partitioned
+by the tag name and a timebucket (this is a day for older versions of the plugin, and configurable for the latest version). 
+Meaning that each eventsByTag stream will initially do a query per time bucket to get up to the current 
+(many of these could be empty so very little over head, some may bring back many events). For example
+if you set the offset to be 30 days ago and a day time bucket, it will require 30 * nr queries to get each stream up to date. 
+If a particular partition contains many events then it is paged back from Cassandra based on demand.
+
 ## Bucket sizes 
 
 Events by tag partitions are grouped into buckets to avoid a partition for a given tag
 getting to large. 
 
- 1000s of events per day per tag -- DAY
- 100,000s  of events per day per tag -- HOUR
- 1,000,000s of events per day per tag -- MINUTE
+* 1000s of events per day per tag -- DAY
+* 100,000s  of events per day per tag -- HOUR
+* 1,000,000s of events per day per tag -- MINUTE
  
 This setting can not be changed after data has been written.
  
@@ -23,7 +39,8 @@ More billion per day per tag? You probably need a specialised schema rather than
 
 The old implementation put all tags for each day in a single cassandra partition. 
 If a cassandra partition gets too large it starts to perform badly (and has a hard limit of 2 billion cells, a cell being similar to a column). 
-Given we have ~10 columns in the table there was a hard limit previously of 200million but it would have performed terribly before getting any where near this.
+Given we have ~10 columns in the table there was a hard limit previously of 200million but it would have performed 
+terribly before getting any where near this.
 
 The support for `Minute` bucket size means that there are 1440 partitions per day. 
 Given a large C* cluster this should work until you have in the order of 10s of millions per minute
@@ -32,22 +49,14 @@ when the write rate to that partition could become the bottleneck rather than pa
 The increased scalability comes at the cost of having to query more partitions on the read side so don't 
 use `Minute` unless necessary.
 
-### Migrating
-
-A one off manual run of a provided stream will take events from the messages table and
-save them to the tag views table. This can run while your application is running but be careful 
-as it will produce a large number of writes to Cassandra. 
-
-Once you restart with the new version of the plugin each time a persistent actor is recovered
-it will repair the tag views table for any event that was missed during the migration.
-
 ## Consistency
 
 Event by tag queries are eventually consistent, i.e. if a persist for an event has completed
 is does not guarantee that it will be visible in an events by tag query, but it will eventually.
 
 Order of the events is maintained per persistence id per tag by maintaining a sequence number for tagged events.
-If an event is missing then `eventByTag` queries will fail.
+This is in addition to the normal sequence nr kept per persistence id.
+If an event is missing then `eventByTag` queries will fail. 
 
 ### Missing and delayed events.
 
@@ -104,5 +113,5 @@ tag_views table which is fine as they will be upserts.
 *Deletes are not propagated to the events by tag table.*
 
 It is assumed that the eventsByTag query is used to populate a separate read view or
-events are never deleted. A future feature will be to TTL the table. 
+events are never deleted.
 
