@@ -1,12 +1,12 @@
 # Events by tag
 
-WIP: This documents the new implementation, the existing one uses Cassandra Materialized
+This documents the new implementation, the existing one uses Cassandra Materialized
 views which have been reported to unstable. See [here](https://github.com/akka/akka-persistence-cassandra/issues/247)
 
 Events by tag is a hard query to execute efficiently in Cassandra. This page documents
 how it works and what are the consistency guarantees.
 
-## How it workss
+## How it works
 
 A separate table is maintained for events by tag queries to that is written to in batches.
 
