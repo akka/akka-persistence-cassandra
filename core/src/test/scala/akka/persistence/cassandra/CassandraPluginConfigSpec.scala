@@ -20,7 +20,7 @@ import com.typesafe.config.Config
 import scala.concurrent.ExecutionContext
 import org.scalatest.BeforeAndAfterAll
 
-object CassandraPluginConfigTest {
+object CassandraPluginConfigSpec {
   class TestContactPointsProvider(system: ActorSystem, config: Config) extends ConfigSessionProvider(system, config) {
     override def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
       if (clusterId == "cluster1")
@@ -32,9 +32,9 @@ object CassandraPluginConfigTest {
   }
 }
 
-class CassandraPluginConfigTest extends TestKit(ActorSystem("CassandraPluginConfigTest"))
+class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConfigSpec"))
   with WordSpecLike with MustMatchers with BeforeAndAfterAll {
-  import CassandraPluginConfigTest._
+  import CassandraPluginConfigSpec._
   import system.dispatcher
   lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-journal")
 

@@ -11,7 +11,7 @@
     <logger name="org.apache.cassandra" level="ERROR" />
     <logger name="com.datastax.driver.core.QueryLogger.NORMAL" level="DEBUG" />
     <logger name="com.datastax.driver.core" level="WARN" />
-    <logger name="com.codahale.metrics.JmxReporter" level="INFO" />
+    <logger name="com.codahale.metrics.JmxReporter" level="DEBUG" />
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
