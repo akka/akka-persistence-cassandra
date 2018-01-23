@@ -6,6 +6,7 @@ package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -13,7 +14,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.concurrent.duration.FiniteDuration
-
 import akka.actor.ActorSystem
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
@@ -109,7 +109,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
       val b = Cluster.builder
-        .withClusterName(system.name)
+        .withClusterName(s"${system.name}-${ConfigSessionProvider.clusterIdentifier.getAndIncrement()}")
         .addContactPointsWithPorts(cp.asJava)
         .withPoolingOptions(poolingOptions)
         .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
@@ -217,4 +217,8 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
       }
     }
   }
+}
+
+object ConfigSessionProvider {
+  private val clusterIdentifier = new AtomicInteger()
 }
