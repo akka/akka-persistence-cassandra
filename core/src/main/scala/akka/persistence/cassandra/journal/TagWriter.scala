@@ -40,7 +40,7 @@ import scala.util.{ Failure, Success, Try }
   ): Props = Props(new TagWriter(session, tag, settings))
 
   private[akka] case class TagWrite(tag: Tag, serialised: Vector[Serialized]) extends NoSerializationVerificationNeeded
-  private[akka] case class SetTagProgress(tag: Tag, progress: TagProgress)
+  private[akka] case class SetTagProgress(tag: Tag, progress: TagProgress) extends NoSerializationVerificationNeeded
   private[akka] case object SetTagProgressAck
 
   private[akka] case class TagWriterSettings(

@@ -36,7 +36,7 @@ object EventsByTagStageSpec {
     s"""
        | akka.loglevel = DEBUG
        |
-       | akka.actor.serialize-messages=off
+       | akka.actor.serialize-messages=on
        |
        | cassandra-journal {
        |   keyspace=eventsbytagstagespec
