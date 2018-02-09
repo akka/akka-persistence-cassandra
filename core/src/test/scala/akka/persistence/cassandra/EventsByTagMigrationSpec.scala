@@ -116,7 +116,7 @@ class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigra
       migrator.createTables()
       migrator.addTagsColumn()
 
-      migrator.migrateToTagViews(List(pidOne)).futureValue shouldEqual Done
+      migrator.migratePidsToTagViews(List(pidOne)).futureValue shouldEqual Done
 
       val blueSrc = queries.eventsByTag("blue", NoOffset)
       val blueProbe = blueSrc.runWith(TestSink.probe[Any])(materialiser)
@@ -126,7 +126,7 @@ class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigra
       blueProbe.expectNoMessage(waitTime)
       blueProbe.cancel()
 
-      migrator.migrateToTagViews(List(pidTwo)).futureValue shouldEqual Done
+      migrator.migratePidsToTagViews(List(pidTwo)).futureValue shouldEqual Done
 
       val blueSrcTakeTwo = queries.eventsByTag("blue", NoOffset)
       val blueProbeTakeTwo = blueSrcTakeTwo.runWith(TestSink.probe[Any])(materialiser)

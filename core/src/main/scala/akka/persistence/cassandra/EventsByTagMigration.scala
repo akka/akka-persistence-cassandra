@@ -17,7 +17,7 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query.PersistenceQuery
 import akka.serialization.Serialization
-import akka.stream.ActorMaterializer
+import akka.stream.{ ActorMaterializer, OverflowStrategy }
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
@@ -137,8 +137,8 @@ class EventsByTagMigration(system: ActorSystem)
    * @param pids PersistenceIds to migrate
    * @return A Future that completes when the migration is complete
    */
-  def migrateToTagViews(pids: Seq[PersistenceId]): Future[Done] = {
-    migrateToTagViewsInternal(Source.fromIterator(() => pids.iterator))
+  def migratePidsToTagViews(pids: Seq[PersistenceId], periodicFlush: Int = 1000): Future[Done] = {
+    migrateToTagViewsInternal(Source.fromIterator(() => pids.iterator), periodicFlush)
   }
 
   /**
@@ -150,11 +150,11 @@ class EventsByTagMigration(system: ActorSystem)
    *
    * @return A Future that completes when the migration is complete.
    */
-  def migrateToTagViews(): Future[Done] = {
-    migrateToTagViewsInternal(queries.currentPersistenceIds())
+  def migrateToTagViews(periodicFlush: Int = 1000): Future[Done] = {
+    migrateToTagViewsInternal(queries.currentPersistenceIds(), periodicFlush)
   }
 
-  private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed]): Future[Done] = {
+  private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed], periodicFlush: Int): Future[Done] = {
     log.info("Beginning migration of data to tag_views table")
     val tagWriterSession = TagWritersSession(
       preparedWriteToTagViewWithoutMeta,
@@ -167,7 +167,9 @@ class EventsByTagMigration(system: ActorSystem)
       (arf, tag) => arf.actorOf(TagWriter.props(tagWriterSession, tag, config.tagWriterSettings))
     ))
 
-    val allPids: Source[RawEvent, NotUsed] = src
+    // A bit arbitrary, but we could be waiting on many Cassandra writes during the flush
+    implicit val timeout = Timeout(30.seconds)
+    val allPids = src
       .map { pids =>
         log.info("Migrating the following persistence ids {}", pids)
         pids
@@ -178,6 +180,8 @@ class EventsByTagMigration(system: ActorSystem)
           startingSeq = calculateStartingSequenceNr(tp)
         } yield (tp, startingSeq)
 
+        // would be nice to group these up into a TagWrites message but also
+        // nice that this reuses the recovery code :-/
         Source.fromFutureSource {
           prereqs.map {
             case (tp, startingSeq) => {
@@ -192,13 +196,13 @@ class EventsByTagMigration(system: ActorSystem)
                 s"migrateToTag-$pid",
                 extractor = EventsByTagMigration.RawPayloadOldTagSchema(config.bucketSize, transportInformation)
               ).map(sendMissingTagWriteRaw(tp, tagWriters))
+                .buffer(periodicFlush, OverflowStrategy.backpressure)
+                .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters).mapTo[AllFlushed.type])
             }
           }
         }
       })
 
-    // A bit arbitrary, but we could be waiting on many Cassandra writes during the flush
-    implicit val timeout = Timeout(30.seconds)
     for {
       _ <- allPids.runWith(Sink.ignore)
       _ <- (tagWriters ? FlushAllTagWriters).mapTo[AllFlushed.type]
