@@ -8,7 +8,6 @@ import akka.Done
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.Session
 
-import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 
 trait CassandraStatements {
@@ -19,12 +18,6 @@ trait CassandraStatements {
       CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
       WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
     """
-
-  private[akka] def createConfigTable =
-    s"""
-      CREATE TABLE IF NOT EXISTS ${configTableName} (
-        property text primary key, value text)
-     """
 
   // message is the serialized PersistentRepr that was used in v0.6 and earlier
   // event is the serialized application event that is used in v0.7 and later
@@ -183,16 +176,6 @@ trait CassandraStatements {
         sequence_nr <= ?
     """
 
-  private[akka] def selectConfig =
-    s"""
-      SELECT * FROM ${configTableName}
-    """
-
-  private[akka] def writeConfig =
-    s"""
-      INSERT INTO ${configTableName}(property, value) VALUES(?, ?) IF NOT EXISTS
-    """
-
   private[akka] def selectHighestSequenceNr =
     s"""
      SELECT sequence_nr, used FROM ${tableName} WHERE
@@ -223,7 +206,6 @@ trait CassandraStatements {
   protected def tableName = s"${config.keyspace}.${config.table}"
   private def tagTableName = s"${config.keyspace}.${config.tagTable.name}"
   private def tagProgressTableName = s"${config.keyspace}.tag_write_progress"
-  private def configTableName = s"${config.keyspace}.${config.configTable}"
   private def metadataTableName = s"${config.keyspace}.${config.metadataTable}"
 
   /**
@@ -255,8 +237,7 @@ trait CassandraStatements {
           _ <- keyspace
           _ <- session.executeAsync(createTable)
           _ <- session.executeAsync(createMetadataTable)
-          _ <- tagStatements
-          done <- session.executeAsync(createConfigTable).map(_ => Done)
+          done <- tagStatements
         } yield done
       } else keyspace
     }
@@ -266,28 +247,4 @@ trait CassandraStatements {
       exec = () => create()
     )
   }
-
-  private[akka] def initializePersistentConfig(session: Session)(implicit ec: ExecutionContext): Future[Map[String, String]] = {
-    import akka.persistence.cassandra.listenableFutureToFuture
-    session.executeAsync(selectConfig)
-      .flatMap { rs =>
-        val properties = rs.all.asScala.map(row => (row.getString("property"), row.getString("value"))).toMap
-        properties.get(CassandraJournalConfig.TargetPartitionProperty) match {
-          case Some(oldValue) =>
-            assertCorrectPartitionSize(oldValue)
-            Future.successful(properties)
-          case None =>
-            session.executeAsync(writeConfig, CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
-              .map { rs =>
-                if (!rs.wasApplied())
-                  Option(rs.one).map(_.getString("value")).foreach(assertCorrectPartitionSize)
-                properties.updated(CassandraJournalConfig.TargetPartitionProperty, config.targetPartitionSize.toString)
-              }
-        }
-      }
-
-  }
-
-  private def assertCorrectPartitionSize(size: String): Unit =
-    require(size.toInt == config.targetPartitionSize, "Can't change target-partition-size")
 }
