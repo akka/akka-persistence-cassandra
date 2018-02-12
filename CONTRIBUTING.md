@@ -149,5 +149,5 @@ that automatically merges the code, builds it, runs the tests and comments on th
 
 ## Source style
 
-akka-persistence-cassandra uses [Scalariform](https://github.com/daniel-trinh/scalariform) to enforce some of the code style rules.
+akka-persistence-cassandra uses [Scalariform](https://github.com/scala-ide/scalariform) to enforce some of the code style rules.
 
