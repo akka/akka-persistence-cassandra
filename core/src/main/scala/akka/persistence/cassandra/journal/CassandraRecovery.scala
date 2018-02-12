@@ -8,11 +8,10 @@ import java.lang.{ Long => JLong }
 
 import akka.Done
 import akka.actor.ActorRef
-import akka.pattern.ask
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.CassandraJournal.Tag
-import akka.persistence.cassandra.journal.TagWriter.{ SetTagProgress, TagProgress, TagWrite }
+import akka.persistence.cassandra.journal.TagWriter.{ TagProgress, TagWrite }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extractors, TaggedPersistentRepr }
 import akka.stream.scaladsl.{ Sink, Source }
 
@@ -23,6 +22,37 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
 
   import config._
   import context.dispatcher
+
+  /**
+   * It is assumed that this is only called during a replay and if fromSequenceNr == highest
+   * then asyncReplayMessages won't be called. In that case the tag progress is updated
+   * in here rather than during replay messages.
+   */
+  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
+    log.debug("asyncReadHighestSequenceNr {} {}", persistenceId, fromSequenceNr)
+    val highestSequenceNr = asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
+      asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h))
+    }
+
+    if (config.eventsByTagEnabled) {
+      // map to send tag write progress so actor doesn't finish recovery until it is done
+      highestSequenceNr.flatMap { seqNr =>
+        if (seqNr == fromSequenceNr && seqNr != 0) {
+          log.debug("Snapshot is current so replay won't be required. Calculating tag progress now.")
+          for {
+            tp <- lookupTagProgress(persistenceId)
+            _ <- sendTagProgress(tp, tagWrites.get)
+            startingSequenceNr = calculateStartingSequenceNr(tp)
+            _ <- sendPreSnapshotTagWrites(startingSequenceNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
+          } yield seqNr
+        } else {
+          Future.successful(seqNr)
+        }
+      }
+    } else {
+      highestSequenceNr
+    }
+  }
 
   // TODO this serialises and re-serialises the messages for fixing tag_views
   // Could have an events by persistenceId stage that has the raw payload
@@ -62,6 +92,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
       ).map(te => queries.mapEvent(te.pr))
         .runForeach(replayCallback)
         .map(_ => ())
+
     } else {
       queries
         .eventsByPersistenceId(
@@ -123,11 +154,6 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
     })
     tpr
   }
-
-  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] =
-    asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
-      asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h))
-    }
 
   private def asyncFindHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
 

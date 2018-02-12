@@ -19,6 +19,7 @@ object TestTaggingActor {
 }
 
 class TestTaggingActor(val persistenceId: String, tags: Set[String], probe: Option[ActorRef]) extends PersistentActor with ActorLogging {
+
   def receiveRecover: Receive = {
     case RecoveryCompleted =>
       probe.foreach(_ ! RecoveryCompleted)

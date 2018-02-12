@@ -109,6 +109,7 @@ import scala.concurrent.duration._
         tagActor(tw.tag) forward tw
       })
     case p: SetTagProgress =>
+      log.debug("Forwarding tag progress {}", p)
       tagActor(p.tag) forward p
     case akka.actor.Status.Failure(_) =>
       log.debug("Failed to write to Cassandra so will not do TagWrites")

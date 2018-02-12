@@ -59,7 +59,8 @@ trait CassandraTagRecovery {
   }
 
   private[akka] def sendTagProgress(tp: Map[Tag, TagProgress], ref: ActorRef): Future[Done] = {
-    implicit val timeout = Timeout(1.second)
+    implicit val timeout = Timeout(10.second)
+    log.debug("Recovery sending tag progress: {}", tp)
     val progressSets = tp.map {
       case (tag, progress) => (ref ? SetTagProgress(tag, progress)).mapTo[TagWriter.SetTagProgressAck.type]
     }
