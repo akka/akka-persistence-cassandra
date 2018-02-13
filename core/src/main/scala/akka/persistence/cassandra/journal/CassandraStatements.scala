@@ -183,13 +183,6 @@ trait CassandraStatements {
         sequence_nr <= ?
     """
 
-  private[akka] def selectInUse =
-    s"""
-     SELECT used from ${tableName} WHERE
-      persistence_id = ? AND
-      partition_nr = ?
-   """
-
   private[akka] def selectConfig =
     s"""
       SELECT * FROM ${configTableName}

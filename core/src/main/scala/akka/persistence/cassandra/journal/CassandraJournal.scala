@@ -94,8 +94,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
   def preparedDeleteMessages = session.prepare(deleteMessages).map(_.setIdempotent(true))
   def preparedSelectMessages = session.prepare(selectMessages)
     .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
-  def preparedCheckInUse = session.prepare(selectInUse)
-    .map(_.setConsistencyLevel(readConsistency).setIdempotent(true))
   def preparedWriteInUse = session.prepare(writeInUse).map(_.setIdempotent(true))
   def preparedSelectHighestSequenceNr = session.prepare(selectHighestSequenceNr)
     .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
@@ -124,7 +122,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       preparedWriteMessageWithMeta
       preparedDeleteMessages
       preparedSelectMessages
-      preparedCheckInUse
       preparedWriteInUse
       preparedSelectHighestSequenceNr
       preparedSelectDeletedTo
