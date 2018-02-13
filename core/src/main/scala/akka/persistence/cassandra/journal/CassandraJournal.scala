@@ -67,7 +67,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
     metricsCategory = s"${self.path.name}",
     init = session =>
     executeCreateKeyspaceAndTables(session, config)
-      .flatMap(_ => initializePersistentConfig(session).map(_ => Done))
   )
 
   private val tagWriterSession = TagWritersSession(
