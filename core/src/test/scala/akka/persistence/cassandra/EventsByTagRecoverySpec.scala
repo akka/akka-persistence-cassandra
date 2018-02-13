@@ -41,6 +41,7 @@ object EventsByTagRecoverySpec {
        |cassandra-query-journal = {
        |   first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormat)}"
        |}
+       |
        |akka.actor.serialize-messages=off
     """.stripMargin
   ).withFallback(CassandraLifecycle.config)
@@ -210,6 +211,44 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
         probe.cancel()
       } finally {
         systemTwo.terminate().futureValue
+      }
+    }
+
+    "recover if snapshot is for the latest sequence nr" in {
+      val p = system.actorOf(TestTaggingActor.props("p4", Set("blue")))
+      (1 to 4) foreach { i =>
+        p ! s"e-$i"
+        expectMsg(Ack)
+      }
+      p ! DoASnapshotPlease
+      expectMsg(SnapShotAck)
+      watch(p)
+      p ! PoisonPill
+      expectTerminated(p)
+
+      // Longer than the flush interval of 250ms
+      Thread.sleep(500)
+
+      val systemTwo = ActorSystem("s2", EventsByTagRecoverySpec.config)
+      val p2 = systemTwo.actorOf(TestTaggingActor.props("p4", Set("blue")))
+      p2 ! "e-5"
+      expectMsg(Ack)
+
+      try {
+        val queryJournal = PersistenceQuery(systemTwo).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+        val blueTags = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
+        val probe = blueTags.runWith(TestSink.probe[Any](systemTwo))
+        probe.request(6)
+        (1 to 5) foreach { i =>
+          val event = s"e-$i"
+          system.log.info("Expecting event {}", event)
+          probe.expectNextPF { case EventEnvelope(_, "p4", `i`, `event`) => }
+        }
+        probe.expectNoMessage(waitTime)
+        probe.cancel()
+
+      } finally {
+        systemTwo.terminate()
       }
     }
   }
