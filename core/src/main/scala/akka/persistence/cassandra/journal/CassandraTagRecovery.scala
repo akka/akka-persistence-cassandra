@@ -9,7 +9,8 @@ import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ SequenceNr, Tag }
-import akka.persistence.cassandra.journal.TagWriter.{ SetTagProgress, TagProgress, TagWrite }
+import akka.persistence.cassandra.journal.TagWriter.{ TagProgress, TagWrite }
+import akka.persistence.cassandra.journal.TagWriters.{ PidRecovering, PidRecoveringAck }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.util.Timeout
 
@@ -58,13 +59,10 @@ trait CassandraTagRecovery {
     rawEvent
   }
 
-  private[akka] def sendTagProgress(tp: Map[Tag, TagProgress], ref: ActorRef): Future[Done] = {
+  private[akka] def sendTagProgress(pid: String, tp: Map[Tag, TagProgress], ref: ActorRef): Future[Done] = {
     implicit val timeout = Timeout(10.second)
     log.debug("Recovery sending tag progress: {}", tp)
-    val progressSets = tp.map {
-      case (tag, progress) => (ref ? SetTagProgress(tag, progress)).mapTo[TagWriter.SetTagProgressAck.type]
-    }
-    Future.sequence(progressSets).map(_ => Done)
+    (ref ? PidRecovering(pid, tp)).mapTo[PidRecoveringAck.type].map(_ => Done)
   }
 
 }

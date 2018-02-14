@@ -5,7 +5,6 @@
 package akka.persistence.cassandra.snapshot
 
 import scala.concurrent.duration._
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import java.lang.{ Long => JLong }
 import java.lang.{ Integer => JInteger }
 import java.nio.ByteBuffer
@@ -45,7 +44,6 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStor
 
   var session: Session = _
 
-  import storeConfig._
   import storeStatements._
 
   override def systemName: String = "CassandraSnapshotStoreSpec"

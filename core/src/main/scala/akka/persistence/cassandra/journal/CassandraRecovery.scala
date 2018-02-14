@@ -41,7 +41,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
           log.debug("Snapshot is current so replay won't be required. Calculating tag progress now.")
           for {
             tp <- lookupTagProgress(persistenceId)
-            _ <- sendTagProgress(tp, tagWrites.get)
+            _ <- sendTagProgress(persistenceId, tp, tagWrites.get)
             startingSequenceNr = calculateStartingSequenceNr(tp)
             _ <- sendPreSnapshotTagWrites(startingSequenceNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
           } yield seqNr
@@ -67,7 +67,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
     if (config.eventsByTagEnabled) {
       val recoveryPrep: Future[Map[String, TagProgress]] = for {
         tp <- lookupTagProgress(persistenceId)
-        _ <- sendTagProgress(tp, tagWrites.get)
+        _ <- sendTagProgress(persistenceId, tp, tagWrites.get)
         startingSequenceNr = calculateStartingSequenceNr(tp)
         _ <- sendPreSnapshotTagWrites(startingSequenceNr, fromSequenceNr, persistenceId, max, tp)
       } yield tp

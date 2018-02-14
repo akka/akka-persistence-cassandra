@@ -92,7 +92,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       ref ! Flush
       probe.expectMsg(Vector(toEw(e1, 1)))
       probe.expectMsg(ProgressWrite("p1", 1, 1, e1.timeUuid))
-      expectMsg(Flushed)
+      expectMsg(FlushComplete)
     }
 
     "flush on demand when query in progress" in {
@@ -118,7 +118,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       // only happened due to the flush
       probe.expectMsg(Vector(toEw(e3, 3)))
       probe.expectMsg(ProgressWrite("p1", 3, 3, e3.timeUuid))
-      expectMsg(Flushed)
+      expectMsg(FlushComplete)
     }
 
     "not write until batch has reached capacity" in {
@@ -359,7 +359,8 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
         settings = defaultSettings.copy(maxBatchSize = 1)
       )
       val bucket = nowBucket()
-      ref ! SetTagProgress(tagName, progress)
+      ref ! ResetPersistenceId("p1", tagName, progress)
+      expectMsg(ResetPersistenceIdComplete)
 
       val e1 = event("p1", 101L, "e-1", bucket)
       ref ! TagWrite(tagName, Vector(e1))
@@ -398,37 +399,37 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       probe.expectMsg(ProgressWrite("p1", 2, 2, p1e2.timeUuid))
     }
 
-    "refresh sequence number from cassandra when idle" in {
+    "update expected sequence nr on reset persistence id request" in {
       val pid = "p-1"
       val initialProgress = TagProgress(pid, 10, 10)
-      val refreshedProgress = TagProgress(pid, 20, 20)
+      val resetProgress = TagProgress(pid, 5, 5)
       val (probe, ref) = setup(
         settings = defaultSettings.copy(maxBatchSize = 1)
       )
       val bucket = nowBucket()
 
-      ref ! SetTagProgress(tagName, initialProgress)
-      expectMsg(SetTagProgressAck)
+      ref ! ResetPersistenceId(pid, tagName, initialProgress)
+      expectMsg(ResetPersistenceIdComplete)
 
       val e11 = event(pid, 11L, "e-11", bucket)
       ref ! TagWrite(tagName, Vector(e11))
       probe.expectMsg(Vector(toEw(e11, 11)))
       probe.expectMsg(ProgressWrite(pid, 11, 11, e11.timeUuid))
 
-      ref ! SetTagProgress(tagName, refreshedProgress)
-      expectMsg(SetTagProgressAck)
+      ref ! ResetPersistenceId(pid, tagName, resetProgress)
+      expectMsg(ResetPersistenceIdComplete)
 
-      // second sequence nr lookup returns 20
-      val e21 = event(pid, 21L, "e-21", bucket)
-      ref ! TagWrite(tagName, Vector(e21))
-      probe.expectMsg(Vector(toEw(e21, 21)))
-      probe.expectMsg(ProgressWrite(pid, 21, 21, e21.timeUuid))
+      // simulating a restart and recovery starting earlier
+      val e6 = event(pid, 6L, "e-6", bucket)
+      ref ! TagWrite(tagName, Vector(e6))
+      probe.expectMsg(Vector(toEw(e6, 6)))
+      probe.expectMsg(ProgressWrite(pid, 6, 6, e6.timeUuid))
     }
 
-    "refresh sequence number from cassandra when write is in progress" in {
+    "update expected sequence nr on reset persistence id request (when write in progress)" in {
       val pid = "p-1"
       val initialProgress = TagProgress(pid, 10, 10)
-      val refreshedProgress = TagProgress(pid, 20, 20)
+      val resetProgress = TagProgress(pid, 5, 5)
       val writeInProgressPromise = Promise[Done]()
       val (probe, ref) = setup(
         settings = defaultSettings.copy(maxBatchSize = 1),
@@ -436,22 +437,44 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       )
       val bucket = nowBucket()
 
-      ref ! SetTagProgress(tagName, initialProgress)
-      expectMsg(SetTagProgressAck)
+      ref ! ResetPersistenceId(pid, tagName, initialProgress)
+      expectMsg(ResetPersistenceIdComplete)
       val e11 = event(pid, 11L, "e-11", bucket)
       ref ! TagWrite(tagName, Vector(e11))
       probe.expectMsg(Vector(toEw(e11, 11)))
 
-      ref ! SetTagProgress(tagName, refreshedProgress)
-      expectMsg(SetTagProgressAck)
+      ref ! ResetPersistenceId(pid, tagName, resetProgress)
+      expectMsg(ResetPersistenceIdComplete)
 
-      // second sequence nr lookup returns 20
       writeInProgressPromise.success(Done)
       probe.expectMsg(ProgressWrite(pid, 11, 11, e11.timeUuid))
-      val e21 = event(pid, 21L, "e-21", bucket)
-      ref ! TagWrite(tagName, Vector(e21))
-      probe.expectMsg(Vector(toEw(e21, 21)))
-      probe.expectMsg(ProgressWrite(pid, 21, 21, e21.timeUuid))
+      val e6 = event(pid, 6L, "e-6", bucket)
+      ref ! TagWrite(tagName, Vector(e6))
+      probe.expectMsg(Vector(toEw(e6, 6)))
+      probe.expectMsg(ProgressWrite(pid, 6, 6, e6.timeUuid))
+    }
+
+    "drop outstanding events for a persistence id when reset" in {
+      val pid = "p-1"
+      // disable any automatic flushing
+      val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 100, flushInterval = 60.seconds))
+      val bucket = nowBucket()
+
+      val e1 = event(pid, 1L, "e-1", bucket)
+      val e2 = event(pid, 2L, "e-2", bucket)
+      val e3 = event(pid, 3L, "e-3", bucket)
+      ref ! TagWrite(tagName, Vector(e1, e2, e3))
+
+      val resetRequest = ResetPersistenceId(pid, tagName, TagProgress(pid, 1, 1))
+      ref ! resetRequest
+      expectMsg(ResetPersistenceIdComplete)
+
+      // can send 2 and 3 again due to the reset
+      ref ! TagWrite(tagName, Vector(e2, e3))
+
+      ref ! Flush
+      expectMsg(FlushComplete)
+      probe.expectMsg(Vector(toEw(e2, 2), toEw(e3, 3)))
     }
   }
 
