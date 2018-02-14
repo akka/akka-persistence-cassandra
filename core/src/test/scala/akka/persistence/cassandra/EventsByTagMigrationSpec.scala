@@ -83,7 +83,7 @@ object EventsByTagMigrationSpec {
     s"""
        |akka {
        | actor.serialize-messages=off
-       | loglevel = DEBUG
+       | loglevel = INFO
        | actor.debug.unhandled = on
        |}
        |cassandra-journal {

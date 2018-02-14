@@ -29,7 +29,7 @@ object TagWriterSpec {
   val config = ConfigFactory.parseString(
     """
       |akka {
-      |  loglevel = DEBUG
+      |  loglevel = INFO
       |  actor {
       |    debug {
       |      # enable function of LoggingReceive, which is to log any received message at
