@@ -115,18 +115,18 @@ import scala.concurrent.duration._
     case PidRecovering(pid, tagProgresses: Map[Tag, TagProgress]) =>
       val replyTo = sender()
       val missingProgress = tagActors.keySet -- tagProgresses.keySet
-      log.debug("Recovering pid with progress [{}]. Pids to reset as not in progress [{}]", missingProgress, missingProgress)
+      log.debug("Recovering pid with progress [{}]. Tags to reset as not in progress [{}]", tagProgresses, missingProgress)
       val tagWriterAcks = Future.sequence(tagProgresses.map {
         case (tag, progress) =>
           log.debug("Sending tag progress: [{}] [{}]", tag, progress)
-          (tagActor(tag) ? ResetPersistenceId(pid, tag, progress)).mapTo[ResetPersistenceIdComplete.type]
+          (tagActor(tag) ? ResetPersistenceId(tag, progress)).mapTo[ResetPersistenceIdComplete.type]
       })
 
       // We send an empty progress in case the tag actor has buffered events
       // and has never written any tag progress for this tag/pid
       val blankTagWriterAcks = Future.sequence(missingProgress.map { tag =>
         log.debug("Sending blank progress for tag [{}] pid [{}]", tag, pid)
-        (tagActor(tag) ? ResetPersistenceId(pid, tag, TagProgress(pid, 0, 0))).mapTo[ResetPersistenceIdComplete.type]
+        (tagActor(tag) ? ResetPersistenceId(tag, TagProgress(pid, 0, 0))).mapTo[ResetPersistenceIdComplete.type]
       })
 
       val recoveryNotificationComplete = for {

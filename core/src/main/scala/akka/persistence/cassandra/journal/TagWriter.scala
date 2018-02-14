@@ -56,7 +56,7 @@ import scala.util.{ Failure, Success, Try }
   /*
    * Reset pid tag sequence numbers to the given [[TagProgress]] and discard any messages for the given persistenceId
    */
-  private[akka] case class ResetPersistenceId(persistenceId: PersistenceId, tag: Tag, progress: TagProgress)
+  private[akka] case class ResetPersistenceId(tag: Tag, progress: TagProgress)
     extends NoSerializationVerificationNeeded
 
   /*
@@ -150,9 +150,9 @@ import scala.util.{ Failure, Success, Try }
       flushIfRequired((buffer ++ payload).sortBy(_.timeUuid)(timeUuidOrdering), tagPidSequenceNrs)
     case twd: TagWriteDone =>
       log.error("Received Done when in idle state. This is a bug. Please report with DEBUG logs: {}", twd)
-    case ResetPersistenceId(pid, _, tp @ TagProgress(_, sequenceNr, tagPidSequenceNr)) =>
+    case ResetPersistenceId(_, tp @ TagProgress(pid, sequenceNr, tagPidSequenceNr)) =>
       log.debug("Resetting persistence id {}. TagProgress {}", pid, tp)
-      sequenceNrs += (pid -> sequenceNr)
+      sequenceNrs += (tp.persistenceId -> sequenceNr)
       become(idle(buffer.filterNot(_.persistenceId == pid), tagPidSequenceNrs + (pid -> tagPidSequenceNr)))
       sender() ! ResetPersistenceIdComplete
   }
@@ -216,7 +216,7 @@ import scala.util.{ Failure, Success, Try }
       timers.startSingleTimer(FlushKey, InternalFlush, settings.flushInterval)
       context.become(idle(events ++ buffer, previousTagPidSequenceNrs ++ updatedTagProgress))
 
-    case ResetPersistenceId(pid, _, tp) =>
+    case ResetPersistenceId(_, tp @ TagProgress(pid, _, _)) =>
       log.debug("Resetting persistence id {}. TagProgress {}", pid, tp)
       sequenceNrs += (pid -> tp.sequenceNr)
       become(writeInProgress(buffer.filterNot(_.persistenceId == pid), tagPidSequenceNrs, updatedTagProgress + (pid -> tp.pidTagSequenceNr)))

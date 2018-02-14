@@ -22,6 +22,9 @@ trait CassandraTagRecovery {
   self: TaggedPreparedStatements =>
   protected val log: LoggingAdapter
 
+  // used for local asks
+  private implicit val timeout = Timeout(10.second)
+
   // No other writes for this pid should be taking place during recovery
   // The result set size will be the number of distinct tags that this pid has used, expecting
   // that to be small (<10) so call to all should be safe
@@ -60,7 +63,6 @@ trait CassandraTagRecovery {
   }
 
   private[akka] def sendTagProgress(pid: String, tp: Map[Tag, TagProgress], ref: ActorRef): Future[Done] = {
-    implicit val timeout = Timeout(10.second)
     log.debug("Recovery sending tag progress: {}", tp)
     (ref ? PidRecovering(pid, tp)).mapTo[PidRecoveringAck.type].map(_ => Done)
   }

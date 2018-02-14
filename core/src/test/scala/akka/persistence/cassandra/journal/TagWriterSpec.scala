@@ -359,7 +359,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
         settings = defaultSettings.copy(maxBatchSize = 1)
       )
       val bucket = nowBucket()
-      ref ! ResetPersistenceId("p1", tagName, progress)
+      ref ! ResetPersistenceId(tagName, progress)
       expectMsg(ResetPersistenceIdComplete)
 
       val e1 = event("p1", 101L, "e-1", bucket)
@@ -408,7 +408,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       )
       val bucket = nowBucket()
 
-      ref ! ResetPersistenceId(pid, tagName, initialProgress)
+      ref ! ResetPersistenceId(tagName, initialProgress)
       expectMsg(ResetPersistenceIdComplete)
 
       val e11 = event(pid, 11L, "e-11", bucket)
@@ -416,7 +416,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       probe.expectMsg(Vector(toEw(e11, 11)))
       probe.expectMsg(ProgressWrite(pid, 11, 11, e11.timeUuid))
 
-      ref ! ResetPersistenceId(pid, tagName, resetProgress)
+      ref ! ResetPersistenceId(tagName, resetProgress)
       expectMsg(ResetPersistenceIdComplete)
 
       // simulating a restart and recovery starting earlier
@@ -437,13 +437,13 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       )
       val bucket = nowBucket()
 
-      ref ! ResetPersistenceId(pid, tagName, initialProgress)
+      ref ! ResetPersistenceId(tagName, initialProgress)
       expectMsg(ResetPersistenceIdComplete)
       val e11 = event(pid, 11L, "e-11", bucket)
       ref ! TagWrite(tagName, Vector(e11))
       probe.expectMsg(Vector(toEw(e11, 11)))
 
-      ref ! ResetPersistenceId(pid, tagName, resetProgress)
+      ref ! ResetPersistenceId(tagName, resetProgress)
       expectMsg(ResetPersistenceIdComplete)
 
       writeInProgressPromise.success(Done)
@@ -465,7 +465,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val e3 = event(pid, 3L, "e-3", bucket)
       ref ! TagWrite(tagName, Vector(e1, e2, e3))
 
-      val resetRequest = ResetPersistenceId(pid, tagName, TagProgress(pid, 1, 1))
+      val resetRequest = ResetPersistenceId(tagName, TagProgress(pid, 1, 1))
       ref ! resetRequest
       expectMsg(ResetPersistenceIdComplete)
 
