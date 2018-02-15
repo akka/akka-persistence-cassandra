@@ -31,7 +31,7 @@ object TagViewSequenceNumberScannerSpec {
   val name = "EventsByTagSequenceNumberScanningSpec"
   val config = ConfigFactory.parseString(
     s"""
-      |akka.loglevel = DEBUG
+      |akka.loglevel = INFO
       |cassandra-journal.events-by-tag.bucket-size = ${bucketSize.toString}
     """.stripMargin
   ).withFallback(CassandraLifecycle.config)

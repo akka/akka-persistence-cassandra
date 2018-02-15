@@ -176,7 +176,7 @@ class EventsByTagMigration(system: ActorSystem)
       }.flatMapConcat(pid => {
         val prereqs: Future[(Map[Tag, TagProgress], SequenceNr)] = for {
           tp <- lookupTagProgress(pid)
-          _ <- sendTagProgress(tp, tagWriters)
+          _ <- sendTagProgress(pid, tp, tagWriters)
           startingSeq = calculateStartingSequenceNr(tp)
         } yield (tp, startingSeq)
 

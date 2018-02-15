@@ -6,19 +6,20 @@ package akka.persistence.cassandra
 
 import akka.actor.{ ActorLogging, ActorRef, Props }
 import akka.persistence.{ PersistentActor, RecoveryCompleted, SaveSnapshotSuccess }
-import akka.persistence.cassandra.TestTaggingActor.{ Ack, DoASnapshotPlease, SnapShotAck }
 import akka.persistence.journal.Tagged
 
 object TestTaggingActor {
   case object Ack
   case object DoASnapshotPlease
   case object SnapShotAck
+  case object Stop
 
   def props(pId: String, tags: Set[String] = Set(), probe: Option[ActorRef] = None): Props =
     Props(classOf[TestTaggingActor], pId, tags, probe)
 }
 
 class TestTaggingActor(val persistenceId: String, tags: Set[String], probe: Option[ActorRef]) extends PersistentActor with ActorLogging {
+  import TestTaggingActor._
 
   def receiveRecover: Receive = {
     case RecoveryCompleted =>
@@ -38,6 +39,9 @@ class TestTaggingActor(val persistenceId: String, tags: Set[String], probe: Opti
     case DoASnapshotPlease =>
       saveSnapshot("i don't have any state :-/")
       context.become(waitingForSnapshot(sender()))
+    case Stop =>
+      context.stop(self)
+
   }
 
   def waitingForSnapshot(who: ActorRef): Receive = {

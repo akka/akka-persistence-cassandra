@@ -6,7 +6,7 @@ package akka.persistence.cassandra.journal
 
 import akka.actor.ActorSystem
 import akka.persistence.cassandra.journal.TagWriter._
-import akka.persistence.cassandra.journal.TagWriters.{ AllFlushed, FlushAllTagWriters, TagFlush }
+import akka.persistence.cassandra.journal.TagWriters._
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 
@@ -18,6 +18,8 @@ class TagWritersSpec extends TestKit(ActorSystem("TagWriterSpec"))
   with ImplicitSender
   with Matchers {
 
+  val smallWait = 10.milliseconds
+
   "Tag writers" must {
     "forward flush requests" in {
       val probe = TestProbe()
@@ -28,28 +30,56 @@ class TagWritersSpec extends TestKit(ActorSystem("TagWriterSpec"))
 
       tagWriters ! TagFlush("blue")
       probe.expectMsg(Flush)
-      probe.reply(Flushed)
-      expectMsg(Flushed) // should be forwarded
+      probe.reply(FlushComplete)
+      expectMsg(FlushComplete) // should be forwarded
     }
 
     "flush all tag writers" in {
-      val probe = TestProbe()
-      val tagWriters = system.actorOf(TagWriters.props((_, tag) => probe.ref))
+      val redProbe = TestProbe()
+      val blueProbe = TestProbe()
+      val probes = Map("red" -> redProbe, "blue" -> blueProbe)
+      val tagWriters = system.actorOf(TagWriters.props((_, tag) => probes(tag).ref))
 
       // do something to make it create a couple
-      val tp = TagProgress("p", 1, 1)
-      tagWriters ! SetTagProgress("blue", tp)
-      probe.expectMsg(SetTagProgress("blue", tp))
-      tagWriters ! SetTagProgress("red", tp)
-      probe.expectMsg(SetTagProgress("red", tp))
+      val blueTagWrite = TagWrite("blue", Vector.empty)
+      tagWriters ! blueTagWrite
+      blueProbe.expectMsg(blueTagWrite)
+      val redTagWrite = TagWrite("red", Vector.empty)
+      tagWriters ! redTagWrite
+      redProbe.expectMsg(redTagWrite)
 
       tagWriters ! FlushAllTagWriters
-      probe.expectMsg(Flush)
-      probe.reply(Flushed)
+      blueProbe.expectMsg(Flush)
+      blueProbe.reply(FlushComplete)
+      redProbe.expectMsg(Flush)
+      // All flushed comes after all have flushes
       expectNoMessage(100.millis)
-      probe.expectMsg(Flush)
-      probe.reply(Flushed)
+      redProbe.reply(FlushComplete)
       expectMsg(AllFlushed)
+    }
+
+    "sends blank progress to tag writers not in recovery" in {
+      val redProbe = TestProbe()
+      val blueProbe = TestProbe()
+      val probes = Map("red" -> redProbe, "blue" -> blueProbe)
+      val tagWriters = system.actorOf(TagWriters.props((_, tag) => probes(tag).ref))
+
+      // do something to make it create a couple
+      val blueTagWrite = TagWrite("blue", Vector.empty)
+      tagWriters ! blueTagWrite
+      blueProbe.expectMsg(blueTagWrite)
+      val redTagWrite = TagWrite("red", Vector.empty)
+      tagWriters ! redTagWrite
+      redProbe.expectMsg(redTagWrite)
+
+      tagWriters ! PidRecovering("p1", Map("red" -> TagProgress("p1", 2, 1)))
+      redProbe.expectMsg(ResetPersistenceId("red", TagProgress("p1", 2, 1)))
+      blueProbe.expectMsg(ResetPersistenceId("blue", TagProgress("p1", 0, 0)))
+      expectNoMessage(smallWait)
+      redProbe.reply(ResetPersistenceIdComplete)
+      expectNoMessage(smallWait)
+      blueProbe.reply(ResetPersistenceIdComplete)
+      expectMsg(PidRecoveringAck)
     }
   }
 

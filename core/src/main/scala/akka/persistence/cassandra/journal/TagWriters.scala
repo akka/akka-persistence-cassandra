@@ -12,7 +12,7 @@ import akka.pattern.ask
 import akka.pattern.pipe
 import akka.actor.{ Actor, ActorLogging, ActorRef, ActorRefFactory, NoSerializationVerificationNeeded, Props }
 import akka.annotation.InternalApi
-import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, Tag }
+import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
@@ -83,6 +83,8 @@ import scala.concurrent.duration._
   case class TagFlush(tag: String)
   case object FlushAllTagWriters
   case object AllFlushed
+  case class PidRecovering(pid: String, tagProgresses: Map[Tag, TagProgress])
+  case object PidRecoveringAck
 }
 
 @InternalApi private[akka] class TagWriters(tagWriterCreator: (ActorRefFactory, Tag) => ActorRef)
@@ -91,6 +93,8 @@ import scala.concurrent.duration._
   import context._
 
   private var tagActors = Map.empty[String, ActorRef]
+  // just used for local actor asks
+  private implicit val timeout = Timeout(10.seconds)
 
   def receive: Receive = {
     case FlushAllTagWriters =>
@@ -98,7 +102,7 @@ import scala.concurrent.duration._
       // will include a C* write so be patient
       implicit val timeout = Timeout(10.seconds)
       val replyTo = sender()
-      val flushes = tagActors.map { case (_, ref) => (ref ? Flush).mapTo[Flushed.type] }
+      val flushes = tagActors.map { case (_, ref) => (ref ? Flush).mapTo[FlushComplete.type] }
       Future.sequence(flushes).map(_ => AllFlushed) pipeTo replyTo
     case twf: TagFlush =>
       tagActor(twf.tag).tell(Flush, sender())
@@ -108,9 +112,31 @@ import scala.concurrent.duration._
       tws.foreach(tw => {
         tagActor(tw.tag) forward tw
       })
-    case p: SetTagProgress =>
-      log.debug("Forwarding tag progress {}", p)
-      tagActor(p.tag) forward p
+    case PidRecovering(pid, tagProgresses: Map[Tag, TagProgress]) =>
+      val replyTo = sender()
+      val missingProgress = tagActors.keySet -- tagProgresses.keySet
+      log.debug("Recovering pid with progress [{}]. Tags to reset as not in progress [{}]", tagProgresses, missingProgress)
+      val tagWriterAcks = Future.sequence(tagProgresses.map {
+        case (tag, progress) =>
+          log.debug("Sending tag progress: [{}] [{}]", tag, progress)
+          (tagActor(tag) ? ResetPersistenceId(tag, progress)).mapTo[ResetPersistenceIdComplete.type]
+      })
+
+      // We send an empty progress in case the tag actor has buffered events
+      // and has never written any tag progress for this tag/pid
+      val blankTagWriterAcks = Future.sequence(missingProgress.map { tag =>
+        log.debug("Sending blank progress for tag [{}] pid [{}]", tag, pid)
+        (tagActor(tag) ? ResetPersistenceId(tag, TagProgress(pid, 0, 0))).mapTo[ResetPersistenceIdComplete.type]
+      })
+
+      val recoveryNotificationComplete = for {
+        _ <- tagWriterAcks
+        _ <- blankTagWriterAcks
+      } yield Done
+
+      // if this fails (all local actor asks) the recovery will timeout
+      recoveryNotificationComplete.foreach { _ => replyTo ! PidRecoveringAck }
+
     case akka.actor.Status.Failure(_) =>
       log.debug("Failed to write to Cassandra so will not do TagWrites")
   }

@@ -83,7 +83,7 @@ object EventsByTagSpec {
 
   val disabledConfig = ConfigFactory.parseString(
     """
-      akka.loglevel = DEBUG
+      akka.loglevel = INFO
       cassandra-journal {
         keyspace=EventsByTagDisabled
         events-by-tag.enabled = false

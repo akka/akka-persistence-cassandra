@@ -9,7 +9,8 @@ import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ SequenceNr, Tag }
-import akka.persistence.cassandra.journal.TagWriter.{ SetTagProgress, TagProgress, TagWrite }
+import akka.persistence.cassandra.journal.TagWriter.{ TagProgress, TagWrite }
+import akka.persistence.cassandra.journal.TagWriters.{ PidRecovering, PidRecoveringAck }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.util.Timeout
 
@@ -20,6 +21,9 @@ import scala.concurrent.duration._
 trait CassandraTagRecovery {
   self: TaggedPreparedStatements =>
   protected val log: LoggingAdapter
+
+  // used for local asks
+  private implicit val timeout = Timeout(10.second)
 
   // No other writes for this pid should be taking place during recovery
   // The result set size will be the number of distinct tags that this pid has used, expecting
@@ -58,13 +62,9 @@ trait CassandraTagRecovery {
     rawEvent
   }
 
-  private[akka] def sendTagProgress(tp: Map[Tag, TagProgress], ref: ActorRef): Future[Done] = {
-    implicit val timeout = Timeout(10.second)
+  private[akka] def sendTagProgress(pid: String, tp: Map[Tag, TagProgress], ref: ActorRef): Future[Done] = {
     log.debug("Recovery sending tag progress: {}", tp)
-    val progressSets = tp.map {
-      case (tag, progress) => (ref ? SetTagProgress(tag, progress)).mapTo[TagWriter.SetTagProgressAck.type]
-    }
-    Future.sequence(progressSets).map(_ => Done)
+    (ref ? PidRecovering(pid, tp)).mapTo[PidRecoveringAck.type].map(_ => Done)
   }
 
 }

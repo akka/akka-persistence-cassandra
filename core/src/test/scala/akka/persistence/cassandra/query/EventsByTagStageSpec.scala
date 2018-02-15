@@ -34,7 +34,7 @@ object EventsByTagStageSpec {
   val fetchSize = 3L
   val config = ConfigFactory.parseString(
     s"""
-       | akka.loglevel = DEBUG
+       | akka.loglevel = INFO
        |
        | akka.actor.serialize-messages=on
        |

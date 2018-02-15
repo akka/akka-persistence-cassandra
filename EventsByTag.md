@@ -105,8 +105,26 @@ CREATE TABLE akka.tag_views_progress (
 Part of recovery checks that all events have been written by the tag writer.
 
 On the happy path this table will be written to after the tag_view write is complete
-so it could be lost in a crash. In that event recovery will duplicate writes to the 
-tag_views table which is fine as they will be upserts.
+so it could be lost in a crash. 
+
+#### Recovery/Restart scenarios
+
+On recovery the tag write progress for a given pid / tag is sent to the tag writer so that
+it bases its tag pid sequence nrs off the recovery. Following scenarios:
+
+No event buffered in the tag writer. Tag write progress has been written.
+* Recovery will see that no events needs to be recovered
+
+No events buffered in the tag writer. Tag write progress is lost.
+* Events will be in the `tag_views` table but not the `tag_write_progress`.
+* Tag write progress will be out of date
+* Events will be recovered and sent to the tag writer, should receive the same tag pid sequence nr and be upserted.
+
+Events buffered in the tag writer. 
+* Buffered events for the persistenceId should be dropped as if they are buffered the tag write progress
+won't have been saved as it happens after the write of the events to tag_views.
+
+
 
 ### Deletion of events
 

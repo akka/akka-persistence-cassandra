@@ -25,7 +25,7 @@ object EventsByTagRecoverySpec {
   val config = ConfigFactory.parseString(
     s"""
        |akka {
-       |  loglevel = DEBUG
+       |  loglevel = INFO
        |  actor.debug.unhandled = on
        |}
        |cassandra-journal {
