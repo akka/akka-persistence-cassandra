@@ -110,7 +110,7 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     name := "akka-persistence-cassandra-bundle",
     crossPaths := false,
     autoScalaLibrary := false,
-    libraryDependencies += "org.apache.cassandra" % "cassandra-all" % "3.10" exclude("commons-logging", "commons-logging"),
+    libraryDependencies += "org.apache.cassandra" % "cassandra-all" % "3.11.2" exclude("commons-logging", "commons-logging"),
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assemblyJarName in assembly := "cassandra-bundle.jar"
   )
