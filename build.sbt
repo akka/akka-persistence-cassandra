@@ -4,7 +4,7 @@ import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
-val AkkaVersion = "2.5.6"
+val AkkaVersion = "2.5.9"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.2.0",
@@ -23,7 +23,7 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   organizationName := "Typesafe Inc.",
   licenses := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
 
-  crossScalaVersions := Seq("2.11.11", "2.12.3"),
+  crossScalaVersions := Seq("2.11.11", "2.12.4"),
   scalaVersion := crossScalaVersions.value.head,
   crossVersion := CrossVersion.binary,
 
@@ -113,7 +113,7 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     name := "akka-persistence-cassandra-bundle",
     crossPaths := false,
     autoScalaLibrary := false,
-    libraryDependencies += "org.apache.cassandra" % "cassandra-all" % "3.10" exclude("commons-logging", "commons-logging"),
+    libraryDependencies += "org.apache.cassandra" % "cassandra-all" % "3.11.2" exclude("commons-logging", "commons-logging"),
 
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assemblyJarName in assembly := "cassandra-bundle.jar"
