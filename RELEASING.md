@@ -4,6 +4,7 @@ From a direct clone (rather than a fork). You will need permission in sonatype t
 
 * commit and push a new version number in the README.md
 * sbt -Dpublish.maven.central=true
+  * clean
   * release skip-tests
 * close the staging repo in sonatype (https://oss.sonatype.org/#welcome)
 * verify the contents of the staging
