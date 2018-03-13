@@ -63,6 +63,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
   val tagWriterSettings = TagWriterSettings(
     config.getInt("events-by-tag.max-message-batch-size"),
     config.getDuration("events-by-tag.flush-interval", TimeUnit.MILLISECONDS).millis,
+    config.getDuration("events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
     config.getBoolean("pubsub-notification")
   )
 }

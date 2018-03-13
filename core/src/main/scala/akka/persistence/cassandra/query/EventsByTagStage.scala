@@ -319,7 +319,7 @@ import com.datastax.driver.core.utils.UUIDs
           val bucket = TimeBucket(startingOffset, bucketSize)
           val lookInPrevious = !bucket.within(startingOffset)
           missingLookup = Some(LookingForMissing(
-            List(repr),
+            repr :: Nil,
             startingOffset,
             bucket,
             lookInPrevious,
@@ -349,7 +349,7 @@ import com.datastax.driver.core.utils.UUIDs
           val bucket = TimeBucket(repr.offset, bucketSize)
           val lookInPrevious = !bucket.within(lastUUID)
           missingLookup = Some(LookingForMissing(
-            List(repr),
+            repr :: Nil,
             lastUUID,
             bucket,
             lookInPrevious,

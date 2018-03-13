@@ -83,6 +83,14 @@ trait CassandraStatements {
         PRIMARY KEY (persistence_id, tag))
        """
 
+  def createTagScanningTable =
+    s"""
+       CREATE TABLE IF NOT EXISTS $tagScanningTableName(
+        persistence_id text,
+        sequence_nr bigint,
+        PRIMARY KEY (persistence_id))
+       """
+
   private[akka] def createMetadataTable =
     s"""
       CREATE TABLE IF NOT EXISTS $metadataTableName(
@@ -127,20 +135,32 @@ trait CassandraStatements {
         sequence_nr,
         tag_pid_sequence_nr,
         offset) VALUES (?, ?, ?, ?, ?)
-     """.stripMargin
+     """
 
   private[akka] def selectTagProgress =
     s"""
        SELECT * from $tagProgressTableName WHERE
        persistence_id = ? AND
        tag = ?
-     """.stripMargin
+     """
 
   private[akka] def selectTagProgressForPersistenceId =
     s"""
        SELECT * from $tagProgressTableName WHERE
        persistence_id = ?
-     """.stripMargin
+     """
+
+  private[akka] def writeTagScanning =
+    s"""
+       INSERT INTO $tagScanningTableName(
+         persistence_id, sequence_nr) VALUES (?, ?)
+     """
+
+  private[akka] def selectTagScanningForPersistenceId =
+    s"""
+       SELECT sequence_nr from $tagScanningTableName WHERE
+       persistence_id = ?
+     """
 
   private[akka] def deleteMessage =
     s"""
@@ -206,6 +226,7 @@ trait CassandraStatements {
   protected def tableName = s"${config.keyspace}.${config.table}"
   private def tagTableName = s"${config.keyspace}.${config.tagTable.name}"
   private def tagProgressTableName = s"${config.keyspace}.tag_write_progress"
+  private def tagScanningTableName = s"${config.keyspace}.tag_scanning"
   private def metadataTableName = s"${config.keyspace}.${config.metadataTable}"
 
   /**
@@ -225,6 +246,7 @@ trait CassandraStatements {
           for {
             _ <- session.executeAsync(createTagsTable)
             _ <- session.executeAsync(createTagsProgressTable)
+            _ <- session.executeAsync(createTagScanningTable)
           } yield Done
         } else Future.successful(Done)
 

@@ -4,10 +4,13 @@
 
 package akka.persistence.cassandra.journal
 
+import scala.collection.immutable
 import java.lang.{ Integer => JInt, Long => JLong }
+import java.net.URLEncoder
 import java.util.UUID
 
 import akka.Done
+import akka.actor.Status
 import akka.pattern.ask
 import akka.pattern.pipe
 import akka.actor.{ Actor, ActorLogging, ActorRef, ActorRefFactory, NoSerializationVerificationNeeded, Props }
@@ -17,9 +20,11 @@ import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
 import com.datastax.driver.core.{ BatchStatement, PreparedStatement, ResultSet, Statement }
-
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
+
+import akka.actor.Timers
+import akka.util.ByteString
 
 @InternalApi private[akka] object TagWriters {
 
@@ -28,7 +33,8 @@ import scala.concurrent.duration._
     tagWriteWithMetaPs: Future[PreparedStatement],
     executeStatement:   Statement => Future[Done],
     selectStatement:    Statement => Future[ResultSet],
-    tagProgressPs:      Future[PreparedStatement]
+    tagProgressPs:      Future[PreparedStatement],
+    tagScanningPs:      Future[PreparedStatement]
   ) {
 
     def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext): Future[Done] = {
@@ -75,26 +81,39 @@ import scala.concurrent.duration._
 
   }
 
-  private[akka] case class BulkTagWrite(tagWrites: Vector[TagWrite]) extends NoSerializationVerificationNeeded
+  private[akka] object BulkTagWrite {
+    def apply(tw: TagWrite): BulkTagWrite = BulkTagWrite(tw :: Nil, Nil)
+  }
+  private[akka] case class BulkTagWrite(tagWrites: immutable.Seq[TagWrite], withoutTags: immutable.Seq[Serialized])
+    extends NoSerializationVerificationNeeded
+  private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized])
+    extends NoSerializationVerificationNeeded
 
-  def props(tagWriterCreator: (ActorRefFactory, Tag) => ActorRef): Props =
-    Props(new TagWriters(tagWriterCreator))
+  def props(settings: TagWriterSettings, tagWriterSession: TagWritersSession): Props =
+    Props(new TagWriters(settings, tagWriterSession))
 
-  case class TagFlush(tag: String)
+  final case class TagFlush(tag: String)
   case object FlushAllTagWriters
   case object AllFlushed
-  case class PidRecovering(pid: String, tagProgresses: Map[Tag, TagProgress])
+  final case class PidRecovering(pid: String, tagProgresses: Map[Tag, TagProgress])
   case object PidRecoveringAck
+  private case object WriteTagScanningTick
 }
 
-@InternalApi private[akka] class TagWriters(tagWriterCreator: (ActorRefFactory, Tag) => ActorRef)
-  extends Actor with ActorLogging {
+@InternalApi private[akka] class TagWriters(settings: TagWriterSettings, tagWriterSession: TagWritersSession)
+  extends Actor with Timers with ActorLogging {
 
-  import context._
+  import context.become
+  import context.dispatcher
 
   private var tagActors = Map.empty[String, ActorRef]
   // just used for local actor asks
   private implicit val timeout = Timeout(10.seconds)
+
+  private var toBeWrittenScanning: Map[PersistenceId, SequenceNr] = Map.empty
+  private var pendingScanning: Map[PersistenceId, SequenceNr] = Map.empty
+
+  timers.startPeriodicTimer(WriteTagScanningTick, WriteTagScanningTick, settings.scanningFlushInterval)
 
   def receive: Receive = {
     case FlushAllTagWriters =>
@@ -104,18 +123,27 @@ import scala.concurrent.duration._
       val replyTo = sender()
       val flushes = tagActors.map { case (_, ref) => (ref ? Flush).mapTo[FlushComplete.type] }
       Future.sequence(flushes).map(_ => AllFlushed) pipeTo replyTo
-    case twf: TagFlush =>
-      tagActor(twf.tag).tell(Flush, sender())
+    case TagFlush(tag) =>
+      tagActor(tag).tell(Flush, sender())
     case tw: TagWrite =>
+      updatePendingScanning(tw.serialised)
       tagActor(tw.tag) forward tw
-    case BulkTagWrite(tws) =>
-      tws.foreach(tw => {
+    case BulkTagWrite(tws, withoutTags) =>
+      tws.foreach { tw =>
+        updatePendingScanning(tw.serialised)
         tagActor(tw.tag) forward tw
-      })
+      }
+      updatePendingScanning(withoutTags)
+    case WriteTagScanningTick =>
+      writeTagScanning()
     case PidRecovering(pid, tagProgresses: Map[Tag, TagProgress]) =>
       val replyTo = sender()
       val missingProgress = tagActors.keySet -- tagProgresses.keySet
-      log.debug("Recovering pid with progress [{}]. Tags to reset as not in progress [{}]", tagProgresses, missingProgress)
+      pendingScanning -= pid
+      log.debug(
+        "Recovering pid [{}] with progress [{}]. Tags to reset as not in progress [{}]",
+        pid, tagProgresses, missingProgress
+      )
       val tagWriterAcks = Future.sequence(tagProgresses.map {
         case (tag, progress) =>
           log.debug("Sending tag progress: [{}] [{}]", tag, progress)
@@ -137,16 +165,59 @@ import scala.concurrent.duration._
       // if this fails (all local actor asks) the recovery will timeout
       recoveryNotificationComplete.foreach { _ => replyTo ! PidRecoveringAck }
 
-    case akka.actor.Status.Failure(_) =>
-      log.debug("Failed to write to Cassandra so will not do TagWrites")
+    case Status.Failure(e) =>
+      toBeWrittenScanning = Map.empty
+      pendingScanning = Map.empty
+      log.debug("Failed to write to Cassandra so will not do TagWrites, [{}]", e)
   }
 
-  protected def tagActor(tag: String): ActorRef =
+  private def updatePendingScanning(serialized: immutable.Seq[Serialized]): Unit = {
+    serialized.foreach { ser =>
+      pendingScanning.get(ser.persistenceId) match {
+        case Some(seqNr) =>
+          if (ser.sequenceNr > seqNr) // collect highest
+            pendingScanning = pendingScanning.updated(ser.persistenceId, ser.sequenceNr)
+        case None =>
+          pendingScanning = pendingScanning.updated(ser.persistenceId, ser.sequenceNr)
+      }
+    }
+  }
+
+  private def writeTagScanning(): Unit = {
+    val updates = toBeWrittenScanning
+    // current pendingScanning will be written on next tick, if no write failures
+    toBeWrittenScanning = pendingScanning
+    // collect new until next tick
+    pendingScanning = Map.empty
+
+    if (updates.nonEmpty && log.isDebugEnabled)
+      log.debug("Update tag scanning [{}]", updates.toSeq.mkString(","))
+
+    tagWriterSession.tagScanningPs.foreach { ps =>
+      updates.foreach {
+        case (pid, seqNr) =>
+          tagWriterSession.executeStatement(ps.bind(pid, seqNr: JLong))
+            .failed.foreach(t => self ! Status.Failure(t))
+      }
+    }
+  }
+
+  private def tagActor(tag: String): ActorRef =
     tagActors.get(tag) match {
       case None =>
-        val ref = tagWriterCreator(context, tag)
+        val ref = createTagWriter(tag)
         tagActors += (tag -> ref)
         ref
       case Some(ar) => ar
     }
+
+  // protected for testing purposes
+  protected def createTagWriter(tag: String): ActorRef = {
+    context.actorOf(
+      TagWriter.props(settings, tagWriterSession, tag)
+        .withDispatcher((context.props.dispatcher)),
+      name = URLEncoder.encode(tag, ByteString.UTF_8)
+    )
+  }
+
 }

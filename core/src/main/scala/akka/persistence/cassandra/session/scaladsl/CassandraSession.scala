@@ -366,8 +366,10 @@ final class CassandraSession(
   def selectOne(stmt: Statement): Future[Option[Row]] = {
     if (stmt.getConsistencyLevel == null)
       stmt.setConsistencyLevel(readConsistency)
-    Source.fromGraph(new SelectSource(Future.successful(stmt)))
-      .runWith(Sink.headOption)
+
+    selectResultSet(stmt).map { rs =>
+      Option(rs.one()) // rs.one returns null if exhausted
+    }
   }
 
   /**

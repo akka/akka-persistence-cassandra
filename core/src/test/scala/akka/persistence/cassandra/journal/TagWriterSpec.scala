@@ -12,6 +12,7 @@ import akka.actor.{ ActorRef, ActorSystem }
 import akka.event.Logging.{ Error, Warning }
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
+import akka.persistence.cassandra.journal.TagWriters.TagWrite
 import akka.persistence.cassandra.journal.TagWriterSpec.{ EventWrite, ProgressWrite, TestEx }
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
@@ -63,7 +64,8 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
   val successfulWrite: Statement => Future[Done] = _ => Future.successful(Done)
   val defaultSettings = TagWriterSettings(
     maxBatchSize = 10,
-    10.seconds,
+    flushInterval = 10.seconds,
+    scanningFlushInterval = 20.seconds,
     pubsubNotification = false
   )
   val waitDuration = 100.millis
@@ -555,7 +557,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
-    val session = new TagWritersSession(fakePs, fakePs, successfulWrite, null, fakePs) {
+    val session = new TagWritersSession(fakePs, fakePs, successfulWrite, null, fakePs, fakePs) {
 
       override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
         probe.ref ! events.map {
@@ -580,7 +582,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       }
     }
 
-    val ref = system.actorOf(TagWriter.props(session, tag, settings))
+    val ref = system.actorOf(TagWriter.props(settings, session, tag))
     (probe, ref)
   }
 

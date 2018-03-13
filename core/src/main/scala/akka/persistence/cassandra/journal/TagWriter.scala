@@ -4,9 +4,11 @@
 
 package akka.persistence.cassandra.journal
 
+import scala.collection.immutable
 import java.util.UUID
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, NoSerializationVerificationNeeded, Props, Timers }
+import akka.actor.Status
 import akka.annotation.InternalApi
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.pattern.pipe
@@ -34,15 +36,16 @@ import scala.util.{ Failure, Success, Try }
 @InternalApi private[akka] object TagWriter {
 
   private[akka] def props(
+    settings: TagWriterSettings,
     session:  TagWritersSession,
-    tag:      Tag,
-    settings: TagWriterSettings
-  ): Props = Props(new TagWriter(session, tag, settings))
+    tag:      Tag
+  ): Props = Props(new TagWriter(settings, session, tag))
 
   private[akka] case class TagWriterSettings(
-    maxBatchSize:       Int,
-    flushInterval:      FiniteDuration,
-    pubsubNotification: Boolean
+    maxBatchSize:          Int,
+    flushInterval:         FiniteDuration,
+    scanningFlushInterval: FiniteDuration,
+    pubsubNotification:    Boolean
   )
 
   private[akka] case class TagProgress(
@@ -50,8 +53,6 @@ import scala.util.{ Failure, Success, Try }
     sequenceNr:       SequenceNr,
     pidTagSequenceNr: TagPidSequenceNr
   )
-
-  private[akka] case class TagWrite(tag: Tag, serialised: Vector[Serialized]) extends NoSerializationVerificationNeeded
 
   /*
    * Reset pid tag sequence numbers to the given [[TagProgress]] and discard any messages for the given persistenceId
@@ -68,12 +69,12 @@ import scala.util.{ Failure, Success, Try }
   private[akka] case object Flush
   private[akka] case object FlushComplete
 
-  private type TagWriteSummary = Map[PersistenceId, PidProgress]
-  private case class PidProgress(seqNrFrom: SequenceNr, seqNrTo: SequenceNr, tagPidSequenceNr: TagPidSequenceNr, offset: UUID)
+  type TagWriteSummary = Map[PersistenceId, PidProgress]
+  case class PidProgress(seqNrFrom: SequenceNr, seqNrTo: SequenceNr, tagPidSequenceNr: TagPidSequenceNr, offset: UUID)
   private case object InternalFlush
   private case object FlushKey
-  private sealed trait TagWriteFinished
-  private final case class TagWriteDone(summary: TagWriteSummary, doneNotify: Option[ActorRef]) extends TagWriteFinished
+  sealed trait TagWriteFinished
+  final case class TagWriteDone(summary: TagWriteSummary, doneNotify: Option[ActorRef]) extends TagWriteFinished
   private final case class TagWriteFailed(reason: Throwable, failedEvents: Vector[Serialized], previousTagSequenceNrs: Map[String, Long]) extends TagWriteFinished
 
   val timeUuidOrdering = new Ordering[UUID] {
@@ -81,13 +82,15 @@ import scala.util.{ Failure, Success, Try }
   }
 }
 
-@InternalApi private[akka] class TagWriter(session: TagWritersSession, tag: String, settings: TagWriterSettings)
+@InternalApi private[akka] class TagWriter(settings: TagWriterSettings, session: TagWritersSession, tag: String)
   extends Actor with Timers with ActorLogging with NoSerializationVerificationNeeded {
 
   import TagWriter._
-  import context._
+  import TagWriters.TagWrite
+  import context.become
+  import context.dispatcher
 
-  log.debug("Running with settings {}", settings)
+  log.debug("Running TagWriter for [{}] with settings {}", tag, settings)
 
   private val pubsub: Option[DistributedPubSub] = if (settings.pubsubNotification) {
     Try {
@@ -97,12 +100,14 @@ import scala.util.{ Failure, Success, Try }
     None
   }
 
+  private val parent = context.parent
+
   // TODO remove once stable, or make part of the state in stack rather than a var
   var sequenceNrs = Map.empty[String, Long]
 
   override def receive: Receive = idle(Vector.empty[Serialized], Map.empty[String, Long])
 
-  def validate(payload: Vector[Serialized], buffer: Vector[Serialized]): Unit = {
+  def validate(payload: immutable.Seq[Serialized], buffer: Vector[Serialized]): Unit = {
     payload.foreach { s =>
       sequenceNrs.get(s.persistenceId) match {
         case Some(seqNr) =>
@@ -190,6 +195,7 @@ import scala.util.{ Failure, Success, Try }
                 s"If this is the only Cassandra error things will continue to work but if this keeps happening it till " +
                 " mean slower recovery as tag_views will need to be repaired.",
                 id, seqNrTo, tagPidSequenceNr, formatOffset(offset))
+              parent ! Status.Failure(t)
           }
       }
       log.debug(s"Tag write complete. ${summary}")
@@ -214,6 +220,7 @@ import scala.util.{ Failure, Success, Try }
       log.error(t, "Writing tags has failed. This means that any eventsByTag query will be out of date. The write will be retried.")
       log.debug("Setting tag sequence nrs back to {}", previousTagPidSequenceNrs)
       timers.startSingleTimer(FlushKey, InternalFlush, settings.flushInterval)
+      parent ! Status.Failure(t)
       context.become(idle(events ++ buffer, previousTagPidSequenceNrs ++ updatedTagProgress))
 
     case ResetPersistenceId(_, tp @ TagProgress(pid, _, _)) =>
@@ -287,6 +294,7 @@ import scala.util.{ Failure, Success, Try }
           TagWriteFailed(t, events, existingTagSequenceNrs)
       }
 
+    import context.dispatcher
     withFailure pipeTo self
 
     context.become(writeInProgress(remainingBuffer, newTagSequenceNrs, Map.empty[String, Long]))
