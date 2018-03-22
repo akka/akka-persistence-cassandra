@@ -39,7 +39,7 @@ private[akka] object BucketSize {
 case class TableSettings(name: String, compactionStrategy: CassandraCompactionStrategy, gcGraceSeconds: Long, ttl: Option[Duration])
 
 class CassandraJournalConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) with NoSerializationVerificationNeeded {
-  val targetPartitionSize: Int = config.getInt(CassandraJournalConfig.TargetPartitionProperty)
+  val targetPartitionSize: Long = config.getLong(CassandraJournalConfig.TargetPartitionProperty)
   val maxResultSize: Int = config.getInt("max-result-size")
   val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
   val maxMessageBatchSize = config.getInt("max-message-batch-size")

@@ -107,6 +107,25 @@ trait CassandraStatements {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true, ?)
     """
 
+  // could just use the write tags statement if we're going to update all the fields.
+  // Fields that are not updated atm: writer_uuid and metadata fields
+  private[akka] def updateMessagePayload =
+    s"""
+       UPDATE $tableName
+       SET
+        event = ?,
+        ser_manifest = ?,
+        ser_id = ?,
+        event_manifest = ?,
+        tags = ?
+       WHERE
+        persistence_id = ? AND
+        partition_nr = ? AND
+        sequence_nr = ? AND
+        timestamp = ? AND
+        timebucket = ?
+     """
+
   private[akka] def writeTags(withMeta: Boolean) =
     s"""
        INSERT INTO $tagTableName(

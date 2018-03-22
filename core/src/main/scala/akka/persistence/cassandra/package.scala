@@ -88,8 +88,14 @@ package object cassandra {
       }
       val serEvent = ByteBuffer.wrap(serialization.serialize(event).get)
 
-      Serialized(p.persistenceId, p.sequenceNr, serEvent, tags, p.manifest, serManifest,
-        serializer.identifier, p.writerUuid, serializeMeta(), uuid, timeBucket)
+      Serialized(p.persistenceId, p.sequenceNr, serEvent, tags,
+        eventAdapterManifest = p.manifest,
+        serManifest = serManifest,
+        serId = serializer.identifier,
+        p.writerUuid,
+        serializeMeta(),
+        uuid,
+        timeBucket)
     }
 
     // serialize actor references with full address information (defaultAddress)

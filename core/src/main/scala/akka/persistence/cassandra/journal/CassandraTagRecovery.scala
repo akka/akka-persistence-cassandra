@@ -21,7 +21,7 @@ import akka.persistence.cassandra.journal.TagWriters.BulkTagWrite
 
 trait CassandraTagRecovery {
   self: TaggedPreparedStatements =>
-  protected val log: LoggingAdapter
+  private[akka] val log: LoggingAdapter
 
   // used for local asks
   private implicit val timeout = Timeout(10.second)
