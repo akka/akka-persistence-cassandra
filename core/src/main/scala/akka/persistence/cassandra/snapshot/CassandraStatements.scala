@@ -11,11 +11,11 @@ import com.datastax.driver.core.Session
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 
 trait CassandraStatements {
-  def config: CassandraSnapshotStoreConfig
+  def snapshotConfig: CassandraSnapshotStoreConfig
 
   def createKeyspace = s"""
-      CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
-      WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
+      CREATE KEYSPACE IF NOT EXISTS ${snapshotConfig.keyspace}
+      WITH REPLICATION = { 'class' : ${snapshotConfig.replicationStrategy} }
     """
 
   // snapshot_data is the serialized snapshot payload
@@ -33,8 +33,8 @@ trait CassandraStatements {
         meta_ser_manifest text,
         meta blob,
         PRIMARY KEY (persistence_id, sequence_nr))
-        WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${config.gcGraceSeconds}
-        AND compaction = ${config.tableCompactionStrategy.asCQL}
+        WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${snapshotConfig.gcGraceSeconds}
+        AND compaction = ${snapshotConfig.tableCompactionStrategy.asCQL}
     """
 
   def writeSnapshot(withMeta: Boolean) = s"""
@@ -47,6 +47,11 @@ trait CassandraStatements {
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND
         sequence_nr = ?
+    """
+
+  def deleteAllSnapshotForPersistenceId = s"""
+      DELETE FROM ${tableName} WHERE
+        persistence_id = ?
     """
 
   def selectSnapshot = s"""
@@ -62,7 +67,7 @@ trait CassandraStatements {
         ${limit.map(l => s"LIMIT ${l}").getOrElse("")}
     """
 
-  private def tableName = s"${config.keyspace}.${config.table}"
+  private def tableName = s"${snapshotConfig.keyspace}.${snapshotConfig.table}"
 
   /**
    * Execute creation of keyspace and tables is limited to one thread at a time to

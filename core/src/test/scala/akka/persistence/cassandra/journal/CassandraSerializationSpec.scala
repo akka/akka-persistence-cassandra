@@ -4,16 +4,14 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.actor.{ ActorRef, ActorSystem, ExtendedActorSystem, Props }
-import akka.persistence.{ PersistentActor, RecoveryCompleted }
-import akka.persistence.cassandra.CassandraLifecycle
-import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.serialization.{ BaseSerializer, Serializer }
+import akka.actor.{ ActorSystem, ExtendedActorSystem, Props }
+import akka.persistence.RecoveryCompleted
+import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
+import akka.persistence.cassandra.{ CassandraLifecycle, EventWithMetaData, Persister }
+import akka.serialization.BaseSerializer
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ Matchers, WordSpecLike }
-import akka.persistence.cassandra.EventWithMetaData
-import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 
 object CassandraSerializationSpec {
   val config = ConfigFactory.parseString(
@@ -22,7 +20,7 @@ object CassandraSerializationSpec {
        |akka.actor.serializers.crap="akka.persistence.cassandra.journal.BrokenDeSerialization"
        |akka.actor.serialization-identifiers."akka.persistence.cassandra.journal.BrokenDeSerialization" = 666
        |akka.actor.serialization-bindings {
-       |  "akka.persistence.cassandra.journal.CassandraSerializationSpec$$Persister$$CrapEvent" = crap
+       |  "akka.persistence.cassandra.Persister$$CrapEvent" = crap
        |}
        |akka.persistence.journal.max-deletion-batch-size = 3
        |akka.persistence.publish-confirmations = on
@@ -35,25 +33,6 @@ object CassandraSerializationSpec {
     """.stripMargin
   ).withFallback(CassandraLifecycle.config)
 
-  object Persister {
-    case class CrapEvent(n: Int)
-  }
-
-  class Persister(override val persistenceId: String, probe: ActorRef) extends PersistentActor {
-    override def receiveRecover: Receive = {
-      case msg => probe ! msg
-    }
-    override def receiveCommand: Receive = {
-      case msg => persist(msg) { persisted =>
-        probe ! msg
-      }
-    }
-
-    override protected def onRecoveryFailure(cause: Throwable, event: Option[Any]): Unit = {
-      probe ! cause
-    }
-
-  }
 }
 
 class BrokenDeSerialization(override val system: ExtendedActorSystem) extends BaseSerializer {
@@ -70,8 +49,7 @@ class BrokenDeSerialization(override val system: ExtendedActorSystem) extends Ba
 class CassandraSerializationSpec extends TestKit(ActorSystem("CassandraSerializationSpec", CassandraSerializationSpec.config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
   override def systemName: String = "CassandraSerializationSpec"
 
-  import CassandraSerializationSpec._
-  import Persister._
+  import akka.persistence.cassandra.Persister._
 
   "A Cassandra journal" should {
 
