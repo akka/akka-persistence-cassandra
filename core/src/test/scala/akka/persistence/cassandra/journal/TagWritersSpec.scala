@@ -9,8 +9,10 @@ import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
-
 import scala.concurrent.duration._
+
+import akka.actor.ActorRef
+import akka.actor.Props
 
 class TagWritersSpec extends TestKit(ActorSystem("TagWriterSpec"))
   with WordSpecLike
@@ -20,10 +22,25 @@ class TagWritersSpec extends TestKit(ActorSystem("TagWriterSpec"))
 
   val smallWait = 10.milliseconds
 
+  private val defaultSettings = TagWriterSettings(
+    maxBatchSize = 10,
+    flushInterval = 10.seconds,
+    scanningFlushInterval = 20.seconds,
+    pubsubNotification = false
+  )
+
+  private def testProps(
+    settings:         TagWriterSettings,
+    tagWriterCreator: String => ActorRef
+  ): Props =
+    Props(new TagWriters(settings, tagWriterSession = null) {
+      override def createTagWriter(tag: String): ActorRef = tagWriterCreator(tag)
+    })
+
   "Tag writers" must {
     "forward flush requests" in {
       val probe = TestProbe()
-      val tagWriters = system.actorOf(TagWriters.props((_, tag) => {
+      val tagWriters = system.actorOf(testProps(defaultSettings, tag => {
         tag shouldEqual "blue"
         probe.ref
       }))
@@ -38,7 +55,7 @@ class TagWritersSpec extends TestKit(ActorSystem("TagWriterSpec"))
       val redProbe = TestProbe()
       val blueProbe = TestProbe()
       val probes = Map("red" -> redProbe, "blue" -> blueProbe)
-      val tagWriters = system.actorOf(TagWriters.props((_, tag) => probes(tag).ref))
+      val tagWriters = system.actorOf(testProps(defaultSettings, tag => probes(tag).ref))
 
       // do something to make it create a couple
       val blueTagWrite = TagWrite("blue", Vector.empty)
@@ -62,7 +79,7 @@ class TagWritersSpec extends TestKit(ActorSystem("TagWriterSpec"))
       val redProbe = TestProbe()
       val blueProbe = TestProbe()
       val probes = Map("red" -> redProbe, "blue" -> blueProbe)
-      val tagWriters = system.actorOf(TagWriters.props((_, tag) => probes(tag).ref))
+      val tagWriters = system.actorOf(testProps(defaultSettings, tag => probes(tag).ref))
 
       // do something to make it create a couple
       val blueTagWrite = TagWrite("blue", Vector.empty)

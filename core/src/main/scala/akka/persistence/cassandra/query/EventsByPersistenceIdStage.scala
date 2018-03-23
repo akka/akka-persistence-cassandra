@@ -22,12 +22,13 @@ import akka.stream.stage._
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RetryPolicy
 import com.datastax.driver.core.utils.Bytes
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.concurrent.duration.{ FiniteDuration, _ }
 import scala.util.{ Failure, Success, Try }
+
+import akka.util.OptionVal
 
 /**
  * INTERNAL API
@@ -40,6 +41,8 @@ import scala.util.{ Failure, Success, Try }
   private[akka] case class TaggedPersistentRepr(pr: PersistentRepr, tags: Set[String], offset: UUID) extends Extracted {
     def sequenceNr = pr.sequenceNr
   }
+
+  private[akka] case class OptionalTagged(sequenceNr: Long, tagged: OptionVal[TaggedPersistentRepr]) extends Extracted
 
   private[akka] case class RawEvent(sequenceNr: Long, serialized: Serialized) extends Extracted
 
@@ -116,11 +119,45 @@ import scala.util.{ Failure, Success, Try }
 
     type Extractor[T <: Extracted] = (Row, EventDeserializer, Serialization) => T
 
+    final case class SeqNrValue(sequenceNr: Long) extends Extracted
+
+    final case class PersistentReprValue(persistentRepr: PersistentRepr) extends Extracted {
+      override def sequenceNr: Long = persistentRepr.sequenceNr
+    }
+
+    val persistentRepr: Extractor[PersistentReprValue] = (row, ed, s) => {
+      val persistentRepr = extractPersistentRepr(row, ed, s)
+      PersistentReprValue(persistentRepr)
+    }
+
     val taggedPersistentRepr: Extractor[TaggedPersistentRepr] = (row, ed, s) => {
-      val tags = extractTags(row)
+      val tags = extractTags(row, ed)
+      val persistentRepr = extractPersistentRepr(row, ed, s)
+      TaggedPersistentRepr(persistentRepr, tags, row.getUUID("timestamp"))
+    }
+
+    val optionalTaggedPersistentRepr: Extractor[OptionalTagged] = (row, ed, s) => {
+      val seqNr = row.getLong("sequence_nr")
+      val tags = extractTags(row, ed)
+      if (tags.isEmpty) {
+        // no tags, no need to extract more
+        OptionalTagged(seqNr, OptionVal.None)
+      } else {
+        val persistentRepr = extractPersistentRepr(row, ed, s)
+        val tagged = TaggedPersistentRepr(persistentRepr, tags, row.getUUID("timestamp"))
+        OptionalTagged(seqNr, OptionVal.Some(tagged))
+      }
+    }
+
+    // TODO performance improvement could be to use another query that is not "select *"
+    val sequenceNumber: Extractor[SeqNrValue] = (row, ed, s) => {
+      SeqNrValue(row.getLong("sequence_nr"))
+    }
+
+    private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization): PersistentRepr = {
       row.getBytes("message") match {
         case null =>
-          TaggedPersistentRepr(PersistentRepr(
+          PersistentRepr(
             payload = ed.deserializeEvent(row),
             sequenceNr = row.getLong("sequence_nr"),
             persistenceId = row.getString("persistence_id"),
@@ -128,30 +165,31 @@ import scala.util.{ Failure, Success, Try }
             deleted = false,
             sender = null,
             writerUuid = row.getString("writer_uuid")
-          ), tags, row.getUUID("timestamp"))
+          )
         case b =>
           // for backwards compatibility
-          TaggedPersistentRepr(persistentFromByteBuffer(s, b), tags, row.getUUID("timestamp"))
+          persistentFromByteBuffer(s, b)
       }
     }
 
-    private def extractTags(row: Row): Set[String] = {
-      // TODO can be removed in 0.81, this is only used during migration from the old version on initial recovery
-      // we could make this a config flag to disable looking for the old or the new
-      val oldTags = (1 to 3).foldLeft(Set.empty[String]) {
-        case (acc, i) =>
-          if (row.getColumnDefinitions.contains(s"tag$i")) {
-            val tag = row.getString(s"tag$i")
-            if (tag != null) acc + tag
-            else acc
-          } else {
-            acc
+    private def extractTags(row: Row, ed: EventDeserializer): Set[String] = {
+      // TODO can be removed in 1.0, this is only used during migration from the old version on initial recovery
+      val oldTags: Set[String] =
+        if (ed.hasOldTagsColumns(row)) {
+          (1 to 3).foldLeft(Set.empty[String]) {
+            case (acc, i) =>
+              val tag = row.getString(s"tag$i")
+              if (tag != null) acc + tag
+              else acc
           }
-      }
-      val newTags = if (row.getColumnDefinitions.contains("tags")) {
-        row.getSet("tags", classOf[String]).asScala.toSet
-      } else Set.empty[String]
-      oldTags ++ newTags
+        } else Set.empty
+
+      val newTags: Set[String] =
+        if (ed.hasTagsColumn(row))
+          row.getSet("tags", classOf[String]).asScala.toSet
+        else Set.empty
+
+      oldTags.union(newTags)
     }
 
     def persistentFromByteBuffer(serialization: Serialization, b: ByteBuffer): PersistentRepr = {

@@ -9,14 +9,15 @@ import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ SequenceNr, Tag }
-import akka.persistence.cassandra.journal.TagWriter.{ TagProgress, TagWrite }
-import akka.persistence.cassandra.journal.TagWriters.{ PidRecovering, PidRecoveringAck }
+import akka.persistence.cassandra.journal.TagWriter.TagProgress
+import akka.persistence.cassandra.journal.TagWriters.{ PidRecovering, PidRecoveringAck, TagWrite }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.util.Timeout
-
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
+
+import akka.persistence.cassandra.journal.TagWriters.BulkTagWrite
 
 trait CassandraTagRecovery {
   self: TaggedPreparedStatements =>
@@ -36,13 +37,15 @@ trait CassandraTagRecovery {
       })
 
   // Before starting the actual recovery first go from the oldest tag progress -> fromSequenceNr
-  // and fix any tags. This recovers any tag writes that happened before the latest snapshot
-  private[akka] def calculateStartingSequenceNr(tps: Map[Tag, TagProgress]): SequenceNr =
-    if (tps.isEmpty) 1L
-    else
-      tps.foldLeft(Long.MaxValue) {
-        case (currentMin, (_, TagProgress(_, sequenceNr, _))) => math.min(currentMin, sequenceNr)
+  // or min tag scanning sequence number, and fix any tags. This recovers any tag writes that
+  // happened before the latest snapshot
+  private[akka] def tagScanningStartingSequenceNr(persistenceId: String): Future[SequenceNr] = {
+    preparedSelectTagScanningForPersistenceId.map(_.bind(persistenceId))
+      .flatMap(session.selectOne).map {
+        case Some(row) => row.getLong("sequence_nr")
+        case None      => 1L
       }
+  }
 
   private[akka] def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], to: ActorRef)(rawEvent: RawEvent): RawEvent = {
     // FIXME logging before releasing
@@ -51,11 +54,11 @@ trait CassandraTagRecovery {
       tp.get(tag) match {
         case None =>
           log.debug("Tag write not in progress. Sending to TagWriter. Tag {} Sequence Nr {}.", tag, rawEvent.sequenceNr)
-          to ! TagWrite(tag, Vector(rawEvent.serialized))
+          to ! TagWrite(tag, rawEvent.serialized :: Nil)
         case Some(progress) =>
           if (rawEvent.sequenceNr > progress.sequenceNr) {
             log.debug("Sequence nr > than write progress. Sending to TagWriter. Tag {} Sequence Nr {}. ", tag, rawEvent.sequenceNr)
-            to ! TagWrite(tag, Vector(rawEvent.serialized))
+            to ! TagWrite(tag, rawEvent.serialized :: Nil)
           }
       }
     })
@@ -63,7 +66,7 @@ trait CassandraTagRecovery {
   }
 
   private[akka] def sendTagProgress(pid: String, tp: Map[Tag, TagProgress], ref: ActorRef): Future[Done] = {
-    log.debug("Recovery sending tag progress: {}", tp)
+    log.debug("Recovery of pid [{}] sending tag progress: {}", pid, tp)
     (ref ? PidRecovering(pid, tp)).mapTo[PidRecoveringAck.type].map(_ => Done)
   }
 

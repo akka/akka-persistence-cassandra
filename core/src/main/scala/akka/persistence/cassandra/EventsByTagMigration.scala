@@ -30,22 +30,21 @@ import scala.concurrent.duration._
 object EventsByTagMigration {
   def apply(system: ActorSystem): EventsByTagMigration = new EventsByTagMigration(system)
   // Extracts a Cassandra Row, assuming the pre 0.80 schema into a [[RawEvent]]
-  val RawPayloadOldTagSchema = (bucketSize: BucketSize, transportInformation: Option[Serialization.Information]) => (row: Row, _: EventDeserializer, serialization: Serialization) => {
+  val RawPayloadOldTagSchema = (bucketSize: BucketSize, transportInformation: Option[Serialization.Information]) => (row: Row, ed: EventDeserializer, serialization: Serialization) => {
     // Get the tags from the old location i.e. tag1, tag2, tag3
-    val tags: Set[String] = (1 to 3).foldLeft(Set.empty[String]) {
-      case (acc, i) =>
-        if (row.getColumnDefinitions.contains(s"tag$i")) {
-          val tag = row.getString(s"tag$i")
-          if (tag != null) acc + tag
-          else acc
-        } else {
-          acc
+    val tags: Set[String] =
+      if (ed.hasOldTagsColumns(row)) {
+        (1 to 3).foldLeft(Set.empty[String]) {
+          case (acc, i) =>
+            val tag = row.getString(s"tag$i")
+            if (tag != null) acc + tag
+            else acc
         }
-    }
+      } else Set.empty
+
     val timeUuid = row.getUUID("timestamp")
     val sequenceNr = row.getLong("sequence_nr")
-    // TODO could cache this decision
-    val meta = if (row.getColumnDefinitions.contains("meta")) {
+    val meta = if (ed.hasMetaColumns(row)) {
       val m = row.getBytes("meta")
       Option(m).map(SerializedMeta(_, row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
     } else {
@@ -91,7 +90,7 @@ class EventsByTagMigration(system: ActorSystem)
   private val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
   private implicit val materialiser = ActorMaterializer()(system)
 
-  implicit val ec = system.dispatcher
+  implicit val ec = system.dispatchers.lookup(system.settings.config.getString("cassandra-journal.plugin-dispatcher"))
   override def config: CassandraJournalConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   val session: CassandraSession = new CassandraSession(
     system,
@@ -109,6 +108,7 @@ class EventsByTagMigration(system: ActorSystem)
       _ <- session.executeWrite(createKeyspace)
       _ <- session.executeWrite(createTagsTable)
       _ <- session.executeWrite(createTagsProgressTable)
+      _ <- session.executeWrite(createTagScanningTable)
     } yield Done
   }
 
@@ -161,11 +161,10 @@ class EventsByTagMigration(system: ActorSystem)
       preparedWriteToTagViewWithMeta,
       session.executeWrite,
       session.selectResultSet,
-      preparedWriteToTagProgress
+      preparedWriteToTagProgress,
+      preparedWriteTagScanning
     )
-    val tagWriters = system.actorOf(TagWriters.props(
-      (arf, tag) => arf.actorOf(TagWriter.props(tagWriterSession, tag, config.tagWriterSettings))
-    ))
+    val tagWriters = system.actorOf(TagWriters.props(config.tagWriterSettings, tagWriterSession))
 
     // A bit arbitrary, but we could be waiting on many Cassandra writes during the flush
     implicit val timeout = Timeout(30.seconds)
@@ -174,11 +173,14 @@ class EventsByTagMigration(system: ActorSystem)
         log.info("Migrating the following persistence ids {}", pids)
         pids
       }.flatMapConcat(pid => {
-        val prereqs: Future[(Map[Tag, TagProgress], SequenceNr)] = for {
-          tp <- lookupTagProgress(pid)
-          _ <- sendTagProgress(pid, tp, tagWriters)
-          startingSeq = calculateStartingSequenceNr(tp)
-        } yield (tp, startingSeq)
+        val prereqs: Future[(Map[Tag, TagProgress], SequenceNr)] = {
+          val startingSeqFut = tagScanningStartingSequenceNr(pid)
+          for {
+            tp <- lookupTagProgress(pid)
+            _ <- sendTagProgress(pid, tp, tagWriters)
+            startingSeq <- startingSeqFut
+          } yield (tp, startingSeq)
+        }
 
         // would be nice to group these up into a TagWrites message but also
         // nice that this reuses the recovery code :-/

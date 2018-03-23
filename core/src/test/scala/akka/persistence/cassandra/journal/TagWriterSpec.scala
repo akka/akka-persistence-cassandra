@@ -12,6 +12,7 @@ import akka.actor.{ ActorRef, ActorSystem }
 import akka.event.Logging.{ Error, Warning }
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
+import akka.persistence.cassandra.journal.TagWriters.TagWrite
 import akka.persistence.cassandra.journal.TagWriterSpec.{ EventWrite, ProgressWrite, TestEx }
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
@@ -20,7 +21,6 @@ import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core.{ PreparedStatement, Statement }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, WordSpecLike }
-
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.control.NoStackTrace
@@ -63,7 +63,8 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
   val successfulWrite: Statement => Future[Done] = _ => Future.successful(Done)
   val defaultSettings = TagWriterSettings(
     maxBatchSize = 10,
-    10.seconds,
+    flushInterval = 10.seconds,
+    scanningFlushInterval = 20.seconds,
     pubsubNotification = false
   )
   val waitDuration = 100.millis
@@ -498,7 +499,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
 
       ref ! TagWrite(tagName, Vector(e2))
       logProbe.expectMsgPF(waitDuration) {
-        case Error(`t`, _, _, "Writing tags has failed. This means that any eventsByTag query will be out of date. The write will be retried.") =>
+        case Warning(_, _, msg) if msg.toString.contains("Writing tags has failed") =>
       }
       ref ! TagWrite(tagName, Vector(e3, e4))
 
@@ -529,7 +530,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       probe.expectMsg(Vector(toEw(e1, 1), toEw(e2, 2)))
       probe.expectMsg(ProgressWrite("p1", 2, 2, e2.timeUuid))
       logProbe.expectMsgPF(waitDuration) {
-        case Error(`t`, _, _, msg) if msg.toString.contains("Tag progress write has failed") =>
+        case Warning(_, _, msg) if msg.toString.contains("Tag progress write has failed") =>
       }
 
       ref ! TagWrite(tagName, Vector(e3, e4))
@@ -555,7 +556,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
-    val session = new TagWritersSession(fakePs, fakePs, successfulWrite, null, fakePs) {
+    val session = new TagWritersSession(fakePs, fakePs, successfulWrite, null, fakePs, fakePs) {
 
       override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
         probe.ref ! events.map {
@@ -580,7 +581,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       }
     }
 
-    val ref = system.actorOf(TagWriter.props(session, tag, settings))
+    val ref = system.actorOf(TagWriter.props(settings, session, tag))
     (probe, ref)
   }
 

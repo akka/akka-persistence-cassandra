@@ -434,10 +434,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.taggedPersistentRepr
+      extractor = Extractors.persistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
-      .map(te => mapEvent(te.pr))
+      .map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
@@ -458,10 +458,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       None,
       s"currentEventsByPersistenceId-$persistenceId",
-      extractor = Extractors.taggedPersistentRepr
+      extractor = Extractors.persistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
-      .map(te => mapEvent(te.pr))
+      .map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
@@ -481,8 +481,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.taggedPersistentRepr
-    ).map(te => mapEvent(te.pr))
+      extractor = Extractors.persistentRepr
+    ).map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**

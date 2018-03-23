@@ -4,6 +4,7 @@
 
 package akka.persistence.cassandra.journal
 
+import scala.collection.immutable
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 import java.util.{ UUID, HashMap => JHMap, Map => JMap }
@@ -16,8 +17,7 @@ import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.journal.TagWriter.TagWrite
-import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWritersSession }
+import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, TagWritersSession }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
@@ -45,12 +45,12 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
 
   val config = new CassandraJournalConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
-  val ec: ExecutionContext = context.system.dispatcher
   val log = Logging(context.system, getClass)
 
   import CassandraJournal._
   import config._
-  import context.dispatcher
+
+  implicit override val ec: ExecutionContext = context.dispatcher
 
   // readHighestSequence must be performed after pending write for a persistenceId
   // when the persistent actor is restarted.
@@ -74,12 +74,14 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
     preparedWriteToTagViewWithMeta,
     session.executeWrite,
     session.selectResultSet,
-    preparedWriteToTagProgress
+    preparedWriteToTagProgress,
+    preparedWriteTagScanning
   )
 
   protected val tagWrites: Option[ActorRef] =
     if (config.eventsByTagEnabled)
-      Some(context.system.actorOf(TagWriters.props((arf, tag) => arf.actorOf(TagWriter.props(tagWriterSession, tag, config.tagWriterSettings)))))
+      Some(context.actorOf(TagWriters.props(config.tagWriterSettings, tagWriterSession)
+        .withDispatcher(context.props.dispatcher), "tagWrites"))
     else None
 
   def preparedWriteMessage = session.prepare(
@@ -132,6 +134,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
         preparedWriteToTagProgress
         preparedWriteToTagViewWithoutMeta
         preparedWriteToTagViewWithMeta
+        preparedWriteTagScanning
       }
   }
 
@@ -200,30 +203,43 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       result.map(_ => extractTagWrites(serialized))
     }
 
-    tagWrites.foreach(tws pipeTo _)
-
-    tws.onComplete { _ =>
+    tws.onComplete { result =>
       self ! WriteFinished(pid, p.future)
       p.success(Done)
+      // notify TagWriters when write was successful
+      result.foreach(bulkTagWrite => tagWrites.foreach(_ ! bulkTagWrite))
     }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
 
     //Nil == all good
     tws.map(_ => Nil)(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
   }
 
-  // FIXME optimize case where there is only one write/tag
-  private def extractTagWrites(serialized: Seq[SerializedAtomicWrite]) = {
-    val messagesByTag: Map[String, Seq[Serialized]] = serialized
-      .flatMap(_.payload)
-      .flatMap(s => s.tags.map((_, s)))
-      .groupBy(_._1).mapValues(_.map(_._2))
+  private def extractTagWrites(serialized: Seq[SerializedAtomicWrite]): BulkTagWrite = {
+    if (serialized.isEmpty) BulkTagWrite(Nil, Nil)
+    else if (serialized.size == 1 && serialized.head.payload.size == 1) {
+      // optimization for one single event, which is the typical case
+      val s = serialized.head.payload.head
+      if (s.tags.isEmpty) BulkTagWrite(Nil, s :: Nil)
+      else BulkTagWrite(s.tags.map(tag => TagWrite(tag, s :: Nil))(collection.breakOut), Nil)
+    } else {
+      val messagesByTag: Map[String, Seq[Serialized]] = serialized
+        .flatMap(_.payload)
+        .flatMap(s => s.tags.map((_, s)))
+        .groupBy(_._1).mapValues(_.map(_._2))
+      val messagesWithoutTag =
+        for {
+          a <- serialized
+          b <- a.payload
+          if b.tags.isEmpty
+        } yield b
 
-    BulkTagWrite(
-      messagesByTag.map {
-      case (tag, writes) =>
-        TagWrite(tag, writes.toVector)
-    }.toVector
-    )
+      val writesWithTags: immutable.Seq[TagWrite] = messagesByTag.map {
+        case (tag, writes) => TagWrite(tag, writes)
+      }(collection.breakOut)
+
+      BulkTagWrite(writesWithTags, messagesWithoutTag)
+    }
+
   }
 
   private def writeMessages(atomicWrites: Seq[SerializedAtomicWrite]): Future[Unit] = {
@@ -366,8 +382,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
 
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
     val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, partitionNr: JLong))
-    boundSelectHighestSequenceNr.flatMap(session.selectResultSet)
-      .map(rs => Option(rs.one()))
+    boundSelectHighestSequenceNr.flatMap(session.selectOne)
       .map(row => row.map(s => PartitionInfo(partitionNr, minSequenceNr(partitionNr), min(s.getLong("sequence_nr"), maxSequenceNr)))
         .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
   }
@@ -383,7 +398,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
     session.executeWrite(stmt).map(_ => ())
   }
 
-  // TODO create a custom extractor that doesn't deserialise the event
   private def asyncReadLowestSequenceNr(persistenceId: String, fromSequenceNr: Long, highestDeletedSequenceNumber: Long): Future[Long] = {
     queries
       .eventsByPersistenceId(
@@ -396,9 +410,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
         "asyncReadLowestSequenceNr",
         someReadConsistency,
         someReadRetryPolicy,
-        extractor = Extractors.taggedPersistentRepr
+        extractor = Extractors.sequenceNumber
       )
-      .map(_.pr.sequenceNr)
+      .map(_.sequenceNr)
       .runWith(Sink.headOption)
       .map {
         case Some(sequenceNr) => sequenceNr
@@ -446,16 +460,31 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
 
   class EventDeserializer(serialization: Serialization) {
 
-    // cache to avoid repeated check via ColumnDefinitions
-    @volatile private var _hasMetaColumns: Option[Boolean] = None
-
-    def hasMetaColumns(row: Row): Boolean = _hasMetaColumns match {
-      case Some(b) => b
-      case None =>
-        val b = row.getColumnDefinitions.contains("meta")
-        _hasMetaColumns = Some(b)
-        b
+    // caching to avoid repeated check via ColumnDefinitions
+    private def hasColumn(column: String, row: Row, cached: Option[Boolean], updateCache: Boolean => Unit): Boolean = {
+      cached match {
+        case Some(b) => b
+        case None =>
+          val b = row.getColumnDefinitions.contains(column)
+          updateCache(b)
+          b
+      }
     }
+
+    @volatile private var _hasMetaColumns: Option[Boolean] = None
+    private val updateMetaColumnsCache: Boolean => Unit = b => _hasMetaColumns = Some(b)
+    def hasMetaColumns(row: Row): Boolean =
+      hasColumn("meta", row, _hasMetaColumns, updateMetaColumnsCache)
+
+    @volatile private var _hasOldTagsColumns: Option[Boolean] = None
+    private val updateOldTagsColumnsCache: Boolean => Unit = b => _hasOldTagsColumns = Some(b)
+    def hasOldTagsColumns(row: Row): Boolean =
+      hasColumn("tag1", row, _hasOldTagsColumns, updateOldTagsColumnsCache)
+
+    @volatile private var _hasTagsColumn: Option[Boolean] = None
+    private val updateTagsColumnCache: Boolean => Unit = b => _hasTagsColumn = Some(b)
+    def hasTagsColumn(row: Row): Boolean =
+      hasColumn("tags", row, _hasTagsColumn, updateTagsColumnCache)
 
     def deserializeEvent(row: Row): Any = {
       val event = serialization.deserialize(

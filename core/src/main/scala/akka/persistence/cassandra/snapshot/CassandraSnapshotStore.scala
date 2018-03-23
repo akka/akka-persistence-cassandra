@@ -143,14 +143,13 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
   def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
     val boundSelectSnapshot = preparedSelectSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
-    boundSelectSnapshot.flatMap(session.selectResultSet).map { rs =>
-      val row = rs.one()
-      if (row == null) {
+    boundSelectSnapshot.flatMap(session.selectOne).map {
+      case None =>
         // Can happen since metadata and the actual snapshot might not be replicated at exactly same time.
         // Handled by loadNAsync.
         throw new NoSuchElementException(s"No snapshot for persistenceId [${metadata.persistenceId}] " +
           s"with with sequenceNr [${metadata.sequenceNr}]")
-      } else {
+      case Some(row) =>
         row.getBytes("snapshot") match {
           case null =>
             Snapshot(snapshotDeserializer.deserializeSnapshot(row))
@@ -158,7 +157,6 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
             // for backwards compatibility
             serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get
         }
-      }
     }
   }
 
