@@ -39,7 +39,7 @@ trait CassandraTagRecovery {
   // Before starting the actual recovery first go from the oldest tag progress -> fromSequenceNr
   // or min tag scanning sequence number, and fix any tags. This recovers any tag writes that
   // happened before the latest snapshot
-  private[akka] def tagScanningStartingSequenceNr(persistenceId: String, tps: Map[Tag, TagProgress]): Future[SequenceNr] = {
+  private[akka] def tagScanningStartingSequenceNr(persistenceId: String): Future[SequenceNr] = {
     preparedSelectTagScanningForPersistenceId.map(_.bind(persistenceId))
       .flatMap(session.selectOne).map {
         case Some(row) => row.getLong("sequence_nr")

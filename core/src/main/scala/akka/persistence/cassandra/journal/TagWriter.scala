@@ -8,7 +8,6 @@ import scala.collection.immutable
 import java.util.UUID
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, NoSerializationVerificationNeeded, Props, Timers }
-import akka.actor.Status
 import akka.annotation.InternalApi
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.pattern.pipe
@@ -89,6 +88,9 @@ import scala.util.{ Failure, Success, Try }
   import TagWriters.TagWrite
   import context.become
   import context.dispatcher
+
+  // eager init and val because used from Future callbacks
+  override val log = super.log
 
   log.debug("Running TagWriter for [{}] with settings {}", tag, settings)
 
@@ -191,14 +193,16 @@ import scala.util.{ Failure, Success, Try }
                 id, seqNrTo, tagPidSequenceNr, offset
               )
             case Failure(t) =>
-              log.error(t, s"Tag progress write has failed for pid: {} seqNrTo: {} tagPidSequenceNr: {} offset: {}. " +
-                s"If this is the only Cassandra error things will continue to work but if this keeps happening it till " +
-                " mean slower recovery as tag_views will need to be repaired.",
-                id, seqNrTo, tagPidSequenceNr, formatOffset(offset))
-              parent ! Status.Failure(t)
+              log.warning(
+                "Tag progress write has failed for pid: {} seqNrTo: {} tagPidSequenceNr: {} offset: {}. " +
+                "If this is the only Cassandra error things will continue to work but if this keeps happening it till " +
+                s" mean slower recovery as tag_views will need to be repaired. Reason: $t",
+                id, seqNrTo, tagPidSequenceNr, formatOffset(offset)
+              )
+              parent ! TagWriters.TagWriteFailed(t)
           }
       }
-      log.debug(s"Tag write complete. ${summary}")
+      log.debug(s"Tag write complete. {}", summary)
       if (awaitingFlush.isDefined) {
         log.debug("External flush request")
         if (buffer.nonEmpty) {
@@ -217,10 +221,11 @@ import scala.util.{ Failure, Success, Try }
       doneNotify.foreach(_ ! FlushComplete)
 
     case TagWriteFailed(t, events, previousTagPidSequenceNrs) =>
-      log.error(t, "Writing tags has failed. This means that any eventsByTag query will be out of date. The write will be retried.")
+      log.warning("Writing tags has failed. This means that any eventsByTag query will be out of date. " +
+        "The write will be retried. Reason {}", t)
       log.debug("Setting tag sequence nrs back to {}", previousTagPidSequenceNrs)
       timers.startSingleTimer(FlushKey, InternalFlush, settings.flushInterval)
-      parent ! Status.Failure(t)
+      parent ! TagWriters.TagWriteFailed(t)
       context.become(idle(events ++ buffer, previousTagPidSequenceNrs ++ updatedTagProgress))
 
     case ResetPersistenceId(_, tp @ TagProgress(pid, _, _)) =>

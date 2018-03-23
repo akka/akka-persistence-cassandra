@@ -173,11 +173,14 @@ class EventsByTagMigration(system: ActorSystem)
         log.info("Migrating the following persistence ids {}", pids)
         pids
       }.flatMapConcat(pid => {
-        val prereqs: Future[(Map[Tag, TagProgress], SequenceNr)] = for {
-          tp <- lookupTagProgress(pid)
-          _ <- sendTagProgress(pid, tp, tagWriters)
-          startingSeq <- tagScanningStartingSequenceNr(pid, tp)
-        } yield (tp, startingSeq)
+        val prereqs: Future[(Map[Tag, TagProgress], SequenceNr)] = {
+          val startingSeqFut = tagScanningStartingSequenceNr(pid)
+          for {
+            tp <- lookupTagProgress(pid)
+            _ <- sendTagProgress(pid, tp, tagWriters)
+            startingSeq <- startingSeqFut
+          } yield (tp, startingSeq)
+        }
 
         // would be nice to group these up into a TagWrites message but also
         // nice that this reuses the recovery code :-/

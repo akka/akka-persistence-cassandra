@@ -18,7 +18,6 @@ import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.OptionVal
 import scala.concurrent._
 
-
 trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatements {
   this: CassandraJournal =>
 
@@ -41,10 +40,11 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
       highestSequenceNr.flatMap { seqNr =>
         if (seqNr == fromSequenceNr && seqNr != 0) {
           log.debug("Snapshot is current so replay won't be required. Calculating tag progress now.")
+          val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
           for {
             tp <- lookupTagProgress(persistenceId)
             _ <- sendTagProgress(persistenceId, tp, tagWrites.get)
-            scanningSeqNr <- tagScanningStartingSequenceNr(persistenceId, tp)
+            scanningSeqNr <- scanningSeqNrFut
             _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
           } yield seqNr
         } else {
@@ -67,12 +67,15 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
     log.debug("Recovering pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
 
     if (config.eventsByTagEnabled) {
-      val recoveryPrep: Future[Map[String, TagProgress]] = for {
-        tp <- lookupTagProgress(persistenceId)
-        _ <- sendTagProgress(persistenceId, tp, tagWrites.get)
-        scanningSeqNr <- tagScanningStartingSequenceNr(persistenceId, tp)
-        _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, max, tp)
-      } yield tp
+      val recoveryPrep: Future[Map[String, TagProgress]] = {
+        val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
+        for {
+          tp <- lookupTagProgress(persistenceId)
+          _ <- sendTagProgress(persistenceId, tp, tagWrites.get)
+          scanningSeqNr <- scanningSeqNrFut
+          _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, max, tp)
+        } yield tp
+      }
 
       Source.fromFutureSource(
         recoveryPrep.map((tp: Map[Tag, TagProgress]) => {

@@ -21,7 +21,6 @@ import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core.{ PreparedStatement, Statement }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, WordSpecLike }
-
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.control.NoStackTrace
@@ -500,7 +499,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
 
       ref ! TagWrite(tagName, Vector(e2))
       logProbe.expectMsgPF(waitDuration) {
-        case Error(`t`, _, _, "Writing tags has failed. This means that any eventsByTag query will be out of date. The write will be retried.") =>
+        case Warning(_, _, msg) if msg.toString.contains("Writing tags has failed") =>
       }
       ref ! TagWrite(tagName, Vector(e3, e4))
 
@@ -531,7 +530,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       probe.expectMsg(Vector(toEw(e1, 1), toEw(e2, 2)))
       probe.expectMsg(ProgressWrite("p1", 2, 2, e2.timeUuid))
       logProbe.expectMsgPF(waitDuration) {
-        case Error(`t`, _, _, msg) if msg.toString.contains("Tag progress write has failed") =>
+        case Warning(_, _, msg) if msg.toString.contains("Tag progress write has failed") =>
       }
 
       ref ! TagWrite(tagName, Vector(e3, e4))

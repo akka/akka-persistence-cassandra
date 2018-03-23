@@ -149,6 +149,7 @@ import akka.util.OptionVal
       }
     }
 
+    // TODO performance improvement could be to use another query that is not "select *"
     val sequenceNumber: Extractor[SeqNrValue] = (row, ed, s) => {
       SeqNrValue(row.getLong("sequence_nr"))
     }

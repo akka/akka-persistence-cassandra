@@ -10,7 +10,6 @@ import java.net.URLEncoder
 import java.util.UUID
 
 import akka.Done
-import akka.actor.Status
 import akka.pattern.ask
 import akka.pattern.pipe
 import akka.actor.{ Actor, ActorLogging, ActorRef, ActorRefFactory, NoSerializationVerificationNeeded, Props }
@@ -97,6 +96,7 @@ import akka.util.ByteString
   case object AllFlushed
   final case class PidRecovering(pid: String, tagProgresses: Map[Tag, TagProgress])
   case object PidRecoveringAck
+  final case class TagWriteFailed(reason: Throwable)
   private case object WriteTagScanningTick
 }
 
@@ -105,6 +105,9 @@ import akka.util.ByteString
 
   import context.become
   import context.dispatcher
+
+  // eager init and val because used from Future callbacks
+  override val log = super.log
 
   private var tagActors = Map.empty[String, ActorRef]
   // just used for local actor asks
@@ -165,10 +168,9 @@ import akka.util.ByteString
       // if this fails (all local actor asks) the recovery will timeout
       recoveryNotificationComplete.foreach { _ => replyTo ! PidRecoveringAck }
 
-    case Status.Failure(e) =>
+    case TagWriteFailed(e) =>
       toBeWrittenScanning = Map.empty
       pendingScanning = Map.empty
-      log.debug("Failed to write to Cassandra so will not do TagWrites, [{}]", e)
   }
 
   private def updatePendingScanning(serialized: immutable.Seq[Serialized]): Unit = {
@@ -197,7 +199,10 @@ import akka.util.ByteString
       updates.foreach {
         case (pid, seqNr) =>
           tagWriterSession.executeStatement(ps.bind(pid, seqNr: JLong))
-            .failed.foreach(t => self ! Status.Failure(t))
+            .failed.foreach { t =>
+              log.warning("Writing tag scanning failed. Reason {}", t)
+              self ! TagWriteFailed(t)
+            }
       }
     }
   }
