@@ -15,7 +15,8 @@ import akka.persistence.cassandra.journal.CassandraJournal.TagPidSequenceNr
  * `eventsByTag` query, or similar queries.
  */
 @InternalApi private[akka] final case class UUIDPersistentRepr(
-  offset:           UUID,
+  offset: UUID,
+  //  tags:             Set[String], this isn't in the tags table, may need to be added
   tagPidSequenceNr: TagPidSequenceNr,
   persistentRepr:   PersistentRepr
 )

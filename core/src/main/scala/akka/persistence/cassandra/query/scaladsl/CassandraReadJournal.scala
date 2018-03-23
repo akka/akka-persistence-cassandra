@@ -265,6 +265,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * backend journal.
    */
   override def eventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
+    eventsByTagInternal(tag, offset).mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
+      .mapMaterializedValue(_ => NotUsed)
+      .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+
+  }
+
+  private[akka] def eventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] = {
     if (!config.eventsByTagEnabled)
       Source.failed(new IllegalStateException("Events by tag queries are disabled"))
     else {
@@ -281,9 +288,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
             usingOffset,
             prereqs._2
           ))
-        }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
+        }
           .mapMaterializedValue(_ => NotUsed)
-          .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+          .map(upr => upr.copy(persistentRepr = mapEvent(upr.persistentRepr)))
       } catch {
         case NonFatal(e) =>
           // e.g. from cassandraSession, or selectStatement
@@ -376,6 +383,12 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    *
    */
   override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
+    currentEventsByTagInternal(tag, offset)
+      .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
+      .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+  }
+
+  private[akka] def currentEventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] = {
     if (!config.eventsByTagEnabled)
       Source.failed(new IllegalStateException("Events by tag queries are disabled"))
     else {
@@ -387,9 +400,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
         createFutureSource(prereqs) { (s, prereqs) =>
           val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
           Source.fromGraph(EventsByTagStage(session, fromOffset, toOffset, queryPluginConfig, None, writePluginConfig.bucketSize, usingOffset, prereqs._2))
-        }.mapConcat(r => toEventEnvelope(mapEvent(r.persistentRepr), TimeBasedUUID(r.offset)))
+        }
           .mapMaterializedValue(_ => NotUsed)
-          .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
+          .map(x => x.copy(persistentRepr = mapEvent(x.persistentRepr)))
       } catch {
         case NonFatal(e) =>
           // e.g. from cassandraSession, or selectStatement
@@ -398,7 +411,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       }
     }
   }
-
   /**
    * `eventsByPersistenceId` is used to retrieve a stream of events for a particular persistenceId.
    *
