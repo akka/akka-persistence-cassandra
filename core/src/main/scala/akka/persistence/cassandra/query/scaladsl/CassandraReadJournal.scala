@@ -437,7 +437,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       extractor = Extractors.taggedPersistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
-      //.map(p => mapEvent(p.pr))
       .mapConcat(r => toEventEnvelopes(mapEvent(r.pr), TimeBasedUUID(r.offset)))
 
   /**
@@ -461,7 +460,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       extractor = Extractors.taggedPersistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
-      //.map(p => mapEvent(p.pr))
       .mapConcat(r => toEventEnvelopes(mapEvent(r.pr), TimeBasedUUID(r.offset)))
 
   /**
