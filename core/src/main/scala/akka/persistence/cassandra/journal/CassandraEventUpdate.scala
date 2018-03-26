@@ -20,11 +20,26 @@ trait CassandraEventUpdate extends CassandraStatements {
 
   def preparedUpdateMessage: Future[PreparedStatement] = session.prepare(updateMessagePayload).map(_.setIdempotent(true))
 
+  /*
+    FIXME, make the update in the tags table as well.
+    Change API so have existing tags/new tags so we know whether to update
+    existing rows or add new tags. Or perhaps a separate API for adding tags.
+
+
+    Steps for updating an event.
+    - Update it in the main table.
+    - Find its tags, everything apart from the tag_pid_sequence_nr is known so find that first.
+    - Issue updates to the tags table.
+   */
+
   def updateEvent(event: Serialized): Future[Done] = {
     preparedUpdateMessage.flatMap {
       ps => session.executeWrite(prepareUpdate(ps, event))
     }
   }
+
+  def addTags(event: Serialized, newTags: Set[String]): Future[Done] = ???
+
 
   private def prepareUpdate(ps: PreparedStatement, s: Serialized): Statement = {
     val maxPnr = partitionNr(s.sequenceNr, config.targetPartitionSize)

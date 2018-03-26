@@ -44,12 +44,12 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
   }
 
   "CassandraEventUpdate" must {
-    "update the event" in {
+    "update the event in messages" in {
       val pid = "a"
       val a = system.actorOf(TestTaggingActor.props(pid))
       a ! "e-1"
       expectMsgType[TestTaggingActor.Ack.type]
-      val eventsBefore = events("a")
+      val eventsBefore = events(pid)
       eventsBefore.map(_.pr.payload) shouldEqual Seq("e-1")
       val originalEvent = eventsBefore.head
       val modifiedEvent = serialize(
@@ -60,6 +60,30 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
       updater.updateEvent(modifiedEvent).futureValue shouldEqual Done
 
       eventPayloadsWithTags(pid) shouldEqual Seq(("secrets", Set("captain america")))
+    }
+
+    "update the event in tag_views" in {
+      val pid = "b"
+      val b = system.actorOf(TestTaggingActor.props(pid, Set("red", "blue")))
+      b ! "e-1"
+      expectMsgType[TestTaggingActor.Ack.type]
+      val eventsBefore = events(pid).head
+      val modifiedEvnet = serialize(
+        eventsBefore.pr.withPayload("hidden"), eventsBefore.offset, Set("red", "blue")
+      )
+
+      // update the event
+    }
+
+    "remove tags" in {
+      // FIXME, decide if want to do this
+      pending
+    }
+
+    "add tag" in {
+      // FIXME, we need to do this but decide if we want to do it while the app is running
+      // will need to be very careful about tag pid sequence nrs
+      pending
     }
 
     def serialize(pr: PersistentRepr, offset: UUID, tags: Set[String]): Serialized = {
