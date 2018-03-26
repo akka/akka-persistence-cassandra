@@ -22,37 +22,11 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
   this: CassandraJournal =>
 
   import config._
-  import context.dispatcher
 
-  /**
-   * It is assumed that this is only called during a replay and if fromSequenceNr == highest
-   * then asyncReplayMessages won't be called. In that case the tag progress is updated
-   * in here rather than during replay messages.
-   */
-  override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
+  private[akka] def asyncReadHighestSequenceNrInternal(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
     log.debug("asyncReadHighestSequenceNr {} {}", persistenceId, fromSequenceNr)
-    val highestSequenceNr = asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
+    asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
       asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h))
-    }
-
-    if (config.eventsByTagEnabled) {
-      // map to send tag write progress so actor doesn't finish recovery until it is done
-      highestSequenceNr.flatMap { seqNr =>
-        if (seqNr == fromSequenceNr && seqNr != 0) {
-          log.debug("Snapshot is current so replay won't be required. Calculating tag progress now.")
-          val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
-          for {
-            tp <- lookupTagProgress(persistenceId)
-            _ <- sendTagProgress(persistenceId, tp, tagWrites.get)
-            scanningSeqNr <- scanningSeqNrFut
-            _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
-          } yield seqNr
-        } else {
-          Future.successful(seqNr)
-        }
-      }
-    } else {
-      highestSequenceNr
     }
   }
 
@@ -119,7 +93,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
     }
   }
 
-  private def sendPreSnapshotTagWrites(
+  private[akka] def sendPreSnapshotTagWrites(
     minProgressNr:  Long,
     fromSequenceNr: Long,
     pid:            String,

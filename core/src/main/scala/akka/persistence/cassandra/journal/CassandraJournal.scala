@@ -306,10 +306,35 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
 
   }
 
+  /**
+   * It is assumed that this is only called during a replay and if fromSequenceNr == highest
+   * then asyncReplayMessages won't be called. In that case the tag progress is updated
+   * in here rather than during replay messages.
+   */
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
-    writeInProgress.get(persistenceId) match {
-      case null => super.asyncReadHighestSequenceNr(persistenceId, fromSequenceNr)
-      case f    => f.flatMap(_ => super.asyncReadHighestSequenceNr(persistenceId, fromSequenceNr))
+    val highestSequenceNr = writeInProgress.get(persistenceId) match {
+      case null => asyncReadHighestSequenceNrInternal(persistenceId, fromSequenceNr)
+      case f    => f.flatMap(_ => asyncReadHighestSequenceNrInternal(persistenceId, fromSequenceNr))
+    }
+
+    if (config.eventsByTagEnabled) {
+      // map to send tag write progress so actor doesn't finish recovery until it is done
+      highestSequenceNr.flatMap { seqNr =>
+        if (seqNr == fromSequenceNr && seqNr != 0) {
+          log.debug("Snapshot is current so replay won't be required. Calculating tag progress now.")
+          val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
+          for {
+            tp <- lookupTagProgress(persistenceId)
+            _ <- sendTagProgress(persistenceId, tp, tagWrites.get)
+            scanningSeqNr <- scanningSeqNrFut
+            _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
+          } yield seqNr
+        } else {
+          Future.successful(seqNr)
+        }
+      }
+    } else {
+      highestSequenceNr
     }
   }
 
@@ -318,7 +343,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       highestDeletedSequenceNumber =>
         asyncReadLowestSequenceNr(persistenceId, 1L, highestDeletedSequenceNumber).flatMap {
           lowestSequenceNr =>
-            super.asyncReadHighestSequenceNr(persistenceId, lowestSequenceNr).flatMap {
+            asyncReadHighestSequenceNrInternal(persistenceId, lowestSequenceNr).flatMap {
               highestSequenceNr =>
                 val lowestPartition = partitionNr(lowestSequenceNr)
                 val toSeqNr = math.min(toSequenceNr, highestSequenceNr)
