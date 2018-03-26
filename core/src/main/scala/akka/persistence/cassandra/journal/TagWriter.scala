@@ -195,8 +195,8 @@ import scala.util.{ Failure, Success, Try }
             case Failure(t) =>
               log.warning(
                 "Tag progress write has failed for pid: {} seqNrTo: {} tagPidSequenceNr: {} offset: {}. " +
-                "If this is the only Cassandra error things will continue to work but if this keeps happening it till " +
-                s" mean slower recovery as tag_views will need to be repaired. Reason: $t",
+                  "If this is the only Cassandra error things will continue to work but if this keeps happening it till " +
+                  s" mean slower recovery as tag_views will need to be repaired. Reason: $t",
                 id, seqNrTo, tagPidSequenceNr, formatOffset(offset)
               )
               parent ! TagWriters.TagWriteFailed(t)
