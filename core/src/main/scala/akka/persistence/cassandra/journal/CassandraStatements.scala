@@ -109,7 +109,7 @@ trait CassandraStatements {
 
   // could just use the write tags statement if we're going to update all the fields.
   // Fields that are not updated atm: writer_uuid and metadata fields
-  private[akka] def updateMessagePayload =
+  private[akka] def updateMessagePayloadAndTags =
     s"""
        UPDATE $tableName
        SET
@@ -118,6 +118,18 @@ trait CassandraStatements {
         ser_id = ?,
         event_manifest = ?,
         tags = ?
+       WHERE
+        persistence_id = ? AND
+        partition_nr = ? AND
+        sequence_nr = ? AND
+        timestamp = ? AND
+        timebucket = ?
+     """
+
+  private[akka] def addTagsToMessagesTable =
+    s"""
+       UPDATE $tableName
+       SET tags = tags + ?
        WHERE
         persistence_id = ? AND
         partition_nr = ? AND
@@ -145,6 +157,32 @@ trait CassandraStatements {
         ${if (withMeta) "?, ?, ?," else ""}
         ?)
      """
+
+  private[akka] def updateMessagePayloadInTagView =
+    s"""
+       UPDATE $tagTableName
+       SET
+        event = ?,
+        ser_manifest = ?,
+        ser_id = ?,
+        event_manifest = ?
+       WHERE
+        tag_name = ? AND
+        timebucket = ? AND
+        timestamp = ? AND
+        persistence_id = ? AND
+        tag_pid_sequence_nr = ?
+     """
+
+  private[akka] def selectTagPidSequenceNr =
+    s"""
+       SELECT tag_pid_sequence_nr
+       FROM $tagTableName WHERE
+       tag_name = ? AND
+       timebucket = ? AND
+       timestamp = ? AND
+       persistence_id = ?
+     """.stripMargin
 
   private[akka] def writeTagProgress =
     s"""

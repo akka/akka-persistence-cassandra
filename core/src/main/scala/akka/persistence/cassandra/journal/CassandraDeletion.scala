@@ -79,10 +79,11 @@ trait CassandraDeletion extends CassandraStatements {
                         group =>
                           {
                             val delete = asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
-                            delete.onFailure {
-                              case e => log.warning(s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                                "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                                "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
+                            delete.failed.foreach {
+                              e =>
+                                log.warning(s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                                  "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                                  "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
                             }
                             delete
                           }
@@ -95,8 +96,8 @@ trait CassandraDeletion extends CassandraStatements {
                         val boundDeleteMessages = preparedDeleteMessages.map(_.bind(persistenceId, pi.partitionNr: JLong, toSeqNr: JLong))
                         boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
                     }))
-                      .onFailure {
-                        case e => log.warning("Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                      .failed.foreach { e =>
+                        log.warning("Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
                           "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
                           "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
                       }

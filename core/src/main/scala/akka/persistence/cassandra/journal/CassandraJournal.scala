@@ -13,7 +13,6 @@ import akka.Done
 import akka.actor.{ ActorRef, ExtendedActorSystem, NoSerializationVerificationNeeded }
 import akka.annotation.InternalApi
 import akka.event.{ Logging, LoggingAdapter }
-import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._

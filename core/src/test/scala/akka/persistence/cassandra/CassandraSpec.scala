@@ -4,22 +4,29 @@
 
 package akka.persistence.cassandra
 
+import java.time.{ LocalDateTime, ZoneOffset }
+import java.util.concurrent.atomic.AtomicInteger
+
 import akka.actor.ActorSystem
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.PersistenceQuery
+import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Keep, Sink }
+import akka.stream.testkit.TestSubscriber
+import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.collection.immutable
+import scala.concurrent.duration._
 
 object CassandraSpec {
+  val today = LocalDateTime.now(ZoneOffset.UTC)
   def getCallerName(clazz: Class[_]): String = {
     val s = (Thread.currentThread.getStackTrace map (_.getClassName) drop 1)
       .dropWhile(_ matches "(java.lang.Thread|.*\\.Abstract.*)")
@@ -33,6 +40,9 @@ object CassandraSpec {
   def configWithKeyspace(name: String) = ConfigFactory.parseString(
     s"""
       cassandra-journal.keyspace = $name
+       cassandra-query-journal = {
+         first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormat)}"
+       }
     """
   ).withFallback(CassandraLifecycle.config)
 }
@@ -46,6 +56,9 @@ abstract class CassandraSpec(config: Config) extends TestKit(ActorSystem(getCall
 
   override def systemName = system.name
   implicit val mat = ActorMaterializer()(system)
+
+  val pidCounter = new AtomicInteger()
+  def nextPid = s"pid=${pidCounter.incrementAndGet()}"
 
   lazy val queries: CassandraReadJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
@@ -68,4 +81,20 @@ abstract class CassandraSpec(config: Config) extends TestKit(ActorSystem(getCall
       .toMat(Sink.seq)(Keep.right)
       .run().futureValue
 
+  def eventsByTag(tag: String): TestSubscriber.Probe[Any] = {
+    queries.eventsByTag(tag, NoOffset)
+      .map(_.event)
+      .runWith(TestSink.probe)
+  }
+
+  def expectEventsForTag(tag: String, elements: String*): Unit = {
+    val probe = queries.eventsByTag(tag, NoOffset)
+      .map(_.event)
+      .runWith(TestSink.probe)
+
+    probe.request(elements.length + 1)
+    elements.foreach(probe.expectNext)
+    probe.expectNoMessage(10.millis)
+    probe.cancel()
+  }
 }

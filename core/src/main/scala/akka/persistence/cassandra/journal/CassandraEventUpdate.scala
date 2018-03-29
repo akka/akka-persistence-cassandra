@@ -5,49 +5,118 @@
 package akka.persistence.cassandra.journal
 
 import akka.Done
-import akka.persistence.cassandra.journal.CassandraJournal.Serialized
+import akka.event.LoggingAdapter
+import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import com.datastax.driver.core.{ PreparedStatement, Statement }
+import com.datastax.driver.core.{ PreparedStatement, Row, Statement }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 
-trait CassandraEventUpdate extends CassandraStatements {
+import java.lang.{ Long => JLong }
+
+private[akka] trait CassandraEventUpdate extends CassandraStatements {
 
   private[akka] val session: CassandraSession
   private[akka] def config: CassandraJournalConfig
   private[akka] implicit val ec: ExecutionContext
+  private[akka] val log: LoggingAdapter
 
-  def preparedUpdateMessage: Future[PreparedStatement] = session.prepare(updateMessagePayload).map(_.setIdempotent(true))
+  def psUpdateMessage: Future[PreparedStatement] = session.prepare(updateMessagePayloadAndTags).map(_.setIdempotent(true))
+  def psSelectTagPidSequenceNr: Future[PreparedStatement] = session.prepare(selectTagPidSequenceNr).map(_.setIdempotent(true))
+  def psUpdateTagView: Future[PreparedStatement] = session.prepare(updateMessagePayloadInTagView).map(_.setIdempotent(true))
+  def psSelectMessages: Future[PreparedStatement] = session.prepare(selectMessages).map(_.setIdempotent(true))
 
-  /*
-    FIXME, make the update in the tags table as well.
-    Change API so have existing tags/new tags so we know whether to update
-    existing rows or add new tags. Or perhaps a separate API for adding tags.
-
-
-    Steps for updating an event.
-    - Update it in the main table.
-    - Find its tags, everything apart from the tag_pid_sequence_nr is known so find that first.
-    - Issue updates to the tags table.
+  /**
+   * Update the given event in the messages table and the tag_vies table.
+   *
+   * Limitations:
+   *  - New tags are not crated in the tag_views table. This may be added later.
+   *  - Tags are not deleted in the tag_views table. This may be added later by adding some kind of tombstone to preserve sequence numbers.
+   *
+   * @param event The serialized event
+   * @param providingTags Whether the tags in the event should be persisted. If true the messages table will be updated with the tags. Otherwise the tags will be read from the messages table.
+   * @return
    */
+  def updateEvent(event: Serialized, providingTags: Boolean = true): Future[Done] = {
+    for {
+      (partitionNr, existingTags) <- findEvent(event)
+      psUM <- psUpdateMessage
+      e = if (providingTags) event else event.copy(tags = existingTags)
+      _ <- session.executeWrite(prepareUpdate(psUM, e, partitionNr))
+      _ <- Future.traverse(existingTags) { tag =>
+        updateEventInTagViews(event, tag)
+      }
+    } yield Done
+    // TODO (maybe) any new tags need to be added tag_views
+    // TODO (maybe) any removed tags need to be "deleted" if providingTags = true
+  }
 
-  def updateEvent(event: Serialized): Future[Done] = {
-    preparedUpdateMessage.flatMap {
-      ps => session.executeWrite(prepareUpdate(ps, event))
+  private def findEvent(s: Serialized): Future[(Long, Set[String])] = {
+    val firstPartition = partitionNr(s.sequenceNr, config.targetPartitionSize)
+    for {
+      ps <- psSelectMessages
+      row <- findEvent(ps, s.persistenceId, s.sequenceNr, firstPartition)
+    } yield (row.getLong("partition_nr"), row.getSet[String]("tags", classOf[String]).asScala.toSet)
+  }
+
+  /**
+   * Events are nearly always in a deterministic partition. However they can be in the
+   * N + 1 partition if a large atomic write was done.
+   */
+  private def findEvent(ps: PreparedStatement, pid: String, sequenceNr: Long, partitionNr: Long): Future[Row] =
+    session.selectOne(ps.bind(pid, partitionNr: JLong, sequenceNr: JLong, sequenceNr: JLong))
+      .flatMap {
+        case Some(row) => Future.successful(Some(row))
+        case None      => session.selectOne(pid, partitionNr + 1: JLong, sequenceNr: JLong, sequenceNr: JLong)
+      }.map {
+        case Some(row) => row
+        case None      => throw new RuntimeException(s"Unable to find event: Pid: [$pid] SequenceNr: [$sequenceNr] partitionNr: [$partitionNr]")
+      }
+
+  private def updateEventInTagViews(event: Serialized, tag: String): Future[Done] = {
+
+    psSelectTagPidSequenceNr.flatMap { ps =>
+      val bind = ps.bind()
+      bind.setString("tag_name", tag)
+      bind.setLong("timebucket", event.timeBucket.key)
+      bind.setUUID("timestamp", event.timeUuid)
+      bind.setString("persistence_id", event.persistenceId)
+      session.selectOne(bind)
+    }.map {
+      case Some(r) => r.getLong("tag_pid_sequence_nr")
+      case None    => throw new RuntimeException(s"no tag pid sequence nr. Pid ${event.persistenceId}. Tag: $tag. SequenceNr: ${event.sequenceNr}")
+    }.flatMap { tagPidSequenceNr =>
+      updateEventInTagViews(event, tag, tagPidSequenceNr)
     }
   }
 
-  def addTags(event: Serialized, newTags: Set[String]): Future[Done] = ???
+  private def updateEventInTagViews(event: Serialized, tag: String, tagPidSequenceNr: TagPidSequenceNr): Future[Done] = {
+    psUpdateTagView.flatMap { ps =>
+      // primary key
+      val bind = ps.bind()
+      bind.setString("tag_name", tag)
+      bind.setLong("timebucket", event.timeBucket.key)
+      bind.setUUID("timestamp", event.timeUuid)
+      bind.setString("persistence_id", event.persistenceId)
+      bind.setLong("tag_pid_sequence_nr", tagPidSequenceNr)
 
+      // event update
+      bind.setBytes("event", event.serialized)
+      bind.setString("ser_manifest", event.serManifest)
+      bind.setInt("ser_id", event.serId)
+      bind.setString("event_manifest", event.eventAdapterManifest)
 
-  private def prepareUpdate(ps: PreparedStatement, s: Serialized): Statement = {
-    val maxPnr = partitionNr(s.sequenceNr, config.targetPartitionSize)
+      session.executeWrite(bind)
+    }
+  }
+
+  private def prepareUpdate(ps: PreparedStatement, s: Serialized, partitionNr: Long): Statement = {
     val bs = ps.bind()
 
     // primary key
     bs.setString("persistence_id", s.persistenceId)
-    bs.setLong("partition_nr", maxPnr)
+    bs.setLong("partition_nr", partitionNr)
     bs.setLong("sequence_nr", s.sequenceNr)
     bs.setUUID("timestamp", s.timeUuid)
     bs.setString("timebucket", s.timeBucket.key.toString)
