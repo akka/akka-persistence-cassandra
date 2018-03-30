@@ -434,11 +434,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr
+      extractor = Extractors.taggedPersistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
-      .map(p => mapEvent(p.persistentRepr))
-      .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
+      .mapConcat(r => toEventEnvelopes(mapEvent(r.pr), TimeBasedUUID(r.offset)))
 
   /**
    * Same type of query as `eventsByPersistenceId` but the event stream
@@ -458,11 +457,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       None,
       s"currentEventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr
+      extractor = Extractors.taggedPersistentRepr
     )
       .mapMaterializedValue(_ => NotUsed)
-      .map(p => mapEvent(p.persistentRepr))
-      .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
+      .mapConcat(r => toEventEnvelopes(mapEvent(r.pr), TimeBasedUUID(r.offset)))
 
   /**
    * INTERNAL API
@@ -481,9 +479,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr
-    ).map(p => mapEvent(p.persistentRepr))
-      .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
+      extractor = Extractors.taggedPersistentRepr
+    )
+      .mapConcat(r => toEventEnvelopes(mapEvent(r.pr), TimeBasedUUID(r.offset)))
 
   /**
    * INTERNAL API: This is a low-level method that return journal events as they are persisted.
@@ -534,9 +532,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   @InternalApi private[akka] def mapEvent(persistentRepr: PersistentRepr): PersistentRepr =
     persistentRepr
 
-  private[this] def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
+  private[this] def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope(Offset.sequence(offset), persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
+      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
     }
 
   private[this] def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
