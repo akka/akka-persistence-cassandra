@@ -17,8 +17,8 @@ Dependencies
 To include the latest release of the Cassandra plugins for **Akka 2.5.x** into your `sbt` project, add the following lines to your `build.sbt` file:
 
     libraryDependencies += Seq(
-      "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.83",
-      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.83" % Test
+      "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.84",
+      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.84" % Test
     )
 
 This version of `akka-persistence-cassandra` depends on Akka 2.5.9. It has been published for Scala 2.11 and 2.12.  The launcher artifact is a utility for starting an embedded Cassandra, useful for running tests. It can be removed if not needed.
@@ -48,7 +48,7 @@ To activate the journal plugin, add the following line to your Akka `application
 
     akka.persistence.journal.plugin = "cassandra-journal"
 
-This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.83/core/src/main/resources/reference.conf):
+This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.43/core/src/main/resources/reference.conf):
 
 ### Caveats
 
@@ -75,7 +75,7 @@ To activate the snapshot-store plugin, add the following line to your Akka `appl
 
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
 
-This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.83/core/src/main/resources/reference.conf):
+This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/v0.84/core/src/main/resources/reference.conf):
 
 Persistence Queries
 -------------------
@@ -104,7 +104,7 @@ Migrations
 
 ### Migrations to 0.80 and later
 
-0.80 introduces a completely different way to manage tags for events. You can skip right ahead to 0.83 without going to
+0.80 introduces a completely different way to manage tags for events. You can skip right ahead to 0.84 without going to
 0.80.
 
 It is very important that you test this migration in a pre-production environment as once you drop the materialized view
