@@ -61,34 +61,12 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
       val originalEvent = eventsBefore.head
       val modifiedEvent = serialize(
         originalEvent.pr.withPayload("secrets"),
-        originalEvent.offset, Set("captain america")
+        originalEvent.offset, Set("ignored")
       )
 
       updater.updateEvent(modifiedEvent).futureValue shouldEqual Done
 
-      eventPayloadsWithTags(pid) shouldEqual Seq(("secrets", Set("captain america")))
-    }
-
-    // eventsByTag doesn't include the original tags so if used to transform
-    // will wipe out old tags
-    "update the event in messages not wiping out existing tags" in {
-      val pid = nextPid
-      val a = system.actorOf(TestTaggingActor.props(pid, Set("keepme")))
-      a ! "e-1"
-      expectMsgType[TestTaggingActor.Ack.type]
-      expectEventsForTag(tag = "keepme", "e-1")
-
-      val eventsBefore = events(pid)
-      eventsBefore.map(_.pr.payload) shouldEqual Seq("e-1")
-      val originalEvent = eventsBefore.head
-      val modifiedEvent = serialize(
-        originalEvent.pr.withPayload("secrets"),
-        originalEvent.offset, Set.empty
-      )
-
-      updater.updateEvent(modifiedEvent, providingTags = false).futureValue shouldEqual Done
-
-      eventPayloadsWithTags(pid) shouldEqual Seq(("secrets", Set("keepme")))
+      eventPayloadsWithTags(pid) shouldEqual Seq(("secrets", Set()))
     }
 
     "update the event in tag_views" in {
@@ -98,7 +76,7 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
       expectMsgType[TestTaggingActor.Ack.type]
       val eventsBefore = events(pid).head
       val modifiedEvent = serialize(
-        eventsBefore.pr.withPayload("hidden"), eventsBefore.offset, Set("green", "red", "blue")
+        eventsBefore.pr.withPayload("hidden"), eventsBefore.offset, Set("ignored")
       )
 
       expectEventsForTag(tag = "red", "e-1")
@@ -108,22 +86,6 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
 
       expectEventsForTag(tag = "red", "hidden")
       expectEventsForTag(tag = "blue", "hidden")
-    }
-
-    "deal with tag pid sequence nr not being here" in {
-      /*
-      If running against a live application then events by persistence id will
-      find events that the tag write is buffered. Should deal with that e.g.
-      report which ones haven't been updated, offer an API to start from a given
-      sequenceNr so it can be run again without duplicating work
-       */
-      pending
-    }
-
-    "add tag to existing event" in {
-      // TODO, we need to do this but decide if we want to do it while the app is running
-      // will need to be very careful about tag pid sequence nrs
-      pending
     }
 
     def serialize(pr: PersistentRepr, offset: UUID, tags: Set[String]): Serialized = {

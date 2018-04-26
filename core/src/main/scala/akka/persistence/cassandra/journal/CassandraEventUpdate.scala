@@ -28,28 +28,20 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
   def psSelectMessages: Future[PreparedStatement] = session.prepare(selectMessages).map(_.setIdempotent(true))
 
   /**
-   * Update the given event in the messages table and the tag_vies table.
+   * Update the given event in the messages table and the tag_views table.
    *
-   * Limitations:
-   *  - New tags are not crated in the tag_views table. This may be added later.
-   *  - Tags are not deleted in the tag_views table. This may be added later by adding some kind of tombstone to preserve sequence numbers.
-   *
-   * @param event The serialized event
-   * @param providingTags Whether the tags in the event should be persisted. If true the messages table will be updated with the tags. Otherwise the tags will be read from the messages table.
-   * @return
+   * Does not support changing tags in anyway. The tags field is ignored.
    */
-  def updateEvent(event: Serialized, providingTags: Boolean = true): Future[Done] = {
+  def updateEvent(event: Serialized): Future[Done] = {
     for {
       (partitionNr, existingTags) <- findEvent(event)
       psUM <- psUpdateMessage
-      e = if (providingTags) event else event.copy(tags = existingTags)
+      e = event.copy(tags = existingTags) // do not allow updating of tags
       _ <- session.executeWrite(prepareUpdate(psUM, e, partitionNr))
       _ <- Future.traverse(existingTags) { tag =>
         updateEventInTagViews(event, tag)
       }
     } yield Done
-    // TODO (maybe) any new tags need to be added tag_views
-    // TODO (maybe) any removed tags need to be "deleted" if providingTags = true
   }
 
   private def findEvent(s: Serialized): Future[(Long, Set[String])] = {

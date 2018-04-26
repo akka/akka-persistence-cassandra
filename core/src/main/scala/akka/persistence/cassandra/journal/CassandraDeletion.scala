@@ -22,12 +22,12 @@ import akka.persistence.cassandra.journal.CassandraDeletion.{ MessageId, Partiti
 import scala.collection.immutable
 import scala.concurrent.{ ExecutionContext, Future }
 
-object CassandraDeletion {
+private[akka] object CassandraDeletion {
   private case class PartitionInfo(partitionNr: Long, minSequenceNr: Long, maxSequenceNr: Long)
   private case class MessageId(persistenceId: String, sequenceNr: Long)
 }
 
-trait CassandraDeletion extends CassandraStatements {
+private[akka] trait CassandraDeletion extends CassandraStatements {
   private[akka] val session: CassandraSession
 
   private[akka] val log: LoggingAdapter
