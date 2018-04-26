@@ -10,8 +10,8 @@ import com.datastax.driver.core.PreparedStatement
 import scala.concurrent.{ ExecutionContext, Future }
 
 trait TaggedPreparedStatements extends CassandraStatements {
-  val session: CassandraSession
-  implicit val ec: ExecutionContext
+  private[akka] val session: CassandraSession
+  private[akka] implicit val ec: ExecutionContext
 
   def preparedWriteToTagViewWithoutMeta: Future[PreparedStatement] = session.prepare(writeTags(false)).map(_.setIdempotent(true))
   def preparedWriteToTagViewWithMeta: Future[PreparedStatement] = session.prepare(writeTags(true)).map(_.setIdempotent(true))

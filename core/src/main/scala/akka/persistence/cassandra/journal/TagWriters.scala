@@ -85,6 +85,7 @@ import akka.util.ByteString
   }
   private[akka] case class BulkTagWrite(tagWrites: immutable.Seq[TagWrite], withoutTags: immutable.Seq[Serialized])
     extends NoSerializationVerificationNeeded
+
   private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized])
     extends NoSerializationVerificationNeeded
 
@@ -103,7 +104,6 @@ import akka.util.ByteString
 @InternalApi private[akka] class TagWriters(settings: TagWriterSettings, tagWriterSession: TagWritersSession)
   extends Actor with Timers with ActorLogging {
 
-  import context.become
   import context.dispatcher
 
   // eager init and val because used from Future callbacks
@@ -139,6 +139,7 @@ import akka.util.ByteString
       updatePendingScanning(withoutTags)
     case WriteTagScanningTick =>
       writeTagScanning()
+
     case PidRecovering(pid, tagProgresses: Map[Tag, TagProgress]) =>
       val replyTo = sender()
       val missingProgress = tagActors.keySet -- tagProgresses.keySet
@@ -168,7 +169,7 @@ import akka.util.ByteString
       // if this fails (all local actor asks) the recovery will timeout
       recoveryNotificationComplete.foreach { _ => replyTo ! PidRecoveringAck }
 
-    case TagWriteFailed(e) =>
+    case TagWriteFailed(_) =>
       toBeWrittenScanning = Map.empty
       pendingScanning = Map.empty
   }

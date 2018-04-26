@@ -86,7 +86,7 @@ class EventsByTagMigration(system: ActorSystem)
   with TaggedPreparedStatements
   with CassandraTagRecovery {
 
-  protected val log = Logging.getLogger(system, getClass)
+  private[akka] val log = Logging.getLogger(system, getClass)
   private val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
   private implicit val materialiser = ActorMaterializer()(system)
 

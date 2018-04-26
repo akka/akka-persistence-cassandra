@@ -40,7 +40,7 @@ object CassandraSnapshotStoreConfiguration {
 class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config) with CassandraLifecycle {
 
   val storeConfig = new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-snapshot-store"))
-  val storeStatements = new CassandraStatements { def config = storeConfig }
+  val storeStatements = new CassandraStatements { def snapshotConfig = storeConfig }
 
   var session: Session = _
 

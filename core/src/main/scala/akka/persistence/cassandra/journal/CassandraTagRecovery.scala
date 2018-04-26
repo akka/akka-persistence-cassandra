@@ -21,7 +21,7 @@ import akka.persistence.cassandra.journal.TagWriters.BulkTagWrite
 
 trait CassandraTagRecovery {
   self: TaggedPreparedStatements =>
-  protected val log: LoggingAdapter
+  private[akka] val log: LoggingAdapter
 
   // used for local asks
   private implicit val timeout = Timeout(10.second)
@@ -48,7 +48,7 @@ trait CassandraTagRecovery {
   }
 
   private[akka] def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], to: ActorRef)(rawEvent: RawEvent): RawEvent = {
-    // FIXME logging before releasing
+    // FIXME logging once stable
     log.debug("Processing tag write for event {} tags {}", rawEvent.sequenceNr, rawEvent.serialized.tags)
     rawEvent.serialized.tags.foreach(tag => {
       tp.get(tag) match {

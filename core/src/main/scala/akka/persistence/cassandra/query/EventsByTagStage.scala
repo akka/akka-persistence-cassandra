@@ -491,6 +491,9 @@ import com.datastax.driver.core.utils.UUIDs
       private def extractEvent(row: Row): UUIDPersistentRepr = {
         val pr = UUIDPersistentRepr(
           row.getUUID("timestamp"),
+          //           FIXME, tags aren't currently stored in here :( Will require some kind of data migration to add them
+          //          row.getSet[String]("tags", classOf[String]).asScala.toSet,
+          //          Set.empty[String],
           row.getLong("tag_pid_sequence_nr"),
           PersistentRepr(
             payload = eventDeserializer.deserializeEvent(row),

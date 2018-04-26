@@ -96,7 +96,6 @@ class EventWithMetaDataTagger extends WriteEventAdapter {
   override def manifest(event: Any) = ""
   override def toJournal(event: Any) = event match {
     case evm: EventWithMetaData =>
-      println("Tagging evm: " + evm)
       Tagged(evm, Set("gotmeta"))
     case _ => event
   }

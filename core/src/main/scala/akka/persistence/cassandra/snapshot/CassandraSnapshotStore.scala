@@ -8,8 +8,7 @@ import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 
 import scala.collection.immutable
-import scala.concurrent.Future
-
+import scala.concurrent.{ ExecutionContext, Future }
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
@@ -27,33 +26,34 @@ import akka.persistence.cassandra.journal.FixedRetryPolicy
 import akka.stream.scaladsl.Sink
 import akka.stream.ActorMaterializer
 import java.util.NoSuchElementException
+
 import scala.util.Success
 import scala.util.Failure
 
-class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
+class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
+  with CassandraStatements with ActorLogging with CassandraSnapshotCleanup {
   import CassandraSnapshotStore._
-  val config = new CassandraSnapshotStoreConfig(context.system, cfg)
+  val snapshotConfig = new CassandraSnapshotStoreConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
   val snapshotDeserializer = new SnapshotDeserializer(serialization)
+  implicit val ec: ExecutionContext = context.dispatcher
 
-  import config._
-  import context.dispatcher
+  import snapshotConfig._
 
-  private val someMaxLoadAttempts = Some(config.maxLoadAttempts)
+  private val someMaxLoadAttempts = Some(snapshotConfig.maxLoadAttempts)
 
   val session = new CassandraSession(
     context.system,
-    config.sessionProvider,
-    config.sessionSettings,
+    snapshotConfig.sessionProvider,
+    snapshotConfig.sessionSettings,
     context.dispatcher,
     log,
     metricsCategory = s"${self.path.name}",
-    init = session => executeCreateKeyspaceAndTables(session, config)
+    init = session => executeCreateKeyspaceAndTables(session, snapshotConfig)
   )
 
-  private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
-  private val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
-  private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.readRetries))
+  private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.writeRetries))
+  private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.readRetries))
 
   private def preparedWriteSnapshot = session.prepare(writeSnapshot(withMeta = false)).map(
     _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(writeRetryPolicy)
@@ -61,9 +61,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   private def preparedWriteSnapshotWithMeta = session.prepare(writeSnapshot(withMeta = true)).map(
     _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(writeRetryPolicy)
   )
-  private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(
-    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy)
-  )
+
   private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(
     _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
   )
@@ -189,11 +187,6 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
         session.executeWrite(bs).map(_ => ())
       }
     }
-  }
-
-  override def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
-    val boundDeleteSnapshot = preparedDeleteSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
-    boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
   }
 
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {

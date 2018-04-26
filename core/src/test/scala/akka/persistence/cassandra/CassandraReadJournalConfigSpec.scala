@@ -9,7 +9,7 @@ import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, T
 import akka.persistence.cassandra.query.CassandraReadJournalConfig
 import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpec, WordSpecLike }
+import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 
 class CassandraReadJournalConfigSpec extends TestKit(ActorSystem("CassandraReadJournalConfigSpec"))
   with WordSpecLike
