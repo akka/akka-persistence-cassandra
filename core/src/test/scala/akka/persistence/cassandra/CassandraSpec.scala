@@ -20,6 +20,7 @@ import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.time.{ Milliseconds, Seconds, Span }
 import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.collection.immutable
@@ -56,6 +57,8 @@ abstract class CassandraSpec(config: Config) extends TestKit(ActorSystem(getCall
 
   override def systemName = system.name
   implicit val mat = ActorMaterializer()(system)
+
+  implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
 
   val pidCounter = new AtomicInteger()
   def nextPid = s"pid=${pidCounter.incrementAndGet()}"
