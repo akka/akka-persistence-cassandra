@@ -21,7 +21,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 object CassandraEventUpdateSpec {
   val config = ConfigFactory.parseString(
     """
-        akka.loglevel = DEBUG
+        akka.loglevel = INFO
     """
   ).withFallback(CassandraLifecycle.config)
 }
