@@ -1,0 +1,16 @@
+.idea*
+*.env
+*.log
+*.iml
+target/
+/.target/
+.DS_Store
+.cache*
+.classpath
+.project
+.settings
+.tmpBin/
+*.sublime-project
+/bin/
+ext-lib-src/
+.classpath_nb
