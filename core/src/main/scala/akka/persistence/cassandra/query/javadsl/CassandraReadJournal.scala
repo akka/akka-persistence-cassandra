@@ -5,14 +5,17 @@
 package akka.persistence.cassandra.query.javadsl
 
 import java.util.UUID
+import java.util.concurrent.CompletionStage
 
-import akka.NotUsed
+import akka.{ Done, NotUsed }
 import akka.persistence.cassandra.session.javadsl.CassandraSession
 import akka.persistence.query.EventEnvelope
 import akka.persistence.query.Offset
 import akka.persistence.query.TimeBasedUUID
 import akka.persistence.query.javadsl._
 import akka.stream.javadsl.Source
+
+import scala.compat.java8.FutureConverters
 
 object CassandraReadJournal {
   /**
@@ -54,6 +57,14 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * Data Access Object for arbitrary queries or updates.
    */
   def session: CassandraSession = new CassandraSession(scaladslReadJournal.session)
+
+  /**
+   * Initialize connection to Cassandra and prepared statements.
+   * It is not required to do this and it will happen lazily otherwise.
+   * It is also not required to wait until this CompletionStage is complete to start
+   * using the read journal.
+   */
+  def initialize(): CompletionStage[Done] = FutureConverters.toJava(scaladslReadJournal.initialize())
 
   /**
    * Use this as the UUID offset in `eventsByTag` queries when you want all
