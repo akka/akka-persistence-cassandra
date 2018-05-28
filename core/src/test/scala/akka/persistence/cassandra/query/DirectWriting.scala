@@ -9,12 +9,13 @@ import java.nio.ByteBuffer
 import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
-import akka.serialization.{ SerializationExtension, SerializerWithStringManifest }
+import akka.serialization.SerializationExtension
 import com.datastax.driver.core.utils.UUIDs
 import org.scalatest.{ BeforeAndAfterAll, Suite }
-
 import scala.concurrent.Await
 import scala.concurrent.duration._
+
+import akka.serialization.Serializers
 
 trait DirectWriting extends BeforeAndAfterAll {
   self: Suite =>
@@ -45,13 +46,7 @@ trait DirectWriting extends BeforeAndAfterAll {
     val serializer = serialization.findSerializerFor(event)
     val serialized = ByteBuffer.wrap(serialization.serialize(event).get)
 
-    val serManifest = serializer match {
-      case ser2: SerializerWithStringManifest ⇒
-        ser2.manifest(persistent)
-      case _ ⇒
-        if (serializer.includeManifest) persistent.getClass.getName
-        else PersistentRepr.Undefined
-    }
+    val serManifest = Serializers.manifestFor(serializer, persistent)
 
     val bs = preparedWriteMessage.bind()
     bs.setString("persistence_id", persistent.persistenceId)

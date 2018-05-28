@@ -7,9 +7,9 @@ package akka.persistence.cassandra.query
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{ EventEnvelope, PersistenceQuery }
+import akka.persistence.query.PersistenceQuery
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{ Keep, Source }
+import akka.stream.scaladsl.Keep
 import akka.stream.testkit.TestSubscriber.Probe
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.{ ImplicitSender, TestKit }
@@ -19,7 +19,6 @@ import org.scalatest.time._
 import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.annotation.tailrec
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object EventsByPersistenceIdWithControlSpec {

@@ -7,8 +7,9 @@ package akka.persistence.cassandra.journal
 import akka.Done
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.Session
-
 import scala.concurrent.{ ExecutionContext, Future }
+
+import akka.persistence.cassandra.FutureDone
 
 trait CassandraStatements {
   private[akka] def config: CassandraJournalConfig
@@ -305,7 +306,7 @@ trait CassandraStatements {
             _ <- session.executeAsync(createTagsProgressTable)
             _ <- session.executeAsync(createTagScanningTable)
           } yield Done
-        } else Future.successful(Done)
+        } else FutureDone
 
       val keyspace: Future[Done] =
         if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).map(_ => Done)

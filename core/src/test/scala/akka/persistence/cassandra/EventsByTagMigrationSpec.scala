@@ -14,7 +14,7 @@ import akka.persistence.cassandra.query.DirectWriting
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
 import akka.persistence.{ PersistentRepr, RecoveryCompleted }
-import akka.serialization.{ SerializationExtension, SerializerWithStringManifest }
+import akka.serialization.SerializationExtension
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
@@ -26,9 +26,10 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Milliseconds, Seconds, Span }
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
-
 import scala.concurrent.duration._
 import scala.util.Try
+
+import akka.serialization.Serializers
 
 /**
  */
@@ -417,13 +418,7 @@ class AbstractEventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMi
     val serializer = serialization.findSerializerFor(event)
     val serialized = ByteBuffer.wrap(serialization.serialize(event).get)
 
-    val serManifest = serializer match {
-      case ser2: SerializerWithStringManifest ⇒
-        ser2.manifest(persistent)
-      case _ ⇒
-        if (serializer.includeManifest) persistent.getClass.getName
-        else PersistentRepr.Undefined
-    }
+    val serManifest = Serializers.manifestFor(serializer, persistent)
 
     val ps = if (metadata.isDefined) preparedWriteMessageWithMeta else preparedWriteMessageWithoutMeta
     val bs = ps.bind()
@@ -449,13 +444,7 @@ class AbstractEventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMi
       val metaSerialised = ByteBuffer.wrap(serialization.serialize(meta).get)
       bs.setBytes("meta", metaSerialised)
       bs.setInt("meta_ser_id", metaSerialiser.identifier)
-      val serManifest: String = serializer match {
-        case ser2: SerializerWithStringManifest ⇒
-          ser2.manifest(meta)
-        case _ ⇒
-          if (serializer.includeManifest) meta.getClass.getName
-          else PersistentRepr.Undefined
-      }
+      val serManifest = Serializers.manifestFor(serializer, meta)
       bs.setString("meta_ser_manifest", serManifest)
     }
 

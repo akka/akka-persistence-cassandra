@@ -12,7 +12,7 @@ import java.util.UUID
 import akka.Done
 import akka.pattern.ask
 import akka.pattern.pipe
-import akka.actor.{ Actor, ActorLogging, ActorRef, ActorRefFactory, NoSerializationVerificationNeeded, Props }
+import akka.actor.{ Actor, ActorLogging, ActorRef, NoSerializationVerificationNeeded, Props }
 import akka.annotation.InternalApi
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._

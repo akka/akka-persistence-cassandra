@@ -10,7 +10,7 @@ import java.nio.ByteBuffer
 import java.util.{ UUID, HashMap => JHMap, Map => JMap }
 
 import akka.Done
-import akka.actor.{ ActorRef, ExtendedActorSystem, NoSerializationVerificationNeeded }
+import akka.actor.{ ActorRef, ActorSystem, ExtendedActorSystem, NoSerializationVerificationNeeded }
 import akka.annotation.InternalApi
 import akka.event.{ Logging, LoggingAdapter }
 import akka.persistence._
@@ -29,11 +29,14 @@ import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.{ Bytes, UUIDs }
 import com.typesafe.config.Config
-
 import scala.collection.immutable.Seq
 import scala.collection.JavaConverters._
 import scala.concurrent._
+import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
+
+import akka.serialization.AsyncSerializer
+import akka.util.OptionVal
 
 class CassandraJournal(cfg: Config) extends AsyncWriteJournal
   with CassandraRecovery
@@ -147,21 +150,21 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
     // Note that we assume that all messages have the same persistenceId, which is
     // the case for Akka 2.4.2.
 
-    def serialize(aw: Seq[(PersistentRepr, UUID)]): SerializedAtomicWrite = {
+    def serialize(aw: Seq[(PersistentRepr, UUID)]): Future[SerializedAtomicWrite] = {
+      val serializedEventsFut: Future[Seq[Serialized]] = Future.sequence(aw.map {
+        case (pr, uuid) =>
+          val (pr2, tags) = pr.payload match {
+            case Tagged(payload, ts) =>
+              (pr.withPayload(payload), ts)
+            case _ =>
+              (pr, Set.empty[String])
+          }
+          serializeEvent(pr2, tags, uuid, config.bucketSize, serialization, context.system)
+      })
 
-      SerializedAtomicWrite(
-        aw.head._1.persistenceId,
-        aw.map {
-          case (pr, uuid) =>
-            val (pr2, tags) = pr.payload match {
-              case Tagged(payload, ts) =>
-                (pr.withPayload(payload), ts)
-              case _ =>
-                (pr, Set.empty[String])
-            }
-            serializeEvent(pr2, tags, uuid, config.bucketSize, serialization, transportInformation)
-        }
-      )
+      serializedEventsFut.map { serializedEvents =>
+        SerializedAtomicWrite(aw.head._1.persistenceId, serializedEvents)
+      }
     }
 
     val writesWithUuids: Seq[Seq[(PersistentRepr, UUID)]] = messages
@@ -171,7 +174,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
     val pid = messages.head.persistenceId
     writeInProgress.put(pid, p.future)
 
-    val tws = Future(writesWithUuids.map(serialize)).flatMap { serialized: Seq[SerializedAtomicWrite] =>
+    val tws = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap { serialized: Seq[SerializedAtomicWrite] =>
       val result: Future[Any] =
         if (messages.size <= config.maxMessageBatchSize) {
           // optimize for the common case
@@ -318,7 +321,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
             _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
           } yield seqNr
         } else {
-          Future.successful(seqNr)
+          highestSequenceNr
         }
       }
     } else {
@@ -339,12 +342,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
 
   private def partitionNew(sequenceNr: Long): Boolean =
     (sequenceNr - 1L) % targetPartitionSize == 0L
-
-  protected lazy val transportInformation: Option[Serialization.Information] = {
-    val address = context.system.asInstanceOf[ExtendedActorSystem].provider.getDefaultAddress
-    if (address.hasLocalScope) None
-    else Some(Serialization.Information(address, context.system))
-  }
 
 }
 
@@ -369,7 +366,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
 
   private[akka] case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
 
-  class EventDeserializer(serialization: Serialization) {
+  class EventDeserializer(system: ActorSystem) {
+
+    private val serialization = SerializationExtension(system)
 
     // caching to avoid repeated check via ColumnDefinitions
     private def hasColumn(column: String, row: Row, cached: Option[Boolean], updateCache: Boolean => Unit): Boolean = {
@@ -397,38 +396,67 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
     def hasTagsColumn(row: Row): Boolean =
       hasColumn("tags", row, _hasTagsColumn, updateTagsColumnCache)
 
-    def deserializeEvent(row: Row): Any = {
-      val event = serialization.deserialize(
-        Bytes.getArray(row.getBytes("event")),
-        row.getInt("ser_id"),
-        row.getString("ser_manifest")
-      ).get
+    def deserializeEvent(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[Any] = try {
 
-      if (hasMetaColumns(row)) {
-        row.getBytes("meta") match {
-          case null =>
-            event // no meta data
-          case metaBytes =>
-            // has meta data, wrap in EventWithMetaData
-            val metaSerId = row.getInt("meta_ser_id")
-            val metaSerManifest = row.getString("meta_ser_manifest")
-            val meta = serialization.deserialize(
-              Bytes.getArray(metaBytes),
-              metaSerId,
-              metaSerManifest
-            ) match {
-                case Success(m) => m
-                case Failure(_) =>
-                  // don't fail replay/query because of deserialization problem with meta data
-                  // see motivation in UnknownMetaData
-                  UnknownMetaData(metaSerId, metaSerManifest)
-              }
-            EventWithMetaData(event, meta)
+      def meta: OptionVal[AnyRef] = {
+        if (hasMetaColumns(row)) {
+          row.getBytes("meta") match {
+            case null =>
+              OptionVal.None // no meta data
+            case metaBytes =>
+              // has meta data, wrap in EventWithMetaData
+              val metaSerId = row.getInt("meta_ser_id")
+              val metaSerManifest = row.getString("meta_ser_manifest")
+              val meta = serialization.deserialize(
+                Bytes.getArray(metaBytes),
+                metaSerId,
+                metaSerManifest
+              ) match {
+                  case Success(m) => m
+                  case Failure(_) =>
+                    // don't fail replay/query because of deserialization problem with meta data
+                    // see motivation in UnknownMetaData
+                    UnknownMetaData(metaSerId, metaSerManifest)
+                }
+              OptionVal.Some(meta)
+          }
+        } else {
+          // for backwards compatibility, when table was not altered, meta columns not added
+          OptionVal.None // no meta data
         }
-      } else {
-        // for backwards compatibility, when table was not altered, meta columns not added
-        event // no meta data
       }
+
+      val bytes = Bytes.getArray(row.getBytes("event"))
+      val serId = row.getInt("ser_id")
+      val manifest = row.getString("ser_manifest")
+
+      serialization.serializerByIdentity.get(serId) match {
+        case Some(asyncSerializer: AsyncSerializer) =>
+          Serialization.withTransportInformation(system.asInstanceOf[ExtendedActorSystem]) { () =>
+            asyncSerializer.fromBinaryAsync(bytes, manifest).map { event =>
+              meta match {
+                case OptionVal.None    => event
+                case OptionVal.Some(m) => EventWithMetaData(event, m)
+              }
+            }
+          }
+
+        case _ =>
+          def deserializedEvent: AnyRef = {
+            // Serialization.deserialize adds transport info
+            val event = serialization.deserialize(bytes, serId, manifest).get
+            meta match {
+              case OptionVal.None    => event
+              case OptionVal.Some(m) => EventWithMetaData(event, m)
+            }
+          }
+
+          if (async) Future(deserializedEvent)
+          else Future.successful(deserializedEvent)
+      }
+
+    } catch {
+      case NonFatal(e) => Future.failed(e)
     }
   }
 }

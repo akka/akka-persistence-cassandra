@@ -6,7 +6,9 @@ package akka.persistence.cassandra.snapshot
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
 import akka.Done
+import akka.persistence.cassandra.FutureDone
 import com.datastax.driver.core.Session
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 
@@ -82,7 +84,7 @@ trait CassandraStatements {
     def create(): Future[Done] = {
       val keyspace: Future[Done] =
         if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).map(_ => Done)
-        else Future.successful(Done)
+        else FutureDone
 
       if (config.tablesAutoCreate) keyspace.flatMap(_ => session.executeAsync(createTable)).map(_ => Done)
       else keyspace

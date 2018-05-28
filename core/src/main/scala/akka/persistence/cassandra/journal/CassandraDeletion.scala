@@ -13,14 +13,14 @@ import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core._
 import java.lang.{ Long => JLong }
 
-import scala.language.implicitConversions
 import akka.persistence.cassandra._
 import akka.Done
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraDeletion.{ MessageId, PartitionInfo }
-
 import scala.collection.immutable
 import scala.concurrent.{ ExecutionContext, Future }
+
+import akka.serialization.Serialization
 
 private[akka] object CassandraDeletion {
   private case class PartitionInfo(partitionNr: Long, minSequenceNr: Long, maxSequenceNr: Long)
@@ -35,6 +35,8 @@ private[akka] trait CassandraDeletion extends CassandraStatements {
   private[akka] def queries: CassandraReadJournal
   private[akka] implicit val ec: ExecutionContext
   private[akka] implicit val materializer: ActorMaterializer
+  private[akka] val eventDeserializer: CassandraJournal.EventDeserializer
+  private[akka] val serialization: Serialization
 
   private[akka] val readRetryPolicy: RetryPolicy
   private lazy val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
@@ -149,7 +151,7 @@ private[akka] trait CassandraDeletion extends CassandraStatements {
         "asyncReadLowestSequenceNr",
         readConsistency,
         retryPolicy,
-        extractor = Extractors.sequenceNumber
+        extractor = Extractors.sequenceNumber(eventDeserializer, serialization)
       )
       .map(_.sequenceNr)
       .runWith(Sink.headOption)
