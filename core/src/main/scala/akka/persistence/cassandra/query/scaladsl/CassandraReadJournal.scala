@@ -8,7 +8,7 @@ import java.net.URLEncoder
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
-import akka.NotUsed
+import akka.{ Done, NotUsed }
 import akka.actor.ExtendedActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
@@ -128,6 +128,22 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     metricsCategory,
     init = session => executeCreateKeyspaceAndTables(session, writePluginConfig)
   )
+
+  /**
+   * Initialize connection to Cassandra and prepared statements.
+   * It is not required to do this and it will happen lazily otherwise.
+   * It is also not required to wait until this Future is complete to start
+   * using the read journal.
+   */
+  def initialize(): Future[Done] = {
+    Future.sequence(List(
+      preparedSelectDeletedTo,
+      preparedSelectDistinctPersistenceIds,
+      preparedSelectEventsByPersistenceId,
+      preparedSelectFromTagViewWithUpperBound,
+      preparedSelectTagSequenceNrs
+    )).map(_ => Done)
+  }
 
   private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(queryPluginConfig.readRetries))
 

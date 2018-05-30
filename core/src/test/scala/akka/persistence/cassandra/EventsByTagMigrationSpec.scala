@@ -83,7 +83,7 @@ object EventsByTagMigrationSpec {
     s"""
        |akka {
        | actor.serialize-messages=off
-       | loglevel = INFO
+       | loglevel = DEBUG
        | actor.debug.unhandled = on
        |}
        |cassandra-journal {
@@ -338,6 +338,7 @@ class AbstractEventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMi
   val waitTime = 100.millis
   lazy val migrator = EventsByTagMigration(system)
   lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+  queries.initialize()
 
   // Lazy so they don't get created until the schema changes have happened
   lazy val systemTwo = ActorSystem("EventsByTagMigration-2", config)

@@ -115,6 +115,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       preparedSelectHighestSequenceNr
       preparedSelectDeletedTo
       preparedInsertDeletedTo
+      queries.initialize()
 
       if (config.eventsByTagEnabled) {
         preparedSelectTagProgress

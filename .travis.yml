@@ -1,8 +1,9 @@
 language: scala
-sudo: false
+sudo: true
+dist: trusty
 scala:
-  - "2.11.11"
-  - "2.12.2"
+  - "2.11.12"
+  - "2.12.6"
 jdk:
   - oraclejdk8
 sbt_args: -J-XX:ReservedCodeCacheSize=128m
