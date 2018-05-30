@@ -6,13 +6,14 @@ package akka.persistence.cassandra.compaction
 
 import java.util.concurrent.TimeUnit
 
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraPluginConfig, CassandraSpec}
 import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.util.Try
 
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(
@@ -43,9 +44,10 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
   }
 
   override protected def afterAll(): Unit = {
-    session.close()
-    session.getCluster.close()
-
+    Try {
+      session.close()
+      session.getCluster.close()
+    }
     super.afterAll()
   }
 

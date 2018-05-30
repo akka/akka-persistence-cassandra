@@ -349,8 +349,10 @@ class AbstractEventsByTagMigrationSpec extends CassandraSpec(EventsByTagMigratio
   private lazy val serialization = SerializationExtension(system)
 
   override protected def afterAll(): Unit = {
-    session.close()
-    session.getCluster.close()
+    Try {
+      session.close()
+      session.getCluster.close()
+    }
     super.afterAll()
     shutdown(systemTwo)
     shutdown(systemThree)

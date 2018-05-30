@@ -8,7 +8,7 @@ import java.util.UUID
 
 import akka.NotUsed
 import akka.actor.ActorRef
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraPluginConfig, CassandraSpec}
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import com.datastax.driver.core.Session
@@ -17,6 +17,7 @@ import org.scalatest.BeforeAndAfterEach
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.util.Try
 
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
@@ -43,8 +44,10 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config)
   }
 
   override protected def afterAll(): Unit = {
-    session.close()
-    session.getCluster.close()
+    Try {
+      session.close()
+      session.getCluster.close()
+    }
     super.afterAll()
   }
 

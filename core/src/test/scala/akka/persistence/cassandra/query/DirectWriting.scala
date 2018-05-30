@@ -9,11 +9,12 @@ import java.nio.ByteBuffer
 import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
-import akka.serialization.SerializationExtension
+import akka.serialization. SerializationExtension
 import com.datastax.driver.core.utils.UUIDs
-import org.scalatest.{ BeforeAndAfterAll, Suite }
+import org.scalatest.{BeforeAndAfterAll, Suite}
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.util.Try
 
 import akka.serialization.Serializers
 
@@ -29,8 +30,10 @@ trait DirectWriting extends BeforeAndAfterAll {
   }
 
   override protected def afterAll(): Unit = {
-    session.close()
-    session.getCluster.close()
+    Try {
+      session.close()
+      session.getCluster.close()
+    }
     super.afterAll()
   }
 

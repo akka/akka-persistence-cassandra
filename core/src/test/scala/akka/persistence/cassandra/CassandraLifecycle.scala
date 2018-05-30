@@ -137,14 +137,18 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   }
 
   override protected def afterAll(): Unit = {
-    shutdown(system, verifySystemShutdown = true)
-    mode match {
-      case Embedded =>
-        CassandraLauncher.stop()
-      case External =>
-        externalCassandraCleanup()
+    try {
+      shutdown(system, verifySystemShutdown = true)
     }
-    super.afterAll()
+    finally {
+      mode match {
+        case Embedded =>
+          CassandraLauncher.stop()
+        case External =>
+          externalCassandraCleanup()
+      }
+      super.afterAll()
+    }
   }
 
   /**

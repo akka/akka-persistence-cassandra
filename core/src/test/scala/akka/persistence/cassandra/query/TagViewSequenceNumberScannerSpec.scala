@@ -7,17 +7,18 @@ package akka.persistence.cassandra.query
 import java.util.UUID
 
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, TagPidSequenceNr }
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Hour }
+import akka.persistence.cassandra.journal.CassandraJournal.{PersistenceId, TagPidSequenceNr}
+import akka.persistence.cassandra.journal.{CassandraJournalConfig, Hour}
 import akka.persistence.cassandra.query.TagViewSequenceNumberScannerSpec.config
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
-import akka.serialization.{ Serialization, SerializationExtension }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
+import akka.serialization.{Serialization, SerializationExtension}
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.util.Try
 
 object TagViewSequenceNumberScannerSpec {
   val bucketSize = Hour
@@ -43,8 +44,10 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config)
   }
 
   override protected def afterAll(): Unit = {
-    session.close()
-    session.getCluster.close()
+    Try {
+      session.close()
+      session.getCluster.close()
+    }
     super.afterAll()
   }
 
