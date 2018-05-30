@@ -4,19 +4,12 @@
 
 package akka.persistence.cassandra.query
 
-import akka.actor.{ ActorRef, ActorSystem }
-import akka.persistence.cassandra.CassandraLifecycle
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.PersistenceQuery
-import akka.stream.ActorMaterializer
+import akka.actor.ActorRef
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.TestSubscriber.Probe
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time._
-import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
@@ -33,21 +26,7 @@ object EventsByPersistenceIdWithControlSpec {
 }
 
 class EventsByPersistenceIdWithControlSpec
-  extends TestKit(ActorSystem("EventsByPersistenceIdWithControlSpec", EventsByPersistenceIdWithControlSpec.config))
-  with ScalaFutures
-  with ImplicitSender
-  with WordSpecLike
-  with CassandraLifecycle
-  with Matchers {
-
-  override def systemName: String = "EventsByPersistenceIdWithControlSpec"
-
-  implicit val mat = ActorMaterializer()(system)
-
-  implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
-
-  lazy val queries: CassandraReadJournal =
-    PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+  extends CassandraSpec(EventsByPersistenceIdWithControlSpec.config) {
 
   val noMsgTimeout = 100.millis
 

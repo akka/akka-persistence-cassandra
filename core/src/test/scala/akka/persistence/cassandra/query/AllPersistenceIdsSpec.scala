@@ -5,26 +5,22 @@
 package akka.persistence.cassandra.query
 
 import java.util.UUID
-import scala.concurrent.duration._
-import akka.actor.{ ActorRef, ActorSystem }
-import akka.stream.ActorMaterializer
-import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
-import com.typesafe.config.ConfigFactory
-import org.scalatest.{ BeforeAndAfterEach, Matchers, WordSpecLike }
-import org.scalatest.concurrent.ScalaFutures
-import akka.persistence.cassandra.{ CassandraPluginConfig, CassandraLifecycle }
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.PersistenceQuery
-import com.datastax.driver.core.Session
-import scala.concurrent.Await
-import akka.stream.scaladsl.Source
+
 import akka.NotUsed
+import akka.actor.ActorRef
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
+import akka.stream.scaladsl.Source
+import akka.stream.testkit.scaladsl.TestSink
+import com.datastax.driver.core.Session
+import com.typesafe.config.ConfigFactory
+import org.scalatest.BeforeAndAfterEach
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
-    cassandra-journal.keyspace=AllPersistenceIdsSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 10
@@ -32,20 +28,10 @@ object AllPersistenceIdsSpec {
     """).withFallback(CassandraLifecycle.config)
 }
 
-class AllPersistenceIdsSpec
-  extends TestKit(ActorSystem("AllPersistenceIdsSpec", AllPersistenceIdsSpec.config))
-  with ScalaFutures
-  with ImplicitSender
-  with WordSpecLike
-  with CassandraLifecycle
-  with Matchers
+class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config)
   with BeforeAndAfterEach {
 
-  override def systemName: String = "AllPersistenceIdsSpec"
-
-  val cfg = AllPersistenceIdsSpec.config
-    .withFallback(system.settings.config)
-    .getConfig("cassandra-journal")
+  val cfg = system.settings.config.getConfig("cassandra-journal")
   val pluginConfig = new CassandraPluginConfig(system, cfg)
 
   var session: Session = _
@@ -66,11 +52,6 @@ class AllPersistenceIdsSpec
     super.beforeEach()
     deleteAllEvents()
   }
-
-  implicit val mat = ActorMaterializer()(system)
-
-  lazy val queries: CassandraReadJournal =
-    PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   def all(): Source[String, NotUsed] = queries.persistenceIds().filterNot(_ == "persistenceInit")
 

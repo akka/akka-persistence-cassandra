@@ -4,15 +4,13 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.actor.{ ActorSystem, Props }
+import akka.actor.Props
 import akka.persistence.cassandra.journal.MultiPluginSpec._
 import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import akka.persistence.{ PersistentActor, SaveSnapshotSuccess }
-import akka.testkit.{ ImplicitSender, TestKit }
 import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
-import org.scalatest.WordSpecLike
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -26,17 +24,15 @@ object MultiPluginSpec {
        |akka.test.single-expect-default = 20s
        |
        |cassandra-journal.keyspace = $journalKeyspace
-       |cassandra-journal.port=$cassandraPort
        |cassandra-journal.keyspace-autocreate=false
        |cassandra-journal.circuit-breaker.call-timeout = 30s
        |cassandra-snapshot-store.keyspace=$snapshotKeyspace
-       |cassandra-snapshot-store.port=$cassandraPort
        |cassandra-snapshot-store.keyspace-autocreate=false
        |
-        |cassandra-journal-a=$${cassandra-journal}
+       |cassandra-journal-a=$${cassandra-journal}
        |cassandra-journal-a.table=processor_a_messages
        |
-        |cassandra-journal-b=$${cassandra-journal}
+       |cassandra-journal-b=$${cassandra-journal}
        |cassandra-journal-b.table=processor_b_messages
        |
         |cassandra-journal-c=$${cassandra-journal}
@@ -44,7 +40,7 @@ object MultiPluginSpec {
        |cassandra-snapshot-c=$${cassandra-snapshot-store}
        |cassandra-snapshot-c.table=snapshot_c_messages
        |
-        |cassandra-journal-d=$${cassandra-journal}
+       |cassandra-journal-d=$${cassandra-journal}
        |cassandra-journal-d.table=processor_d_messages
        |cassandra-snapshot-d=$${cassandra-snapshot-store}
        |cassandra-snapshot-d.table=snapshot_d_messages
@@ -82,15 +78,12 @@ object MultiPluginSpec {
 
 }
 
-class MultiPluginSpec
-  extends TestKit(ActorSystem("MultiPluginSpec", config.withFallback(ConfigFactory.load("reference.conf")).resolve()))
-  with ImplicitSender
-  with WordSpecLike
-  with CassandraLifecycle {
+class MultiPluginSpec extends CassandraSpec(
+  config.withFallback(ConfigFactory.load("reference.conf")),
+  MultiPluginSpec.journalKeyspace, MultiPluginSpec.snapshotKeyspace
+) {
 
-  override def systemName: String = "MultiPluginSpec"
-
-  val cassandraPluginConfig = new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-journal"))
+  lazy val cassandraPluginConfig = new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-journal"))
 
   var session: Session = _
 

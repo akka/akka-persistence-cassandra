@@ -4,17 +4,16 @@
 
 package akka.persistence.cassandra.query
 
-import akka.actor.{ ActorSystem, ExtendedActorSystem }
+import akka.actor.ExtendedActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.TestTaggingActor.Ack
-import akka.persistence.cassandra.{ CassandraLifecycle, TestTaggingActor }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, TestTaggingActor }
 import akka.persistence.query.{ PersistenceQuery, ReadJournalProvider }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.{ Config, ConfigFactory }
-import org.scalatest.WordSpecLike
+
 import scala.concurrent.duration._
 
 class JournalOverride(as: ExtendedActorSystem, config: Config) extends CassandraReadJournal(as, config) {
@@ -39,15 +38,8 @@ object CassandraReadJournalOverrideSpec {
 
 }
 
-class CassandraReadJournalOverrideSpec extends TestKit(ActorSystem(
-  "CassandraReadJournalOverride",
-  CassandraReadJournalOverrideSpec.config
-))
-  with WordSpecLike
-  with ImplicitSender
-  with CassandraLifecycle {
+class CassandraReadJournalOverrideSpec extends CassandraSpec(CassandraReadJournalOverrideSpec.config) {
 
-  override def systemName = "CassandraReadJournalOverride"
   implicit val materialiser = ActorMaterializer()
 
   lazy val journal =

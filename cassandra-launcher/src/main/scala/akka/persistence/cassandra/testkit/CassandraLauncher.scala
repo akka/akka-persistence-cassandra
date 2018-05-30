@@ -166,6 +166,9 @@ object CassandraLauncher {
    */
   def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int, classpath: immutable.Seq[String], host: Option[String]): Unit = this.synchronized {
     if (cassandraDaemon.isEmpty) {
+
+      println(s"Starting Cassandra on port $port")
+
       prepareCassandraDirectory(cassandraDirectory, clean)
 
       val realHost = host.getOrElse("127.0.0.1")

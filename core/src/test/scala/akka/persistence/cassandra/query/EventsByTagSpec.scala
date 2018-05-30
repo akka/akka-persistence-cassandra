@@ -4,26 +4,24 @@
 
 package akka.persistence.cassandra.query
 
-import java.time.{ LocalDateTime, ZoneOffset }
 import java.time.temporal.ChronoUnit
+import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.UUID
 
-import akka.actor.{ ActorSystem, PoisonPill, Props }
+import akka.actor.{ PoisonPill, Props }
 import akka.event.Logging.Warning
-import akka.persistence.{ PersistentActor, PersistentRepr }
-import akka.persistence.cassandra.{ CassandraLifecycle, EventWithMetaData }
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Day }
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, EventWithMetaData }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, EventsByTagQuery }
-import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery, TimeBasedUUID }
+import akka.persistence.query.{ EventEnvelope, NoOffset, TimeBasedUUID }
+import akka.persistence.{ PersistentActor, PersistentRepr }
 import akka.serialization.SerializationExtension
-import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.testkit.TestProbe
 import com.datastax.driver.core.Cluster
 import com.typesafe.config.{ Config, ConfigFactory }
-import org.scalatest.{ BeforeAndAfterEach, Matchers, WordSpecLike }
+import org.scalatest.BeforeAndAfterEach
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -32,8 +30,6 @@ import scala.util.Try
 object EventsByTagSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
-  val keyspaceName = "EventsByTagSpec"
-
   val config = ConfigFactory.parseString(
     s"""
     akka.loglevel = INFO
@@ -41,7 +37,6 @@ object EventsByTagSpec {
     akka.actor.warn-about-java-serializer-usage = off
     cassandra-journal {
       #target-partition-size = 5
-      keyspace=$keyspaceName
 
       event-adapters {
         color-tagger  = akka.persistence.cassandra.query.ColorFruitTagger
@@ -117,20 +112,11 @@ class ColorFruitTagger extends WriteEventAdapter {
   override def manifest(event: Any): String = ""
 }
 
-abstract class AbstractEventsByTagSpec(override val systemName: String, config: Config)
-  extends TestKit(ActorSystem(systemName, config))
-  with ImplicitSender
-  with WordSpecLike
-  with Matchers
-  with CassandraLifecycle
-  with BeforeAndAfterEach
+abstract class AbstractEventsByTagSpec(config: Config) extends CassandraSpec(config) with BeforeAndAfterEach
   with TestTagWriter {
 
-  implicit val mat = ActorMaterializer()(system)
   val bucketSize = Day
   val waitTime = 100.millis
-
-  lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   val serialization = SerializationExtension(system)
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
@@ -173,13 +159,13 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
   }
 }
 
-class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsByTagSpec.config) {
+class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
   import EventsByTagSpec._
 
   "Cassandra query currentEventsByTag" must {
     "set ttl on table" in {
-      session.getCluster.getMetadata.getKeyspace(keyspaceName).getTable("tag_views").getOptions.getDefaultTimeToLive shouldEqual 86400
+      session.getCluster.getMetadata.getKeyspace(journalName).getTable("tag_views").getOptions.getDefaultTimeToLive shouldEqual 86400
     }
 
     "implement standard CurrentEventsByTagQuery" in {
@@ -494,7 +480,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec("EventsByTagSpec", EventsB
 // Manually writing events for same persistence id is no longer valid
 // tho new persistence ids from a node with a slow clocks is still applicable
 // and we pick them up by noticing that there is a tagPidSequenceNr gap
-class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsByTagFindDelayedEventsSpec", EventsByTagSpec.strictConfig) {
+class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(EventsByTagSpec.strictConfig) {
   "Cassandra live eventsByTag delayed messages" must {
 
     // slightly lower guarantee than before, we need another event to come along for that pid/tag combination
@@ -704,7 +690,7 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec("EventsBy
 }
 
 class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
-  extends AbstractEventsByTagSpec("EventsByTagStrictBySeqNoEarlyFirstOffsetSpec", EventsByTagSpec.strictConfigFirstOffset1001DaysAgo) {
+  extends AbstractEventsByTagSpec(EventsByTagSpec.strictConfigFirstOffset1001DaysAgo) {
 
   "Cassandra live eventsByTag with delayed-event-timeout > 0s and firstOffset = 1000 days ago" must {
     "find all events when starting the query 1000 days ago" in {
@@ -733,8 +719,7 @@ class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
   }
 }
 
-class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec
-  extends AbstractEventsByTagSpec("EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec", EventsByTagSpec.strictConfig) {
+class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec extends AbstractEventsByTagSpec(EventsByTagSpec.strictConfig) {
 
   "Cassandra eventsByTag with many events in current time bucket" must {
     "find all current events" in {
@@ -771,7 +756,7 @@ class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec
 }
 
 class EventsByTagStrictBySeqMemoryIssueSpec
-  extends AbstractEventsByTagSpec("EventsByTagStrictBySeqMemoryIssueSpec", EventsByTagSpec.strictConfig) {
+  extends AbstractEventsByTagSpec(EventsByTagSpec.strictConfig) {
 
   "Cassandra eventsByTag with many events" must {
     // would need to send another event or implement a periodic back track for this
@@ -921,7 +906,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec
   }
 }
 
-object EventsByTagDisabled {
+object EventsByTagDisabledSpec {
   class CounterActor(val persistenceId: String) extends PersistentActor {
     var state = 0
     override def receiveRecover = {
@@ -940,15 +925,15 @@ object EventsByTagDisabled {
   def props(pid: String): Props = Props(new CounterActor(pid))
 }
 
-class EventsByTagDisabled extends AbstractEventsByTagSpec("EventsByTagDisabled", EventsByTagSpec.disabledConfig) {
+class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.disabledConfig) {
 
   "Events by tag disabled" must {
     "stop tag_views being created" in {
-      session.getCluster.getMetadata.getKeyspace("EventsByTagDisabled").getTable("tag_views") shouldEqual null
+      session.getCluster.getMetadata.getKeyspace(journalName).getTable("tag_views") shouldEqual null
     }
 
     "stop tag_progress being created" in {
-      session.getCluster.getMetadata.getKeyspace("EventsByTagDisabled").getTable("tag_write_progress") shouldEqual null
+      session.getCluster.getMetadata.getKeyspace(journalName).getTable("tag_write_progress") shouldEqual null
     }
 
     "fail current events by tag queries" in {
@@ -966,12 +951,12 @@ class EventsByTagDisabled extends AbstractEventsByTagSpec("EventsByTagDisabled",
     }
 
     "allow recovery" in {
-      val a = system.actorOf(EventsByTagDisabled.props("a"))
+      val a = system.actorOf(EventsByTagDisabledSpec.props("a"))
       a ! 2
       expectMsg(20.seconds, 2)
       a ! PoisonPill
 
-      val aMk2 = system.actorOf(EventsByTagDisabled.props("a"))
+      val aMk2 = system.actorOf(EventsByTagDisabledSpec.props("a"))
       aMk2 ! 4
       expectMsg(20.seconds, 6)
     }

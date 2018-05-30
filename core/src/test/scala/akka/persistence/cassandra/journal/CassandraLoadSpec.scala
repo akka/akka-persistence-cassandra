@@ -6,7 +6,7 @@ package akka.persistence.cassandra.journal
 
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
@@ -81,9 +81,7 @@ object CassandraLoadSpec {
 
 import akka.persistence.cassandra.journal.CassandraLoadSpec._
 
-class CassandraLoadSpec extends TestKit(ActorSystem("CassandraLoadSpec", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
-
-  override def systemName: String = "CassandraLoadSpec"
+class CassandraLoadSpec extends CassandraSpec(config) with ImplicitSender with WordSpecLike with Matchers {
 
   // use PropertyFileSnitch with cassandra-topology.properties
   override def cassandraConfigResource: String = "test-embedded-cassandra-net.yaml"

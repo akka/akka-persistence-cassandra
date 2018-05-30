@@ -36,6 +36,7 @@ object EagerInitializationSpec {
 }
 
 class EagerInitializationSpec extends CassandraSpec(EagerInitializationSpec.config) {
+
   "Eager initialization" in {
     val p = system.actorOf(TestTaggingActor.props("p1"))
     p ! "persist"

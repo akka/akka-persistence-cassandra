@@ -7,13 +7,12 @@ package akka.persistence.cassandra
 import java.time.format.DateTimeFormatter
 import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.actor.{ ActorSystem }
 import akka.persistence.cassandra.TestTaggingActor.{ Ack, Stop }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.testkit.{ ImplicitSender, TestProbe }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{ Matchers, WordSpecLike }
@@ -51,11 +50,10 @@ object EventsByTagRestartSpec {
   ).withFallback(CassandraLifecycle.config)
 }
 
-class EventsByTagRestartSpec extends TestKit(ActorSystem("EventsByTagRestartSpec", EventsByTagRestartSpec.config))
+class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config)
   with ImplicitSender
   with WordSpecLike
   with Matchers
-  with CassandraLifecycle
   with ScalaFutures {
 
   import EventsByTagRestartSpec._
@@ -75,7 +73,6 @@ class EventsByTagRestartSpec extends TestKit(ActorSystem("EventsByTagRestartSpec
     cluster.close()
   }
 
-  override def systemName = keyspaceName
   implicit val materialiser = ActorMaterializer()(system)
 
   val waitTime = 100.milliseconds

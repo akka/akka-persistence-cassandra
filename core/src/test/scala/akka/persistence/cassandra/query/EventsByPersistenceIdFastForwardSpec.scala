@@ -6,19 +6,12 @@ package akka.persistence.cassandra.query
 
 import java.util.UUID
 
-import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.CassandraLifecycle
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.PersistenceQuery
-import akka.stream.ActorMaterializer
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Milliseconds, Seconds, Span }
-import org.scalatest.{ Matchers, WordSpecLike }
 
 object EventsByPersistenceIdFastForwardSpec {
 
@@ -32,23 +25,10 @@ object EventsByPersistenceIdFastForwardSpec {
     """).withFallback(CassandraLifecycle.config)
 }
 
-class EventsByPersistenceIdFastForwardSpec
-  extends TestKit(ActorSystem("EventsByPersistenceIdSpec", EventsByPersistenceIdFastForwardSpec.config))
-  with ImplicitSender
-  with WordSpecLike
-  with CassandraLifecycle
-  with Matchers
-  with ScalaFutures
+class EventsByPersistenceIdFastForwardSpec extends CassandraSpec(EventsByPersistenceIdFastForwardSpec.config)
   with DirectWriting {
 
-  override def systemName: String = "EventsByPersistenceIdFastForwardSpec"
-
-  implicit val mat = ActorMaterializer()(system)
-
-  implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
-
-  lazy val queries: CassandraReadJournal =
-    PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+  override implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
 
   "be able to fast forward when currently looking for missing sequence number" in {
     val w1 = UUID.randomUUID().toString

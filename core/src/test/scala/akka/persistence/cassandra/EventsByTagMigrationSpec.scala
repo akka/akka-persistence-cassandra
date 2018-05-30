@@ -18,14 +18,13 @@ import akka.serialization.SerializationExtension
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.testkit.TestProbe
 import akka.{ Done, NotUsed }
 import com.datastax.driver.core.Cluster
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time.{ Milliseconds, Seconds, Span }
-import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
+
+import org.scalatest. BeforeAndAfterAll
 import scala.concurrent.duration._
 import scala.util.Try
 
@@ -35,50 +34,6 @@ import akka.serialization.Serializers
  */
 object EventsByTagMigrationSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
-  val keyspaceName = "EventsByTagMigration"
-  val messagesTableName = s"$keyspaceName.messages"
-  val eventsByTagViewName = s"$keyspaceName.eventsByTag1"
-
-  val oldMessagesTable =
-    s"""
-       | CREATE TABLE $messagesTableName(
-       | used boolean static,
-       | persistence_id text,
-       | partition_nr bigint,
-       | sequence_nr bigint,
-       | timestamp timeuuid,
-       | timebucket text,
-       | writer_uuid text,
-       | ser_id int,
-       | ser_manifest text,
-       | event_manifest text,
-       | event blob,
-       | meta_ser_id int,
-       | meta_ser_manifest text,
-       | meta blob,
-       | tag1 text,
-       | tag2 text,
-       | tag3 text,
-       | message blob,
-       | PRIMARY KEY((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
-    """.stripMargin
-
-  val oldMateterializedView =
-    s"""
-      CREATE MATERIALIZED VIEW $eventsByTagViewName AS
-         SELECT tag1, timebucket, timestamp, persistence_id, partition_nr, sequence_nr, writer_uuid, ser_id, ser_manifest, event_manifest, event,
-           meta_ser_id, meta_ser_manifest, meta, message
-         FROM $messagesTableName
-         WHERE persistence_id IS NOT NULL AND partition_nr IS NOT NULL AND sequence_nr IS NOT NULL
-           AND tag1 IS NOT NULL AND timestamp IS NOT NULL AND timebucket IS NOT NULL
-         PRIMARY KEY ((tag1, timebucket), timestamp, persistence_id, partition_nr, sequence_nr)
-         WITH CLUSTERING ORDER BY (timestamp ASC)
-      """
-
-  val createKeyspace =
-    s"""
-       |CREATE KEYSPACE IF NOT EXISTS $keyspaceName WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1 }
-     """.stripMargin
 
   val config = ConfigFactory.parseString(
     s"""
@@ -88,7 +43,6 @@ object EventsByTagMigrationSpec {
        | actor.debug.unhandled = on
        |}
        |cassandra-journal {
-       | keyspace = $keyspaceName
        | keyspace-autocreate = true
        | tables-autocreate = true
        |}
@@ -101,8 +55,6 @@ object EventsByTagMigrationSpec {
 }
 
 class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigrationSpec {
-
-  implicit val patience = PatienceConfig(timeout = Span(45, Seconds), interval = Span(500, Milliseconds))
 
   "Partial events by tag migration" must {
     val pidOne = "pOne"
@@ -143,10 +95,6 @@ class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigra
 }
 
 class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
-
-  import EventsByTagMigrationSpec._
-
-  implicit val patience = PatienceConfig(timeout = Span(10, Seconds), interval = Span(500, Milliseconds))
 
   "Events by tag migration with no metadata" must {
     val pidOne = "p-1"
@@ -318,36 +266,73 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
   }
 }
 
-class AbstractEventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMigrationSpec.keyspaceName, EventsByTagMigrationSpec.config))
-  with WordSpecLike
-  with CassandraLifecycle
+class AbstractEventsByTagMigrationSpec extends CassandraSpec(EventsByTagMigrationSpec.config)
   with DirectWriting
-  with ScalaFutures
-  with Matchers
-  with BeforeAndAfterAll
-  with ImplicitSender {
+  with BeforeAndAfterAll {
 
   import EventsByTagMigrationSpec._
+
+  val messagesTableName = s"$journalName.messages"
+  val eventsByTagViewName = s" $journalName.eventsByTag1"
+
+  val oldMessagesTable =
+    s"""
+       | CREATE TABLE $messagesTableName(
+       | used boolean static,
+       | persistence_id text,
+       | partition_nr bigint,
+       | sequence_nr bigint,
+       | timestamp timeuuid,
+       | timebucket text,
+       | writer_uuid text,
+       | ser_id int,
+       | ser_manifest text,
+       | event_manifest text,
+       | event blob,
+       | meta_ser_id int,
+       | meta_ser_manifest text,
+       | meta blob,
+       | tag1 text,
+       | tag2 text,
+       | tag3 text,
+       | message blob,
+       | PRIMARY KEY((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
+    """.stripMargin
+
+  val oldMateterializedView =
+    s"""
+      CREATE MATERIALIZED VIEW $eventsByTagViewName AS
+         SELECT tag1, timebucket, timestamp, persistence_id, partition_nr, sequence_nr, writer_uuid, ser_id, ser_manifest, event_manifest, event,
+           meta_ser_id, meta_ser_manifest, meta, message
+         FROM $messagesTableName
+         WHERE persistence_id IS NOT NULL AND partition_nr IS NOT NULL AND sequence_nr IS NOT NULL
+           AND tag1 IS NOT NULL AND timestamp IS NOT NULL AND timebucket IS NOT NULL
+         PRIMARY KEY ((tag1, timebucket), timestamp, persistence_id, partition_nr, sequence_nr)
+         WITH CLUSTERING ORDER BY (timestamp ASC)
+      """
+
+  val createKeyspace =
+    s"""
+       |CREATE KEYSPACE IF NOT EXISTS $journalName WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1 }
+     """.stripMargin
 
   val statements = new CassandraStatements {
     override def config: CassandraJournalConfig = new CassandraJournalConfig(system, EventsByTagMigrationSpec.config)
   }
 
   lazy val session = cluster.connect()
-  override val systemName = keyspaceName
   implicit val materialiser = ActorMaterializer()(system)
   val waitTime = 100.millis
   lazy val migrator = EventsByTagMigration(system)
-  lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
   queries.initialize()
 
   // Lazy so they don't get created until the schema changes have happened
-  lazy val systemTwo = ActorSystem("EventsByTagMigration-2", config)
+  lazy val systemTwo = ActorSystem("EventsByTagMigration-2", system.settings.config)
   lazy val materialiserTwo = ActorMaterializer()(systemTwo)
   lazy val queriesTwo = PersistenceQuery(systemTwo).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   // for after tag1-3 columns are dropped
-  lazy val systemThree = ActorSystem("EventsByTagMigration-3", config)
+  lazy val systemThree = ActorSystem("EventsByTagMigration-3", system.settings.config)
   lazy val materialiserThree = ActorMaterializer()(systemThree)
   lazy val queriesThree = PersistenceQuery(systemThree).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
@@ -457,7 +442,7 @@ class AbstractEventsByTagMigrationSpec extends TestKit(ActorSystem(EventsByTagMi
       .addContactPoint("localhost")
       .withClusterName(systemName + "Cleanup")
       .build()
-    Try(cluster.connect().execute(s"drop keyspace $keyspaceName"))
+    Try(cluster.connect().execute(s"drop keyspace $journalName"))
     cluster.close()
   }
 }

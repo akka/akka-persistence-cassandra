@@ -4,18 +4,13 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import java.util.UUID
-
-import scala.concurrent.duration._
 
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.testkit._
-
 import com.typesafe.config.ConfigFactory
-
 import org.scalatest._
 
 object CassandraIntegrationSpec {
@@ -106,11 +101,9 @@ object CassandraIntegrationSpec {
 
 }
 
-import CassandraIntegrationSpec._
+import akka.persistence.cassandra.journal.CassandraIntegrationSpec._
 
-class CassandraIntegrationSpec extends TestKit(ActorSystem("CassandraIntegrationSpec", config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
-
-  override def systemName: String = "CassandraIntegrationSpec"
+class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender with WordSpecLike with Matchers {
 
   def subscribeToRangeDeletion(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessagesTo])
@@ -162,13 +155,14 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("CassandraIntegration
       processor2 ! "b"
       expectMsgAllOf("b", 17L, false)
     }
+
     "not replay range-deleted messages" in {
       val persistenceId = UUID.randomUUID().toString
       testRangeDelete(persistenceId)
     }
+
     "write and replay with persistAll greater than partition size skipping whole partition" in {
       val persistenceId = UUID.randomUUID().toString
-      val probe = TestProbe()
       val processorAtomic = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
 
       processorAtomic ! List("a-1", "a-2", "a-3", "a-4", "a-5", "a-6")
@@ -182,6 +176,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("CassandraIntegration
         testProbe.expectMsgAllOf(s"a-${i}", i, true)
       }
     }
+
     "write and replay with persistAll greater than partition size skipping part of a partition" in {
       val persistenceId = UUID.randomUUID().toString
       val probe = TestProbe()
@@ -203,6 +198,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("CassandraIntegration
         testProbe.expectMsgAllOf(s"a-${i}", i, true)
       }
     }
+
     "write and replay with persistAll less than partition size" in {
       val persistenceId = UUID.randomUUID().toString
       val processorAtomic = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
@@ -217,6 +213,7 @@ class CassandraIntegrationSpec extends TestKit(ActorSystem("CassandraIntegration
         expectMsgAllOf(s"a-${i}", i, true)
       }
     }
+
     "not replay messages deleted from the +1 partition" in {
       val persistenceId = UUID.randomUUID().toString
       val probe = TestProbe()

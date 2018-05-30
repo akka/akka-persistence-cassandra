@@ -4,17 +4,13 @@
 
 package akka.persistence.cassandra.journal
 
-import scala.concurrent.duration._
-
 import akka.actor._
-import akka.persistence.PersistentActor
-import akka.persistence.RecoveryCompleted
-import akka.persistence.SnapshotOffer
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.{ PersistentActor, RecoveryCompleted, SnapshotOffer }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.persistence.journal.Tagged
-import akka.testkit._
 import com.typesafe.config.ConfigFactory
-import org.scalatest._
+
+import scala.concurrent.duration._
 
 object RecoveryLoadSpec {
   val config = ConfigFactory.parseString(
@@ -101,12 +97,9 @@ object RecoveryLoadSpec {
 
 }
 
-class RecoveryLoadSpec extends TestKit(ActorSystem("RecoveryLoadSpec", RecoveryLoadSpec.config))
-  with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
+class RecoveryLoadSpec extends CassandraSpec(RecoveryLoadSpec.config) {
 
   import RecoveryLoadSpec._
-
-  override def systemName: String = "RecoveryLoadSpec"
 
   private def printMetrics(metrics: Metrics): Unit = {
     println(s"  snapshot recovery took ${metrics.snapshotDuration.toMillis} ms")

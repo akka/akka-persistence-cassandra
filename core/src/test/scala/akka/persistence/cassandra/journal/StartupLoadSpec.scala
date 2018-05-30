@@ -4,19 +4,13 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.persistence.cassandra.testkit.CassandraLauncher
-import java.util.UUID
-
-import scala.concurrent.duration._
-
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.testkit._
-
 import com.typesafe.config.ConfigFactory
 
-import org.scalatest._
+import scala.concurrent.duration._
 
 object StartupLoadSpec {
   val config = ConfigFactory.parseString(
@@ -46,12 +40,9 @@ object StartupLoadSpec {
 
 }
 
-class StartupLoadSpec extends TestKit(ActorSystem("StartupLoadSpec", StartupLoadSpec.config))
-  with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
+class StartupLoadSpec extends CassandraSpec(StartupLoadSpec.config) {
 
   import StartupLoadSpec._
-
-  override def systemName: String = "StartupLoadSpec"
 
   // important, since we are testing the initialization
   override def awaitPersistenceInit(): Unit = ()

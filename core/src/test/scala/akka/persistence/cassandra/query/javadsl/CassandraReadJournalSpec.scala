@@ -4,16 +4,13 @@
 
 package akka.persistence.cassandra.query.javadsl
 
-import akka.actor.{ ActorSystem, Props }
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.actor.Props
 import akka.persistence.cassandra.query.{ TestActor, javadsl, scaladsl }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.{ Offset, PersistenceQuery }
-import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
 
@@ -21,7 +18,6 @@ object CassandraReadJournalSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
     akka.actor.serialize-messages=off
-    cassandra-journal.keyspace=JavadslCassandraReadJournalSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-journal.event-adapters {
@@ -41,16 +37,7 @@ class TestTagger extends WriteEventAdapter {
   }
 }
 
-class CassandraReadJournalSpec
-  extends TestKit(ActorSystem("JavaCassandraReadJournalSpec", CassandraReadJournalSpec.config))
-  with ImplicitSender
-  with WordSpecLike
-  with CassandraLifecycle
-  with Matchers {
-
-  override def systemName: String = "JavaCassandraReadJournalSpec"
-
-  implicit val mat = ActorMaterializer()(system)
+class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.config) {
 
   lazy val javaQueries = PersistenceQuery(system)
     .getReadJournalFor(classOf[javadsl.CassandraReadJournal], scaladsl.CassandraReadJournal.Identifier)

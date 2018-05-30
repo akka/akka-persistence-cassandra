@@ -4,35 +4,22 @@
 
 package akka.persistence.cassandra.session.javadsl
 
-import scala.compat.java8.FutureConverters._
-import akka.persistence.cassandra.ListenableFutureConverter
 import java.util.Optional
+import java.util.concurrent.CompletionStage
+
+import akka.Done
+import akka.actor.ExtendedActorSystem
+import akka.event.Logging
+import akka.persistence.cassandra.session.CassandraSessionSettings
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, ListenableFutureConverter, SessionProvider }
+import akka.stream.testkit.scaladsl.TestSink
+import com.datastax.driver.core.{ BatchStatement, Session, SimpleStatement }
+import com.typesafe.config.ConfigFactory
+
 import scala.collection.JavaConverters._
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import akka.stream.ActorMaterializer
-import akka.stream.testkit.scaladsl.TestSink
-import com.datastax.driver.core.BatchStatement
-import com.datastax.driver.core.SimpleStatement
-import com.typesafe.config.ConfigFactory
-import scala.annotation.varargs
-import akka.testkit.TestKit
-import org.scalatest.WordSpecLike
-import akka.testkit.ImplicitSender
-import org.scalatest.Matchers
-import akka.persistence.cassandra.CassandraLifecycle
-import akka.actor.ActorSystem
-import akka.persistence.cassandra.session.CassandraSessionSettings
-import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.actor.ExtendedActorSystem
-import akka.event.LoggingAdapter
-import akka.event.Logging
-import java.util.concurrent.CompletableFuture
-import com.datastax.driver.core.Session
-import java.util.concurrent.CompletionStage
-import akka.Done
-import akka.persistence.cassandra.SessionProvider
 
 object CassandraSessionSpec {
 
@@ -49,14 +36,8 @@ object CassandraSessionSpec {
 
 }
 
-class CassandraSessionSpec extends TestKit(ActorSystem("CassandraSessionSpec", CassandraSessionSpec.config))
-  with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
-  import CassandraSessionSpec._
+class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
   import system.dispatcher
-
-  override def systemName: String = "CassandraSessionSpec"
-
-  implicit val materializer = ActorMaterializer()(system)
 
   val log = Logging.getLogger(system, this.getClass)
 

@@ -4,6 +4,8 @@
 
 package akka.persistence.cassandra
 
+import java.net.InetSocketAddress
+import java.nio.channels.ServerSocketChannel
 import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -17,7 +19,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Keep, Sink }
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
+import akka.testkit.{ ImplicitSender, TestKitBase }
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Milliseconds, Seconds, Span }
@@ -29,7 +31,6 @@ import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
 
 object CassandraSpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
   def getCallerName(clazz: Class[_]): String = {
     val s = (Thread.currentThread.getStackTrace map (_.getClassName) drop 1)
       .dropWhile(_ matches "(java.lang.Thread|.*\\.Abstract.*)")
@@ -40,27 +41,56 @@ object CassandraSpec {
     reduced.head.replaceFirst(""".*\.""", "").replaceAll("[^a-zA-Z_0-9]", "_")
   }
 
-  def configWithKeyspace(name: String) = ConfigFactory.parseString(
+  def configWithKeyspace(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config = ConfigFactory.parseString(
     s"""
-      cassandra-journal.keyspace = $name
-       cassandra-query-journal = {
-         first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormat)}"
-       }
+      cassandra-journal {
+        keyspace = $journalKeyspace
+        port = $port
+      }
+
+      cassandra-snapshot-store {
+        keyspace = $snapshotStoreKeyspace
+        port = $port
+      }
     """
-  ).withFallback(CassandraLifecycle.config)
+  )
+
 }
 
-abstract class CassandraSpec(config: Config) extends TestKit(ActorSystem(getCallerName(getClass), config.withFallback(configWithKeyspace(getCallerName(getClass)))))
+/**
+ * Picks a free port for Cassandra before starting the ActorSystem
+ */
+abstract class CassandraSpec(config: Config, val journalName: String = getCallerName(getClass), val snapshotName: String = getCallerName(getClass)) extends TestKitBase
   with ImplicitSender
   with WordSpecLike
   with Matchers
   with CassandraLifecycle
   with ScalaFutures {
 
-  override def systemName = system.name
+  lazy val randomPort = freePort()
+  override def port(): Int = randomPort
+
+  final implicit lazy val system: ActorSystem = {
+    // always use this p;ort and keyspace generated here, then test config, then the lifecycle config
+    val finalConfig = configWithKeyspace(journalName, snapshotName, port()).withFallback(config).withFallback(CassandraLifecycle.config).resolve()
+    ActorSystem(journalName, finalConfig)
+  }
+
+  final override def systemName = system.name
+
   implicit val mat = ActorMaterializer()(system)
 
   implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
+
+  private def freePort(): Int = {
+    val serverSocket = ServerSocketChannel.open().socket()
+    serverSocket.bind(new InetSocketAddress("127.0.0.1", 0))
+    val port = serverSocket.getLocalPort
+    serverSocket.close()
+    port
+  }
+
+  lazy val cassandraPort = freePort()
 
   val pidCounter = new AtomicInteger()
   def nextPid = s"pid=${pidCounter.incrementAndGet()}"
