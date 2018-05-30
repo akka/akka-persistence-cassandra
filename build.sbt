@@ -2,6 +2,7 @@ import com.typesafe.sbt.SbtScalariform
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
+import net.virtualvoid.optimizer._
 
 val AkkaVersion = "2.5.13"
 
@@ -77,7 +78,7 @@ lazy val root = (project in file("."))
   )
 
 lazy val core = (project in file("core"))
-  .enablePlugins(AutomateHeaderPlugin, SbtOsgi)
+  .enablePlugins(AutomateHeaderPlugin, SbtOsgi, SbtOptimizerPlugin)
   .dependsOn(cassandraLauncher % Test)
   .settings(common: _*)
   .settings(osgiSettings: _*)
@@ -92,6 +93,7 @@ lazy val core = (project in file("core"))
   )
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
+  .enablePlugins(SbtOptimizerPlugin)
   .settings(common: _*)
   .settings(
     name := "akka-persistence-cassandra-launcher",
@@ -102,7 +104,7 @@ lazy val cassandraLauncher = (project in file("cassandra-launcher"))
 // This project doesn't get published directly, rather the assembled artifact is included as part of cassandraLaunchers
 // resources
 lazy val cassandraBundle = (project in file("cassandra-bundle"))
-  .enablePlugins(AutomateHeaderPlugin)
+  .enablePlugins(AutomateHeaderPlugin, SbtOptimizerPlugin)
   .settings(common: _*)
   .settings(
     name := "akka-persistence-cassandra-bundle",

@@ -6,7 +6,7 @@ scala:
   - "2.12.6"
 jdk:
   - oraclejdk8
-sbt_args: -J-XX:ReservedCodeCacheSize=128m
+sbt_args: -d -J-XX:ReservedCodeCacheSize=128m
 script:
   # make 'git branch' work again
   - git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH"
