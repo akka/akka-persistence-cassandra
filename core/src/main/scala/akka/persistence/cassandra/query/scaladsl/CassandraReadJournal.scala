@@ -15,16 +15,16 @@ import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
 import akka.persistence.cassandra.journal._
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extracted, Extractors }
+import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
 import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.CombinedEventsByTagStmts
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.journal.EventAdapter
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
+import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
 import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.util.ByteString
@@ -32,12 +32,13 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
-
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
+
+import akka.serialization.SerializationExtension
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -97,6 +98,16 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig(writePluginId))
   private val queryPluginConfig = new CassandraReadJournalConfig(cfg, writePluginConfig)
   private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
+
+  // The EventDeserializer is caching some things based on the column structure and
+  // therefore different instances must be used for the eventsByPersistenceId and eventsByTag
+  // queries, since the messages table might have a different structure than the tag view.
+  private val eventsByPersistenceIdDeserializer: CassandraJournal.EventDeserializer =
+    new CassandraJournal.EventDeserializer(system)
+  private val eventsByTagDeserializer: CassandraJournal.EventDeserializer =
+    new CassandraJournal.EventDeserializer(system)
+
+  private val serialization = SerializationExtension(system)
   implicit private val ec = system.dispatchers.lookup(queryPluginConfig.pluginDispatcher)
   implicit private val materializer = ActorMaterializer()(system)
 
@@ -305,8 +316,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
             prereqs._2
           ))
         }
+          .via(deserializeEventsByTagRow)
           .mapMaterializedValue(_ => NotUsed)
-          .map(upr => upr.copy(persistentRepr = mapEvent(upr.persistentRepr)))
+
       } catch {
         case NonFatal(e) =>
           // e.g. from cassandraSession, or selectStatement
@@ -314,6 +326,27 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
           Source.failed(e)
       }
     }
+  }
+
+  private def deserializeEventsByTagRow: Flow[EventsByTagStage.UUIDRow, UUIDPersistentRepr, NotUsed] = {
+    val deserializeEventAsync = queryPluginConfig.deserializationParallelism > 1
+    Flow[EventsByTagStage.UUIDRow]
+      .mapAsync(queryPluginConfig.deserializationParallelism) { uuidRow =>
+        val row = uuidRow.row
+        eventsByTagDeserializer.deserializeEvent(row, deserializeEventAsync).map { payload =>
+          val repr = mapEvent(PersistentRepr(
+            payload,
+            sequenceNr = uuidRow.sequenceNr,
+            persistenceId = uuidRow.persistenceId,
+            manifest = row.getString("event_manifest"),
+            deleted = false,
+            sender = null,
+            writerUuid = row.getString("writer_uuid")
+          ))
+          UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, repr)
+        }
+      }
+      .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
   }
 
   private def eventsByTagPrereqs(
@@ -417,8 +450,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
           val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
           Source.fromGraph(EventsByTagStage(session, fromOffset, toOffset, queryPluginConfig, None, writePluginConfig.bucketSize, usingOffset, prereqs._2))
         }
+          .via(deserializeEventsByTagRow)
           .mapMaterializedValue(_ => NotUsed)
-          .map(x => x.copy(persistentRepr = mapEvent(x.persistentRepr)))
+
       } catch {
         case NonFatal(e) =>
           // e.g. from cassandraSession, or selectStatement
@@ -463,7 +497,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization)
     )
       .mapMaterializedValue(_ => NotUsed)
       .map(p => mapEvent(p.persistentRepr))
@@ -487,7 +521,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       None,
       s"currentEventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization)
     )
       .mapMaterializedValue(_ => NotUsed)
       .map(p => mapEvent(p.persistentRepr))
@@ -510,7 +544,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization)
     ).map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
@@ -521,7 +555,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    *  - In the AsyncWriteJournal for the PersistentActor and PersistentView recovery.
    *  - In the public eventsByPersistenceId and currentEventsByPersistenceId queries.
    */
-  @InternalApi private[akka] def eventsByPersistenceId[T <: Extracted](
+  @InternalApi private[akka] def eventsByPersistenceId[T](
     persistenceId:          String,
     fromSequenceNr:         Long,
     toSequenceNr:           Long,
@@ -533,9 +567,12 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     customRetryPolicy:      Option[RetryPolicy]      = None,
     extractor:              Extractor[T]
   ): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
+
+    val deserializeEventAsync = queryPluginConfig.deserializationParallelism > 1
+
     createFutureSource(combinedEventsByPersistenceIdStmts) { (s, c) =>
       log.debug("Creating EventByPersistentIdState graph")
-      Source.fromGraph(new EventsByPersistenceIdStage[T](
+      Source.fromGraph(new EventsByPersistenceIdStage(
         persistenceId,
         fromSequenceNr,
         toSequenceNr,
@@ -549,12 +586,15 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
           customConsistencyLevel,
           customRetryPolicy
         ),
-        queryPluginConfig,
-        extractor
+        queryPluginConfig
       ))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
         .named(name)
     }
+      .mapAsync(queryPluginConfig.deserializationParallelism) { row =>
+        extractor.extract(row, deserializeEventAsync)
+      }
+      .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
   }
 
   /**

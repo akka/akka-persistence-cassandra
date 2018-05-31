@@ -16,6 +16,7 @@ import scala.concurrent.Promise
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
@@ -43,6 +44,7 @@ import com.datastax.driver.core.Row
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.Statement
 import akka.annotation.InternalApi
+import akka.persistence.cassandra.FutureDone
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
@@ -445,7 +447,7 @@ final class CassandraSession(
  * INTERNAL API
  */
 @InternalApi private[akka] final object CassandraSession {
-  private val serializedExecutionProgress = new AtomicReference[Future[Done]](Future.successful(Done))
+  private val serializedExecutionProgress = new AtomicReference[Future[Done]](FutureDone)
 
   def serializedExecution(recur: () => Future[Done], exec: () => Future[Done])(implicit ec: ExecutionContext): Future[Done] = {
     val progress = serializedExecutionProgress.get

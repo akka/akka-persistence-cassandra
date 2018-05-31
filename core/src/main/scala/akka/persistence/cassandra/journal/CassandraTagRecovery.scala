@@ -17,8 +17,6 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 
-import akka.persistence.cassandra.journal.TagWriters.BulkTagWrite
-
 trait CassandraTagRecovery {
   self: TaggedPreparedStatements =>
   private[akka] val log: LoggingAdapter

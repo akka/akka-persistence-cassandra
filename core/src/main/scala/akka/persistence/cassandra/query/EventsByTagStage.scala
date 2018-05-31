@@ -8,11 +8,9 @@ import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
 
 import akka.annotation.InternalApi
-import akka.persistence.PersistentRepr
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.journal.{ BucketSize, CassandraJournal, TimeBucket }
+import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
 import akka.persistence.cassandra.query.EventsByTagStage._
-import akka.serialization.SerializationExtension
 import akka.stream.stage.{ GraphStage, _ }
 import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
 import com.datastax.driver.core._
@@ -43,6 +41,15 @@ import com.datastax.driver.core.utils.UUIDs
  * to be the first (scanning happens before this and results are initialTagPidSequenceNrs)
  */
 @InternalApi private[akka] object EventsByTagStage {
+
+  final case class UUIDRow(
+    persistenceId:    PersistenceId,
+    sequenceNr:       SequenceNr,
+    offset:           UUID,
+    tagPidSequenceNr: TagPidSequenceNr,
+    row:              Row
+  )
+
   def apply(
     session:                  TagStageSession,
     fromOffset:               UUID,
@@ -86,10 +93,10 @@ import com.datastax.driver.core.utils.UUIDs
   private case object QueryIdle extends State
   private final case class QueryInProgress(startTime: Long = System.nanoTime()) extends State
   private final case class QueryResult(resultSet: ResultSet) extends State
-  private final case class BufferedEvents(events: List[UUIDPersistentRepr]) extends State
+  private final case class BufferedEvents(events: List[UUIDRow]) extends State
 
   private final case class LookingForMissing(
-    buffered:       List[UUIDPersistentRepr],
+    buffered:       List[UUIDRow],
     previousOffset: UUID,
     bucket:         TimeBucket,
     queryPrevious:  Boolean,
@@ -119,9 +126,9 @@ import com.datastax.driver.core.utils.UUIDs
   bucketSize:               BucketSize,
   usingOffset:              Boolean,
   initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)]
-) extends GraphStage[SourceShape[UUIDPersistentRepr]] {
+) extends GraphStage[SourceShape[UUIDRow]] {
 
-  private val out: Outlet[UUIDPersistentRepr] = Outlet("event.out")
+  private val out: Outlet[UUIDRow] = Outlet("event.out")
 
   override def shape = SourceShape(out)
 
@@ -141,8 +148,6 @@ import com.datastax.driver.core.utils.UUIDs
           throw new IllegalStateException("EventsByTagStage requires ActorMaterializer")
       }
 
-      lazy val serialization = SerializationExtension(system)
-      lazy val eventDeserializer = new CassandraJournal.EventDeserializer(serialization)
       implicit def ec: ExecutionContextExecutor = materializer.executionContext
       setHandler(out, this)
 
@@ -262,19 +267,19 @@ import com.datastax.driver.core.utils.UUIDs
         val rowPersistenceId = row.getString("persistence_id")
         val rowTagPidSequenceNr = row.getLong("tag_pid_sequence_nr")
         if (rowPersistenceId == m.persistenceId && m.missing.contains(rowTagPidSequenceNr)) {
-          val event = extractEvent(row)
-          val remainingEvents = m.missing - event.tagPidSequenceNr
+          val uuidRow = extractUuidRow(row)
+          val remainingEvents = m.missing - uuidRow.tagPidSequenceNr
           log.info(
             "{}: Found a missing event, sequence nr {}. Remaining missing: {}",
-            session.tag, event.tagPidSequenceNr, remainingEvents
+            session.tag, uuidRow.tagPidSequenceNr, remainingEvents
           )
           if (remainingEvents.isEmpty) {
-            stopLookingForMissing(m, event :: m.buffered)
+            stopLookingForMissing(m, uuidRow :: m.buffered)
           } else {
             log.info("{}: There are more missing events. {}", session.tag, remainingEvents)
             missingLookup = missingLookup.map(m => m.copy(
               missing = remainingEvents,
-              buffered = event :: m.buffered
+              buffered = uuidRow :: m.buffered
             ))
           }
         }
@@ -289,24 +294,24 @@ import com.datastax.driver.core.utils.UUIDs
        * This is because before starting a [[akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.eventsByTag()]]
        * a scanning of the current bucket is done to find out the smallest [[TagPidSequenceNr]]
        */
-      def handleFirstTimePersistenceId(repr: UUIDPersistentRepr): Boolean = {
+      def handleFirstTimePersistenceId(repr: UUIDRow): Boolean = {
         val expectedSequenceNr = 1L
         if (repr.tagPidSequenceNr == expectedSequenceNr) {
           currentOffset = repr.offset
-          tagPidSequenceNrs += (repr.persistentRepr.persistenceId -> ((1, repr.offset)))
+          tagPidSequenceNrs += (repr.persistenceId -> ((1, repr.offset)))
           push(out, repr)
           false
         } else if (usingOffset && currTimeBucket.inPast) {
           // If we're in the past and this is an offset query we assume this is
           // the first tagPidSequenceNr
           currentOffset = repr.offset
-          tagPidSequenceNrs += (repr.persistentRepr.persistenceId -> ((repr.tagPidSequenceNr, repr.offset)))
+          tagPidSequenceNrs += (repr.persistenceId -> ((repr.tagPidSequenceNr, repr.offset)))
           push(out, repr)
           false
         } else {
           log.info(
             "{}: Missing event for new persistence id: {}. Expected sequence nr: {}, actual: {}.",
-            session.tag, repr.persistentRepr.persistenceId, expectedSequenceNr, repr.tagPidSequenceNr
+            session.tag, repr.persistenceId, expectedSequenceNr, repr.tagPidSequenceNr
           )
           val previousBucketStart = UUIDs.startOf(currTimeBucket.previous(1).key)
           val startingOffset: UUID = if (UUIDComparator.comparator.compare(previousBucketStart, fromOffset) < 0) {
@@ -324,7 +329,7 @@ import com.datastax.driver.core.utils.UUIDs
             bucket,
             lookInPrevious,
             repr.offset,
-            repr.persistentRepr.persistenceId,
+            repr.persistenceId,
             repr.tagPidSequenceNr,
             (1L until repr.tagPidSequenceNr).toSet,
             failIfNotFound = false,
@@ -334,9 +339,9 @@ import com.datastax.driver.core.utils.UUIDs
         }
       }
 
-      def handleExistingPersistenceId(repr: UUIDPersistentRepr, lastSequenceNr: Long, lastUUID: UUID): Boolean = {
+      def handleExistingPersistenceId(repr: UUIDRow, lastSequenceNr: Long, lastUUID: UUID): Boolean = {
         val expectedSequenceNr = lastSequenceNr + 1
-        val pid = repr.persistentRepr.persistenceId
+        val pid = repr.persistenceId
         if (repr.tagPidSequenceNr < expectedSequenceNr) {
           log.warning("Duplicate sequence number. Persistence id: {}. Tag: {}. Expected sequence nr: {}. " +
             "Actual {}. This will be dropped.", pid, session.tag, expectedSequenceNr, repr.tagPidSequenceNr)
@@ -354,7 +359,7 @@ import com.datastax.driver.core.utils.UUIDs
             bucket,
             lookInPrevious,
             repr.offset,
-            repr.persistentRepr.persistenceId,
+            repr.persistenceId,
             repr.tagPidSequenceNr,
             (expectedSequenceNr until repr.tagPidSequenceNr).toSet,
             failIfNotFound = true,
@@ -365,9 +370,9 @@ import com.datastax.driver.core.utils.UUIDs
           // FIXME remove this log once stable
           if (log.isDebugEnabled)
             log.debug("Updating offset to {} from pId {} seqNr {} tagPidSequenceNr {}", formatOffset(currentOffset),
-              pid, repr.persistentRepr.sequenceNr, repr.tagPidSequenceNr)
+              pid, repr.sequenceNr, repr.tagPidSequenceNr)
           currentOffset = repr.offset
-          tagPidSequenceNrs += (repr.persistentRepr.persistenceId -> ((expectedSequenceNr, repr.offset)))
+          tagPidSequenceNrs += (repr.persistenceId -> ((expectedSequenceNr, repr.offset)))
           push(out, repr)
           false
         }
@@ -386,8 +391,8 @@ import com.datastax.driver.core.utils.UUIDs
               tryPushOne()
             } else {
               val row = rs.one()
-              val repr = extractEvent(row)
-              val pid = repr.persistentRepr.persistenceId
+              val repr = extractUuidRow(row)
+              val pid = repr.persistenceId
 
               val missing = tagPidSequenceNrs.get(pid) match {
                 case None =>
@@ -468,7 +473,7 @@ import com.datastax.driver.core.utils.UUIDs
         }
       }
 
-      private def stopLookingForMissing(m: LookingForMissing, buffered: List[UUIDPersistentRepr]): Unit = {
+      private def stopLookingForMissing(m: LookingForMissing, buffered: List[UUIDRow]): Unit = {
         state = if (buffered.isEmpty) {
           QueryIdle
         } else {
@@ -488,24 +493,14 @@ import com.datastax.driver.core.utils.UUIDs
         moreResults.onComplete(newResultSetCb.invoke)
       }
 
-      private def extractEvent(row: Row): UUIDPersistentRepr = {
-        val pr = UUIDPersistentRepr(
-          row.getUUID("timestamp"),
-          //           FIXME, tags aren't currently stored in here :( Will require some kind of data migration to add them
-          //          row.getSet[String]("tags", classOf[String]).asScala.toSet,
-          //          Set.empty[String],
-          row.getLong("tag_pid_sequence_nr"),
-          PersistentRepr(
-            payload = eventDeserializer.deserializeEvent(row),
-            sequenceNr = row.getLong("sequence_nr"),
-            persistenceId = row.getString("persistence_id"),
-            manifest = row.getString("event_manifest"),
-            deleted = false,
-            sender = null,
-            writerUuid = row.getString("writer_uuid")
-          )
+      private def extractUuidRow(row: Row): UUIDRow = {
+        UUIDRow(
+          persistenceId = row.getString("persistence_id"),
+          sequenceNr = row.getLong("sequence_nr"),
+          offset = row.getUUID("timestamp"),
+          tagPidSequenceNr = row.getLong("tag_pid_sequence_nr"),
+          row
         )
-        pr
       }
 
       private def nextTimeBucket(): Unit =

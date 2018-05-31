@@ -53,6 +53,8 @@ import scala.concurrent.duration._
     )
   }
 
+  val deserializationParallelism: Int = config.getInt("deserialization-parallelism")
+
   val pluginDispatcher: String = config.getString("plugin-dispatcher")
 
   val keyspace: String = writePluginConfig.keyspace

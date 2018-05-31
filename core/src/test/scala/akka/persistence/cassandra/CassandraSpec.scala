@@ -22,9 +22,11 @@ import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Milliseconds, Seconds, Span }
 import org.scalatest.{ Matchers, WordSpecLike }
-
 import scala.collection.immutable
 import scala.concurrent.duration._
+
+import akka.persistence.cassandra.journal.CassandraJournal
+import akka.serialization.SerializationExtension
 
 object CassandraSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
@@ -63,6 +65,8 @@ abstract class CassandraSpec(config: Config) extends TestKit(ActorSystem(getCall
   val pidCounter = new AtomicInteger()
   def nextPid = s"pid=${pidCounter.incrementAndGet()}"
 
+  val eventDeserializer: CassandraJournal.EventDeserializer = new CassandraJournal.EventDeserializer(system)
+
   lazy val queries: CassandraReadJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   def eventsPayloads(pid: String): Seq[Any] =
@@ -73,13 +77,13 @@ abstract class CassandraSpec(config: Config) extends TestKit(ActorSystem(getCall
 
   def events(pid: String): immutable.Seq[EventsByPersistenceIdStage.TaggedPersistentRepr] =
     queries.eventsByPersistenceId(pid, 0, Long.MaxValue, Long.MaxValue, 100, None, "test",
-      extractor = Extractors.taggedPersistentRepr)
+      extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .toMat(Sink.seq)(Keep.right)
       .run().futureValue
 
   def eventPayloadsWithTags(pid: String): immutable.Seq[(Any, Set[String])] =
     queries.eventsByPersistenceId(pid, 0, Long.MaxValue, Long.MaxValue, 100, None, "test",
-      extractor = Extractors.taggedPersistentRepr)
+      extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .map { tpr => (tpr.pr.payload, tpr.tags) }
       .toMat(Sink.seq)(Keep.right)
       .run().futureValue

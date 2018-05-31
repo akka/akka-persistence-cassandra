@@ -12,7 +12,8 @@ import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal._
-import akka.serialization.{ Serialization, SerializerWithStringManifest }
+import akka.serialization.Serialization
+import akka.serialization.Serializers
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.UUIDs
 
@@ -48,13 +49,7 @@ private[akka] trait TestTagWriter {
     val serializer = serialization.findSerializerFor(event)
     val serialized = ByteBuffer.wrap(serialization.serialize(event).get)
 
-    val serManifest = serializer match {
-      case ser2: SerializerWithStringManifest ⇒
-        ser2.manifest(pr)
-      case _ ⇒
-        if (serializer.includeManifest) pr.getClass.getName
-        else PersistentRepr.Undefined
-    }
+    val serManifest = Serializers.manifestFor(serializer, pr)
 
     val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), bucketSize)
 

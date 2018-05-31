@@ -6,36 +6,41 @@ package akka.persistence.cassandra.snapshot
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
+import java.util.NoSuchElementException
 
 import scala.collection.immutable
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.util.Failure
+import scala.util.Success
+import scala.util.control.NonFatal
+
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
+import akka.persistence.cassandra.journal.FixedRetryPolicy
+import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
+import akka.serialization.AsyncSerializer
 import akka.serialization.Serialization
 import akka.serialization.SerializationExtension
-import akka.serialization.SerializerWithStringManifest
+import akka.serialization.Serializers
+import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Sink
+import akka.util.OptionVal
 import com.datastax.driver.core._
+import com.datastax.driver.core.policies.LoggingRetryPolicy
+import com.datastax.driver.core.utils.Bytes
 import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import com.datastax.driver.core.policies.LoggingRetryPolicy
-import akka.persistence.cassandra.journal.FixedRetryPolicy
-import akka.stream.scaladsl.Sink
-import akka.stream.ActorMaterializer
-import java.util.NoSuchElementException
-
-import scala.util.Success
-import scala.util.Failure
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
   with CassandraStatements with ActorLogging with CassandraSnapshotCleanup {
   import CassandraSnapshotStore._
   val snapshotConfig = new CassandraSnapshotStoreConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
-  val snapshotDeserializer = new SnapshotDeserializer(serialization)
+  val snapshotDeserializer = new SnapshotDeserializer(context.system)
   implicit val ec: ExecutionContext = context.dispatcher
 
   import snapshotConfig._
@@ -141,7 +146,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
 
   def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
     val boundSelectSnapshot = preparedSelectSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
-    boundSelectSnapshot.flatMap(session.selectOne).map {
+    boundSelectSnapshot.flatMap(session.selectOne).flatMap {
       case None =>
         // Can happen since metadata and the actual snapshot might not be replicated at exactly same time.
         // Handled by loadNAsync.
@@ -150,16 +155,16 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
       case Some(row) =>
         row.getBytes("snapshot") match {
           case null =>
-            Snapshot(snapshotDeserializer.deserializeSnapshot(row))
+            snapshotDeserializer.deserializeSnapshot(row).map(Snapshot.apply)
           case bytes =>
             // for backwards compatibility
-            serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get
+            Future.successful(serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get)
         }
     }
   }
 
   override def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
-    Future(serialize(snapshot)).flatMap { ser =>
+    serialize(snapshot).flatMap { ser =>
 
       // using two separate statements with or without the meta data columns because
       // then users doesn't have to alter table and add the new columns if they don't use
@@ -206,54 +211,44 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
     session.underlying().flatMap(_.executeAsync(batch)).map(_ => ())
   }
 
-  private lazy val transportInformation: Option[Serialization.Information] = {
-    val address = context.system.asInstanceOf[ExtendedActorSystem].provider.getDefaultAddress
-    if (address.hasLocalScope) None
-    else Some(Serialization.Information(address, context.system))
-  }
-
-  private def serialize(payload: Any): Serialized = {
+  private def serialize(payload: Any): Future[Serialized] = try {
     def serializeMeta(): Option[SerializedMeta] = {
       // meta data, if any
       payload match {
         case SnapshotWithMetaData(_, m) =>
           val m2 = m.asInstanceOf[AnyRef]
           val serializer = serialization.findSerializerFor(m2)
-          val serManifest = serializer match {
-            case ser2: SerializerWithStringManifest ⇒
-              ser2.manifest(m2)
-            case _ ⇒
-              if (serializer.includeManifest) m2.getClass.getName
-              else PersistentRepr.Undefined
-          }
+          val serManifest = Serializers.manifestFor(serializer, m2)
           val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
           Some(SerializedMeta(metaBuf, serManifest, serializer.identifier))
         case evt => None
       }
     }
 
-    def doSerializeSnapshot(): Serialized = {
-      val p: AnyRef = (payload match {
-        case SnapshotWithMetaData(snap, _) => snap // unwrap
-        case snap                          => snap
-      }).asInstanceOf[AnyRef]
-      val serializer = serialization.findSerializerFor(p)
-      val serManifest = serializer match {
-        case ser2: SerializerWithStringManifest ⇒
-          ser2.manifest(p)
-        case _ ⇒
-          if (serializer.includeManifest) p.getClass.getName
-          else PersistentRepr.Undefined
-      }
-      val serPayload = ByteBuffer.wrap(serialization.serialize(p).get)
-      Serialized(serPayload, serManifest, serializer.identifier, serializeMeta())
+    val p: AnyRef = (payload match {
+      case SnapshotWithMetaData(snap, _) => snap // unwrap
+      case snap                          => snap
+    }).asInstanceOf[AnyRef]
+    val serializer = serialization.findSerializerFor(p)
+    val serManifest = Serializers.manifestFor(serializer, p)
+    serializer match {
+      case asyncSer: AsyncSerializer =>
+        Serialization.withTransportInformation(context.system.asInstanceOf[ExtendedActorSystem]) { () =>
+          asyncSer.toBinaryAsync(p).map { bytes =>
+            val serPayload = ByteBuffer.wrap(bytes)
+            Serialized(serPayload, serManifest, serializer.identifier, serializeMeta())
+          }
+        }
+      case _ =>
+        Future {
+          // Serialization.serialize adds transport info
+          val serPayload = ByteBuffer.wrap(serialization.serialize(p).get)
+          Serialized(serPayload, serManifest, serializer.identifier, serializeMeta())
+        }
     }
 
-    // serialize actor references with full address information (defaultAddress)
-    transportInformation match {
-      case Some(ti) ⇒ Serialization.currentTransportInformation.withValue(ti) { doSerializeSnapshot() }
-      case None     ⇒ doSerializeSnapshot()
-    }
+  } catch {
+    case NonFatal(e) => Future.failed(e)
   }
 
   private def metadata(prepStmt: PreparedStatement, persistenceId: String, criteria: SnapshotSelectionCriteria,
@@ -279,7 +274,9 @@ private[snapshot] object CassandraSnapshotStore {
 
   private case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
 
-  class SnapshotDeserializer(serialization: Serialization) {
+  class SnapshotDeserializer(system: ActorSystem) {
+
+    private val serialization = SerializationExtension(system)
 
     // cache to avoid repeated check via ColumnDefinitions
     @volatile private var _hasMetaColumns: Option[Boolean] = None
@@ -292,38 +289,63 @@ private[snapshot] object CassandraSnapshotStore {
         b
     }
 
-    def deserializeSnapshot(row: Row): Any = {
-      val payload = serialization.deserialize(
-        Bytes.getArray(row.getBytes("snapshot_data")),
-        row.getInt("ser_id"),
-        row.getString("ser_manifest")
-      ).get
+    def deserializeSnapshot(row: Row)(implicit ec: ExecutionContext): Future[Any] = try {
 
-      if (hasMetaColumns(row)) {
-        row.getBytes("meta") match {
-          case null =>
-            payload // no meta data
-          case metaBytes =>
-            // has meta data, wrap in EventWithMetaData
-            val metaSerId = row.getInt("meta_ser_id")
-            val metaSerManifest = row.getString("meta_ser_manifest")
-            val meta = serialization.deserialize(
-              Bytes.getArray(metaBytes),
-              metaSerId,
-              metaSerManifest
-            ) match {
-                case Success(m) => m
-                case Failure(_) =>
-                  // don't fail query because of deserialization problem with meta data
-                  // see motivation in UnknownMetaData
-                  SnapshotWithMetaData.UnknownMetaData(metaSerId, metaSerManifest)
-              }
-            SnapshotWithMetaData(payload, meta)
+      def meta: OptionVal[AnyRef] = {
+        if (hasMetaColumns(row)) {
+          row.getBytes("meta") match {
+            case null =>
+              OptionVal.None // no meta data
+            case metaBytes =>
+              // has meta data, wrap in EventWithMetaData
+              val metaSerId = row.getInt("meta_ser_id")
+              val metaSerManifest = row.getString("meta_ser_manifest")
+              val meta = serialization.deserialize(
+                Bytes.getArray(metaBytes),
+                metaSerId,
+                metaSerManifest
+              ) match {
+                  case Success(m) => m
+                  case Failure(_) =>
+                    // don't fail query because of deserialization problem with meta data
+                    // see motivation in UnknownMetaData
+                    SnapshotWithMetaData.UnknownMetaData(metaSerId, metaSerManifest)
+                }
+              OptionVal.Some(meta)
+          }
+        } else {
+          // for backwards compatibility, when table was not altered, meta columns not added
+          OptionVal.None // no meta data
         }
-      } else {
-        // for backwards compatibility, when table was not altered, meta columns not added
-        payload // no meta data
       }
+
+      val bytes = Bytes.getArray(row.getBytes("snapshot_data"))
+      val serId = row.getInt("ser_id")
+      val manifest = row.getString("ser_manifest")
+      serialization.serializerByIdentity.get(serId) match {
+        case Some(asyncSerializer: AsyncSerializer) =>
+          Serialization.withTransportInformation(system.asInstanceOf[ExtendedActorSystem]) { () =>
+            asyncSerializer.fromBinaryAsync(bytes, manifest).map { payload =>
+              meta match {
+                case OptionVal.None    => payload
+                case OptionVal.Some(m) => SnapshotWithMetaData(payload, m)
+              }
+            }
+          }
+
+        case _ =>
+          Future.successful {
+            // Serialization.deserialize adds transport info
+            val payload = serialization.deserialize(bytes, serId, manifest).get
+            meta match {
+              case OptionVal.None    => payload
+              case OptionVal.Some(m) => SnapshotWithMetaData(payload, m)
+            }
+          }
+      }
+
+    } catch {
+      case NonFatal(e) => Future.failed(e)
     }
   }
 }
