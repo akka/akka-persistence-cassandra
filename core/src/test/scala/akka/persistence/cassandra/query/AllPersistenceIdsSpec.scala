@@ -8,7 +8,7 @@ import java.util.UUID
 
 import akka.NotUsed
 import akka.actor.ActorRef
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraPluginConfig, CassandraSpec}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import com.datastax.driver.core.Session

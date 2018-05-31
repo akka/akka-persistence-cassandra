@@ -25,6 +25,7 @@ object EventsByTagPubsubSpec {
     akka.actor.serialize-messages = off
     akka.actor.serialize-creators = off
     akka.remote.netty.tcp.port = 0
+    akka.remote.artery.canonical.port = 0
     cassandra-journal {
       pubsub-notification = on
 

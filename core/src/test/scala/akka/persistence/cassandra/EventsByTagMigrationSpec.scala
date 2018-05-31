@@ -24,7 +24,7 @@ import com.datastax.driver.core.Cluster
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
 
-import org.scalatest. BeforeAndAfterAll
+import org.scalatest.BeforeAndAfterAll
 import scala.concurrent.duration._
 import scala.util.Try
 
@@ -269,8 +269,6 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
 class AbstractEventsByTagMigrationSpec extends CassandraSpec(EventsByTagMigrationSpec.config)
   with DirectWriting
   with BeforeAndAfterAll {
-
-  import EventsByTagMigrationSpec._
 
   val messagesTableName = s"$journalName.messages"
   val eventsByTagViewName = s" $journalName.eventsByTag1"

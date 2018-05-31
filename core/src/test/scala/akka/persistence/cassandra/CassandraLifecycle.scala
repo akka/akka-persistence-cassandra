@@ -16,7 +16,6 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 import scala.concurrent.duration._
-import scala.util.Try
 
 object CassandraLifecycle {
   sealed trait CassandraMode
@@ -139,8 +138,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   override protected def afterAll(): Unit = {
     try {
       shutdown(system, verifySystemShutdown = true)
-    }
-    finally {
+    } finally {
       mode match {
         case Embedded =>
           CassandraLauncher.stop()

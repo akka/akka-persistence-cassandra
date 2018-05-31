@@ -175,11 +175,11 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       1L to 6L foreach { i =>
         testProbe.expectMsgAllOf(s"a-${i}", i, true)
       }
+      processor2
     }
 
     "write and replay with persistAll greater than partition size skipping part of a partition" in {
       val persistenceId = UUID.randomUUID().toString
-      val probe = TestProbe()
       val processorAtomic = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
 
       processorAtomic ! List("a-1", "a-2", "a-3")
@@ -197,6 +197,7 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       1L to 6L foreach { i =>
         testProbe.expectMsgAllOf(s"a-${i}", i, true)
       }
+      processor2
     }
 
     "write and replay with persistAll less than partition size" in {
@@ -208,7 +209,7 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
         expectMsgAllOf(s"a-${i}", i, false)
       }
 
-      val processor2 = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
+      system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
       1L to 4L foreach { i =>
         expectMsgAllOf(s"a-${i}", i, true)
       }
@@ -216,7 +217,6 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
 
     "not replay messages deleted from the +1 partition" in {
       val persistenceId = UUID.randomUUID().toString
-      val probe = TestProbe()
       val deleteProbe = TestProbe()
       subscribeToRangeDeletion(deleteProbe)
       val processorAtomic = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
@@ -229,7 +229,7 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       awaitRangeDeletion(deleteProbe)
 
       val testProbe = TestProbe()
-      val processor2 = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, testProbe.ref))
+      system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, testProbe.ref))
       testProbe.expectMsgAllOf(s"a-6", 6, true)
     }
   }

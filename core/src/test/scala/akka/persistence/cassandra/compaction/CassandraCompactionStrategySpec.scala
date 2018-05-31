@@ -6,7 +6,7 @@ package akka.persistence.cassandra.compaction
 
 import java.util.concurrent.TimeUnit
 
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraPluginConfig, CassandraSpec}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike

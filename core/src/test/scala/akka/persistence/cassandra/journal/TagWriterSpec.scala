@@ -550,7 +550,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
 
   private def setup(
     tag:                   String               = "tag-1",
-    settings:              TagWriterSettings    = defaultSettings,
+    settings:              TagWriterSettings,
     writeResponse:         Stream[Future[Done]] = Stream.continually(Future.successful(Done)),
     progressWriteResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done))
   ): (TestProbe, ActorRef) = {

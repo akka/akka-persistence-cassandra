@@ -5,13 +5,13 @@
 package akka.persistence.cassandra.snapshot
 
 import scala.concurrent.duration._
-import java.lang.{Long => JLong}
-import java.lang.{Integer => JInteger}
+import java.lang.{ Long => JLong }
+import java.lang.{ Integer => JInteger }
 import java.nio.ByteBuffer
 
 import akka.persistence._
 import akka.persistence.SnapshotProtocol._
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraMetricsRegistry}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
 import com.datastax.driver.core._

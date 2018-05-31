@@ -4,12 +4,12 @@
 
 package akka.persistence.cassandra
 
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.actor.{ActorSystem, PoisonPill}
-import akka.persistence.cassandra.TestTaggingActor.{Ack, DoASnapshotPlease, SnapShotAck}
+import akka.actor.{ ActorSystem, PoisonPill }
+import akka.persistence.cassandra.TestTaggingActor.{ Ack, DoASnapshotPlease, SnapShotAck }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{EventEnvelope, NoOffset, PersistenceQuery}
+import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory

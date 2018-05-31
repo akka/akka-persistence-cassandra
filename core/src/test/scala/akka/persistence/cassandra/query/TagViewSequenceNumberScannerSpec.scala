@@ -7,11 +7,11 @@ package akka.persistence.cassandra.query
 import java.util.UUID
 
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.CassandraJournal.{PersistenceId, TagPidSequenceNr}
-import akka.persistence.cassandra.journal.{CassandraJournalConfig, Hour}
+import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, TagPidSequenceNr }
+import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Hour }
 import akka.persistence.cassandra.query.TagViewSequenceNumberScannerSpec.config
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
-import akka.serialization.{Serialization, SerializationExtension}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.serialization.{ Serialization, SerializationExtension }
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
