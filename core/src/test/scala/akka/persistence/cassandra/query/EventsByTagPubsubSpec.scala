@@ -6,17 +6,12 @@ package akka.persistence.cassandra.query
 
 import java.time.{ LocalDate, ZoneOffset }
 
-import akka.actor.ActorSystem
 import akka.cluster.Cluster
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.CassandraSpec
 import akka.persistence.cassandra.journal.CassandraJournalConfig
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
-import akka.stream.ActorMaterializer
+import akka.persistence.query.{ EventEnvelope, NoOffset }
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -29,6 +24,8 @@ object EventsByTagPubsubSpec {
     akka.actor.provider = "akka.cluster.ClusterActorRefProvider"
     akka.actor.serialize-messages = off
     akka.actor.serialize-creators = off
+    akka.remote.netty.tcp.port = 0
+    akka.remote.artery.canonical.port = 0
     cassandra-journal {
       pubsub-notification = on
 
@@ -42,12 +39,8 @@ object EventsByTagPubsubSpec {
     """).withFallback(EventsByTagSpec.config)
 }
 
-class EventsByTagPubsubSpec extends TestKit(ActorSystem("EventsByTagPubsubSpec", EventsByTagPubsubSpec.config))
-  with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
+class EventsByTagPubsubSpec extends CassandraSpec(EventsByTagPubsubSpec.config) {
 
-  override def systemName: String = "EventsByTagPubsubSpec"
-  implicit val mat = ActorMaterializer()(system)
-  lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   lazy val session = {
     import system.dispatcher

@@ -8,15 +8,19 @@ import scala.concurrent.duration._
 import java.lang.{ Long => JLong }
 import java.lang.{ Integer => JInteger }
 import java.nio.ByteBuffer
+
 import akka.persistence._
 import akka.persistence.SnapshotProtocol._
-import akka.persistence.cassandra.{ CassandraMetricsRegistry, CassandraLifecycle }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
 import com.datastax.driver.core._
 import com.typesafe.config.ConfigFactory
+
 import scala.concurrent.Await
 import akka.persistence.cassandra.SnapshotWithMetaData
+
+import scala.util.Try
 
 object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(
@@ -55,8 +59,10 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStor
   }
 
   override def afterAll(): Unit = {
-    session.close()
-    session.getCluster.close()
+    Try {
+      session.close()
+      session.getCluster.close()
+    }
     super.afterAll()
   }
 

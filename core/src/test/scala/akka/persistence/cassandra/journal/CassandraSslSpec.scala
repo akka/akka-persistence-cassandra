@@ -4,17 +4,14 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.persistence.cassandra.testkit.CassandraLauncher
-import scala.concurrent.duration._
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.journal.CassandraSslSpec._
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
-import org.scalatest._
-import CassandraSslSpec._
-import java.util.Locale
 import javax.crypto.Cipher
+import org.scalatest._
 
 object CassandraSslSpec {
   def config(keyStore: Boolean) = {
@@ -106,16 +103,9 @@ class CassandraSslSpecWithClientAuth extends TestKit(ActorSystem("CassandraSslSp
   }
 }
 
-class CassandraSslSpecWithoutClientAuth extends TestKit(ActorSystem("CassandraSslSpecWithoutClientAuth", config(false)))
-  with ImplicitSender
-  with WordSpecLike
-  with Matchers
-  with CassandraLifecycle
-  with CassandraSslSpec {
+class CassandraSslSpecWithoutClientAuth extends CassandraSpec(config(false)) with CassandraSslSpec {
 
   override def cassandraConfigResource: String = "test-embedded-cassandra-ssl-server.yaml"
-
-  override def systemName: String = "CassandraSslSpec"
 
   override protected def beforeAll(): Unit = {
     if (hasJCESupport)

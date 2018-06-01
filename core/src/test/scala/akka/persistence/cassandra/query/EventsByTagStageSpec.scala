@@ -7,24 +7,20 @@ package akka.persistence.cassandra.query
 import java.time.{ LocalDateTime, ZoneOffset }
 
 import akka.NotUsed
-import akka.actor.{ ActorRef, ActorSystem }
+import akka.actor.ActorRef
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Minute, TimeBucket }
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.persistence.journal.Tagged
 import akka.persistence.query.scaladsl.EventsByTagQuery
-import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
+import akka.persistence.query.{ EventEnvelope, NoOffset }
 import akka.serialization.{ Serialization, SerializationExtension }
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Keep, Source }
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
 import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core.{ Cluster, Session }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
+import org.scalatest.BeforeAndAfterAll
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -61,19 +57,11 @@ object EventsByTagStageSpec {
 
 }
 
-class EventsByTagStageSpec
-  extends TestKit(ActorSystem("EventsByTagStageSpec", EventsByTagStageSpec.config))
-  with ScalaFutures
-  with ImplicitSender
-  with WordSpecLike
-  with CassandraLifecycle
-  with Matchers
+class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
   with BeforeAndAfterAll
   with TestTagWriter {
 
   import EventsByTagStageSpec._
-
-  override def systemName: String = "EventsByTagStageSpec"
 
   override def externalCassandraCleanup(): Unit = {
     val cluster = Cluster.builder()
@@ -99,13 +87,9 @@ class EventsByTagStageSpec
     super.afterAll()
   }
 
-  implicit val mat = ActorMaterializer()(system)
   private val waitTime = 150.milliseconds
   private val longWaitTime = waitTime * 3
   private val bucketSize = Minute
-
-  lazy val queries: CassandraReadJournal =
-    PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   val noMsgTimeout = 100.millis
 

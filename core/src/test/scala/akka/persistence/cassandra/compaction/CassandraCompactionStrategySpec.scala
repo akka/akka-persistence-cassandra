@@ -6,15 +6,14 @@ package akka.persistence.cassandra.compaction
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.ActorSystem
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig }
-import akka.testkit.TestKit
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ MustMatchers, WordSpecLike }
+import org.scalatest.WordSpecLike
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.util.Try
 
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(
@@ -25,10 +24,8 @@ object CassandraCompactionStrategySpec {
   ).withFallback(CassandraLifecycle.config)
 }
 
-class CassandraCompactionStrategySpec extends TestKit(
-  ActorSystem("CassandraCompactionStrategySpec", CassandraCompactionStrategySpec.config)
-)
-  with WordSpecLike with MustMatchers with CassandraLifecycle {
+class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionStrategySpec.config)
+  with WordSpecLike {
 
   import system.dispatcher
 
@@ -37,8 +34,6 @@ class CassandraCompactionStrategySpec extends TestKit(
   val cassandraPluginConfig = new CassandraPluginConfig(system, defaultConfigs)
 
   var session: Session = _
-
-  override def systemName: String = "CassandraCompactionStrategySpec"
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -49,9 +44,10 @@ class CassandraCompactionStrategySpec extends TestKit(
   }
 
   override protected def afterAll(): Unit = {
-    session.close()
-    session.getCluster.close()
-
+    Try {
+      session.close()
+      session.getCluster.close()
+    }
     super.afterAll()
   }
 
@@ -69,8 +65,8 @@ class CassandraCompactionStrategySpec extends TestKit(
 
       val compactionStrategy = CassandraCompactionStrategy(twConfig.getConfig("table-compaction-strategy")).asInstanceOf[TimeWindowCompactionStrategy]
 
-      compactionStrategy.compactionWindowSize mustEqual 10
-      compactionStrategy.compactionWindowUnit mustEqual TimeUnit.DAYS
+      compactionStrategy.compactionWindowSize shouldEqual 10
+      compactionStrategy.compactionWindowUnit shouldEqual TimeUnit.DAYS
     }
 
     "successfully create CQL from TimeWindowCompactionStrategy" in {
@@ -125,15 +121,15 @@ class CassandraCompactionStrategySpec extends TestKit(
 
       val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asInstanceOf[DateTieredCompactionStrategy]
 
-      compactionStrategy.enabled mustEqual true
-      compactionStrategy.tombstoneCompactionInterval mustEqual 86400
-      compactionStrategy.tombstoneThreshold mustEqual 0.1
-      compactionStrategy.uncheckedTombstoneCompaction mustEqual false
-      compactionStrategy.baseTimeSeconds mustEqual 100
-      compactionStrategy.maxSSTableAgeDays mustEqual 100
-      compactionStrategy.maxThreshold mustEqual 20
-      compactionStrategy.minThreshold mustEqual 10
-      compactionStrategy.timestampResolution mustEqual TimeUnit.MICROSECONDS
+      compactionStrategy.enabled shouldEqual true
+      compactionStrategy.tombstoneCompactionInterval shouldEqual 86400
+      compactionStrategy.tombstoneThreshold shouldEqual 0.1
+      compactionStrategy.uncheckedTombstoneCompaction shouldEqual false
+      compactionStrategy.baseTimeSeconds shouldEqual 100
+      compactionStrategy.maxSSTableAgeDays shouldEqual 100
+      compactionStrategy.maxThreshold shouldEqual 20
+      compactionStrategy.minThreshold shouldEqual 10
+      compactionStrategy.timestampResolution shouldEqual TimeUnit.MICROSECONDS
     }
 
     "successfully create CQL from DateTieredCompactionStrategy" in {
@@ -176,11 +172,11 @@ class CassandraCompactionStrategySpec extends TestKit(
 
       val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asInstanceOf[LeveledCompactionStrategy]
 
-      compactionStrategy.enabled mustEqual true
-      compactionStrategy.tombstoneCompactionInterval mustEqual 86400
-      compactionStrategy.tombstoneThreshold mustEqual 0.1
-      compactionStrategy.uncheckedTombstoneCompaction mustEqual false
-      compactionStrategy.ssTableSizeInMB mustEqual 100
+      compactionStrategy.enabled shouldEqual true
+      compactionStrategy.tombstoneCompactionInterval shouldEqual 86400
+      compactionStrategy.tombstoneThreshold shouldEqual 0.1
+      compactionStrategy.uncheckedTombstoneCompaction shouldEqual false
+      compactionStrategy.ssTableSizeInMB shouldEqual 100
     }
 
     "successfully create CQL from LeveledCompactionStrategy" in {
@@ -223,15 +219,15 @@ class CassandraCompactionStrategySpec extends TestKit(
 
       val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asInstanceOf[SizeTieredCompactionStrategy]
 
-      compactionStrategy.enabled mustEqual true
-      compactionStrategy.tombstoneCompactionInterval mustEqual 86400
-      compactionStrategy.tombstoneThreshold mustEqual 0.1
-      compactionStrategy.uncheckedTombstoneCompaction mustEqual false
-      compactionStrategy.bucketHigh mustEqual 5.0
-      compactionStrategy.bucketLow mustEqual 2.5
-      compactionStrategy.maxThreshold mustEqual 20
-      compactionStrategy.minThreshold mustEqual 10
-      compactionStrategy.minSSTableSize mustEqual 100
+      compactionStrategy.enabled shouldEqual true
+      compactionStrategy.tombstoneCompactionInterval shouldEqual 86400
+      compactionStrategy.tombstoneThreshold shouldEqual 0.1
+      compactionStrategy.uncheckedTombstoneCompaction shouldEqual false
+      compactionStrategy.bucketHigh shouldEqual 5.0
+      compactionStrategy.bucketLow shouldEqual 2.5
+      compactionStrategy.maxThreshold shouldEqual 20
+      compactionStrategy.minThreshold shouldEqual 10
+      compactionStrategy.minSSTableSize shouldEqual 100
     }
 
     "successfully create CQL from SizeTieredCompactionStrategy" in {

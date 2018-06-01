@@ -4,14 +4,13 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.actor.{ ActorSystem, ExtendedActorSystem, Props }
+import akka.actor.{ ExtendedActorSystem, Props }
 import akka.persistence.RecoveryCompleted
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
-import akka.persistence.cassandra.{ CassandraLifecycle, EventWithMetaData, Persister }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, EventWithMetaData, Persister }
 import akka.serialization.BaseSerializer
-import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ Matchers, WordSpecLike }
 
 object CassandraSerializationSpec {
   val config = ConfigFactory.parseString(
@@ -46,8 +45,7 @@ class BrokenDeSerialization(override val system: ExtendedActorSystem) extends Ba
   }
 }
 
-class CassandraSerializationSpec extends TestKit(ActorSystem("CassandraSerializationSpec", CassandraSerializationSpec.config)) with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
-  override def systemName: String = "CassandraSerializationSpec"
+class CassandraSerializationSpec extends CassandraSpec(CassandraSerializationSpec.config) {
 
   import akka.persistence.cassandra.Persister._
 
@@ -67,7 +65,7 @@ class CassandraSerializationSpec extends TestKit(ActorSystem("CassandraSerializa
 
       val incarnation2 = system.actorOf(Props(new Persister("id1", probe.ref)))
       probe.expectMsgType[RuntimeException].getMessage shouldBe "I can't deserialize a single thing"
-
+      incarnation2
     }
 
     "be able to store meta data" in {

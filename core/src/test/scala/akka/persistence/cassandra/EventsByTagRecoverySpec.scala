@@ -10,18 +10,16 @@ import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.{ Ack, DoASnapshotPlease, SnapShotAck }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
-import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
+import scala.util.Try
 
 object EventsByTagRecoverySpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
-  val keyspaceName = "EventsByTagRecovery"
+  val keyspaceName = "EventsByTagRecoverySpec"
   val config = ConfigFactory.parseString(
     s"""
        |akka {
@@ -47,12 +45,7 @@ object EventsByTagRecoverySpec {
   ).withFallback(CassandraLifecycle.config)
 }
 
-class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySpec", EventsByTagRecoverySpec.config))
-  with ImplicitSender
-  with WordSpecLike
-  with Matchers
-  with CassandraLifecycle
-  with ScalaFutures {
+class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.config) {
 
   import EventsByTagRecoverySpec._
 
@@ -61,8 +54,10 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
   }
 
   override protected def afterAll(): Unit = {
-    session.close()
-    cluster.close()
+    Try {
+      session.close()
+      cluster.close()
+    }
     super.afterAll()
   }
 
@@ -71,16 +66,13 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
     cluster.close()
   }
 
-  override def systemName = keyspaceName
-  implicit val materialiser = ActorMaterializer()(system)
-
   val waitTime = 100.milliseconds
 
   "Events by tag recovery" must {
 
     "continue tag sequence nrs" in {
       val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
-      val systemTwo = ActorSystem("s2", EventsByTagRecoverySpec.config)
+      val systemTwo = ActorSystem("s2", system.settings.config)
 
       try {
         val p1 = systemTwo.actorOf(TestTaggingActor.props("p1", Set("blue")))
@@ -131,7 +123,7 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
     }
 
     "recover tag if missing from views table" in {
-      val systemTwo = ActorSystem("s2", EventsByTagRecoverySpec.config)
+      val systemTwo = ActorSystem("s2", system.settings.config)
       try {
         val p2 = systemTwo.actorOf(TestTaggingActor.props("p2", Set("red", "orange")))
         (1 to 4) foreach { i =>
@@ -144,7 +136,6 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
         session.execute(s"truncate tag_views")
         session.execute(s"truncate tag_write_progress")
 
-        implicit val materialiser = ActorMaterializer()(system)
         val tProbe = TestProbe()(system)
         val p2take2 = system.actorOf(TestTaggingActor.props("p2", Set("red", "orange")))
         (5 to 8) foreach { i =>
@@ -169,7 +160,7 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
     }
 
     "recover tags from before a snapshot" in {
-      val systemTwo = ActorSystem("s2", EventsByTagRecoverySpec.config)
+      val systemTwo = ActorSystem("s2", system.settings.config)
       try {
         val p3 = systemTwo.actorOf(TestTaggingActor.props("p3", Set("red", "orange")))
         (1 to 4) foreach { i =>
@@ -190,7 +181,6 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
         session.execute(s"truncate tag_views")
         session.execute(s"truncate tag_write_progress")
 
-        implicit val materialiser = ActorMaterializer()(system)
         val tProbe = TestProbe()(system)
         val p3take2 = system.actorOf(TestTaggingActor.props("p3", Set("red", "orange")))
         (9 to 12) foreach { i =>
@@ -229,7 +219,7 @@ class EventsByTagRecoverySpec extends TestKit(ActorSystem("EventsByTagRecoverySp
       // Longer than the flush interval of 250ms
       Thread.sleep(500)
 
-      val systemTwo = ActorSystem("s2", EventsByTagRecoverySpec.config)
+      val systemTwo = ActorSystem("s2", system.settings.config)
       val p2 = systemTwo.actorOf(TestTaggingActor.props("p4", Set("blue")))
       p2 ! "e-5"
       expectMsg(Ack)

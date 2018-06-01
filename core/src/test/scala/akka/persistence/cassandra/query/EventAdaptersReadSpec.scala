@@ -6,16 +6,11 @@ package akka.persistence.cassandra.query
 
 import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.actor.{ ActorRef, ActorSystem }
-import akka.persistence.cassandra.CassandraLifecycle
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{ NoOffset, PersistenceQuery }
-import akka.stream.ActorMaterializer
+import akka.actor.ActorRef
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.query.NoOffset
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
 
@@ -47,22 +42,9 @@ object EventAdaptersReadSpec {
   ).withFallback(CassandraLifecycle.config)
 }
 
-class EventAdaptersReadSpec
-  extends TestKit(ActorSystem("EventAdaptersReadSpec", EventAdaptersReadSpec.config))
-  with ScalaFutures
-  with ImplicitSender
-  with WordSpecLike
-  with CassandraLifecycle
-  with Matchers {
-
-  override def systemName: String = "EventAdaptersReadSpec"
+class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) {
 
   val waitTime = 25.millis
-
-  implicit val mat = ActorMaterializer()(system)
-
-  lazy val queries: CassandraReadJournal =
-    PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   def setup(persistenceId: String, n: Int, prefix: (Int) => String = _ => ""): ActorRef = {
     val ref = system.actorOf(TestActor.props(persistenceId))

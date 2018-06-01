@@ -4,26 +4,22 @@
 
 package akka.persistence.cassandra.query.scaladsl
 
-import scala.concurrent.duration._
-import akka.actor.{ ActorSystem, Props }
-import akka.stream.ActorMaterializer
-import akka.testkit.{ ImplicitSender, TestKit }
-import com.typesafe.config.ConfigFactory
-import org.scalatest.{ Matchers, WordSpecLike }
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry }
+import akka.actor.Props
 import akka.persistence.cassandra.query.TestActor
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry, CassandraSpec }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
-import akka.persistence.query.PersistenceQuery
-import akka.stream.testkit.scaladsl.TestSink
 import akka.persistence.query.NoOffset
+import akka.stream.testkit.scaladsl.TestSink
 import com.datastax.driver.core.Cluster
+import com.typesafe.config.ConfigFactory
+
+import scala.concurrent.duration._
 
 object CassandraReadJournalSpec {
   val config = ConfigFactory.parseString(
     s"""
     akka.loglevel = INFO
     akka.actor.serialize-messages=off
-    cassandra-journal.keyspace=ScaladslCassandraReadJournalSpec
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-journal.event-adapters {
@@ -47,12 +43,7 @@ class TestTagger extends WriteEventAdapter {
   }
 }
 
-class CassandraReadJournalSpec
-  extends TestKit(ActorSystem("ScalaCassandraReadJournalSpec", CassandraReadJournalSpec.config))
-  with ImplicitSender
-  with WordSpecLike
-  with CassandraLifecycle
-  with Matchers {
+class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.config) {
 
   override protected def externalCassandraCleanup(): Unit = {
     val cluster = Cluster.builder()
@@ -61,18 +52,11 @@ class CassandraReadJournalSpec
       .withPort(9042)
       .build()
     try {
-      cluster.connect().execute("drop keyspace scaladslcassandrareadjournalspec")
+      cluster.connect().execute(s"drop keyspace $journalName")
     } finally {
       cluster.close()
     }
   }
-
-  override def systemName: String = "ScalaCassandraReadJournalSpec"
-
-  implicit val mat = ActorMaterializer()(system)
-
-  lazy val queries: CassandraReadJournal =
-    PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   "Cassandra Read Journal Scala API" must {
     "start eventsByPersistenceId query" in {

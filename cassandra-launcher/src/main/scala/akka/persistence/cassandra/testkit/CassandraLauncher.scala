@@ -166,11 +166,13 @@ object CassandraLauncher {
    */
   def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int, classpath: immutable.Seq[String], host: Option[String]): Unit = this.synchronized {
     if (cassandraDaemon.isEmpty) {
+
       prepareCassandraDirectory(cassandraDirectory, clean)
 
       val realHost = host.getOrElse("127.0.0.1")
       val realPort = if (port == 0) randomPort else port
       val storagePort = freePort()
+      println(s"Starting Cassandra on port $realPort")
 
       // http://wiki.apache.org/cassandra/StorageConfiguration
       val conf = readResource(configResource)

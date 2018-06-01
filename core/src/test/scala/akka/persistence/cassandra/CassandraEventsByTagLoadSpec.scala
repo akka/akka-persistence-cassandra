@@ -6,26 +6,21 @@ package akka.persistence.cassandra
 
 import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.actor.ActorSystem
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit }
 import com.datastax.driver.core.Cluster
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Seconds, Span }
-import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
 import scala.util.Try
 
 object CassandraEventsByTagLoadSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
-  val keyspaceName = "CassandraEventsByTagLoadSpec"
 
   val config = ConfigFactory.parseString(
     s"""
@@ -33,7 +28,6 @@ object CassandraEventsByTagLoadSpec {
        |  loglevel = INFO
        |}
        |cassandra-journal {
-       |  keyspace = $keyspaceName
        |  log-queries = off
        |  events-by-tag {
        |     max-message-batch-size = 200
@@ -49,14 +43,7 @@ object CassandraEventsByTagLoadSpec {
   ).withFallback(CassandraLifecycle.config)
 }
 
-class CassandraEventsByTagLoadSpec extends TestKit(ActorSystem("CassandraEventsByTagLoadSpec", CassandraEventsByTagLoadSpec.config))
-  with ImplicitSender
-  with WordSpecLike
-  with Matchers
-  with CassandraLifecycle
-  with ScalaFutures {
-
-  override def systemName = "CassandraEventsByTagLoadSpec"
+class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoadSpec.config) {
 
   implicit val materialiser = ActorMaterializer()(system)
   implicit override val patienceConfig = PatienceConfig(timeout = Span(60, Seconds), interval = Span(5, Seconds))
@@ -136,7 +123,7 @@ class CassandraEventsByTagLoadSpec extends TestKit(ActorSystem("CassandraEventsB
       .withClusterName("CassandraEventsByTagLoadSpecCleanup")
       .addContactPoint("localhost")
       .build()
-    Try(cluster.connect().execute(s"drop keyspace ${CassandraEventsByTagLoadSpec.keyspaceName}"))
+    Try(cluster.connect().execute(s"drop keyspace ${system.settings.config.getString("cassandra-journal.keyspace")}"))
     cluster.close()
   }
 }

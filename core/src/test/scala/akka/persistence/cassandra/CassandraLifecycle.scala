@@ -87,8 +87,8 @@ object CassandraLifecycle {
   }
 }
 
-trait CassandraLifecycle extends BeforeAndAfterAll {
-  this: TestKitBase with Suite =>
+trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
+  this: Suite =>
 
   import CassandraLifecycle._
 
@@ -100,17 +100,21 @@ trait CassandraLifecycle extends BeforeAndAfterAll {
     Cluster.builder()
       .addContactPoint("localhost")
       .withClusterName(systemName)
-      .withPort(config.getInt("cassandra-journal.port"))
+      .withPort(port())
       .build()
   }
 
   override protected def beforeAll(): Unit = {
-    startCassandra(config.getInt("cassandra-journal.port"))
+    startCassandra(port())
     awaitPersistenceInit()
     super.beforeAll()
   }
 
-  def startCassandra(): Unit = startCassandra(0)
+  def port(): Int = 0
+
+  def startCassandra(): Unit = {
+    startCassandra(port())
+  }
 
   def startCassandra(port: Int): Unit = {
     mode match {
@@ -132,14 +136,17 @@ trait CassandraLifecycle extends BeforeAndAfterAll {
   }
 
   override protected def afterAll(): Unit = {
-    shutdown(system, verifySystemShutdown = true)
-    mode match {
-      case Embedded =>
-        CassandraLauncher.stop()
-      case External =>
-        externalCassandraCleanup()
+    try {
+      shutdown(system, verifySystemShutdown = true)
+    } finally {
+      mode match {
+        case Embedded =>
+          CassandraLauncher.stop()
+        case External =>
+          externalCassandraCleanup()
+      }
+      super.afterAll()
     }
-    super.afterAll()
   }
 
   /**

@@ -9,7 +9,7 @@ import java.util.UUID
 
 import akka.Done
 import akka.actor.{ ActorRef, ActorSystem }
-import akka.event.Logging.{ Error, Warning }
+import akka.event.Logging.Warning
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters.TagWrite
@@ -21,6 +21,7 @@ import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core.{ PreparedStatement, Statement }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, WordSpecLike }
+
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.control.NoStackTrace
@@ -549,7 +550,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
 
   private def setup(
     tag:                   String               = "tag-1",
-    settings:              TagWriterSettings    = defaultSettings,
+    settings:              TagWriterSettings,
     writeResponse:         Stream[Future[Done]] = Stream.continually(Future.successful(Done)),
     progressWriteResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done))
   ): (TestProbe, ActorRef) = {

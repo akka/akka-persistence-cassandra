@@ -5,11 +5,9 @@
 package akka.persistence.cassandra.journal
 
 import akka.actor._
-import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.CassandraLifecycle.AwaitPersistenceInit
-import akka.testkit._
+import akka.persistence.cassandra.CassandraSpec
 import com.typesafe.config.ConfigFactory
-import org.scalatest._
 
 import scala.concurrent.duration._
 
@@ -18,15 +16,11 @@ object ReconnectSpec {
     s"""
       |cassandra-journal.keyspace=ReconnectSpec
       |cassandra-snapshot-store.keyspace=ReconnectSpecSnapshot
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
-
+    """
+  )
 }
 
-class ReconnectSpec extends TestKit(ActorSystem("ReconnectSpec", ReconnectSpec.config))
-  with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
-
-  override def systemName: String = "ReconnectSpec"
+class ReconnectSpec extends CassandraSpec(ReconnectSpec.config) {
 
   // important, since we are testing the initialization and starting Cassandra later
   override protected def beforeAll(): Unit = ()

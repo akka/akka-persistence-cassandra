@@ -7,22 +7,19 @@ package akka.persistence.cassandra
 import java.time.format.DateTimeFormatter
 import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.actor.{ ActorSystem }
 import akka.persistence.cassandra.TestTaggingActor.{ Ack, Stop }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
+import scala.util.Try
 
 object EventsByTagRestartSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
-  val keyspaceName = "EventsByTagRestart"
   val firstBucketFormat: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyyMMdd'T'HH:mm")
 
@@ -33,14 +30,12 @@ object EventsByTagRestartSpec {
        |  actor.debug.unhandled = on
        |}
        |cassandra-journal {
-       |  keyspace = $keyspaceName
        |  log-queries = off
        |  events-by-tag {
        |     max-message-batch-size = 250 // make it likely we have messages in the buffer
        |     bucket-size = "Day"
        |  }
        |}
-       |cassandra-snapshot-store.keyspace=$keyspaceName
        |
        |cassandra-query-journal = {
        |   first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormat)}"
@@ -51,31 +46,25 @@ object EventsByTagRestartSpec {
   ).withFallback(CassandraLifecycle.config)
 }
 
-class EventsByTagRestartSpec extends TestKit(ActorSystem("EventsByTagRestartSpec", EventsByTagRestartSpec.config))
-  with ImplicitSender
-  with WordSpecLike
-  with Matchers
-  with CassandraLifecycle
-  with ScalaFutures {
-
-  import EventsByTagRestartSpec._
+class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config) {
 
   lazy val session = {
-    cluster.connect(keyspaceName)
+    cluster.connect(journalName)
   }
 
   override protected def afterAll(): Unit = {
-    session.close()
-    cluster.close()
+    Try {
+      session.close()
+      cluster.close()
+    }
     super.afterAll()
   }
 
   override protected def externalCassandraCleanup(): Unit = {
-    cluster.connect().execute(s"drop keyspace $keyspaceName")
+    cluster.connect().execute(s"drop keyspace $journalName")
     cluster.close()
   }
 
-  override def systemName = keyspaceName
   implicit val materialiser = ActorMaterializer()(system)
 
   val waitTime = 100.milliseconds
