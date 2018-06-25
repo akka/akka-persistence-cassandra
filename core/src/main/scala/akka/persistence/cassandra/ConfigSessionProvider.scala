@@ -95,6 +95,9 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
     .setPoolTimeoutMillis(
       connectionPoolConfig.getInt("pool-timeout-millis")
     )
+    .setMaxQueueSize(
+      connectionPoolConfig.getInt("max-queue-size")
+    )
 
   val reconnectMaxDelay: FiniteDuration = config.getDuration("reconnect-max-delay", TimeUnit.MILLISECONDS).millis
 
