@@ -63,6 +63,8 @@ import scala.concurrent.duration._
   val pubsubNotification: Boolean = writePluginConfig.tagWriterSettings.pubsubNotification
   val eventsByPersistenceIdEventTimeout: FiniteDuration = config.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 
-  val eventsByTagTimeout: FiniteDuration = config.getDuration("events-by-tag.gap-timeout", MILLISECONDS).millis
+  val eventsByTagGapTimeout: FiniteDuration = config.getDuration("events-by-tag.gap-timeout", MILLISECONDS).millis
+  val eventsByTagNewPersistenceIdScanTimeout = config.getDuration("events-by-tag.new-persistence-id-scan-timeout", MILLISECONDS).millis
   val eventsByTagOffsetScanning: FiniteDuration = config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis
+
 }

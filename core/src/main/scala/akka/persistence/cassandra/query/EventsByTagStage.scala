@@ -287,7 +287,7 @@ import com.datastax.driver.core.utils.UUIDs
 
       /**
        * Works out if this is an acceptable [[TagPidSequenceNr]].
-       * For an NoOffset query this must be 1.
+       * For a NoOffset query this must be 1.
        * For an Offset query this can be anything if we're in a bucket in the past.
        * For an Offset query for the current bucket if it is not 1 then assume that
        * all the [[TagPidSequenceNr]]s from 1 have been missed and search for them.
@@ -301,9 +301,10 @@ import com.datastax.driver.core.utils.UUIDs
           tagPidSequenceNrs += (repr.persistenceId -> ((1, repr.offset)))
           push(out, repr)
           false
-        } else if (usingOffset && currTimeBucket.inPast) {
+        } else if (usingOffset && (currTimeBucket.inPast || settings.eventsByTagNewPersistenceIdScanTimeout == scala.concurrent.duration.Duration.Zero)) {
           // If we're in the past and this is an offset query we assume this is
           // the first tagPidSequenceNr
+          log.debug("New persistence id: {}. Timebucket: {}. Tag pid sequence nr: {}", repr.persistenceId, currTimeBucket, repr.tagPidSequenceNr)
           currentOffset = repr.offset
           tagPidSequenceNrs += (repr.persistenceId -> ((repr.tagPidSequenceNr, repr.offset)))
           push(out, repr)
@@ -333,7 +334,7 @@ import com.datastax.driver.core.utils.UUIDs
             repr.tagPidSequenceNr,
             (1L until repr.tagPidSequenceNr).toSet,
             failIfNotFound = false,
-            deadline = Deadline.now + settings.eventsByTagTimeout
+            deadline = Deadline.now + settings.eventsByTagNewPersistenceIdScanTimeout
           ))
           true
         }
@@ -363,7 +364,7 @@ import com.datastax.driver.core.utils.UUIDs
             repr.tagPidSequenceNr,
             (expectedSequenceNr until repr.tagPidSequenceNr).toSet,
             failIfNotFound = true,
-            deadline = Deadline.now + settings.eventsByTagTimeout
+            deadline = Deadline.now + settings.eventsByTagGapTimeout
           ))
           true
         } else {

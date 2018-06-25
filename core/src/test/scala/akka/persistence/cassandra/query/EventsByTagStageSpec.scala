@@ -30,29 +30,30 @@ object EventsByTagStageSpec {
   val fetchSize = 3L
   val config = ConfigFactory.parseString(
     s"""
-       | akka.loglevel = INFO
-       |
-       | akka.actor.serialize-messages=on
-       |
-       | cassandra-journal {
-       |   keyspace=eventsbytagstagespec
-       |   log-queries = off
-       |   events-by-tag {
-       |    flush-interval = 0ms
-       |    bucket-size = Minute
-       |   }
-       | }
-       |
-       | cassandra-query-journal {
-       |   first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormat)}"
-       |   max-result-size-query = $fetchSize
-       |   log-queries = on
-       |   refresh-interval = 200ms
-       |   events-by-tag {
-       |     gap-timeout = 3s
-       |   }
-       | }
-    """.stripMargin
+        akka.loglevel = INFO
+
+        akka.actor.serialize-messages=on
+
+        cassandra-journal {
+          keyspace=eventsbytagstagespec
+          log-queries = off
+          events-by-tag {
+           flush-interval = 0ms
+           bucket-size = Minute
+          }
+        }
+
+        cassandra-query-journal {
+          first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormat)}"
+          max-result-size-query = $fetchSize
+          log-queries = on
+          refresh-interval = 200ms
+          events-by-tag {
+            gap-timeout = 3s
+            new-persistence-id-scan-timeout = 500s
+          }
+        }
+    """
   ).withFallback(CassandraLifecycle.config)
 
 }
@@ -87,7 +88,7 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
     super.afterAll()
   }
 
-  private val waitTime = 150.milliseconds
+  private val waitTime = 75.milliseconds
   private val longWaitTime = waitTime * 3
   private val bucketSize = Minute
 
@@ -276,23 +277,7 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       sub.expectComplete()
     }
 
-    "look for events in the initial bucket for only a short time" ignore {
-      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
-      val tag = "CurrentOffsetMissingInInitialBucket"
 
-      writeTaggedEvent(nowTime, PersistentRepr("p1e11", 11, "p-1"), Set(tag), 11, bucketSize)
-      writeTaggedEvent(nowTime, PersistentRepr("p2e21", 21, "p-2"), Set(tag), 21, bucketSize)
-      writeTaggedEvent(nowTime, PersistentRepr("p3e31", 31, "p-3"), Set(tag), 31, bucketSize)
-
-      val tagStream = queries.currentEventsByTag(tag, queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
-
-      sub.request(4)
-      sub.expectNextWithTimeoutPF(waitTime, { case EventEnvelope(_, "p-1", 11, "p1e11") => })
-      sub.expectNextWithTimeoutPF(waitTime, { case EventEnvelope(_, "p-2", 21, "p1e21") => })
-      sub.expectNextWithTimeoutPF(waitTime, { case EventEnvelope(_, "p-3", 31, "p1e31") => })
-      sub.expectComplete()
-    }
   }
 
   "Live EventsByTag" must {
@@ -472,8 +457,6 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       sub.expectNoMessage(waitTime)
 
       writeTaggedEvent(previousBucket, PersistentRepr("e-1", 1, "p-1"), Set(tag), 1, bucketSize)
-      sub.expectNoMessage(waitTime)
-
       writeTaggedEvent(nowTime, PersistentRepr("e-2", 2, "p-1"), Set(tag), 2, bucketSize)
 
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "e-1") => }
@@ -509,6 +492,21 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 4, "p1e4") => }
       sub.expectNoMessage(waitTime)
 
+      sub.cancel()
+    }
+
+    "look for events in the initial bucket for only a short time" in {
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      val tag = "CurrentOffsetMissingInInitialBucket"
+
+      val tagStream = queries.eventsByTag(tag, queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+
+      sub.request(4)
+      sub.expectNoMessage(100.millis)
+      writeTaggedEvent(nowTime, PersistentRepr("p1e11", 11, "p-1"), Set(tag), 11, bucketSize)
+      // wait more than the new persistence id timeout but less than the gap-timeout
+      sub.expectNextWithTimeoutPF(1.second, { case EventEnvelope(_, "p-1", 11, "p1e11") => })
       sub.cancel()
     }
   }
