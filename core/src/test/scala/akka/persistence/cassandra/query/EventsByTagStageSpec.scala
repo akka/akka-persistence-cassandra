@@ -277,7 +277,6 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       sub.expectComplete()
     }
 
-
   }
 
   "Live EventsByTag" must {
@@ -506,7 +505,7 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       sub.expectNoMessage(100.millis)
       writeTaggedEvent(nowTime, PersistentRepr("p1e11", 11, "p-1"), Set(tag), 11, bucketSize)
       // wait more than the new persistence id timeout but less than the gap-timeout
-      sub.expectNextWithTimeoutPF(1.second, { case EventEnvelope(_, "p-1", 11, "p1e11") => })
+      sub.expectNextWithTimeoutPF(2.seconds, { case EventEnvelope(_, "p-1", 11, "p1e11") => })
       sub.cancel()
     }
   }

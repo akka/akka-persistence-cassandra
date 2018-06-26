@@ -66,7 +66,14 @@ object EventsByTagSpec {
   val strictConfig = ConfigFactory.parseString(
     s"""
     akka.loglevel = INFO
-    cassandra-query-journal.events-by-tag-gap-timeout = 5s
+    cassandra-query-journal {
+      refresh-interval = 100ms
+      events-by-tag {
+        gap-timeout = 5s
+        new-persistence-id-scan-timeout = 200s
+      }
+
+    }
     """
   ).withFallback(config)
 

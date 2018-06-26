@@ -13,9 +13,9 @@ import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
 import akka.persistence.cassandra.query.EventsByTagStage._
 import akka.stream.stage.{ GraphStage, _ }
 import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
-import com.datastax.driver.core._
 
 import scala.annotation.tailrec
+import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
 import scala.util.{ Failure, Success, Try }
@@ -24,6 +24,7 @@ import java.lang.{ Long => JLong }
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.CombinedEventsByTagStmts
+import com.datastax.driver.core.{ ResultSet, Row, Session }
 import com.datastax.driver.core.utils.UUIDs
 
 /**
@@ -301,7 +302,7 @@ import com.datastax.driver.core.utils.UUIDs
           tagPidSequenceNrs += (repr.persistenceId -> ((1, repr.offset)))
           push(out, repr)
           false
-        } else if (usingOffset && (currTimeBucket.inPast || settings.eventsByTagNewPersistenceIdScanTimeout == scala.concurrent.duration.Duration.Zero)) {
+        } else if (usingOffset && (currTimeBucket.inPast || settings.eventsByTagNewPersistenceIdScanTimeout == Duration.Zero)) {
           // If we're in the past and this is an offset query we assume this is
           // the first tagPidSequenceNr
           log.debug("New persistence id: {}. Timebucket: {}. Tag pid sequence nr: {}", repr.persistenceId, currTimeBucket, repr.tagPidSequenceNr)
