@@ -1,6 +1,6 @@
 # Events by tag
 
-This documents the new implementation, the existing one uses Cassandra Materialized
+This documents how EventsByTag works from version 0.80, older versions use Cassandra Materialized
 views which have been reported to unstable. See [here](https://github.com/akka/akka-persistence-cassandra/issues/247)
 
 Events by tag is a hard query to execute efficiently in Cassandra. This page documents
@@ -14,7 +14,7 @@ It is partitioned via tag and a time bucket. The timebucket causes a hot spot fo
 this is kept to a minimum by making the bucket small enough and by batching the writes into
 unlogged batches.
 
-Each events by tag query starts at the offset you provide and query back all the events. 
+Each events by tag query starts at the offset you provide and queries the events. 
 Events for a particular tag are partitioned
 by the tag name and a timebucket (this is a day for older versions of the plugin, and configurable for the latest version). 
 Meaning that each eventsByTag stream will initially do a query per time bucket to get up to the current 
@@ -54,7 +54,7 @@ use `Minute` unless necessary.
 Event by tag queries are eventually consistent, i.e. if a persist for an event has completed
 is does not guarantee that it will be visible in an events by tag query, but it will eventually.
 
-Order of the events is maintained per persistence id per tag by maintaining a sequence number for tagged events.
+Order of the events is maintained per persistence id per tag by maintaining a sequence number for tagged events per persistence id.
 This is in addition to the normal sequence nr kept per persistence id.
 If an event is missing then `eventByTag` queries will fail. 
 
@@ -73,9 +73,17 @@ events. If the missing event is not found then then stream is failed.
 
 When receiving the first event for a given persistenceId in an offset query it is not known 
 if that is actually the first event. If the offset query starts in a time bucket in the past then
-it is assumed to be the first. If the query is started with an offset in the current time bucket then
+it is assumed to be the first. 
+
+If the query is started with an offset in the current time bucket then
 the query starts with a scanning mode to look for the lowest sequence number per persistenceId
-before delivering any events. 
+before delivering any events.
+ 
+The above scanning only looks in the current time bucket. For persistenceIds that aren't found in this initial scan because they 
+don't have any events in the current time bucket then the expected tag pid sequence number is not known. 
+In this case the eventsByTag query looks for the new-persistence-id-scan-timeout. This adds a delay each time a new persistenceId
+is found by an offset query. If this is an issue it can be set to 0s. If events are found out of order due to this
+the stage will fail.  
 
 ## Implementation
 
