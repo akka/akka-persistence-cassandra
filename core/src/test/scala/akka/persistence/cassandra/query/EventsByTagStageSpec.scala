@@ -18,7 +18,7 @@ import akka.serialization.{ Serialization, SerializationExtension }
 import akka.stream.scaladsl.{ Keep, Source }
 import akka.stream.testkit.scaladsl.TestSink
 import com.datastax.driver.core.utils.UUIDs
-import com.datastax.driver.core.{ Cluster, Session }
+import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 
@@ -63,16 +63,6 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
   with TestTagWriter {
 
   import EventsByTagStageSpec._
-
-  override def externalCassandraCleanup(): Unit = {
-    val cluster = Cluster.builder()
-      .withClusterName("EventsByTagStageSpecCleanup")
-      .addContactPoint("localhost")
-      .withPort(9042)
-      .build()
-    cluster.connect().execute("drop keyspace eventsbytagstagespec")
-    cluster.close()
-  }
 
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   val serialization: Serialization = SerializationExtension(system)
@@ -134,6 +124,7 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       sub.request(fetchSize + 1L)
       (1L to (fetchSize + 1)).foreach { i =>
         val id = s"e-$i"
+        system.log.debug("Looking for event {}", id)
         sub.expectNextPF { case EventEnvelope(_, "p-2", `i`, `id`) => }
       }
     }

@@ -155,15 +155,6 @@ abstract class AbstractEventsByTagSpec(config: Config) extends CassandraSpec(con
     logProbe.expectNoMessage(waitTime)
     super.afterEach()
   }
-
-  override protected def externalCassandraCleanup(): Unit = {
-    val cluster = Cluster.builder()
-      .addContactPoint("localhost")
-      .withClusterName(systemName + "Cleanup")
-      .build()
-    Try(cluster.connect().execute(s"drop keyspace EventsByTagSpec"))
-    cluster.close()
-  }
 }
 
 class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {

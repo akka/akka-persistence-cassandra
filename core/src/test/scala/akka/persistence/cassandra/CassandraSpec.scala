@@ -8,6 +8,7 @@ import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
+import akka.persistence.cassandra.CassandraLifecycle.{ Embedded, External }
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
@@ -22,17 +23,20 @@ import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Milliseconds, Seconds, Span }
 import org.scalatest.{ Matchers, WordSpecLike }
+
 import scala.collection.immutable
 import scala.concurrent.duration._
-
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
+import com.datastax.driver.core.Cluster
+
+import scala.util.Try
 
 object CassandraSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   def getCallerName(clazz: Class[_]): String = {
     val s = (Thread.currentThread.getStackTrace map (_.getClassName) drop 1)
-      .dropWhile(_ matches "(java.lang.Thread|.*\\.Abstract.*)")
+      .dropWhile(_ matches "(java.lang.Thread|.*Abstract.*)")
     val reduced = s.lastIndexWhere(_ == clazz.getName) match {
       case -1 ⇒ s
       case z  ⇒ s drop (z + 1)
@@ -73,7 +77,20 @@ abstract class CassandraSpec(config: Config, val journalName: String = getCaller
   with ScalaFutures {
 
   lazy val randomPort = SocketUtil.temporaryLocalPort()
-  override def port(): Int = randomPort
+
+  override def port(): Int = CassandraLifecycle.mode match {
+    case External => 9042
+    case Embedded => randomPort
+  }
+
+  override protected def externalCassandraCleanup(): Unit = {
+    Try {
+      system.log.info(s"Dropping keysapces: $journalName $snapshotName")
+      cluster.connect().execute(s"drop keyspace if exists $journalName")
+      cluster.connect().execute(s"drop keyspace if exists $snapshotName")
+      cluster.close()
+    }
+  }
 
   final implicit lazy val system: ActorSystem = {
     // always use this port and keyspace generated here, then test config, then the lifecycle config
@@ -82,16 +99,21 @@ abstract class CassandraSpec(config: Config, val journalName: String = getCaller
         .withFallback(config) // test's config
         .withFallback(fallbackConfig) // generally good config that tests can override
         .withFallback(CassandraLifecycle.config).resolve()
-    ActorSystem(journalName, finalConfig)
+    val as = ActorSystem(journalName, finalConfig)
+    as.log.info("Using key spaces: {} {}", journalName, snapshotName)
+    as
   }
+
+  final override lazy val cluster = Cluster.builder()
+    .addContactPoint("localhost")
+    .withPort(port())
+    .build()
 
   final override def systemName = system.name
 
   implicit val mat = ActorMaterializer()(system)
 
   implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
-
-  lazy val cassandraPort = SocketUtil.temporaryLocalPort()
 
   val pidCounter = new AtomicInteger()
   def nextPid = s"pid=${pidCounter.incrementAndGet()}"

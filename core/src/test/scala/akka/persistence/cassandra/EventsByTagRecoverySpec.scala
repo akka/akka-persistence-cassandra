@@ -54,16 +54,11 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
   }
 
   override protected def afterAll(): Unit = {
+    super.afterAll()
     Try {
       session.close()
       cluster.close()
     }
-    super.afterAll()
-  }
-
-  override protected def externalCassandraCleanup(): Unit = {
-    cluster.connect().execute(s"drop keyspace $keyspaceName")
-    cluster.close()
   }
 
   val waitTime = 100.milliseconds

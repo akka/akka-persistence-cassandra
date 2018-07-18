@@ -55,14 +55,8 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
   override protected def afterAll(): Unit = {
     Try {
       session.close()
-      cluster.close()
     }
     super.afterAll()
-  }
-
-  override protected def externalCassandraCleanup(): Unit = {
-    cluster.connect().execute(s"drop keyspace $journalName")
-    cluster.close()
   }
 
   implicit val materialiser = ActorMaterializer()(system)

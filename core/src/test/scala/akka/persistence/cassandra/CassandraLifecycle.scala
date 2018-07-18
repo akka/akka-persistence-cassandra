@@ -16,6 +16,7 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 import scala.concurrent.duration._
+import scala.util.{ Failure, Success, Try }
 
 object CassandraLifecycle {
   sealed trait CassandraMode
@@ -24,8 +25,10 @@ object CassandraLifecycle {
 
   // Set to external to use your own cassandra instance running on localhost:9042
   // beware that most tests rely on the data directory being removed for clean up
-  // which won't happen for an external cassandra
+  // which won't happen for an external cassandra unless extending CassandraSpec
   val mode: CassandraMode = Embedded //External
+
+  def isExternal: Boolean = mode == External
 
   val config = {
     val always = ConfigFactory.parseString(
@@ -38,6 +41,7 @@ object CassandraLifecycle {
     """
     )
 
+    // this isn't used if extending CassandraSpec
     val port = mode match {
       case Embedded =>
         CassandraLauncher.randomPort
@@ -99,8 +103,8 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   lazy val cluster = {
     Cluster.builder()
       .addContactPoint("localhost")
-      .withClusterName(systemName)
-      .withPort(port())
+      .withClusterName(systemName + "TestCluster")
+      .withPort(system.settings.config.getInt("cassandra-journal.port"))
       .build()
   }
 
@@ -147,11 +151,25 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
       }
       super.afterAll()
     }
+
+  }
+
+  def dropKeyspaces(): Unit = {
+    val journalKeyspace = system.settings.config.getString("cassandra-journal.keyspace")
+    val snapshotKeyspace = system.settings.config.getString("cassandra-snapshot-store.keyspace")
+    val dropped = Try {
+      cluster.connect().execute(s"drop keyspace if exists ${journalKeyspace}")
+      cluster.connect().execute(s"drop keyspace if exists ${snapshotKeyspace}")
+    }
+    dropped match {
+      case Failure(t) => system.log.error(t, "Failed to drop keyspaces {} {}", journalKeyspace, snapshotKeyspace)
+      case Success(_) =>
+    }
   }
 
   /**
    * Only called if using an external cassandra. Override to clean up
-   * keyspace etc
+   * keyspace etc. Defaults to dropping the keyspaces.
    */
-  protected def externalCassandraCleanup(): Unit = {}
+  protected def externalCassandraCleanup(): Unit = dropKeyspaces()
 }

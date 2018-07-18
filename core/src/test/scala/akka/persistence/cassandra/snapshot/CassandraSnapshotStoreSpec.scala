@@ -25,9 +25,9 @@ import scala.util.Try
 object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(
     s"""
-      |cassandra-journal.keyspace=CassandraSnapshotStoreSpec
-      |cassandra-snapshot-store.keyspace=CassandraSnapshotStoreSpecSnapshot
-      |cassandra-snapshot-store.max-metadata-result-size = 2
+       |cassandra-journal.keyspace=CassandraSnapshotStoreSpec
+       |cassandra-snapshot-store.keyspace=CassandraSnapshotStoreSpecSnapshot
+       |cassandra-snapshot-store.max-metadata-result-size = 2
     """.stripMargin
   ).withFallback(CassandraLifecycle.config)
 
@@ -44,7 +44,9 @@ object CassandraSnapshotStoreConfiguration {
 class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config) with CassandraLifecycle {
 
   val storeConfig = new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-snapshot-store"))
-  val storeStatements = new CassandraStatements { def snapshotConfig = storeConfig }
+  val storeStatements = new CassandraStatements {
+    def snapshotConfig = storeConfig
+  }
 
   var session: Session = _
 
@@ -131,6 +133,7 @@ class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStor
       loaded.snapshot should equal(SnapshotWithMetaData("snap", "meta"))
     }
   }
+
 }
 
 /**
@@ -141,4 +144,5 @@ class CassandraSnapshotStoreProtocolV3Spec extends SnapshotStoreSpec(CassandraSn
   with CassandraLifecycle {
 
   override def systemName: String = "CassandraSnapshotStoreProtocolV3Spec"
+
 }

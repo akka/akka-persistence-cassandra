@@ -92,6 +92,9 @@ class CassandraSslSpecWithClientAuth extends TestKit(ActorSystem("CassandraSslSp
 
   "A Cassandra journal with 2-way SSL setup" must {
 
+    if (CassandraLifecycle.isExternal)
+      pending
+
     "write messages over SSL" in {
       skipIfNoJCESupport()
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
@@ -101,6 +104,9 @@ class CassandraSslSpecWithClientAuth extends TestKit(ActorSystem("CassandraSslSp
       }
     }
   }
+
+  // Doesn't work in external mode
+  override protected def externalCassandraCleanup(): Unit = ()
 }
 
 class CassandraSslSpecWithoutClientAuth extends CassandraSpec(config(false)) with CassandraSslSpec {
@@ -113,6 +119,10 @@ class CassandraSslSpecWithoutClientAuth extends CassandraSpec(config(false)) wit
   }
 
   "A Cassandra journal with 1-way SSL setup" must {
+
+    if (CassandraLifecycle.isExternal)
+      pending
+
     "write messages over SSL" in {
       skipIfNoJCESupport()
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
@@ -122,4 +132,7 @@ class CassandraSslSpecWithoutClientAuth extends CassandraSpec(config(false)) wit
       }
     }
   }
+
+  // Doesn't work in external mode
+  override protected def externalCassandraCleanup(): Unit = ()
 }
