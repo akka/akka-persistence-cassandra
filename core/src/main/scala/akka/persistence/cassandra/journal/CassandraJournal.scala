@@ -29,7 +29,6 @@ import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.{ Bytes, UUIDs }
 import com.typesafe.config.Config
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.collection.immutable.Seq

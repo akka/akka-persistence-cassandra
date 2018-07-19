@@ -17,8 +17,8 @@ import com.typesafe.config.ConfigFactory
 object CassandraJournalConfiguration {
   lazy val config = ConfigFactory.parseString(
     s"""
-      |cassandra-journal.keyspace=CassandraJournalSpec
-      |cassandra-snapshot-store.keyspace=CassandraJournalSpecSnapshot
+       |cassandra-journal.keyspace=CassandraJournalSpec
+       |cassandra-snapshot-store.keyspace=CassandraJournalSpecSnapshot
     """.stripMargin
   ).withFallback(CassandraLifecycle.config)
 
@@ -48,10 +48,12 @@ object CassandraJournalConfiguration {
   ).withFallback(config)
 }
 
+// Can't use CassandraSpec so needs to do its own clean up
 class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
   override def systemName: String = "CassandraJournalSpec"
 
   override def supportsRejectingNonSerializableObjects = false
+
   "A Cassandra Journal" must {
     "insert Cassandra metrics to Cassandra Metrics Registry" in {
       val registry = CassandraMetricsRegistry(system).getRegistry
@@ -93,12 +95,15 @@ class CassandraJournalProtocolV3Spec extends JournalSpec(CassandraJournalConfigu
   override def systemName: String = "CassandraJournalProtocolV3Spec"
 
   override def supportsRejectingNonSerializableObjects = false
+
 }
 
 class CassandraJournalCompat2Spec extends JournalSpec(CassandraJournalConfiguration.compat2Config) with CassandraLifecycle {
+
   override def systemName: String = "CassandraJournalCompat2Spec"
 
   override def supportsRejectingNonSerializableObjects = false
+
 }
 
 class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfiguration.perfConfig) with CassandraLifecycle {
@@ -107,4 +112,5 @@ class CassandraJournalPerfSpec extends JournalPerfSpec(CassandraJournalConfigura
   override def awaitDurationMillis: Long = 20.seconds.toMillis
 
   override def supportsRejectingNonSerializableObjects = false
+
 }

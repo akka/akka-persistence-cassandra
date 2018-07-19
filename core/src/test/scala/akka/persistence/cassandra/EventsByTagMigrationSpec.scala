@@ -20,7 +20,6 @@ import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import akka.{ Done, NotUsed }
-import com.datastax.driver.core.Cluster
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
 
@@ -203,7 +202,9 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     // This will be left as a manual step for the user as it stops
     // rolling back to the old version
     "allow dropping of the materialized view" in {
+      system.log.info("Dropping old materialzied view")
       session.execute(s"DROP MATERIALIZED VIEW $eventsByTagViewName")
+      system.log.info("Dropped old materialzied view")
     }
 
     "have a peek in the messages table" in {
@@ -266,7 +267,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
   }
 }
 
-class AbstractEventsByTagMigrationSpec extends CassandraSpec(EventsByTagMigrationSpec.config)
+abstract class AbstractEventsByTagMigrationSpec extends CassandraSpec(EventsByTagMigrationSpec.config)
   with DirectWriting
   with BeforeAndAfterAll {
 
@@ -437,12 +438,4 @@ class AbstractEventsByTagMigrationSpec extends CassandraSpec(EventsByTagMigratio
     system.log.debug("Directly wrote payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
   }
 
-  override protected def externalCassandraCleanup(): Unit = {
-    val cluster = Cluster.builder()
-      .addContactPoint("localhost")
-      .withClusterName(systemName + "Cleanup")
-      .build()
-    Try(cluster.connect().execute(s"drop keyspace $journalName"))
-    cluster.close()
-  }
 }

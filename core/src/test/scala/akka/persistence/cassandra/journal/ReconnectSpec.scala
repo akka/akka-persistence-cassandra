@@ -6,7 +6,7 @@ package akka.persistence.cassandra.journal
 
 import akka.actor._
 import akka.persistence.cassandra.CassandraLifecycle.AwaitPersistenceInit
-import akka.persistence.cassandra.CassandraSpec
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
@@ -14,8 +14,6 @@ import scala.concurrent.duration._
 object ReconnectSpec {
   val config = ConfigFactory.parseString(
     s"""
-      |cassandra-journal.keyspace=ReconnectSpec
-      |cassandra-snapshot-store.keyspace=ReconnectSpecSnapshot
     """
   )
 }
@@ -26,6 +24,11 @@ class ReconnectSpec extends CassandraSpec(ReconnectSpec.config) {
   override protected def beforeAll(): Unit = ()
 
   "Journal" should {
+
+    // This test can't run with an external Cassandra as
+    // it requires to start with a stopped Cassandra
+    if (CassandraLifecycle.isExternal)
+      pending
 
     "reconnect if Cassandra is not started" in {
       val a1 = system.actorOf(Props(classOf[AwaitPersistenceInit], "", ""))

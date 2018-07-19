@@ -27,8 +27,7 @@ object CassandraEventUpdateSpec {
   ).withFallback(CassandraLifecycle.config)
 }
 
-class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.config) {
-  s =>
+class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.config) { s =>
 
   private[akka] val log = Logging(system, getClass)
   private val serialization = SerializationExtension(system)

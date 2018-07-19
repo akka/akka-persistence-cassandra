@@ -37,9 +37,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-
     session = Await.result(cassandraPluginConfig.sessionProvider.connect(), 5.seconds)
-
     session.execute("CREATE KEYSPACE IF NOT EXISTS testKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
   }
 

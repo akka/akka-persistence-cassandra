@@ -16,13 +16,15 @@ import scala.language.postfixOps
 
 object CassandraLoadSpec {
   val config = ConfigFactory.parseString(
-    s"""
-      |cassandra-journal.replication-strategy = NetworkTopologyStrategy
-      |cassandra-journal.data-center-replication-factors = ["dc1:1"]
-      |cassandra-journal.keyspace=CassandraLoadSpec
-      |cassandra-snapshot-store.keyspace=CassandraLoadSpecSnapshot
-      |akka.actor.serialize-messages=off
-    """.stripMargin
+    if (CassandraLifecycle.isExternal) {
+      "akka.actor.serialize-messages=off"
+    } else {
+      s"""
+      cassandra-journal.replication-strategy = NetworkTopologyStrategy
+      cassandra-journal.data-center-replication-factors = ["dc1:1"]
+      akka.actor.serialize-messages=off
+     """
+    }
   ).withFallback(CassandraLifecycle.config)
 
   trait Measure extends { this: Actor =>

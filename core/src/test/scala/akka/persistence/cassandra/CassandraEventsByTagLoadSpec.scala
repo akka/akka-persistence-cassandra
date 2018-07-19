@@ -12,40 +12,38 @@ import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
 import akka.stream.testkit.scaladsl.TestSink
-import com.datastax.driver.core.Cluster
 import com.typesafe.config.ConfigFactory
 import org.scalatest.time.{ Seconds, Span }
 
 import scala.concurrent.duration._
-import scala.util.Try
 
 object CassandraEventsByTagLoadSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(
     s"""
-       |akka {
-       |  loglevel = INFO
-       |}
-       |cassandra-journal {
-       |  log-queries = off
-       |  events-by-tag {
-       |     max-message-batch-size = 200
-       |     bucket-size = "Minute"
-       |  }
-       |}
-       |cassandra-snapshot-store.keyspace=CassandraEventsByTagLoadSpecSnapshot
-       |cassandra-query-journal = {
-       |   first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormat)}"
-       |}
-       |akka.actor.serialize-messages=off
-    """.stripMargin
+       akka {
+         loglevel = INFO
+       }
+       cassandra-journal {
+         log-queries = off
+         events-by-tag {
+            max-message-batch-size = 200
+            bucket-size = "Minute"
+         }
+       }
+       cassandra-snapshot-store.keyspace=CassandraEventsByTagLoadSpecSnapshot
+       cassandra-query-journal = {
+          first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormat)}"
+       }
+       akka.actor.serialize-messages=off
+    """
   ).withFallback(CassandraLifecycle.config)
 }
 
 class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoadSpec.config) {
 
-  implicit val materialiser = ActorMaterializer()(system)
+  implicit val materializer = ActorMaterializer()(system)
   implicit override val patienceConfig = PatienceConfig(timeout = Span(60, Seconds), interval = Span(5, Seconds))
 
   val nrPersistenceIds = 50L
@@ -118,12 +116,4 @@ class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoa
     }
   }
 
-  override protected def externalCassandraCleanup(): Unit = {
-    val cluster = Cluster.builder()
-      .withClusterName("CassandraEventsByTagLoadSpecCleanup")
-      .addContactPoint("localhost")
-      .build()
-    Try(cluster.connect().execute(s"drop keyspace ${system.settings.config.getString("cassandra-journal.keyspace")}"))
-    cluster.close()
-  }
 }

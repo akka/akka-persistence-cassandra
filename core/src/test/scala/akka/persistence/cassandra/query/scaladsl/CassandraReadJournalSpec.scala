@@ -45,19 +45,6 @@ class TestTagger extends WriteEventAdapter {
 
 class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.config) {
 
-  override protected def externalCassandraCleanup(): Unit = {
-    val cluster = Cluster.builder()
-      .withClusterName("scaladslcassandrareadjournalspec")
-      .addContactPoint("localhost")
-      .withPort(9042)
-      .build()
-    try {
-      cluster.connect().execute(s"drop keyspace $journalName")
-    } finally {
-      cluster.close()
-    }
-  }
-
   "Cassandra Read Journal Scala API" must {
     "start eventsByPersistenceId query" in {
       val a = system.actorOf(Props(new TestActor("a")))
