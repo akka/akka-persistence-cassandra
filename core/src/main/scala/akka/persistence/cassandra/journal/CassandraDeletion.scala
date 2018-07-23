@@ -17,9 +17,9 @@ import akka.persistence.cassandra._
 import akka.Done
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraDeletion.{ MessageId, PartitionInfo }
-import scala.collection.immutable
-import scala.concurrent.{ ExecutionContext, Future }
 
+import scala.collection.{ immutable => im }
+import scala.concurrent.{ ExecutionContext, Future }
 import akka.serialization.Serialization
 
 private[akka] object CassandraDeletion {
@@ -50,68 +50,59 @@ private[akka] trait CassandraDeletion extends CassandraStatements {
   def preparedDeleteMessages = session.prepare(deleteMessages).map(_.setIdempotent(true))
 
   def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
-    asyncHighestDeletedSequenceNumber(persistenceId).flatMap {
-      highestDeletedSequenceNumber =>
-        asyncReadLowestSequenceNr(persistenceId, 1L, highestDeletedSequenceNumber, Some(config.readConsistency), Some(readRetryPolicy)).flatMap {
-          lowestSequenceNr =>
-            asyncFindHighestSequenceNr(persistenceId, lowestSequenceNr, config.targetPartitionSize).flatMap {
-              highestSequenceNr =>
-                val lowestPartition = partitionNr(lowestSequenceNr, config.targetPartitionSize)
-                val toSeqNr = math.min(toSequenceNr, highestSequenceNr)
-                val highestPartition = partitionNr(toSeqNr, config.targetPartitionSize) + 1 // may have been moved to the next partition
-
-                val boundInsertDeletedTo = preparedInsertDeletedTo.map(_.bind(persistenceId, toSeqNr: JLong))
-                val logicalDelete = boundInsertDeletedTo.flatMap(session.executeWrite)
-
-                def partitionInfos: immutable.Seq[Future[PartitionInfo]] = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
-
-                def physicalDelete(): Unit = {
-                  if (config.cassandra2xCompat) {
-                    def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = {
-                      val boundStatements = messageIds.map(mid =>
-                        preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
-                      Future.sequence(boundStatements).flatMap {
-                        stmts =>
-                          executeBatch(batch => stmts.foreach(batch.add), deleteRetryPolicy)
-                      }
-                    }
-
-                    partitionInfos.map(future => future.flatMap(pi => {
-                      Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map {
-                        group =>
-                          {
-                            val delete = asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
-                            delete.failed.foreach {
-                              e =>
-                                log.warning(s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                                  "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                                  "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
-                            }
-                            delete
-                          }
-                      })
-                    }))
-
-                  } else {
-                    Future.sequence(partitionInfos.map(future => future.flatMap {
-                      pi =>
-                        val boundDeleteMessages = preparedDeleteMessages.map(_.bind(persistenceId, pi.partitionNr: JLong, toSeqNr: JLong))
-                        boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
-                    }))
-                      .failed.foreach { e =>
-                        log.warning("Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                          "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                          "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
-                      }
-                  }
-                }
-
-                logicalDelete.foreach(_ => physicalDelete())
-
-                logicalDelete.map(_ => Done)
-            }
+    def physicalDelete(lowestPartition: Long, highestPartition: Long, toSeqNr: Long): Unit = {
+      val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
+      if (config.cassandra2xCompat) {
+        def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = {
+          val boundStatements = messageIds.map(mid =>
+            preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
+          Future.sequence(boundStatements).flatMap { stmts =>
+            executeBatch(batch => stmts.foreach(batch.add), deleteRetryPolicy)
+          }
         }
+
+        partitionInfos.map(future => future.flatMap(pi => {
+          Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map {
+            group =>
+              {
+                val delete = asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
+                delete.failed.foreach {
+                  e =>
+                    log.warning(s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                      "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                      "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
+                }
+                delete
+              }
+          })
+        }))
+
+      } else {
+        Future.sequence(partitionInfos.map(future => future.flatMap {
+          pi =>
+            val boundDeleteMessages = preparedDeleteMessages.map(_.bind(persistenceId, pi.partitionNr: JLong, toSeqNr: JLong))
+            boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
+        }))
+          .failed.foreach { e =>
+            log.warning("Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+              "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+              "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
+          }
+      }
     }
+
+    for {
+      highestDeletedSequenceNumber <- asyncHighestDeletedSequenceNumber(persistenceId)
+      lowestSequenceNr <- asyncReadLowestSequenceNr(persistenceId, 1L, highestDeletedSequenceNumber, Some(config.readConsistency), Some(readRetryPolicy))
+      highestSequenceNr <- asyncFindHighestSequenceNr(persistenceId, lowestSequenceNr, config.targetPartitionSize)
+      lowestPartition = partitionNr(lowestSequenceNr, config.targetPartitionSize)
+      toSeqNr = math.min(toSequenceNr, highestSequenceNr)
+      highestPartition = partitionNr(toSeqNr, config.targetPartitionSize) + 1 // may have been moved to the next partition
+      boundInsertDeletedTo = preparedInsertDeletedTo.map(_.bind(persistenceId, toSeqNr: JLong))
+      logicalDelete = boundInsertDeletedTo.flatMap(session.executeWrite)
+      _ = logicalDelete.foreach(_ => physicalDelete(lowestPartition, highestPartition, toSeqNr))
+      done <- logicalDelete.map(_ => Done)
+    } yield done
   }
 
   private def execute(stmt: Statement, retryPolicy: RetryPolicy): Future[Unit] = {
@@ -132,7 +123,6 @@ private[akka] trait CassandraDeletion extends CassandraStatements {
       .map(rowOption => rowOption.map(_.getLong("deleted_to")).getOrElse(0))
   }
 
-  // TODO create a custom extractor that doesn't deserialise the event
   private[akka] def asyncReadLowestSequenceNr(
     persistenceId:                String,
     fromSequenceNr:               Long,
