@@ -17,8 +17,7 @@ import akka.util.OptionVal
 import scala.concurrent._
 
 trait CassandraRecovery extends CassandraTagRecovery
-  with TaggedPreparedStatements
-  with CassandraDeletion {
+  with TaggedPreparedStatements {
   this: CassandraJournal =>
 
   private[akka] val config: CassandraJournalConfig
@@ -42,7 +41,7 @@ trait CassandraRecovery extends CassandraTagRecovery
     fromSequenceNr: Long,
     toSequenceNr:   Long,
     max:            Long
-  )(replayCallback: (PersistentRepr) => Unit): Future[Unit] = {
+  )(replayCallback: PersistentRepr => Unit): Future[Unit] = {
     log.debug("Recovering pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
 
     if (config.eventsByTagEnabled) {

@@ -76,6 +76,8 @@ abstract class CassandraSpec(config: Config, val journalName: String = getCaller
   with CassandraLifecycle
   with ScalaFutures {
 
+  def this(config: String) = this(ConfigFactory.parseString(config))
+
   lazy val randomPort = SocketUtil.temporaryLocalPort()
 
   override def port(): Int = CassandraLifecycle.mode match {

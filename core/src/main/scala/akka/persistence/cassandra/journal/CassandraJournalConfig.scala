@@ -48,6 +48,8 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
   // query what version of cassandra we're connected to and do the right thing
   val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
 
+  val maxConcurrentDeletes = config.getInt("max-concurrent-deletes")
+
   val queryPlugin = config.getString("query-plugin")
 
   val eventsByTagEnabled = config.getBoolean("events-by-tag.enabled")
