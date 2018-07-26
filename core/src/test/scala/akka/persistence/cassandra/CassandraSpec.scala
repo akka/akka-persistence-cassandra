@@ -100,7 +100,10 @@ abstract class CassandraSpec(config: Config, val journalName: String = getCaller
       configOverrides(journalName, snapshotName, port())
         .withFallback(config) // test's config
         .withFallback(fallbackConfig) // generally good config that tests can override
-        .withFallback(CassandraLifecycle.config).resolve()
+        .withFallback(CassandraLifecycle.config)
+        .withFallback(ConfigFactory.load())
+        .resolve()
+
     val as = ActorSystem(journalName, finalConfig)
     as.log.info("Using key spaces: {} {}", journalName, snapshotName)
     as
