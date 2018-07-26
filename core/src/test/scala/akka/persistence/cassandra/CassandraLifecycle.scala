@@ -26,7 +26,8 @@ object CassandraLifecycle {
   // Set to external to use your own cassandra instance running on localhost:9042
   // beware that most tests rely on the data directory being removed for clean up
   // which won't happen for an external cassandra unless extending CassandraSpec
-  val mode: CassandraMode = Embedded //External
+  val mode: CassandraMode = Embedded
+  //  val mode: CassandraMode = External
 
   def isExternal: Boolean = mode == External
 
