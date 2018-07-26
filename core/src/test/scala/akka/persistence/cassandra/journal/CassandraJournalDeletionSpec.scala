@@ -5,10 +5,9 @@
 package akka.persistence.cassandra.journal
 
 import akka.actor.{ ActorRef, PoisonPill, Props }
-import akka.persistence.{ DeleteMessagesFailure, DeleteMessagesSuccess, PersistentActor }
+import akka.persistence.{ DeleteMessagesFailure, DeleteMessagesSuccess, PersistentActor, RecoveryCompleted }
 import akka.persistence.cassandra.CassandraSpec
 import akka.testkit.TestProbe
-import com.typesafe.config.ConfigFactory
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -17,6 +16,9 @@ object CassandraJournalDeletionSpec {
   case class PersistMe(msg: Long)
   case class DeleteTo(sequenceNr: Long)
   case object Ack
+  case object GetRecoveredEvents
+
+  case class RecoveredEvents(events: Seq[Any])
 
   case class Deleted(sequenceNr: Long)
 
@@ -28,8 +30,11 @@ object CassandraJournalDeletionSpec {
   )
     extends PersistentActor {
 
+    var recoveredEvents: List[Any] = List.empty
+
     override def receiveRecover: Receive = {
-      case _ =>
+      case event =>
+        recoveredEvents = event :: recoveredEvents
     }
 
     var lastDeletedTo: Long = 0
@@ -38,6 +43,8 @@ object CassandraJournalDeletionSpec {
       case p: PersistMe => persist(p) { _ =>
         sender() ! Ack
       }
+      case GetRecoveredEvents =>
+        sender() ! RecoveredEvents(recoveredEvents.reverse)
       case DeleteTo(to) => deleteMessages(to)
       case DeleteMessagesSuccess(to) =>
         context.system.log.debug("Deleted to: {}", to)
@@ -90,8 +97,8 @@ class CassandraJournalDeletionSpec extends CassandraSpec(
 
       // Recovery should not find a missing sequence nr
       val p1TakeTwo = system.actorOf(Props(new PAThatDeletes("p1", deleteSuccess.ref, deleteFail.ref)))
-      p1TakeTwo ! PersistMe(101)
-      expectMsg(Ack)
+      p1TakeTwo ! GetRecoveredEvents
+      expectMsg(RecoveredEvents(List(PersistMe(100), RecoveryCompleted)))
     }
 
     "fail fast if too many concurrent deletes" in {
