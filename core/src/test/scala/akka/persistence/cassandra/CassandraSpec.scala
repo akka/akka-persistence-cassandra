@@ -35,13 +35,14 @@ import scala.util.Try
 object CassandraSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   def getCallerName(clazz: Class[_]): String = {
-    val s = (Thread.currentThread.getStackTrace map (_.getClassName) drop 1)
-      .dropWhile(_ matches "(java.lang.Thread|.*Abstract.*)")
+    val s = (Thread.currentThread.getStackTrace map (_.getClassName))
+      .dropWhile(_ matches "(java.lang.Thread|.*Abstract.*|akka.persistence.cassandra.CassandraSpec\\$|.*CassandraSpec)")
     val reduced = s.lastIndexWhere(_ == clazz.getName) match {
       case -1 ⇒ s
       case z  ⇒ s drop (z + 1)
     }
     reduced.head.replaceFirst(""".*\.""", "").replaceAll("[^a-zA-Z_0-9]", "_")
+      .take(48) // Max length of a c* keyspace
   }
 
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config = ConfigFactory.parseString(

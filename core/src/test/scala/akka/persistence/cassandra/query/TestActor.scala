@@ -13,14 +13,14 @@ import akka.persistence.cassandra.EventWithMetaData
 import akka.persistence.journal.Tagged
 
 object TestActor {
-  def props(persistenceId: String): Props =
-    Props(new TestActor(persistenceId))
+  def props(persistenceId: String, journalId: String = "cassandra-journal"): Props =
+    Props(new TestActor(persistenceId, journalId))
 
   final case class PersistAll(events: immutable.Seq[String])
   final case class DeleteTo(seqNr: Long)
 }
 
-class TestActor(override val persistenceId: String) extends PersistentActor {
+class TestActor(override val persistenceId: String, override val journalPluginId: String) extends PersistentActor {
 
   var lastDelete: ActorRef = _
 
@@ -47,7 +47,7 @@ class TestActor(override val persistenceId: String) extends PersistentActor {
       val size = events.size
       val handler = {
         var count = 0
-        (evt: String) => {
+        evt: String => {
           count += 1
           if (count == size)
             sender() ! "PersistAll-done"

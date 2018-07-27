@@ -544,7 +544,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization)
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization),
+      fastForwardEnabled = true
     ).map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
@@ -565,7 +566,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     name:                   String,
     customConsistencyLevel: Option[ConsistencyLevel] = None,
     customRetryPolicy:      Option[RetryPolicy]      = None,
-    extractor:              Extractor[T]
+    extractor:              Extractor[T],
+    fastForwardEnabled:     Boolean                  = false
   ): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
 
     val deserializeEventAsync = queryPluginConfig.deserializationParallelism > 1
@@ -586,7 +588,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
           customConsistencyLevel,
           customRetryPolicy
         ),
-        queryPluginConfig
+        queryPluginConfig,
+        fastForwardEnabled
       ))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
         .named(name)

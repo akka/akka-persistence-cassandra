@@ -96,6 +96,10 @@ class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigra
 class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
 
   "Events by tag migration with no metadata" must {
+
+    if (CassandraLifecycle.isExternal)
+      pending
+
     val pidOne = "p-1"
     val pidTwo = "p-2"
     val pidWithMeta = "pidMeta"
