@@ -154,10 +154,16 @@ class EventsByTagMigration(system: ActorSystem)
    * Note that this is a very inefficient cassandra query so might timeout. If so
    * the version of this method can be used where the persistenceIds are provided.
    *
+   * Persistence ids can be excluded (e.g. useful if you know certain persistenceIds
+   * don't use tags
+   *
    * @return A Future that completes when the migration is complete.
    */
-  def migrateToTagViews(periodicFlush: Int = 1000): Future[Done] = {
-    migrateToTagViewsInternal(queries.currentPersistenceIds(), periodicFlush)
+  def migrateToTagViews(periodicFlush: Int = 1000, filter: String => Boolean = _ => true): Future[Done] = {
+    migrateToTagViewsInternal(
+      queries.currentPersistenceIds().filter(filter),
+      periodicFlush
+    )
   }
 
   private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed], periodicFlush: Int): Future[Done] = {

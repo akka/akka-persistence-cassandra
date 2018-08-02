@@ -6,7 +6,7 @@ package akka.persistence.cassandra
 
 import java.nio.ByteBuffer
 import java.time.{ LocalDateTime, ZoneOffset }
-import java.lang.{Long => JLong}
+import java.lang.{ Long => JLong }
 
 import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.Ack
@@ -102,11 +102,11 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     val pidTwo = "p-2"
     val pidWithMeta = "pidMeta"
     val pidWithSnapshot = "pidSnapshot"
+    val pidExcluded = "pidExcluded"
 
     "have some existing tagged messages" in {
       // this one uses the 0.7 schema, soo old.
       writeOldTestEventInMessagesColumn(PersistentRepr("e-1", 1L, pidOne), Set("blue", "green", "orange"))
-
 
       writeOldTestEventWithTags(PersistentRepr("e-2", 2L, pidOne), Set("blue"))
       writeOldTestEventWithTags(PersistentRepr("e-3", 3L, pidOne), Set())
@@ -120,6 +120,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       writeOldTestEventWithTags(PersistentRepr("h-2", 11L, pidWithSnapshot), Set("red"))
       writeToDeletedTo(pidWithSnapshot, 9)
 
+      writeOldTestEventWithTags(PersistentRepr("i-1", 1L, pidExcluded), Set("bad-tag"))
     }
 
     "allow creation of the new tags view table" in {
@@ -127,7 +128,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     }
 
     "migrate tags to the new table" in {
-      migrator.migrateToTagViews().futureValue shouldEqual Done
+      migrator.migrateToTagViews(filter = _ != pidExcluded).futureValue shouldEqual Done
     }
 
     "be idempotent so it can be restarted" in {
@@ -138,7 +139,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     }
 
     "allow a second migration to resume from where the last one got to" in {
-      migrator.migrateToTagViews().futureValue shouldEqual Done
+      migrator.migrateToTagViews(filter = _ != pidExcluded).futureValue shouldEqual Done
     }
 
     "migrate events missed during the large migration as part of actor recovery" in {
@@ -191,6 +192,12 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       redProbe.expectNextPF { case EventEnvelope(_, `pidWithSnapshot`, 10, "h-1") => }
       redProbe.expectNextPF { case EventEnvelope(_, `pidWithSnapshot`, 11, "h-2") => }
       redProbe.cancel()
+
+      val excludedSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("bad-tag", NoOffset)
+      val excludedProbe = excludedSrc.runWith(TestSink.probe[Any])(materialiser)
+      excludedProbe.request(1)
+      excludedProbe.expectNoMessage(waitTime)
+      excludedProbe.cancel()
     }
 
     "see events missed by migration if the persistent actor is started" in {
