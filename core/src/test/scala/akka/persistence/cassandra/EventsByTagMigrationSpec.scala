@@ -6,6 +6,7 @@ package akka.persistence.cassandra
 
 import java.nio.ByteBuffer
 import java.time.{ LocalDateTime, ZoneOffset }
+import java.lang.{Long => JLong}
 
 import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.Ack
@@ -36,20 +37,21 @@ object EventsByTagMigrationSpec {
 
   val config = ConfigFactory.parseString(
     s"""
-       |akka {
-       | actor.serialize-messages=off
-       | loglevel = DEBUG
-       | actor.debug.unhandled = on
-       |}
-       |cassandra-journal {
-       | keyspace-autocreate = true
-       | tables-autocreate = true
-       |}
-       |cassandra-query-journal {
-       | first-time-bucket = "${today.minusHours(5).format(query.firstBucketFormat)}"
-       |}
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+       akka {
+        actor.serialize-messages=off
+        loglevel = DEBUG
+        actor.debug.unhandled = on
+       }
+       cassandra-journal {
+        keyspace-autocreate = true
+        tables-autocreate = true
+       }
+       cassandra-query-journal {
+         first-time-bucket = "${today.minusHours(5).format(query.firstBucketFormat)}"
+         events-by-persistence-id-gap-timeout = 1s
+       }
+    """
+  ).withFallback(CassandraLifecycle.config).withFallback(ConfigFactory.load())
 
 }
 
@@ -99,16 +101,25 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     val pidOne = "p-1"
     val pidTwo = "p-2"
     val pidWithMeta = "pidMeta"
+    val pidWithSnapshot = "pidSnapshot"
 
     "have some existing tagged messages" in {
       // this one uses the 0.7 schema, soo old.
       writeOldTestEventInMessagesColumn(PersistentRepr("e-1", 1L, pidOne), Set("blue", "green", "orange"))
+
+
       writeOldTestEventWithTags(PersistentRepr("e-2", 2L, pidOne), Set("blue"))
       writeOldTestEventWithTags(PersistentRepr("e-3", 3L, pidOne), Set())
       writeOldTestEventWithTags(PersistentRepr("e-4", 4L, pidOne), Set("blue", "green"))
       writeOldTestEventWithTags(PersistentRepr("f-1", 1L, pidTwo), Set("green"))
       writeOldTestEventWithTags(PersistentRepr("f-2", 2L, pidTwo), Set("blue"))
       writeOldTestEventWithTags(PersistentRepr("g-1", 1L, pidWithMeta), Set("blue"), Some("This is the best event ever"))
+
+      // These events have been snapshotted
+      writeOldTestEventWithTags(PersistentRepr("h-1", 10L, pidWithSnapshot), Set("red"))
+      writeOldTestEventWithTags(PersistentRepr("h-2", 11L, pidWithSnapshot), Set("red"))
+      writeToDeletedTo(pidWithSnapshot, 9)
+
     }
 
     "allow creation of the new tags view table" in {
@@ -173,6 +184,13 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       bananaProbe.request(3)
       bananaProbe.expectNoMessage(waitTime)
       bananaProbe.cancel()
+
+      val redSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("red", NoOffset)
+      val redProbe = redSrc.runWith(TestSink.probe[Any])(materialiser)
+      redProbe.request(3)
+      redProbe.expectNextPF { case EventEnvelope(_, `pidWithSnapshot`, 10, "h-1") => }
+      redProbe.expectNextPF { case EventEnvelope(_, `pidWithSnapshot`, 11, "h-2") => }
+      redProbe.cancel()
     }
 
     "see events missed by migration if the persistent actor is started" in {
@@ -316,7 +334,7 @@ abstract class AbstractEventsByTagMigrationSpec extends CassandraSpec(EventsByTa
      """.stripMargin
 
   val statements = new CassandraStatements {
-    override def config: CassandraJournalConfig = new CassandraJournalConfig(system, EventsByTagMigrationSpec.config)
+    override def config: CassandraJournalConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   }
 
   lazy val session = cluster.connect()
@@ -370,6 +388,8 @@ abstract class AbstractEventsByTagMigrationSpec extends CassandraSpec(EventsByTa
 
   private lazy val preparedWriteMessageWithoutMeta = session.prepare(writeMessage(false))
 
+  private lazy val preapredWriteDeletedTo = session.prepare(statements.insertDeletedTo)
+
   private val writeMessageVersion0p7 =
     s"""
       INSERT INTO ${messagesTableName} (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, tag1, tag2, tag3, message, used)
@@ -396,6 +416,10 @@ abstract class AbstractEventsByTagMigrationSpec extends CassandraSpec(EventsByTa
         bound.setString(s"tag${index + 1}", tag)
     }
     session.execute(bound)
+  }
+
+  def writeToDeletedTo(persistenceId: String, deletedTo: Long): Unit = {
+    session.execute(preapredWriteDeletedTo.bind(persistenceId, deletedTo: JLong))
   }
 
   def writeOldTestEventWithTags(persistent: PersistentRepr, tags: Set[String], metadata: Option[String] = None): Unit = {
