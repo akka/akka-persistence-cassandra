@@ -47,7 +47,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
 
   "Cassandra Read Journal Scala API" must {
     "start eventsByPersistenceId query" in {
-      val a = system.actorOf(Props(new TestActor("a")))
+      val a = system.actorOf(TestActor.props("a"))
       a ! "a-1"
       expectMsg("a-1-done")
 
@@ -59,7 +59,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
     }
 
     "start current eventsByPersistenceId query" in {
-      val a = system.actorOf(Props(new TestActor("b")))
+      val a = system.actorOf(TestActor.props("b"))
       a ! "b-1"
       expectMsg("b-1-done")
 

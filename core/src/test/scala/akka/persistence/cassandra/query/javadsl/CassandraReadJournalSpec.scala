@@ -4,7 +4,6 @@
 
 package akka.persistence.cassandra.query.javadsl
 
-import akka.actor.Props
 import akka.persistence.cassandra.query.{ TestActor, javadsl, scaladsl }
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
@@ -44,7 +43,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
 
   "Cassandra Read Journal Java API" must {
     "start eventsByPersistenceId query" in {
-      val a = system.actorOf(Props(new TestActor("a")))
+      val a = system.actorOf(TestActor.props("a"))
       a ! "a-1"
       expectMsg("a-1-done")
 
@@ -56,7 +55,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
     }
 
     "start current eventsByPersistenceId query" in {
-      val a = system.actorOf(Props(new TestActor("b")))
+      val a = system.actorOf(TestActor.props("b"))
       a ! "b-1"
       expectMsg("b-1-done")
 

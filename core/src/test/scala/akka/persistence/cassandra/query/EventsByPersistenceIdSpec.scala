@@ -20,7 +20,6 @@ import scala.concurrent.duration._
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
-    cassandra-journal.keyspace=EventsByPersistenceIdSpec
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 2
     cassandra-query-journal.events-by-persistence-id-gap-timeout = 4 seconds
@@ -29,8 +28,7 @@ object EventsByPersistenceIdSpec {
     """).withFallback(CassandraLifecycle.config)
 }
 
-class EventsByPersistenceIdSpec
-  extends CassandraSpec(EventsByPersistenceIdSpec.config)
+class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.config)
   with DirectWriting {
 
   val noMsgTimeout = 100.millis
