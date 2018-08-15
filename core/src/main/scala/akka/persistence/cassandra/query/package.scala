@@ -12,8 +12,8 @@ import com.datastax.driver.core.utils.UUIDs
 
 package object query {
 
-  val firstBucketFormat: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyyMMdd'T'HH:mm")
+  val firstBucketFormat = "yyyyMMdd'T'HH:mm"
+  val firstBucketFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern(firstBucketFormat)
 
   def uuid(timestamp: Long): UUID = {
     def makeMsb(time: Long): Long = {

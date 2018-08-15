@@ -34,7 +34,7 @@ object CassandraEventsByTagLoadSpec {
        }
        cassandra-snapshot-store.keyspace=CassandraEventsByTagLoadSpecSnapshot
        cassandra-query-journal = {
-          first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormat)}"
+          first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
        }
        akka.actor.serialize-messages=off
     """
