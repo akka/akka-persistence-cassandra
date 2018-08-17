@@ -307,62 +307,87 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     }
   }
 
-  def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
-    asyncHighestDeletedSequenceNumber(persistenceId).flatMap { highestDeletedSequenceNumber =>
-      asyncReadLowestSequenceNr(persistenceId, 1L, highestDeletedSequenceNumber).flatMap { lowestSequenceNr =>
-        super.asyncReadHighestSequenceNr(persistenceId, lowestSequenceNr).flatMap { highestSequenceNr =>
-          val lowestPartition = partitionNr(lowestSequenceNr)
-          val toSeqNr = math.min(toSequenceNr, highestSequenceNr)
-          val highestPartition = partitionNr(toSeqNr) + 1 // may have been moved to the next partition
+  /**
+   * Not thread safe. Assumed to only be called from the journal actor.
+   * However, unlike asyncWriteMessages it can be called before the previous Future completes
+   */
+  override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
 
-          val boundInsertDeletedTo = preparedInsertDeletedTo.map(_.bind(persistenceId, toSeqNr: JLong))
-          val logicalDelete = boundInsertDeletedTo.flatMap(session.executeWrite)
-
-          def partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
-
-          def physicalDelete(): Unit = {
-            if (config.cassandra2xCompat) {
-              def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = {
-                val boundStatements = messageIds.map(mid =>
-                  preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
-                Future.sequence(boundStatements).flatMap { stmts =>
-                  executeBatch(batch => stmts.foreach(batch.add), deleteRetryPolicy)
-                }
-              }
-
-              partitionInfos.map(future => future.flatMap(pi => {
-                Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>
-                  {
-                    val delete = asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
-                    delete.onFailure {
-                      case e => log.warning(s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                        "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                        "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
-                    }
-                    delete
-                  }
-                })
-              }))
-
-            } else {
-              Future.sequence(partitionInfos.map(future => future.flatMap { pi =>
-                val boundDeleteMessages = preparedDeleteMessages.map(_.bind(persistenceId, pi.partitionNr: JLong, toSeqNr: JLong))
-                boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
-              }))
-                .onFailure {
-                  case e => log.warning("Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                    "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                    "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
-                }
-            }
+    def physicalDelete(lowestPartition: Long, highestPartition: Long, toSeqNr: Long): Future[Done] = {
+      if (config.cassandra2xCompat) {
+        def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = {
+          val boundStatements = messageIds.map(mid =>
+            preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
+          Future.sequence(boundStatements).flatMap { stmts =>
+            executeBatch(batch => stmts.foreach(batch.add), deleteRetryPolicy)
           }
-
-          logicalDelete.foreach(_ => physicalDelete())
-
-          logicalDelete.map(_ => Done)
         }
+
+        val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
+        val deleteResult =
+          Future.sequence(partitionInfos.map(future => future.flatMap(pi => {
+            Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map {
+              group =>
+                {
+                  val groupDeleteResult = asyncDeleteMessages(pi.partitionNr, group map (MessageId(persistenceId, _)))
+                  groupDeleteResult.failed.foreach { e =>
+                    log.warning(s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                      "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                      "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
+                  }
+                  groupDeleteResult
+                }
+            })
+          })))
+        deleteResult.map(_ => Done)
+
+      } else {
+        val deleteResult = Future.sequence((lowestPartition to highestPartition).map { partitionNr =>
+          val boundDeleteMessages = preparedDeleteMessages.map(_.bind(persistenceId, partitionNr: JLong, toSeqNr: JLong))
+          boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
+        })
+        deleteResult.failed.foreach { e =>
+          log.warning("Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+            "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+            "Caused by: [{}: {}]", persistenceId, toSequenceNr, e.getClass.getName, e.getMessage)
+        }
+        deleteResult.map(_ => Done)
       }
     }
+
+    /**
+     * Deletes the events by inserting into the metadata table deleted_to
+     * and physically deletes the rows.
+     */
+    def logicalAndPhysicalDelete(highestDeletedSequenceNumber: Long, highestSequenceNr: Long): Future[Done] = {
+      val lowestPartition = partitionNr(highestDeletedSequenceNumber + 1)
+      val toSeqNr = math.min(toSequenceNr, highestSequenceNr)
+      val highestPartition = partitionNr(toSeqNr) + 1 // may have been moved to the next partition
+      val logicalDelete =
+        if (toSeqNr <= highestDeletedSequenceNumber) {
+          // already deleted same or higher sequence number, don't update highestDeletedSequenceNumber,
+          // but perform the physical delete (again), may be a retry request
+          Future.successful(())
+        } else {
+          val boundInsertDeletedTo = preparedInsertDeletedTo.map(_.bind(persistenceId, toSeqNr: JLong))
+          boundInsertDeletedTo.flatMap(session.executeWrite)
+        }
+      logicalDelete.flatMap(_ => physicalDelete(lowestPartition, highestPartition, toSeqNr))
+    }
+
+    val deleteResult = for {
+      highestDeletedSequenceNumber <- asyncHighestDeletedSequenceNumber(persistenceId)
+      highestSequenceNr <- {
+        // MaxValue may be used as magic value to delete all events without specifying actual toSequenceNr
+        if (toSequenceNr == Long.MaxValue)
+          super.asyncReadHighestSequenceNr(persistenceId, highestDeletedSequenceNumber)
+        else
+          Future.successful(toSequenceNr)
+      }
+      _ <- logicalAndPhysicalDelete(highestDeletedSequenceNumber, highestSequenceNr)
+    } yield ()
+
+    deleteResult
   }
 
   def partitionNr(sequenceNr: Long): Long =
