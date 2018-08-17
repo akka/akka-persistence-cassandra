@@ -22,6 +22,7 @@ object MultiPluginSpec {
   val config = ConfigFactory.parseString(
     s"""
        |akka.test.single-expect-default = 20s
+       |akka.test.filter-leeway = 20s
        |
        |cassandra-journal.keyspace = $journalKeyspace
        |cassandra-journal.keyspace-autocreate=false

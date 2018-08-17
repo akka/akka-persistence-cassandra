@@ -38,6 +38,7 @@ object CassandraLifecycle {
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
     cassandra-journal.circuit-breaker.call-timeout = 30s
     akka.test.single-expect-default = 20s
+    akka.test.filter-leeway = 20s
     akka.actor.serialize-messages=on
     """
     )
