@@ -55,6 +55,7 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
   override protected def afterAll(): Unit = {
     Try {
       session.close()
+      cluster.close()
     }
     super.afterAll()
   }
