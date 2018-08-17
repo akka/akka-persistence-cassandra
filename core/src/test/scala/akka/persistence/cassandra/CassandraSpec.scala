@@ -61,7 +61,7 @@ object CassandraSpec {
 
   val fallbackConfig = ConfigFactory.parseString(
     s"""
-      first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormat)}"
+      first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
     """
   )
 

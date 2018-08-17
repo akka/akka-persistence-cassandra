@@ -58,7 +58,7 @@ object EventsByTagSpec {
     cassandra-query-journal {
       refresh-interval = 500ms
       max-buffer-size = 50
-      first-time-bucket = "${today.minusDays(5).format(firstBucketFormat)}"
+      first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
     }
     """
   ).withFallback(CassandraLifecycle.config)
@@ -79,7 +79,7 @@ object EventsByTagSpec {
 
   val strictConfigFirstOffset1001DaysAgo = ConfigFactory.parseString(
     s"""
-    cassandra-query-journal.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormat)}"
+    cassandra-query-journal.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
     """
   ).withFallback(strictConfig)
 

@@ -44,7 +44,7 @@ object EventsByTagStageSpec {
         }
 
         cassandra-query-journal {
-          first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormat)}"
+          first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormatter)}"
           max-result-size-query = $fetchSize
           log-queries = on
           refresh-interval = 200ms

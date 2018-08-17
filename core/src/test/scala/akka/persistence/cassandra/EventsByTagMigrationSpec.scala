@@ -47,7 +47,7 @@ object EventsByTagMigrationSpec {
         tables-autocreate = true
        }
        cassandra-query-journal {
-         first-time-bucket = "${today.minusHours(5).format(query.firstBucketFormat)}"
+         first-time-bucket = "${today.minusHours(5).format(query.firstBucketFormatter)}"
          events-by-persistence-id-gap-timeout = 1s
        }
     """

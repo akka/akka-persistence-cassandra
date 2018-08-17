@@ -36,7 +36,7 @@ object EventAdaptersReadSpec {
     cassandra-query-journal {
       refresh-interval = 500ms
       max-buffer-size = 50
-      first-time-bucket = "${today.minusDays(5).format(firstBucketFormat)}"
+      first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
     }
     """
   ).withFallback(CassandraLifecycle.config)
