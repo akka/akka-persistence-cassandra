@@ -67,6 +67,22 @@ class CassandraJournalDeletionSpec extends CassandraSpec(
     cassandra-journal-low-concurrent-deletes = ${cassandra-journal}
     cassandra-journal-low-concurrent-deletes {
       max-concurrent-deletes = 5
+      query-plugin = cassandra-query-journal-low-concurrent-deletes
+    }
+    cassandra-query-journal-low-concurrent-deletes = ${cassandra-query-journal}
+    cassandra-query-journal-low-concurrent-deletes {
+      write-plugin = cassandra-journal-low-concurrent-deletes
+    }
+
+    cassandra-journal-small-partition-size = ${cassandra-journal}
+    cassandra-journal-small-partition-size {
+      target-partition-size = 3
+      keyspace = "DeletionSpecMany"
+      query-plugin = cassandra-query-journal-small-partition-size
+    }
+    cassandra-query-journal-small-partition-size = ${cassandra-query-journal}
+    cassandra-query-journal-small-partition-size {
+      write-plugin = cassandra-journal-small-partition-size
     }
   """
 ) {
@@ -126,5 +142,43 @@ class CassandraJournalDeletionSpec extends CassandraSpec(
       }
       successes shouldEqual successes.sorted
     }
+
+    "handle deletes over many partitions" in {
+      val deleteSuccess = TestProbe()
+      val deleteFail = TestProbe()
+      val props = Props(new PAThatDeletes("p3", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-small-partition-size"))
+      val p1 = system.actorOf(props)
+      (1 to 100).foreach { i =>
+        p1 ! PersistMe(i)
+        expectMsg(Ack)
+      }
+
+      p1 ! DeleteTo(10)
+      deleteSuccess.expectMsg(Deleted(10))
+
+      p1 ! DeleteTo(20)
+      deleteSuccess.expectMsg(Deleted(20))
+
+      p1 ! DeleteTo(98)
+      deleteSuccess.expectMsg(Deleted(98))
+
+      p1 ! PoisonPill
+
+      // Recovery should not find a deleted sequence nr
+      val p1TakeTwo = system.actorOf(props)
+      p1TakeTwo ! GetRecoveredEvents
+      expectMsg(RecoveredEvents(List(PersistMe(99), PersistMe(100), RecoveryCompleted)))
+
+      // Delete all with Long.MaxValue
+      p1TakeTwo ! DeleteTo(Long.MaxValue)
+      deleteSuccess.expectMsg(Deleted(Long.MaxValue))
+
+      p1TakeTwo ! PoisonPill
+
+      val p1TakeThree = system.actorOf(props)
+      p1TakeThree ! GetRecoveredEvents
+      expectMsg(RecoveredEvents(List(RecoveryCompleted)))
+    }
+
   }
 }
