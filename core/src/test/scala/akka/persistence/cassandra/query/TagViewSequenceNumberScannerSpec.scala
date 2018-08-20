@@ -27,8 +27,7 @@ object TagViewSequenceNumberScannerSpec {
     s"""
       |akka.loglevel = INFO
       |cassandra-journal.events-by-tag.bucket-size = ${bucketSize.toString}
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+    """.stripMargin).withFallback(CassandraLifecycle.config)
 }
 
 class TagViewSequenceNumberScannerSpec extends CassandraSpec(config)
@@ -70,8 +69,7 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config)
       val pidSequenceNrs = queries.scanTagSequenceNrs("blue", now).futureValue.mapValues(_._1)
       pidSequenceNrs should equal(Map(
         "p1" -> 0,
-        "p2" -> 4
-      ))
+        "p2" -> 4))
     }
   }
 }

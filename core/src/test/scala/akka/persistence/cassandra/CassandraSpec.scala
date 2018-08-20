@@ -56,8 +56,7 @@ object CassandraSpec {
         keyspace = $snapshotStoreKeyspace
         port = $port
       }
-    """
-  )
+    """)
 
   val fallbackConfig = ConfigFactory.parseString(
     s"""

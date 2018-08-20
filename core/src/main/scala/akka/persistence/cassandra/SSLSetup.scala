@@ -18,13 +18,11 @@ import akka.annotation.InternalApi
    */
   def constructContext(
     trustStore: StorePathPasswordConfig,
-    keyStore:   Option[StorePathPasswordConfig]
-  ): SSLContext = {
+    keyStore:   Option[StorePathPasswordConfig]): SSLContext = {
 
     val tmf = loadTrustManagerFactory(
       trustStore.path,
-      trustStore.password
-    )
+      trustStore.password)
 
     val trustManagers: Array[TrustManager] = tmf.getTrustManagers
 
@@ -39,16 +37,14 @@ import akka.annotation.InternalApi
     ctx.init(
       keyManagers,
       trustManagers,
-      new SecureRandom()
-    )
+      new SecureRandom())
 
     ctx
   }
 
   def loadKeyStore(
     storePath:     String,
-    storePassword: String
-  ): KeyStore = {
+    storePassword: String): KeyStore = {
     val ks = KeyStore.getInstance("JKS")
     val f = new File(storePath)
     if (!f.isFile) throw new IllegalArgumentException(s"JKSs path $storePath not found.")
@@ -63,8 +59,7 @@ import akka.annotation.InternalApi
 
   def loadTrustManagerFactory(
     trustStorePath:     String,
-    trustStorePassword: String
-  ): TrustManagerFactory = {
+    trustStorePassword: String): TrustManagerFactory = {
 
     val ts = loadKeyStore(trustStorePath, trustStorePassword)
     val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm)
@@ -74,8 +69,7 @@ import akka.annotation.InternalApi
 
   def loadKeyManagerFactory(
     keyStorePath:     String,
-    keyStorePassword: String
-  ): KeyManagerFactory = {
+    keyStorePassword: String): KeyManagerFactory = {
 
     val ks = loadKeyStore(keyStorePath, keyStorePassword)
     val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm)

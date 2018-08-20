@@ -29,8 +29,7 @@ object CassandraSerializationSpec {
        |cassandra-journal.keyspace=CassandraIntegrationSpec
        |cassandra-snapshot-store.keyspace=CassandraIntegrationSpecSnapshot
        |
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+    """.stripMargin).withFallback(CassandraLifecycle.config)
 
 }
 

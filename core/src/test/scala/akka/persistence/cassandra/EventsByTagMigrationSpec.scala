@@ -50,8 +50,7 @@ object EventsByTagMigrationSpec {
          first-time-bucket = "${today.minusHours(5).format(query.firstBucketFormatter)}"
          events-by-persistence-id-gap-timeout = 1s
        }
-    """
-  ).withFallback(CassandraLifecycle.config).withFallback(ConfigFactory.load())
+    """).withFallback(CassandraLifecycle.config).withFallback(ConfigFactory.load())
 
 }
 

@@ -32,9 +32,7 @@ object TimeWindowCompactionStrategy extends CassandraCompactionStrategyConfig[Ti
   override def propertyKeys: List[String] = (
     BaseCompactionStrategy.propertyKeys union List(
       "compaction_window_size",
-      "compaction_window_unit"
-    )
-  ).sorted
+      "compaction_window_unit")).sorted
 
   override def fromConfig(config: Config): TimeWindowCompactionStrategy = new TimeWindowCompactionStrategy(config)
 }

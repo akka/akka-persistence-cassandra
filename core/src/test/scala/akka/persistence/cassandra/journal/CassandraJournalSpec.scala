@@ -19,16 +19,14 @@ object CassandraJournalConfiguration {
     s"""
        |cassandra-journal.keyspace=CassandraJournalSpec
        |cassandra-snapshot-store.keyspace=CassandraJournalSpecSnapshot
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+    """.stripMargin).withFallback(CassandraLifecycle.config)
 
   lazy val perfConfig = ConfigFactory.parseString(
     """
     akka.actor.serialize-messages=off
     cassandra-journal.keyspace=CassandraJournalPerfSpec
     cassandra-snapshot-store.keyspace=CassandraJournalPerfSpecSnapshot
-    """
-  ).withFallback(config)
+    """).withFallback(config)
 
   lazy val protocolV3Config = ConfigFactory.parseString(
     s"""
@@ -36,16 +34,14 @@ object CassandraJournalConfiguration {
       cassandra-journal.enable-events-by-tag-query = off
       cassandra-journal.keyspace=CassandraJournalProtocolV3Spec
       cassandra-snapshot-store.keyspace=CassandraJournalProtocolV3Spec
-    """
-  ).withFallback(config)
+    """).withFallback(config)
 
   lazy val compat2Config = ConfigFactory.parseString(
     s"""
       cassandra-journal.cassandra-2x-compat = on
       cassandra-journal.keyspace=CassandraJournalCompat2Spec
       cassandra-snapshot-store.keyspace=CassandraJournalCompat2Spec
-    """
-  ).withFallback(config)
+    """).withFallback(config)
 }
 
 // Can't use CassandraSpec so needs to do its own clean up
@@ -70,8 +66,7 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
         sequenceNr = 6,
         persistenceId = pid,
         sender = Actor.noSender,
-        writerUuid = writerUuid
-      )
+        writerUuid = writerUuid)
 
       val probe = TestProbe()
 

@@ -31,8 +31,7 @@ object CassandraSessionSpec {
       test-cassandra-session-config {
         max-result-size = 2
       }
-    """
-  ).withFallback(CassandraLifecycle.config)
+    """).withFallback(CassandraLifecycle.config)
 
 }
 
@@ -55,8 +54,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
         override def apply(s: Session): CompletionStage[Done] = {
           s.executeAsync(s"USE ${cfg.getString("keyspace")};").asScala.map(_ => Done.getInstance).toJava
         }
-      }
-    )
+      })
   }
 
   override def beforeAll: Unit = {
@@ -90,8 +88,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
 
     "select prepared statement as Source" in {
       val stmt = Await.result(session.prepare(
-        "SELECT count FROM testcounts WHERE partition = ?"
-      ).toScala, 5.seconds)
+        "SELECT count FROM testcounts WHERE partition = ?").toScala, 5.seconds)
       val bound = stmt.bind("A")
       val rows = session.select(bound).asScala
       val probe = rows.map(_.getLong("count")).runWith(TestSink.probe[Long])
@@ -114,29 +111,25 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
 
     "selectAll and bind" in {
       val rows = Await.result(session.selectAll(
-        "SELECT count FROM testcounts WHERE partition = ?", "A"
-      ).toScala, 5.seconds)
+        "SELECT count FROM testcounts WHERE partition = ?", "A").toScala, 5.seconds)
       rows.asScala.map(_.getLong("count")).toSet should ===(Set(1L, 2L, 3L, 4L))
     }
 
     "selectAll empty" in {
       val rows = Await.result(session.selectAll(
-        "SELECT count FROM testcounts WHERE partition = ?", "X"
-      ).toScala, 5.seconds)
+        "SELECT count FROM testcounts WHERE partition = ?", "X").toScala, 5.seconds)
       rows.isEmpty should ===(true)
     }
 
     "selectOne and bind" in {
       val row = Await.result(session.selectOne(
-        "SELECT count FROM testcounts WHERE partition = ? and key = ?", "A", "b"
-      ).toScala, 5.seconds)
+        "SELECT count FROM testcounts WHERE partition = ? and key = ?", "A", "b").toScala, 5.seconds)
       row.get.getLong("count") should ===(2L)
     }
 
     "selectOne empty" in {
       val row = Await.result(session.selectOne(
-        "SELECT count FROM testcounts WHERE partition = ? and key = ?", "A", "x"
-      ).toScala, 5.seconds)
+        "SELECT count FROM testcounts WHERE partition = ? and key = ?", "A", "x").toScala, 5.seconds)
       row should be(Optional.empty())
     }
 

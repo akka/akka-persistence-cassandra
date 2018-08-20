@@ -40,8 +40,7 @@ trait CassandraRecovery extends CassandraTagRecovery
     persistenceId:  String,
     fromSequenceNr: Long,
     toSequenceNr:   Long,
-    max:            Long
-  )(replayCallback: PersistentRepr => Unit): Future[Unit] = {
+    max:            Long)(replayCallback: PersistentRepr => Unit): Future[Unit] = {
     log.debug("Recovering pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
 
     if (config.eventsByTagEnabled) {
@@ -69,10 +68,8 @@ trait CassandraRecovery extends CassandraTagRecovery
               "asyncReplayMessages",
               someReadConsistency,
               someReadRetryPolicy,
-              extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization)
-            ).mapAsync(1)(sendMissingTagWrite(tp, tagWrites.get))
-        })
-      )
+              extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization)).mapAsync(1)(sendMissingTagWrite(tp, tagWrites.get))
+        }))
         .map(te => queries.mapEvent(te.pr))
         .runForeach(replayCallback)
         .map(_ => ())
@@ -89,8 +86,7 @@ trait CassandraRecovery extends CassandraTagRecovery
           "asyncReplayMessages",
           someReadConsistency,
           someReadRetryPolicy,
-          extractor = Extractors.persistentRepr(eventDeserializer, serialization)
-        )
+          extractor = Extractors.persistentRepr(eventDeserializer, serialization))
         .map(p => queries.mapEvent(p.persistentRepr))
         .runForeach(replayCallback)
         .map(_ => ())
@@ -102,8 +98,7 @@ trait CassandraRecovery extends CassandraTagRecovery
     fromSequenceNr: Long,
     pid:            String,
     max:            Long,
-    tp:             Map[Tag, TagProgress]
-  ): Future[Done] = if (minProgressNr < fromSequenceNr) {
+    tp:             Map[Tag, TagProgress]): Future[Done] = if (minProgressNr < fromSequenceNr) {
     val scanTo = fromSequenceNr - 1
     log.debug("Scanning events before snapshot to recover tag_views: From: {} to: {}", minProgressNr, scanTo)
     queries.eventsByPersistenceId(
@@ -116,8 +111,7 @@ trait CassandraRecovery extends CassandraTagRecovery
       "asyncReplayMessagesPreSnapshot",
       someReadConsistency,
       someReadRetryPolicy,
-      Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization)
-    )
+      Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization))
       .mapAsync(1) { t =>
         t.tagged match {
           case OptionVal.Some(tpr) => sendMissingTagWrite(tp, tagWrites.get)(tpr)

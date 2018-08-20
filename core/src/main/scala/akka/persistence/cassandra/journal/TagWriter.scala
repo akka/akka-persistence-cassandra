@@ -37,21 +37,18 @@ import scala.util.{ Failure, Success, Try }
   private[akka] def props(
     settings: TagWriterSettings,
     session:  TagWritersSession,
-    tag:      Tag
-  ): Props = Props(new TagWriter(settings, session, tag))
+    tag:      Tag): Props = Props(new TagWriter(settings, session, tag))
 
   private[akka] case class TagWriterSettings(
     maxBatchSize:          Int,
     flushInterval:         FiniteDuration,
     scanningFlushInterval: FiniteDuration,
-    pubsubNotification:    Boolean
-  )
+    pubsubNotification:    Boolean)
 
   private[akka] case class TagProgress(
     persistenceId:    PersistenceId,
     sequenceNr:       SequenceNr,
-    pidTagSequenceNr: TagPidSequenceNr
-  )
+    pidTagSequenceNr: TagPidSequenceNr)
 
   /*
    * Reset pid tag sequence numbers to the given [[TagProgress]] and discard any messages for the given persistenceId
@@ -118,8 +115,7 @@ import scala.util.{ Failure, Success, Try }
             val newEvents = buffer.map(s => (s.persistenceId, s.sequenceNr, formatOffset(s.timeUuid)))
             log.error(
               "Received sequence numbers out of order. Pid: {}. HighestSeq: {}. New events: {}. Buffered events: {}",
-              s.persistenceId, seqNr, newEvents, currentBuffer
-            )
+              s.persistenceId, seqNr, newEvents, currentBuffer)
             throw new IllegalStateException(s"Not received sequence numbers in order for pid: ${s.persistenceId}, " +
               s"current highest sequenceNr: ${sequenceNrs(s.persistenceId)}. Sequence nr in event: ${seqNr}")
           }
@@ -168,8 +164,7 @@ import scala.util.{ Failure, Success, Try }
     buffer:             Vector[Serialized],
     tagPidSequenceNrs:  Map[String, Long],
     updatedTagProgress: Map[String, Long],
-    awaitingFlush:      Option[ActorRef]   = None
-  ): Receive = {
+    awaitingFlush:      Option[ActorRef]   = None): Receive = {
     case InternalFlush =>
     // Ignore, we will check when the write is done
     case Flush =>
@@ -190,15 +185,13 @@ import scala.util.{ Failure, Success, Try }
             case Success(_) =>
               log.debug(
                 "Tag progress written. Pid: {} SeqNrTo: {} tagPidSequenceNr: {} offset: {}",
-                id, seqNrTo, tagPidSequenceNr, offset
-              )
+                id, seqNrTo, tagPidSequenceNr, offset)
             case Failure(t) =>
               log.warning(
                 "Tag progress write has failed for pid: {} seqNrTo: {} tagPidSequenceNr: {} offset: {}. " +
                   "If this is the only Cassandra error things will continue to work but if this keeps happening it till " +
                   s" mean slower recovery as tag_views will need to be repaired. Reason: $t",
-                id, seqNrTo, tagPidSequenceNr, formatOffset(offset)
-              )
+                id, seqNrTo, tagPidSequenceNr, formatOffset(offset))
               parent ! TagWriters.TagWriteFailed(t)
           }
       }
@@ -256,8 +249,7 @@ import scala.util.{ Failure, Success, Try }
       if (log.isDebugEnabled) {
         log.debug(
           "Batch size not reached, buffering. Current buffer size: {}. First timebucket: {} Last timebucket: {}",
-          buffer.size, buffer.head.timeBucket, buffer.last.timeBucket
-        )
+          buffer.size, buffer.head.timeBucket, buffer.last.timeBucket)
       }
       context.become(idle(buffer, tagSequenceNrs))
     }
@@ -287,8 +279,7 @@ import scala.util.{ Failure, Success, Try }
     events:                 Vector[Serialized],
     remainingBuffer:        Vector[Serialized],
     existingTagSequenceNrs: Map[Tag, TagPidSequenceNr],
-    notifyWhenDone:         Option[ActorRef]           = None
-  ): Unit = {
+    notifyWhenDone:         Option[ActorRef]           = None): Unit = {
     val (newTagSequenceNrs, withPidTagSeqNr) = assignTagPidSequenceNumbers(events, existingTagSequenceNrs)
     val writeSummary = createTagWriteSummary(withPidTagSeqNr, events)
     log.debug("Starting tag write. Summary: {}", writeSummary)
@@ -322,8 +313,7 @@ import scala.util.{ Failure, Success, Try }
 
   private def assignTagPidSequenceNumbers(
     events:                   Vector[Serialized],
-    currentTagPidSequenceNrs: Map[String, TagPidSequenceNr]
-  ): (Map[String, TagPidSequenceNr], Seq[(Serialized, TagPidSequenceNr)]) = {
+    currentTagPidSequenceNrs: Map[String, TagPidSequenceNr]): (Map[String, TagPidSequenceNr], Seq[(Serialized, TagPidSequenceNr)]) = {
     events.foldLeft((currentTagPidSequenceNrs, Vector.empty[(Serialized, TagPidSequenceNr)])) {
       case ((accTagSequenceNrs, accEvents), nextEvent) =>
         val (newSequenceNrs, sequenceNr: TagPidSequenceNr) = calculateTagPidSequenceNr(nextEvent.persistenceId, accTagSequenceNrs)

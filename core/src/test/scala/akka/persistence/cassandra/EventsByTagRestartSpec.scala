@@ -42,8 +42,7 @@ object EventsByTagRestartSpec {
        |}
        |
        |akka.actor.serialize-messages=off
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+    """.stripMargin).withFallback(CassandraLifecycle.config)
 }
 
 class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config) {

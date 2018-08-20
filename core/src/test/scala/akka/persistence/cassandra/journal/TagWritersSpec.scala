@@ -26,13 +26,11 @@ class TagWritersSpec extends TestKit(ActorSystem("TagWriterSpec"))
     maxBatchSize = 10,
     flushInterval = 10.seconds,
     scanningFlushInterval = 20.seconds,
-    pubsubNotification = false
-  )
+    pubsubNotification = false)
 
   private def testProps(
     settings:         TagWriterSettings,
-    tagWriterCreator: String => ActorRef
-  ): Props =
+    tagWriterCreator: String => ActorRef): Props =
     Props(new TagWriters(settings, tagWriterSession = null) {
       override def createTagWriter(tag: String): ActorRef = tagWriterCreator(tag)
     })

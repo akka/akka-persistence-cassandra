@@ -40,8 +40,7 @@ object TagWriterSpec {
       |    }
       |  }
       |}
-    """.stripMargin
-  )
+    """.stripMargin)
 
   case class ProgressWrite(persistenceId: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)
   case class EventWrite(persistenceId: String, seqNr: Long, tagPidSequenceNr: Long)
@@ -66,8 +65,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     maxBatchSize = 10,
     flushInterval = 10.seconds,
     scanningFlushInterval = 20.seconds,
-    pubsubNotification = false
-  )
+    pubsubNotification = false)
   val waitDuration = 100.millis
   val shortDuration = 50.millis
   val tagName = "tag-1"
@@ -101,8 +99,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-        settings = defaultSettings.copy(maxBatchSize = 2)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
       val e1 = event("p1", 1L, "e-1", bucket)
       val e2 = event("p1", 2L, "e-2", bucket)
@@ -218,8 +215,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-        settings = defaultSettings.copy(maxBatchSize = 2)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -240,8 +236,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-        settings = defaultSettings.copy(maxBatchSize = 2)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 2))
       val now = UUIDs.timeBased()
       val bucketOne = TimeBucket(now, bucketSize)
       val bucketTwo = bucketOne.next()
@@ -285,8 +280,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-        settings = defaultSettings.copy(maxBatchSize = 2)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -308,8 +302,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-        settings = defaultSettings.copy(maxBatchSize = 3, flushInterval = 0.millis)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 3, flushInterval = 0.millis))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -331,8 +324,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-        settings = defaultSettings.copy(maxBatchSize = 2, flushInterval = 500.millis)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 2, flushInterval = 500.millis))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -355,11 +347,9 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
 
     "resume from existing sequence nr" in {
       val progress = TagProgress(
-        "p1", 100, 10
-      )
+        "p1", 100, 10)
       val (probe, ref) = setup(
-        settings = defaultSettings.copy(maxBatchSize = 1)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 1))
       val bucket = nowBucket()
       ref ! ResetPersistenceId(tagName, progress)
       expectMsg(ResetPersistenceIdComplete)
@@ -378,8 +368,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
 
     "handle timeuuids coming out of order" in {
       val (probe, ref) = setup(
-        settings = defaultSettings.copy(maxBatchSize = 4)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 4))
       val currentBucket = (0 to 2) map { _ =>
         val uuid = UUIDs.timeBased()
         (uuid, TimeBucket(uuid, bucketSize))
@@ -406,8 +395,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val initialProgress = TagProgress(pid, 10, 10)
       val resetProgress = TagProgress(pid, 5, 5)
       val (probe, ref) = setup(
-        settings = defaultSettings.copy(maxBatchSize = 1)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 1))
       val bucket = nowBucket()
 
       ref ! ResetPersistenceId(tagName, initialProgress)
@@ -435,8 +423,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val writeInProgressPromise = Promise[Done]()
       val (probe, ref) = setup(
         settings = defaultSettings.copy(maxBatchSize = 1),
-        writeResponse = Stream(writeInProgressPromise.future) ++ Stream.continually(Future.successful(Done))
-      )
+        writeResponse = Stream(writeInProgressPromise.future) ++ Stream.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       ref ! ResetPersistenceId(tagName, initialProgress)
@@ -486,8 +473,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val t = TestEx("Tag write failed")
       val (probe, ref) = setup(
         settings = defaultSettings.copy(maxBatchSize = 2),
-        writeResponse = Stream(Future.failed(t)) ++ Stream.continually(Future.successful(Done))
-      )
+        writeResponse = Stream(Future.failed(t)) ++ Stream.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -518,8 +504,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       val t = TestEx("Tag progress write has failed")
       val (probe, ref) = setup(
         settings = defaultSettings.copy(maxBatchSize = 2),
-        progressWriteResponse = Stream(Future.failed(t)) ++ Stream.continually(Future.successful(Done))
-      )
+        progressWriteResponse = Stream(Future.failed(t)) ++ Stream.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -552,8 +537,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     tag:                   String               = "tag-1",
     settings:              TagWriterSettings,
     writeResponse:         Stream[Future[Done]] = Stream.continually(Future.successful(Done)),
-    progressWriteResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done))
-  ): (TestProbe, ActorRef) = {
+    progressWriteResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done))): (TestProbe, ActorRef) = {
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
@@ -573,8 +557,7 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
         pid:              PersistenceId,
         seqNr:            SequenceNr,
         tagPidSequenceNr: TagPidSequenceNr,
-        offset:           UUID
-      )(implicit ec: ExecutionContext): Future[Done] = {
+        offset:           UUID)(implicit ec: ExecutionContext): Future[Done] = {
         val (head, tail) = (progressWriteResponseStream.head, progressWriteResponseStream.tail)
         probe.ref ! ProgressWrite(pid, seqNr, tagPidSequenceNr, offset)
         progressWriteResponseStream = tail

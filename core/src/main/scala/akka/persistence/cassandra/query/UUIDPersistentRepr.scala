@@ -18,5 +18,4 @@ import akka.persistence.cassandra.journal.CassandraJournal.TagPidSequenceNr
   offset: UUID,
   //  tags:             Set[String], this isn't in the tags table, may need to be added
   tagPidSequenceNr: TagPidSequenceNr,
-  persistentRepr:   PersistentRepr
-)
+  persistentRepr:   PersistentRepr)

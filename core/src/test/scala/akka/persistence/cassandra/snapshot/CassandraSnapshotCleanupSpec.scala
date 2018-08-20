@@ -18,8 +18,7 @@ object CassandraSnapshotCleanupSpec {
   val config = ConfigFactory.parseString(
     """
       akka.loglevel = INFO
-    """.stripMargin
-  )
+    """.stripMargin)
 }
 
 class CassandraSnapshotCleanupSpec extends CassandraSpec(CassandraSnapshotCleanupSpec.config) {
@@ -35,8 +34,7 @@ class CassandraSnapshotCleanupSpec extends CassandraSpec(CassandraSnapshotCleanu
       system.dispatcher,
       log,
       systemName,
-      init = _ => Future.successful(Done)
-    )
+      init = _ => Future.successful(Done))
     override implicit val ec: ExecutionContext = system.dispatcher
   }
 

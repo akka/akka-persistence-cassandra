@@ -67,16 +67,14 @@ import akka.util.OptionVal
     selectDeletedToQuery:             PreparedStatement,
     session:                          Session,
     customConsistencyLevel:           Option[ConsistencyLevel],
-    customRetryPolicy:                Option[RetryPolicy]
-  ) {
+    customRetryPolicy:                Option[RetryPolicy]) {
 
     def selectEventsByPersistenceId(
       persistenceId: String,
       partitionNr:   Long,
       progress:      Long,
       toSeqNr:       Long,
-      fetchSize:     Int
-    )(implicit ec: ExecutionContext): Future[ResultSet] = {
+      fetchSize:     Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
       val boundStatement = selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
       executeStatement(boundStatement)
@@ -172,8 +170,7 @@ import akka.util.OptionVal
               manifest = row.getString("event_manifest"), // manifest for event adapters
               deleted = false,
               sender = null,
-              writerUuid = row.getString("writer_uuid")
-            )
+              writerUuid = row.getString("writer_uuid"))
           }
         case b =>
           // for backwards compatibility
@@ -442,8 +439,7 @@ import akka.util.OptionVal
                 case (Some(MissingSeqNr(_, sawSeqNr)), Some(fastForwardTo)) if fastForwardTo >= sawSeqNr =>
                   log.debug(
                     "Aborting missing sequence search: {} nr due to fast forward to next sequence nr: {}",
-                    lookingForMissingSeqNr, fastForwardTo
-                  )
+                    lookingForMissingSeqNr, fastForwardTo)
                   internalFastForward(fastForwardTo)
                   pendingFastForward = None
                   lookingForMissingSeqNr = None
@@ -477,8 +473,7 @@ import akka.util.OptionVal
                       persistenceId, expectedNextSeqNr, sequenceNr
                     )
                     lookingForMissingSeqNr = Some(
-                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, sequenceNr)
-                    )
+                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, sequenceNr))
                     // Forget about any other rows in this result set until we find
                     // the missing sequence nrs
                     queryState = QueryIdle
@@ -496,8 +491,7 @@ import akka.util.OptionVal
                   // we found that missing seqNr
                   log.debug(
                     "EventsByPersistenceId [{}] Found missing seqNr [{}]",
-                    persistenceId, sequenceNr
-                  )
+                    persistenceId, sequenceNr)
                   lookingForMissingSeqNr = None
                   queryState = QueryIdle
                   if (refreshInterval.isEmpty) query(false)

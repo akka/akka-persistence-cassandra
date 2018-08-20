@@ -24,8 +24,7 @@ object CassandraLoadSpec {
       cassandra-journal.data-center-replication-factors = ["dc1:1"]
       akka.actor.serialize-messages=off
      """
-    }
-  ).withFallback(CassandraLifecycle.config)
+    }).withFallback(CassandraLifecycle.config)
 
   trait Measure extends { this: Actor =>
     val NanoToSecond = 1000.0 * 1000 * 1000

@@ -48,8 +48,7 @@ import com.datastax.driver.core.utils.UUIDs
     sequenceNr:       SequenceNr,
     offset:           UUID,
     tagPidSequenceNr: TagPidSequenceNr,
-    row:              Row
-  )
+    row:              Row)
 
   def apply(
     session:                  TagStageSession,
@@ -59,8 +58,7 @@ import com.datastax.driver.core.utils.UUIDs
     refreshInterval:          Option[FiniteDuration],
     bucketSize:               BucketSize,
     usingOffset:              Boolean,
-    initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)]
-  ): EventsByTagStage = {
+    initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)]): EventsByTagStage = {
     new EventsByTagStage(session, fromOffset, toOffset, settings, refreshInterval, bucketSize, usingOffset, initialTagPidSequenceNrs)
   }
 
@@ -72,14 +70,12 @@ import com.datastax.driver.core.utils.UUIDs
             tag,
             bucket.key: JLong,
             from,
-            toUUID
-          ).setFetchSize(fetchSize)
+            toUUID).setFetchSize(fetchSize)
         case None =>
           statements.byTag.bind(
             tag,
             bucket.key: JLong,
-            from
-          ).setFetchSize(fetchSize)
+            from).setFetchSize(fetchSize)
       }
       session.executeAsync(bound).asScala
     }
@@ -106,8 +102,7 @@ import com.datastax.driver.core.utils.UUIDs
     maxSequenceNr:  Long,
     missing:        Set[Long],
     deadline:       Deadline,
-    failIfNotFound: Boolean
-  ) {
+    failIfNotFound: Boolean) {
 
     // don't include buffered in the toString
     override def toString = s"LookingForMissing{previousOffset=$previousOffset bucket=$bucket " +
@@ -126,8 +121,7 @@ import com.datastax.driver.core.utils.UUIDs
   refreshInterval:          Option[FiniteDuration],
   bucketSize:               BucketSize,
   usingOffset:              Boolean,
-  initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)]
-) extends GraphStage[SourceShape[UUIDRow]] {
+  initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)]) extends GraphStage[SourceShape[UUIDRow]] {
 
   private val out: Outlet[UUIDRow] = Outlet("event.out")
 
@@ -170,8 +164,7 @@ import com.datastax.driver.core.utils.UUIDs
         if (log.isDebugEnabled)
           log.debug(
             "Starting with initial pid tag sequence numbers: {}. Offset: {}. FromOffset: {}. To offset: {}",
-            tagPidSequenceNrs, usingOffset, formatOffset(fromOffset), toOffset.map(formatOffset)
-          )
+            tagPidSequenceNrs, usingOffset, formatOffset(fromOffset), toOffset.map(formatOffset))
 
         if (settings.pubsubNotification) {
           Try {
@@ -254,8 +247,7 @@ import com.datastax.driver.core.utils.UUIDs
           if (log.isInfoEnabled) {
             log.info(
               "{}: Executing query to look for missing. Timebucket: {}. From: {}. To: {}",
-              session.tag, missing.bucket, formatOffset(missing.previousOffset), formatOffset(missing.maxOffset)
-            )
+              session.tag, missing.bucket, formatOffset(missing.previousOffset), formatOffset(missing.maxOffset))
           }
           session.selectEventsForBucket(missing.bucket, missing.previousOffset, Some(missing.maxOffset))
             .onComplete(newResultSetCb.invoke)
@@ -272,16 +264,14 @@ import com.datastax.driver.core.utils.UUIDs
           val remainingEvents = m.missing - uuidRow.tagPidSequenceNr
           log.info(
             "{}: Found a missing event, sequence nr {}. Remaining missing: {}",
-            session.tag, uuidRow.tagPidSequenceNr, remainingEvents
-          )
+            session.tag, uuidRow.tagPidSequenceNr, remainingEvents)
           if (remainingEvents.isEmpty) {
             stopLookingForMissing(m, uuidRow :: m.buffered)
           } else {
             log.info("{}: There are more missing events. {}", session.tag, remainingEvents)
             missingLookup = missingLookup.map(m => m.copy(
               missing = remainingEvents,
-              buffered = uuidRow :: m.buffered
-            ))
+              buffered = uuidRow :: m.buffered))
           }
         }
       }
@@ -313,8 +303,7 @@ import com.datastax.driver.core.utils.UUIDs
         } else {
           log.info(
             "{}: Missing event for new persistence id: {}. Expected sequence nr: {}, actual: {}.",
-            session.tag, repr.persistenceId, expectedSequenceNr, repr.tagPidSequenceNr
-          )
+            session.tag, repr.persistenceId, expectedSequenceNr, repr.tagPidSequenceNr)
           val previousBucketStart = UUIDs.startOf(currTimeBucket.previous(1).key)
           val startingOffset: UUID = if (UUIDComparator.comparator.compare(previousBucketStart, fromOffset) < 0) {
             log.debug("Starting at fromOffset")
@@ -335,8 +324,7 @@ import com.datastax.driver.core.utils.UUIDs
             repr.tagPidSequenceNr,
             (1L until repr.tagPidSequenceNr).toSet,
             failIfNotFound = false,
-            deadline = Deadline.now + settings.eventsByTagNewPersistenceIdScanTimeout
-          ))
+            deadline = Deadline.now + settings.eventsByTagNewPersistenceIdScanTimeout))
           true
         }
       }
@@ -351,8 +339,7 @@ import com.datastax.driver.core.utils.UUIDs
         } else if (repr.tagPidSequenceNr > expectedSequenceNr) {
           log.info(
             "{}: Missing event for persistence id: {}. Expected sequence nr: {}, actual: {}.",
-            session.tag, pid, expectedSequenceNr, repr.tagPidSequenceNr
-          )
+            session.tag, pid, expectedSequenceNr, repr.tagPidSequenceNr)
           val bucket = TimeBucket(repr.offset, bucketSize)
           val lookInPrevious = !bucket.within(lastUUID)
           missingLookup = Some(LookingForMissing(
@@ -365,8 +352,7 @@ import com.datastax.driver.core.utils.UUIDs
             repr.tagPidSequenceNr,
             (expectedSequenceNr until repr.tagPidSequenceNr).toSet,
             failIfNotFound = true,
-            deadline = Deadline.now + settings.eventsByTagGapTimeout
-          ))
+            deadline = Deadline.now + settings.eventsByTagGapTimeout))
           true
         } else {
           // FIXME remove this log once stable
@@ -443,8 +429,7 @@ import com.datastax.driver.core.utils.UUIDs
             log.info("{}: Missing could be in previous bucket. Querying right away.", session.tag)
             missingLookup = missingLookup.map(m => m.copy(
               queryPrevious = false,
-              bucket = m.bucket.previous(1)
-            ))
+              bucket = m.bucket.previous(1)))
             lookForMissing()
           } else {
             log.info("{}: Still looking for missing. {}. Waiting for next poll.", session.tag, missingLookup)
@@ -453,8 +438,7 @@ import com.datastax.driver.core.utils.UUIDs
               val newBucket = TimeBucket(m.maxOffset, bucketSize)
               m.copy(
                 bucket = newBucket,
-                queryPrevious = !newBucket.within(m.previousOffset)
-              )
+                queryPrevious = !newBucket.within(m.previousOffset))
             })
             // a current query doesn't have a poll we schedule
             if (refreshInterval.isEmpty)
@@ -501,8 +485,7 @@ import com.datastax.driver.core.utils.UUIDs
           sequenceNr = row.getLong("sequence_nr"),
           offset = row.getUUID("timestamp"),
           tagPidSequenceNr = row.getLong("tag_pid_sequence_nr"),
-          row
-        )
+          row)
       }
 
       private def nextTimeBucket(): Unit =

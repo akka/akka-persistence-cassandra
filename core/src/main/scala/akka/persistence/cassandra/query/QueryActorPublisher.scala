@@ -53,8 +53,7 @@ import java.util.concurrent.ThreadLocalRandom
  */
 @InternalApi private[akka] abstract class QueryActorPublisher[MessageType, State: ClassTag](
   refreshInterval: Option[FiniteDuration],
-  config:          CassandraReadJournalConfig
-)
+  config:          CassandraReadJournalConfig)
   extends ActorPublisher[MessageType]
   with ActorLogging {
 
@@ -128,8 +127,7 @@ import java.util.concurrent.ThreadLocalRandom
     state:     State,
     finished:  Boolean,
     continue:  Boolean,
-    behaviour: Option[(ResultSet, State, Boolean) => Receive] = None
-  ): Receive = {
+    behaviour: Option[(ResultSet, State, Boolean) => Receive] = None): Receive = {
 
     try {
       val (newRs, newState) =
@@ -151,15 +149,13 @@ import java.util.concurrent.ThreadLocalRandom
     resultSet: ResultSet,
     state:     State,
     finished:  Boolean,
-    continue:  Boolean
-  ): Receive = {
+    continue:  Boolean): Receive = {
 
     val availableWithoutFetching = resultSet.getAvailableWithoutFetching
     val isFullyFetched = resultSet.isFullyFetched
 
     if (shouldFetchMore(
-      availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue
-    )) {
+      availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue)) {
       listenableFutureToFuture(resultSet.fetchMoreResults())
         .map(FetchedResultSet)
         .pipeTo(self)
@@ -191,8 +187,7 @@ import java.util.concurrent.ThreadLocalRandom
     demand:                   Long,
     state:                    State,
     finished:                 Boolean,
-    continue:                 Boolean
-  ) =
+    continue:                 Boolean) =
     !isFullyFetched &&
       (availableWithoutFetching + config.fetchSize <= config.maxBufferSize
         || availableWithoutFetching == 0) &&
@@ -203,8 +198,7 @@ import java.util.concurrent.ThreadLocalRandom
     demand:      Long,
     state:       State,
     finished:    Boolean,
-    continue:    Boolean
-  ) =
+    continue:    Boolean) =
     (!completionCondition(state) || refreshInterval.isDefined) &&
       !(finished && !continue) &&
       isExhausted
@@ -213,8 +207,7 @@ import java.util.concurrent.ThreadLocalRandom
     isExhausted:     Boolean,
     refreshInterval: Option[FiniteDuration],
     state:           State,
-    finished:        Boolean
-  ) =
+    finished:        Boolean) =
     (finished && refreshInterval.isEmpty && isExhausted) || completionCondition(state)
 
   // ResultSet methods isExhausted(), one() etc. cause blocking database fetch if there aren't
@@ -228,8 +221,7 @@ import java.util.concurrent.ThreadLocalRandom
     state:     State,
     available: Int,
     count:     Long,
-    max:       Long
-  ): (ResultSet, State) = {
+    max:       Long): (ResultSet, State) = {
     if (available == 0 || count == max || completionCondition(state)) {
       (resultSet, state)
     } else {

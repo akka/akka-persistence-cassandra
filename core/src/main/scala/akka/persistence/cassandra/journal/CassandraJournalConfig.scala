@@ -59,15 +59,13 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
     config.getString("events-by-tag.table"),
     CassandraCompactionStrategy(config.getConfig("events-by-tag.compaction-strategy")),
     config.getLong("events-by-tag.gc-grace-seconds"),
-    if (config.hasPath("events-by-tag.time-to-live")) Some(config.getDuration("events-by-tag.time-to-live", TimeUnit.MILLISECONDS).millis) else None
-  )
+    if (config.hasPath("events-by-tag.time-to-live")) Some(config.getDuration("events-by-tag.time-to-live", TimeUnit.MILLISECONDS).millis) else None)
 
   val tagWriterSettings = TagWriterSettings(
     config.getInt("events-by-tag.max-message-batch-size"),
     config.getDuration("events-by-tag.flush-interval", TimeUnit.MILLISECONDS).millis,
     config.getDuration("events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
-    config.getBoolean("pubsub-notification")
-  )
+    config.getBoolean("pubsub-notification"))
 
   /**
    * The Cassandra statement that can be used to create the configured keyspace.

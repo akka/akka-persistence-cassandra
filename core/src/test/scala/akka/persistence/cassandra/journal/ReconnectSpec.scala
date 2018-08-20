@@ -14,8 +14,7 @@ import scala.concurrent.duration._
 object ReconnectSpec {
   val config = ConfigFactory.parseString(
     s"""
-    """
-  )
+    """)
 }
 
 class ReconnectSpec extends CassandraSpec(ReconnectSpec.config) {

@@ -28,8 +28,7 @@ object CassandraSnapshotStoreConfiguration {
        |cassandra-journal.keyspace=CassandraSnapshotStoreSpec
        |cassandra-snapshot-store.keyspace=CassandraSnapshotStoreSpecSnapshot
        |cassandra-snapshot-store.max-metadata-result-size = 2
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+    """.stripMargin).withFallback(CassandraLifecycle.config)
 
   lazy val protocolV3Config = ConfigFactory.parseString(
     s"""
@@ -37,8 +36,7 @@ object CassandraSnapshotStoreConfiguration {
       cassandra-journal.enable-events-by-tag-query = off
       cassandra-journal.keyspace=CassandraSnapshotStoreProtocolV3Spec
       cassandra-snapshot-store.keyspace=CassandraSnapshotStoreProtocolV3Spec
-    """
-  ).withFallback(config)
+    """).withFallback(config)
 }
 
 class CassandraSnapshotStoreSpec extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config) with CassandraLifecycle {

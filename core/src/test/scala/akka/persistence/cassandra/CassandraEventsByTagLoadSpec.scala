@@ -37,8 +37,7 @@ object CassandraEventsByTagLoadSpec {
           first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
        }
        akka.actor.serialize-messages=off
-    """
-  ).withFallback(CassandraLifecycle.config)
+    """).withFallback(CassandraLifecycle.config)
 }
 
 class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoadSpec.config) {

@@ -53,8 +53,7 @@ object EventsByTagStageSpec {
             new-persistence-id-scan-timeout = 500s
           }
         }
-    """
-  ).withFallback(CassandraLifecycle.config)
+    """).withFallback(CassandraLifecycle.config)
 
 }
 

@@ -17,8 +17,7 @@ object StartupLoadSpec {
     s"""
       |cassandra-journal.keyspace=StartupLoadSpec
       |cassandra-snapshot-store.keyspace=StartupLoadSpecSnapshot
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+    """.stripMargin).withFallback(CassandraLifecycle.config)
 
   class ProcessorA(val persistenceId: String, receiver: ActorRef) extends PersistentActor {
     def receiveRecover: Receive = {

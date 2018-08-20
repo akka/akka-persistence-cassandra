@@ -55,30 +55,24 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
     context.dispatcher,
     log,
     metricsCategory = s"${self.path.name}",
-    init = session => executeCreateKeyspaceAndTables(session, snapshotConfig)
-  )
+    init = session => executeCreateKeyspaceAndTables(session, snapshotConfig))
 
   private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.writeRetries))
   private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.readRetries))
 
   private def preparedWriteSnapshot = session.prepare(writeSnapshot(withMeta = false)).map(
-    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(writeRetryPolicy)
-  )
+    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(writeRetryPolicy))
   private def preparedWriteSnapshotWithMeta = session.prepare(writeSnapshot(withMeta = true)).map(
-    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(writeRetryPolicy)
-  )
+    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(writeRetryPolicy))
 
   private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(
-    _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
-  )
+    _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
   private def preparedSelectSnapshotMetadata: Future[PreparedStatement] =
     session.prepare(selectSnapshotMetadata(limit = None)).map(
-      _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
-    )
+      _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
   private def preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit: Future[PreparedStatement] =
     session.prepare(selectSnapshotMetadata(limit = Some(maxLoadAttempts))).map(
-      _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
-    )
+      _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
 
   private implicit val materializer = ActorMaterializer()
 
@@ -131,15 +125,13 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
           log.warning(
             s"Failed to load snapshot [$md] ({} of {}), last attempt. Caused by: [{}: {}]",
             maxLoadAttempts, maxLoadAttempts,
-            e.getClass.getName, e.getMessage
-          )
+            e.getClass.getName, e.getMessage)
           Future.failed(e) // all attempts failed
         } else {
           log.warning(
             s"Failed to load snapshot [$md] ({} of {}), trying older one. Caused by: [{}: {}]",
             maxLoadAttempts - mds.size, maxLoadAttempts,
-            e.getClass.getName, e.getMessage
-          )
+            e.getClass.getName, e.getMessage)
           loadNAsync(mds) // try older snapshot
         }
     }
@@ -311,8 +303,7 @@ private[snapshot] object CassandraSnapshotStore {
               val meta = serialization.deserialize(
                 Bytes.getArray(metaBytes),
                 metaSerId,
-                metaSerManifest
-              ) match {
+                metaSerManifest) match {
                   case Success(m) => m
                   case Failure(_) =>
                     // don't fail query because of deserialization problem with meta data

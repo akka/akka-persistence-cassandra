@@ -31,8 +31,7 @@ object EagerInitializationSpec {
     cassandra-journal {
       session-provider = akka.persistence.cassandra.TestSessionProvider
     }
-    """
-  )
+    """)
 }
 
 class EagerInitializationSpec extends CassandraSpec(EagerInitializationSpec.config) {

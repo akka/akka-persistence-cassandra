@@ -50,9 +50,7 @@ object DateTieredCompactionStrategy extends CassandraCompactionStrategyConfig[Da
       "max_sstable_age_days",
       "max_threshold",
       "min_threshold",
-      "timestamp_resolution"
-    )
-  ).sorted
+      "timestamp_resolution")).sorted
 
   override def fromConfig(config: Config): DateTieredCompactionStrategy = new DateTieredCompactionStrategy(config)
 }
