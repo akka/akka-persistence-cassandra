@@ -4,7 +4,6 @@
 
 package akka.persistence.cassandra.query
 
-import java.time.format.DateTimeFormatter
 import java.time.{ LocalDateTime, ZoneOffset }
 
 import akka.actor.NoSerializationVerificationNeeded
@@ -20,9 +19,6 @@ import scala.concurrent.duration._
  */
 @InternalApi private[akka] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig)
   extends NoSerializationVerificationNeeded {
-
-  private val timeBucketFormat = "yyyyMMdd'T'HH:mm"
-  private val timeBucketFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern(timeBucketFormat).withZone(ZoneOffset.UTC)
 
   val refreshInterval: FiniteDuration = config.getDuration("refresh-interval", MILLISECONDS).millis
   val gapFreeSequenceNumbers: Boolean = config.getBoolean("gap-free-sequence-numbers")
@@ -44,9 +40,9 @@ import scala.concurrent.duration._
       case (_, fb) if fb.length == 14    => fb
       case (Hour, fb) if fb.length == 11 => s"${fb}:00"
       case (Day, fb) if fb.length == 8   => s"${fb}T00:00"
-      case _                             => throw new IllegalArgumentException("Invalid first-time-bucket format. Use: " + timeBucketFormat)
+      case _                             => throw new IllegalArgumentException("Invalid first-time-bucket format. Use: " + firstBucketFormat)
     }
-    val date: LocalDateTime = LocalDateTime.parse(firstBucketPadded, timeBucketFormatter)
+    val date: LocalDateTime = LocalDateTime.parse(firstBucketPadded, firstBucketFormatter)
     TimeBucket(
       date.toInstant(ZoneOffset.UTC).toEpochMilli,
       writePluginConfig.bucketSize

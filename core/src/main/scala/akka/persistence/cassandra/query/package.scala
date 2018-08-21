@@ -5,15 +5,15 @@
 package akka.persistence.cassandra
 
 import java.time.format.DateTimeFormatter
-import java.time.{ LocalDateTime, ZoneId }
+import java.time.{ LocalDateTime, ZoneId, ZoneOffset }
 import java.util.UUID
 
 import com.datastax.driver.core.utils.UUIDs
 
 package object query {
 
-  val firstBucketFormat: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyyMMdd'T'HH:mm")
+  val firstBucketFormat = "yyyyMMdd'T'HH:mm"
+  val firstBucketFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern(firstBucketFormat).withZone(ZoneOffset.UTC)
 
   def uuid(timestamp: Long): UUID = {
     def makeMsb(time: Long): Long = {
