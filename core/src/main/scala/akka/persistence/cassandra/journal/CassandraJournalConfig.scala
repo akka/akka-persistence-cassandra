@@ -4,6 +4,7 @@
 
 package akka.persistence.cassandra.journal
 
+import scala.collection.immutable
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
@@ -12,7 +13,6 @@ import akka.persistence.cassandra.CassandraPluginConfig
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
 import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
 import com.typesafe.config.Config
-
 import scala.concurrent.duration._
 
 @InternalApi private[akka] sealed trait BucketSize {
@@ -68,6 +68,65 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
     config.getDuration("events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
     config.getBoolean("pubsub-notification")
   )
+
+  /**
+   * The Cassandra statement that can be used to create the configured keyspace.
+   *
+   * This can be queried in for example a startup script without accessing the actual
+   * Cassandra plugin actor.
+   *
+   * {{{
+   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-journal")).createKeyspaceStatement
+   * }}}
+   *
+   * @see [[CassandraJournalConfig#createTablesStatements]]
+   */
+  def createKeyspaceStatement: String =
+    statements.createKeyspace
+
+  /**
+   * Scala API: The Cassandra statements that can be used to create the configured tables.
+   *
+   * This can be queried in for example a startup script without accessing the actual
+   * Cassandra plugin actor.
+   *
+   * {{{
+   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-journal")).createTablesStatements
+   * }}}
+   * *
+   * * @see [[CassandraJournalConfig#createKeyspaceStatement]]
+   */
+  def createTablesStatements: immutable.Seq[String] = {
+    statements.createTable ::
+      statements.createTagsTable ::
+      statements.createTagsProgressTable ::
+      statements.createTagScanningTable ::
+      statements.createMetadataTable ::
+      Nil
+  }
+
+  /**
+   * Java API: The Cassandra statements that can be used to create the configured tables.
+   *
+   * This can be queried in for example a startup script without accessing the actual
+   * Cassandra plugin actor.
+   *
+   * {{{
+   * new CassandraJournalConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-journal")).getCreateTablesStatements();
+   * }}}
+   * *
+   * * @see [[CassandraJournalConfig#createKeyspaceStatement]]
+   */
+  def getCreateTablesStatements: java.util.List[String] = {
+    import scala.collection.JavaConverters._
+    createTablesStatements.asJava
+  }
+
+  private def statements: CassandraStatements = {
+    new CassandraStatements {
+      override def config: CassandraJournalConfig = CassandraJournalConfig.this
+    }
+  }
 }
 
 object CassandraJournalConfig {

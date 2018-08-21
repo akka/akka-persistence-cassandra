@@ -11,33 +11,36 @@ import akka.Done
 import akka.persistence.cassandra.FutureDone
 import com.datastax.driver.core.Session
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import akka.persistence.cassandra.indent
 
 trait CassandraStatements {
   def snapshotConfig: CassandraSnapshotStoreConfig
 
-  def createKeyspace = s"""
-      CREATE KEYSPACE IF NOT EXISTS ${snapshotConfig.keyspace}
-      WITH REPLICATION = { 'class' : ${snapshotConfig.replicationStrategy} }
-    """
+  def createKeyspace =
+    s"""
+    | CREATE KEYSPACE IF NOT EXISTS ${snapshotConfig.keyspace}
+    | WITH REPLICATION = { 'class' : ${snapshotConfig.replicationStrategy} }
+    """.stripMargin.trim
 
   // snapshot_data is the serialized snapshot payload
   // snapshot is for backwards compatibility and not used for new rows
-  def createTable = s"""
-      CREATE TABLE IF NOT EXISTS ${tableName} (
-        persistence_id text,
-        sequence_nr bigint,
-        timestamp bigint,
-        ser_id int,
-        ser_manifest text,
-        snapshot_data blob,
-        snapshot blob,
-        meta_ser_id int,
-        meta_ser_manifest text,
-        meta blob,
-        PRIMARY KEY (persistence_id, sequence_nr))
-        WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${snapshotConfig.gcGraceSeconds}
-        AND compaction = ${snapshotConfig.tableCompactionStrategy.asCQL}
-    """
+  def createTable =
+    s"""
+    |CREATE TABLE IF NOT EXISTS ${tableName} (
+    |  persistence_id text,
+    |  sequence_nr bigint,
+    |  timestamp bigint,
+    |  ser_id int,
+    |  ser_manifest text,
+    |  snapshot_data blob,
+    |  snapshot blob,
+    |  meta_ser_id int,
+    |  meta_ser_manifest text,
+    |  meta blob,
+    |  PRIMARY KEY (persistence_id, sequence_nr))
+    |  WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${snapshotConfig.gcGraceSeconds}
+    |  AND compaction = ${indent(snapshotConfig.tableCompactionStrategy.asCQL, "    ")}
+    """.stripMargin.trim
 
   def writeSnapshot(withMeta: Boolean) = s"""
       INSERT INTO ${tableName} (persistence_id, sequence_nr, timestamp, ser_manifest, ser_id, snapshot_data
