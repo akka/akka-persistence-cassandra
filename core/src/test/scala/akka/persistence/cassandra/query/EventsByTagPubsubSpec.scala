@@ -21,11 +21,13 @@ object EventsByTagPubsubSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
+    akka.loglevel = INFO
     akka.actor.provider = "akka.cluster.ClusterActorRefProvider"
     akka.actor.serialize-messages = off
     akka.actor.serialize-creators = off
     akka.remote.netty.tcp.port = 0
     akka.remote.artery.canonical.port = 0
+    akka.remote.netty.tcp.hostname = "127.0.0.1"
     cassandra-journal {
       pubsub-notification = on
 
@@ -35,6 +37,9 @@ object EventsByTagPubsubSpec {
     }
     cassandra-query-journal {
       refresh-interval = 10s
+      events-by-tag {
+        eventual-consistency-delay = 0s
+      }
     }
     """).withFallback(EventsByTagSpec.config)
 }

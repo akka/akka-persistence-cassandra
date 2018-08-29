@@ -58,6 +58,8 @@ import scala.concurrent.duration._
   val eventsByPersistenceIdEventTimeout: FiniteDuration = config.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 
   val eventsByTagGapTimeout: FiniteDuration = config.getDuration("events-by-tag.gap-timeout", MILLISECONDS).millis
+  val eventsByTagDebug: Boolean = config.getBoolean("events-by-tag.verbose-debug-logging")
+  val eventsByTagEventualConsistency: FiniteDuration = config.getDuration("events-by-tag.eventual-consistency-delay", MILLISECONDS).millis
   val eventsByTagNewPersistenceIdScanTimeout = config.getDuration("events-by-tag.new-persistence-id-scan-timeout", MILLISECONDS).millis
   val eventsByTagOffsetScanning: FiniteDuration = config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis
 

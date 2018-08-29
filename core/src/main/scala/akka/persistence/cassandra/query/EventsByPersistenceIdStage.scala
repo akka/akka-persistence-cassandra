@@ -290,8 +290,7 @@ import akka.util.OptionVal
       private def internalFastForward(nextSeqNr: Long): Unit = {
         log.debug(
           "EventsByPersistenceId [{}] External fast-forward to seqNr [{}] from current [{}]",
-          persistenceId, nextSeqNr, expectedNextSeqNr
-        )
+          persistenceId, nextSeqNr, expectedNextSeqNr)
         expectedNextSeqNr = nextSeqNr
         val nextPartition = partitionNr(nextSeqNr)
         if (nextPartition > partition)
@@ -384,14 +383,12 @@ import akka.util.OptionVal
           case Some(_) =>
             log.debug(
               "EventsByPersistenceId [{}] Query for missing seqNr [{}] in partition [{}]",
-              persistenceId, expectedNextSeqNr, pnr
-            )
+              persistenceId, expectedNextSeqNr, pnr)
             expectedNextSeqNr
           case _ =>
             log.debug(
               "EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
-              persistenceId, expectedNextSeqNr, pnr
-            )
+              persistenceId, expectedNextSeqNr, pnr)
             toSeqNr
         }
         session.selectEventsByPersistenceId(persistenceId, pnr, expectedNextSeqNr, endNr, fetchSize)
@@ -465,13 +462,11 @@ import akka.util.OptionVal
                 // we will probably now come in here which isn't what we want
                 lookingForMissingSeqNr match {
                   case Some(_) => throw new IllegalStateException(
-                    s"Should not be able to get here when already looking for missing seqNr [$expectedNextSeqNr] for entity [$persistenceId]"
-                  )
+                    s"Should not be able to get here when already looking for missing seqNr [$expectedNextSeqNr] for entity [$persistenceId]")
                   case None =>
                     log.debug(
                       "EventsByPersistenceId [{}] Missing seqNr [{}], found [{}], looking for event eventually appear",
-                      persistenceId, expectedNextSeqNr, sequenceNr
-                    )
+                      persistenceId, expectedNextSeqNr, sequenceNr)
                     lookingForMissingSeqNr = Some(
                       MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, sequenceNr))
                     // Forget about any other rows in this result set until we find

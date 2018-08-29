@@ -10,21 +10,26 @@ how it works and what are the consistency guarantees.
 
 A separate table is maintained for events by tag queries to that is written to in batches.
 
-It is partitioned via tag and a time bucket. The timebucket causes a hot spot for writes but
+The table is partitioned via tag and a time bucket. 
+This allows events for the same tag can be queried and the time bucket prevents all events
+for the same tag being in a single partition.
+ 
+The timebucket causes a hot spot for writes but
 this is kept to a minimum by making the bucket small enough and by batching the writes into
 unlogged batches.
 
-Each events by tag query starts at the offset you provide and queries the events. 
-Events for a particular tag are partitioned
-by the tag name and a timebucket (this is a day for older versions of the plugin, and configurable for the latest version). 
-Meaning that each eventsByTag stream will initially do a query per time bucket to get up to the current 
+Each events by tag query starts at the provided offset and queries the events. 
+The stream will initially do a query per time bucket to get up to the current 
 (many of these could be empty so very little over head, some may bring back many events). For example
 if you set the offset to be 30 days ago and a day time bucket, it will require 30 * nr queries to get each stream up to date. 
 If a particular partition contains many events then it is paged back from Cassandra based on demand.
 
+When no offset is provided EventsByTag queries start at the configured `first-time-bucket`. For new applications
+increase this to the day your application is initially deployed to speed to `NoOffset` queries.
+
 ## Bucket sizes 
 
-Events by tag partitions are grouped into buckets to avoid a partition for a given tag
+Events by tag partitions are grouped into buckets to avoid a single partition for a tag
 getting to large. 
 
 * 1000s of events per day per tag -- DAY
@@ -35,19 +40,24 @@ This setting can not be changed after data has been written.
  
 More billion per day per tag? You probably need a specialised schema rather than a general library like this.
 
-### Justification for bucket sizes
-
-The old implementation put all tags for each day in a single cassandra partition. 
-If a cassandra partition gets too large it starts to perform badly (and has a hard limit of 2 billion cells, a cell being similar to a column). 
-Given we have ~10 columns in the table there was a hard limit previously of 200million but it would have performed 
-terribly before getting any where near this.
+If a cassandra partition gets too large it will perform badly (and has a hard limit of 2 billion cells, a cell being similar to a column). 
+Given there is ~10 columns in the table there was a hard limit previously of 200million but performance would degrade before reaching this. 
 
 The support for `Minute` bucket size means that there are 1440 partitions per day. 
 Given a large C* cluster this should work until you have in the order of 10s of millions per minute
-when the write rate to that partition could become the bottleneck rather than partition size.
+when the write rate to that partition would likely become the bottleneck rather than partition size.
 
 The increased scalability comes at the cost of having to query more partitions on the read side so don't 
 use `Minute` unless necessary.
+
+## Write batch size
+
+The size of the of the batch is controlled via `max-message-batch-size`. Cassandra imposes a limit on the serialized size
+of a batch, currently 50kb by default. The larger this value the more efficient the tag writes will be but care must 
+be taken not to have batches that will be rejected by Cassandra. Two other cases cause the batch to be written before the batch size is reached:
+* Periodically: By default 250ms. To prevent eventsByTag queries being too out of date.
+* When a starting a new timebucket, which translates to a new partition in Cassandra, the events for the old timebucket are written.
+
 
 ## Consistency
 
@@ -56,17 +66,12 @@ is does not guarantee that it will be visible in an events by tag query, but it 
 
 Order of the events is maintained per persistence id per tag by maintaining a sequence number for tagged events per persistence id.
 This is in addition to the normal sequence nr kept per persistence id.
-If an event is missing then `eventByTag` queries will fail. 
+This additional sequence number is used to detect missing events and trigger searching back. However this only works if
+a new event for the same persistenceId is encountered. If your usecase involves many persistenceIds with only a small 
+number of events per persistenceId then the `eventual-consistency-delay` can be used to mitigate the risk of missing
+delayed events in live queries.
 
-### Missing and delayed events.
-
-Cassandra does not offer isolation in a batch even for the same partition (whatever the docs might say).
-If an eventsByTag query is happening at the same time as a batch insert to `tag_views` table then it might
-see an events from the same persistence id and tag in the incorrect order.
-
-For that reason the `tag_views` table has an additional sequence number maintained for every 
-persistenceId, tag combination. This sequence number can be generated as all the events for a given
-persistenceId are generated on the same node.
+### Gap detection for the same persistence id
 
 If a gap is detected then the event is held back and the stream goes into a searching mode for the missing
 events. If the missing event is not found then then stream is failed.
@@ -81,9 +86,25 @@ before delivering any events.
  
 The above scanning only looks in the current time bucket. For persistenceIds that aren't found in this initial scan because they 
 don't have any events in the current time bucket then the expected tag pid sequence number is not known. 
-In this case the eventsByTag query looks for the new-persistence-id-scan-timeout. This adds a delay each time a new persistenceId
-is found by an offset query. If this is an issue it can be set to 0s. If events are found out of order due to this
+In this case the eventsByTag query looks for the `new-persistence-id-scan-timeout`. This adds a delay each time a new persistenceId
+is found by an offset query when the first event doesn't have a sequenceNr of `1`. 
+If this is an issue it can be set to 0s. If events are found out of order due to this
 the stage will fail.  
+
+### Delayed events and out of sync clocks
+
+Events for a tag are globally ordered using a TimeUUID.
+However events for the same tag but for a difference persistenceIds can come from different nodes in a cluster meaning that
+events enter Cassandra out of TimeUUID order. 
+
+If a live eventsByTag query is currently running it can see newer events before the older delayed events. For
+that reason an `eventual-consistency-delay` is used to keep eventsByTag a configurable amount of time in the past to give a time
+for events from all nodes to settle to their final order.
+
+Setting this to a small value can lead to:
+* Receiving events out of TimeUUID (offset) order for different persistenceIds, meaning if the offset is saved for restart/resume then delayed events can be missed on restart 
+* Increased likelihood of receiving events for the same persistenceId out of order. This is detected but the stream is temporarily paused to search for the missing events which is less efficient then reading them initially in order.
+* Missing events the first events for new persistenceIds. Unless the events are two timebuckets ago (very delayed) they will be found during a missing search but it is very inefficient to look for them.
 
 ## Implementation
 

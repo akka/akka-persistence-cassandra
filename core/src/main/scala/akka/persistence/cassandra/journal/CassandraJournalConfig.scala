@@ -29,9 +29,14 @@ private[akka] case object Minute extends BucketSize {
   override val durationMillis: Long = 1.minute.toMillis
 }
 
+// Not to be used for real production apps. Just to make testing bucket transitions easier.
+private[akka] case object Second extends BucketSize {
+  override val durationMillis: Long = 1.second.toMillis
+}
+
 private[akka] object BucketSize {
   def fromString(value: String): BucketSize = {
-    Vector(Day, Hour, Minute).find(_.toString.toLowerCase == value.toLowerCase)
+    Vector(Day, Hour, Minute, Second).find(_.toString.toLowerCase == value.toLowerCase)
       .getOrElse(throw new IllegalArgumentException("Invalid value for bucket size: " + value))
   }
 }
@@ -55,6 +60,11 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
   val eventsByTagEnabled = config.getBoolean("events-by-tag.enabled")
 
   val bucketSize: BucketSize = BucketSize.fromString(config.getString("events-by-tag.bucket-size"))
+
+  if (bucketSize == Second) {
+    system.log.warning("Do not use Second bucket size in production. It is meant for testing purposes only.")
+  }
+
   val tagTable = TableSettings(
     config.getString("events-by-tag.table"),
     CassandraCompactionStrategy(config.getConfig("events-by-tag.compaction-strategy")),

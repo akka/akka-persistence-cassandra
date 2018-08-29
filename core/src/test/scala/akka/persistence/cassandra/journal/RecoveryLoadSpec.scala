@@ -20,7 +20,7 @@ object RecoveryLoadSpec {
       cassandra-journal.events-by-tag.enabled = on
       cassandra-journal.events-by-tag.scanning-flush-interval = 2s
       cassandra-journal.replay-filter.mode = off
-      cassandra-journal.log-queries = on
+      cassandra-journal.log-queries = off
       cassandra-snapshot-store.keyspace=RecoveryLoadSpecSnapshot
       cassandra-snapshot-store.log-queries = on
     """).withFallback(CassandraLifecycle.config)

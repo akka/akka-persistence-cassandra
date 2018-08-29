@@ -17,6 +17,7 @@ import akka.persistence.query.{ EventEnvelope, NoOffset }
 import akka.serialization.{ Serialization, SerializationExtension }
 import akka.stream.scaladsl.{ Keep, Source }
 import akka.stream.testkit.scaladsl.TestSink
+import akka.testkit.ImplicitSender
 import com.datastax.driver.core.utils.UUIDs
 import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
@@ -35,7 +36,6 @@ object EventsByTagStageSpec {
         akka.actor.serialize-messages=on
 
         cassandra-journal {
-          keyspace=eventsbytagstagespec
           log-queries = off
           events-by-tag {
            flush-interval = 0ms
@@ -49,6 +49,8 @@ object EventsByTagStageSpec {
           log-queries = on
           refresh-interval = 200ms
           events-by-tag {
+            # Speeds up tests
+            eventual-consistency-delay = 100ms
             gap-timeout = 3s
             new-persistence-id-scan-timeout = 500s
           }
@@ -59,7 +61,8 @@ object EventsByTagStageSpec {
 
 class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
   with BeforeAndAfterAll
-  with TestTagWriter {
+  with TestTagWriter
+  with ImplicitSender {
 
   import EventsByTagStageSpec._
 
@@ -77,7 +80,7 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
     super.afterAll()
   }
 
-  private val waitTime = 75.milliseconds
+  private val waitTime = 150.milliseconds // bigger than the eventual consistency delay
   private val longWaitTime = waitTime * 3
   private val bucketSize = Minute
 
@@ -96,6 +99,7 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       val sub = stream.toMat(TestSink.probe[EventEnvelope])(Keep.right).run()
 
       sub.request(2)
+      sub.expectNoMessage(50.millis) // eventual consistency delay prevents events coming right away
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "e-1") => }
       sub.expectNextPF { case EventEnvelope(_, "p-1", 3, "e-3") => }
       sub.request(2)
@@ -270,6 +274,7 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
   }
 
   "Live EventsByTag" must {
+
     "implement standard EventsByTagQuery" in {
       queries.isInstanceOf[EventsByTagQuery] should ===(true)
     }

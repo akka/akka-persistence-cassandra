@@ -19,7 +19,6 @@ import akka.persistence.{ PersistentActor, PersistentRepr }
 import akka.serialization.SerializationExtension
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
-import com.datastax.driver.core.Cluster
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.BeforeAndAfterEach
 
@@ -59,6 +58,9 @@ object EventsByTagSpec {
       refresh-interval = 500ms
       max-buffer-size = 50
       first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
+      events-by-tag {
+        eventual-consistency-delay = 2s
+      }
     }
     """).withFallback(CassandraLifecycle.config)
 
@@ -78,8 +80,7 @@ object EventsByTagSpec {
   val strictConfigFirstOffset1001DaysAgo = ConfigFactory.parseString(
     s"""
     cassandra-query-journal.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
-    """
-  ).withFallback(strictConfig)
+    """).withFallback(strictConfig)
 
   val disabledConfig = ConfigFactory.parseString(
     """
@@ -449,7 +450,9 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
       for (n <- 101 to 200) {
         val Expected = s"yellow-$n"
-        probe.expectNextPF { case e @ EventEnvelope(_, "e", _, Expected) => e }
+        withClue(s"Expected: $Expected") {
+          probe.expectNextPF { case e @ EventEnvelope(_, "e", _, Expected) => e }
+        }
       }
       probe.expectNoMessage(waitTime)
 
@@ -469,6 +472,45 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       probe.expectNoMessage(waitTime)
       probe.cancel()
     }
+  }
+}
+
+class EventsByTagZeroEventualConsistencyDelaySpec
+  extends AbstractEventsByTagSpec(
+    ConfigFactory.parseString("cassandra-query-journal.eventual-consistency-delay = 0s")
+      .withFallback(EventsByTagSpec.strictConfig)) {
+
+  "Cassandra query currentEventsByTag with zero eventual-consistency-delay" must {
+
+    "find existing events" in {
+      val a = system.actorOf(TestActor.props("a"))
+      val b = system.actorOf(TestActor.props("b"))
+      a ! "a green apple"
+      val NumberOfBananas = 5017
+      expectMsg(20.seconds, s"a green apple-done")
+      (1 to NumberOfBananas).foreach { n =>
+        a ! s"a green banana-$n"
+        expectMsg(s"a green banana-$n-done")
+      }
+
+      b ! "a green leaf"
+      expectMsg(s"a green leaf-done")
+
+      val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
+      val probe = greenSrc.runWith(TestSink.probe[Any])
+      probe.request(NumberOfBananas + 10L)
+      probe.expectNextPF { case e @ EventEnvelope(_, "a", 1L, "a green apple") => e }
+      (1 to NumberOfBananas).foreach { n =>
+        val SeqNr = 1L + n
+        val Description = s"a green banana-$n"
+        withClue(s"banana-$n") {
+          probe.expectNextPF { case e @ EventEnvelope(_, "a", SeqNr, Description) => e }
+        }
+      }
+      probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "a green leaf") => e }
+      probe.expectComplete()
+    }
+
   }
 }
 
@@ -536,9 +578,7 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(EventsByT
       probe.cancel()
     }
 
-    // Not supported yet. We don't delay events to make timestamps
-    // come in order across different writers
-    "find delayed events 3" ignore {
+    "find delayed events 3" in {
       val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
       val w1 = UUID.randomUUID().toString
       val w2 = UUID.randomUUID().toString
@@ -558,10 +598,10 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(EventsByT
 
       // delayed, timestamp is before A1
       val eventB1 = PersistentRepr("B1", 2L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t1, eventB1, Set("T8"), 1, bucketSize)
+      writeTaggedEvent(t1, eventB1, Set("T8"), 2, bucketSize)
       val t3 = t1.plusSeconds(2)
       val eventB2 = PersistentRepr("B2", 3L, "b", "", writerUuid = w2)
-      writeTaggedEvent(t3, eventB2, Set("T8"), 2, bucketSize)
+      writeTaggedEvent(t3, eventB2, Set("T8"), 3, bucketSize)
 
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 3L, "B2") => e }
@@ -601,8 +641,8 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(EventsByT
 
     // Not supported atm as it requires us to back track without seeing a future event
     // for a new persistenceId
-    "find delayed events when many other events" ignore {
-      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
+    "find delayed events when many other events" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC)
       val w1 = UUID.randomUUID().toString
       val w2 = UUID.randomUUID().toString
 
@@ -621,14 +661,15 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(EventsByT
         val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
         writeTaggedEvent(t2.plus(n, ChronoUnit.MILLIS), eventA, Set("T10"), n, bucketSize)
       }
-      probe.expectNextN(100)
 
       // delayed, timestamp is before A101 but after A100
       val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
       writeTaggedEvent(t2.minus(100, ChronoUnit.MILLIS), eventB1, Set("T10"), 1, bucketSize)
 
       probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B1") => e }
-      probe.expectNoMessage(2.second)
+
+      // Now A101 - A200 can be delivered
+      probe.expectNextN(100)
 
       val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
       writeTaggedEvent(t2.plusSeconds(1), eventB2, Set("T10"), 2, bucketSize)
@@ -637,44 +678,40 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(EventsByT
       probe.cancel()
     }
 
-    // Same as other ignored tests. This will work if we receive another event in the
-    // future which will cause us to go back and pick up the delayed events.
-    "find events from many persistenceIds" ignore {
-      val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5)
-
-      // limit is 50, so let's use something not divisible by 50
-      (1L to 70L).foreach { n =>
-        val eventA2 = PersistentRepr(s"A$n-2", sequenceNr = 2, persistenceId = s"a$n", "",
-          writerUuid = UUID.randomUUID().toString)
-        writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA2, Set("T11"), 1, bucketSize)
-      }
+    "find events from many persistenceIds" in {
+      val t1 = LocalDateTime.now(ZoneOffset.UTC)
 
       val src = queries.eventsByTag(tag = "T11", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(1000)
-      probe.expectNextN(70)
 
+      // A101-2 to A200-2
       (101L to 200L).foreach { n =>
+        val eventA2 = PersistentRepr(s"A$n-2", sequenceNr = 2, persistenceId = s"a$n", "",
+          writerUuid = UUID.randomUUID().toString)
+        writeTaggedEvent(t1.plus(500 + n, ChronoUnit.MILLIS), eventA2, Set("T11"), 1, bucketSize)
+      }
+
+      // limit is 50, so let's use something not divisible by 50
+      // A1-2 to A70-2
+      (1L to 70L).foreach { n =>
         val eventA2 = PersistentRepr(s"A$n-2", sequenceNr = 2, persistenceId = s"a$n", "",
           writerUuid = UUID.randomUUID().toString)
         writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA2, Set("T11"), 1, bucketSize)
       }
-      probe.expectNextN(100)
 
-      (101L to 200L).foreach { n =>
-        val eventA3 = PersistentRepr(s"A$n-3", sequenceNr = 3, persistenceId = s"a$n", "",
-          writerUuid = UUID.randomUUID().toString)
-        writeTaggedEvent(t1.plus(500 + n, ChronoUnit.MILLIS), eventA3, Set("T11"), 2, bucketSize)
-      }
-      probe.expectNextN(100)
-
-      // those are delayed, timestamp before 101-200 A3
       (1L to 70L).foreach { n =>
-        val eventA3 = PersistentRepr(s"A$n-3", sequenceNr = 3, persistenceId = s"a$n", "",
-          writerUuid = UUID.randomUUID().toString)
-        writeTaggedEvent(t1.plus(200 + n, ChronoUnit.MILLIS), eventA3, Set("T11"), 2, bucketSize)
+        val ExpectedPid = s"a$n"
+        withClue(s"Expected: $ExpectedPid") {
+          probe.expectNextPF { case e @ EventEnvelope(_, ExpectedPid, 2L, _) => e }
+        }
       }
-      probe.expectNextN(70)
+
+      // Come after due to eventual consistency delay
+      (101L to 200L).foreach { n =>
+        val Expected = s"a$n"
+        probe.expectNextPF { case e @ EventEnvelope(_, Expected, 2L, _) => e }
+      }
 
       probe.expectNoMessage(1.second)
       probe.cancel()

@@ -178,4 +178,9 @@ class CassandraJournalDeletionSpec extends CassandraSpec(
     }
 
   }
+
+  override protected def externalCassandraCleanup(): Unit = {
+    super.externalCassandraCleanup()
+    cluster.connect().execute(s"drop keyspace if exists DeletionSpecMany")
+  }
 }

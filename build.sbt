@@ -10,12 +10,13 @@ val akkaPersistenceCassandraDependencies = Seq(
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query"              % AkkaVersion,
-  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion     % "test",
-  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % "test",
-  "ch.qos.logback"          % "logback-classic"                     % "1.2.3"         % "test",
-  "org.scalatest"          %% "scalatest"                           % "3.0.5"         % "test",
-  "org.pegdown"             % "pegdown"                             % "1.6.0"         % "test",
-  "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % "provided"
+  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion     % Test,
+  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % Test,
+  "com.typesafe.akka"      %% "akka-multi-node-testkit"             % AkkaVersion     % Test,
+  "ch.qos.logback"          % "logback-classic"                     % "1.2.3"         % Test,
+  "org.scalatest"          %% "scalatest"                           % "3.0.5"         % Test,
+  "org.pegdown"             % "pegdown"                             % "1.6.0"         % Test,
+  "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % Provided
 )
 
 
@@ -24,7 +25,7 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   organizationName := "Lightbend Inc.",
   startYear := Some(2016),
   licenses := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
-  crossScalaVersions := Seq("2.11.12", "2.12.6"),
+  crossScalaVersions := Seq("2.11.12", "2.12.7"),
   scalaVersion := crossScalaVersions.value.last,
   crossVersion := CrossVersion.binary,
 

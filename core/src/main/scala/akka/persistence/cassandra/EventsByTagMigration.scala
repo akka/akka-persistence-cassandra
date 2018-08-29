@@ -159,8 +159,7 @@ class EventsByTagMigration(system: ActorSystem)
   def migrateToTagViews(periodicFlush: Int = 1000, filter: String => Boolean = _ => true): Future[Done] = {
     migrateToTagViewsInternal(
       queries.currentPersistenceIds().filter(filter),
-      periodicFlush
-    )
+      periodicFlush)
   }
 
   private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed], periodicFlush: Int): Future[Done] = {
