@@ -4,7 +4,7 @@ import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 import net.virtualvoid.optimizer._
 
-val AkkaVersion = "2.5.13"
+val AkkaVersion = "2.5.16"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.3.1",
