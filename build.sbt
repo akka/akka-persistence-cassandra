@@ -7,7 +7,7 @@ import net.virtualvoid.optimizer._
 val AkkaVersion = "2.5.16"
 
 val akkaPersistenceCassandraDependencies = Seq(
-  "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.3.1",
+  "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.6.0",
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query"              % AkkaVersion,
