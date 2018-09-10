@@ -65,7 +65,8 @@ trait CassandraStatements {
   def selectSnapshotMetadata(limit: Option[Int] = None) = s"""
       SELECT persistence_id, sequence_nr, timestamp FROM ${tableName} WHERE
         persistence_id = ? AND
-        sequence_nr <= ?
+        sequence_nr <= ? AND
+        sequence_nr >= ?
         ${limit.map(l => s"LIMIT ${l}").getOrElse("")}
     """
 

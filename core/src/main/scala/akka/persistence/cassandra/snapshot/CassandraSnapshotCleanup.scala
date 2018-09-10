@@ -10,6 +10,7 @@ import akka.Done
 import akka.persistence.SnapshotMetadata
 import akka.persistence.cassandra.journal.FixedRetryPolicy
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import com.datastax.driver.core.PreparedStatement
 import com.datastax.driver.core.policies.LoggingRetryPolicy
 
 import scala.concurrent.{ ExecutionContext, Future }
@@ -22,7 +23,7 @@ trait CassandraSnapshotCleanup extends CassandraStatements {
 
   private lazy val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.deleteRetries))
 
-  def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(
+  def preparedDeleteSnapshot: Future[PreparedStatement] = session.prepare(deleteSnapshot).map(
     _.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy)
   )
 
