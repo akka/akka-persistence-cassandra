@@ -10,15 +10,16 @@ import com.datastax.driver.core.Session
 import scala.concurrent.{ ExecutionContext, Future }
 
 import akka.persistence.cassandra.FutureDone
+import akka.persistence.cassandra.indent
 
 trait CassandraStatements {
   private[akka] def config: CassandraJournalConfig
 
   private[akka] def createKeyspace =
     s"""
-      CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
-      WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
-    """
+     |CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
+     |WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
+    """.stripMargin.trim
 
   // message is the serialized PersistentRepr that was used in v0.6 and earlier
   // event is the serialized application event that is used in v0.7 and later
@@ -28,77 +29,77 @@ trait CassandraStatements {
   // ser_manifest together with ser_id is used for the serialization of the event (payload).
   private[akka] def createTable =
     s"""
-      CREATE TABLE IF NOT EXISTS ${tableName} (
-        used boolean static,
-        persistence_id text,
-        partition_nr bigint,
-        sequence_nr bigint,
-        timestamp timeuuid,
-        timebucket text,
-        writer_uuid text,
-        ser_id int,
-        ser_manifest text,
-        event_manifest text,
-        event blob,
-        meta_ser_id int,
-        meta_ser_manifest text,
-        meta blob,
-        message blob,
-        tags set<text>,
-        PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
-        WITH gc_grace_seconds =${config.gcGraceSeconds}
-        AND compaction = ${config.tableCompactionStrategy.asCQL}
-    """
+      |CREATE TABLE IF NOT EXISTS ${tableName} (
+      |  used boolean static,
+      |  persistence_id text,
+      |  partition_nr bigint,
+      |  sequence_nr bigint,
+      |  timestamp timeuuid,
+      |  timebucket text,
+      |  writer_uuid text,
+      |  ser_id int,
+      |  ser_manifest text,
+      |  event_manifest text,
+      |  event blob,
+      |  meta_ser_id int,
+      |  meta_ser_manifest text,
+      |  meta blob,
+      |  message blob,
+      |  tags set<text>,
+      |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
+      |  WITH gc_grace_seconds =${config.gcGraceSeconds}
+      |  AND compaction = ${indent(config.tableCompactionStrategy.asCQL, "    ")}
+    """.stripMargin.trim
 
   private[akka] def createTagsTable =
     s"""
-      CREATE TABLE IF NOT EXISTS ${tagTableName} (
-        tag_name text,
-        persistence_id text,
-        sequence_nr bigint,
-        timebucket bigint,
-        timestamp timeuuid,
-        tag_pid_sequence_nr bigint,
-        writer_uuid text,
-        ser_id int,
-        ser_manifest text,
-        event_manifest text,
-        event blob,
-        meta_ser_id int,
-        meta_ser_manifest text,
-        meta blob,
-        PRIMARY KEY ((tag_name, timebucket), timestamp, persistence_id, tag_pid_sequence_nr))
-        WITH gc_grace_seconds =${config.tagTable.gcGraceSeconds}
-        AND compaction = ${config.tagTable.compactionStrategy.asCQL}
-        ${if (config.tagTable.ttl.isDefined) "AND default_time_to_live = " + config.tagTable.ttl.get.toSeconds else ""}
-    """
+      |CREATE TABLE IF NOT EXISTS ${tagTableName} (
+      |  tag_name text,
+      |  persistence_id text,
+      |  sequence_nr bigint,
+      |  timebucket bigint,
+      |  timestamp timeuuid,
+      |  tag_pid_sequence_nr bigint,
+      |  writer_uuid text,
+      |  ser_id int,
+      |  ser_manifest text,
+      |  event_manifest text,
+      |  event blob,
+      |  meta_ser_id int,
+      |  meta_ser_manifest text,
+      |  meta blob,
+      |  PRIMARY KEY ((tag_name, timebucket), timestamp, persistence_id, tag_pid_sequence_nr))
+      |  WITH gc_grace_seconds =${config.tagTable.gcGraceSeconds}
+      |  AND compaction = ${indent(config.tagTable.compactionStrategy.asCQL, "    ")}
+      |  ${if (config.tagTable.ttl.isDefined) "AND default_time_to_live = " + config.tagTable.ttl.get.toSeconds else ""}
+    """.stripMargin.trim
 
   def createTagsProgressTable =
     s"""
-       CREATE TABLE IF NOT EXISTS $tagProgressTableName(
-        persistence_id text,
-        tag text,
-        sequence_nr bigint,
-        tag_pid_sequence_nr bigint,
-        offset timeuuid,
-        PRIMARY KEY (persistence_id, tag))
-       """
+     |CREATE TABLE IF NOT EXISTS $tagProgressTableName(
+     |  persistence_id text,
+     |  tag text,
+     |  sequence_nr bigint,
+     |  tag_pid_sequence_nr bigint,
+     |  offset timeuuid,
+     |  PRIMARY KEY (persistence_id, tag))
+     """.stripMargin.trim
 
   def createTagScanningTable =
     s"""
-       CREATE TABLE IF NOT EXISTS $tagScanningTableName(
-        persistence_id text,
-        sequence_nr bigint,
-        PRIMARY KEY (persistence_id))
-       """
+     |CREATE TABLE IF NOT EXISTS $tagScanningTableName(
+     |  persistence_id text,
+     |  sequence_nr bigint,
+     |  PRIMARY KEY (persistence_id))
+     """.stripMargin.trim
 
   private[akka] def createMetadataTable =
     s"""
-      CREATE TABLE IF NOT EXISTS $metadataTableName(
-        persistence_id text PRIMARY KEY,
-        deleted_to bigint,
-        properties map<text,text>)
-   """
+     |CREATE TABLE IF NOT EXISTS $metadataTableName(
+     |  persistence_id text PRIMARY KEY,
+     |  deleted_to bigint,
+     |  properties map<text,text>)
+    """.stripMargin.trim
 
   private[akka] def writeMessage(withMeta: Boolean) =
     s"""

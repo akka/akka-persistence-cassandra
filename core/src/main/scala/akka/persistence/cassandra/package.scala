@@ -25,6 +25,7 @@ import akka.actor.ExtendedActorSystem
 import akka.serialization.AsyncSerializer
 import akka.serialization.Serializers
 import akka.Done
+import akka.annotation.InternalApi
 
 package object cassandra {
   private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
@@ -116,6 +117,13 @@ package object cassandra {
     } catch {
       case NonFatal(e) => Future.failed(e)
     }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def indent(stmt: String, prefix: String): String = {
+    stmt.split('\n').mkString("\n" + prefix)
   }
 
 }
