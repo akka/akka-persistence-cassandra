@@ -32,12 +32,13 @@ import akka.util.OptionVal
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.LoggingRetryPolicy
 import com.datastax.driver.core.utils.Bytes
-import com.datastax.driver.core.utils.Bytes
 import com.typesafe.config.Config
 
 class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
   with CassandraStatements with ActorLogging with CassandraSnapshotCleanup {
+
   import CassandraSnapshotStore._
+
   val snapshotConfig = new CassandraSnapshotStoreConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
   val snapshotDeserializer = new SnapshotDeserializer(context.system)
@@ -70,11 +71,11 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
   private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(
     _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
   )
-  private def preparedSelectSnapshotMetadata =
+  private def preparedSelectSnapshotMetadata: Future[PreparedStatement] =
     session.prepare(selectSnapshotMetadata(limit = None)).map(
       _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
     )
-  private def preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit =
+  private def preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit: Future[PreparedStatement] =
     session.prepare(selectSnapshotMetadata(limit = Some(maxLoadAttempts))).map(
       _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
     )
@@ -105,22 +106,22 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
     // The normal case is that timestamp is not specified (Long.MaxValue) in the criteria and then we can
     // use a select stmt with LIMIT if maxLoadAttempts, otherwise the result is iterated and
     // non-matching timestamps are discarded.
-    val prepStmt =
+    val snapshotMetaPs =
       if (criteria.maxTimestamp == Long.MaxValue) preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
       else preparedSelectSnapshotMetadata
     for {
-      p <- prepStmt
+      p <- snapshotMetaPs
       mds <- metadata(p, persistenceId, criteria, someMaxLoadAttempts)
       res <- loadNAsync(mds)
     } yield res
   }
 
-  def loadNAsync(metadata: immutable.Seq[SnapshotMetadata]): Future[Option[SelectedSnapshot]] = metadata match {
+  private def loadNAsync(metadata: immutable.Seq[SnapshotMetadata]): Future[Option[SelectedSnapshot]] = metadata match {
     case Seq() => Future.successful(None) // no snapshots stored
     case md +: mds => load1Async(md) map {
       case Snapshot(s) => Some(SelectedSnapshot(md, s))
     } recoverWith {
-      case e: NoSuchElementException if metadata.size == 1 =>
+      case _: NoSuchElementException if metadata.size == 1 =>
         // Thrown load1Async when snapshot couldn't be found, which can happen since metadata and the
         // actual snapshot might not be replicated at exactly same time.
         // Treat this as if there were no snapshots.
@@ -144,7 +145,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
     }
   }
 
-  def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
+  private def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
     val boundSelectSnapshot = preparedSelectSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
     boundSelectSnapshot.flatMap(session.selectOne).flatMap {
       case None =>
@@ -195,12 +196,19 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
   }
 
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
-    preparedSelectSnapshotMetadata.flatMap { prepStmt =>
-      metadata(prepStmt, persistenceId, criteria, limit = None).flatMap { mds =>
+    preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
+      // this meta query gets slower than slower if snapshots are deleted without a criteria.minSequenceNr as
+      // all previous tombstones are scanned in the meta data query
+      metadata(snapshotMetaPs, persistenceId, criteria, limit = None).flatMap { mds: immutable.Seq[SnapshotMetadata] =>
         val boundStatements = mds.map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
-        Future.sequence(boundStatements).flatMap { stmts =>
-          executeBatch(batch => stmts.foreach(batch.add))
+        if (boundStatements.nonEmpty) {
+          Future.sequence(boundStatements).flatMap { stmts =>
+            executeBatch(batch => stmts.foreach(batch.add))
+          }
+        } else {
+          Future.successful(())
         }
+
       }
     }
   }
@@ -251,9 +259,9 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
     case NonFatal(e) => Future.failed(e)
   }
 
-  private def metadata(prepStmt: PreparedStatement, persistenceId: String, criteria: SnapshotSelectionCriteria,
+  private def metadata(snapshotMetaPs: PreparedStatement, persistenceId: String, criteria: SnapshotSelectionCriteria,
                        limit: Option[Int]): Future[immutable.Seq[SnapshotMetadata]] = {
-    val boundStmt = prepStmt.bind(persistenceId, criteria.maxSequenceNr: JLong)
+    val boundStmt = snapshotMetaPs.bind(persistenceId, criteria.maxSequenceNr: JLong, criteria.minSequenceNr: JLong)
     val source = session.select(boundStmt)
       .map(row => SnapshotMetadata(row.getString("persistence_id"), row.getLong("sequence_nr"), row.getLong("timestamp")))
       .dropWhile(_.timestamp > criteria.maxTimestamp)
