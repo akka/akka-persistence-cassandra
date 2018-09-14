@@ -2,7 +2,7 @@
 
 From a direct clone (rather than a fork). You will need permission in sonatype to push to akka repositories.
 
-* run `test:runMain akka.persistence.cassandra.PrintCreateStatements` if statements or config have changed,
+* run `core/test:runMain akka.persistence.cassandra.PrintCreateStatements` if keyspace/table statements or config have changed,
   paste into README.md
 * commit and push a new version number in the README.md
 * sbt -Dpublish.maven.central=true
