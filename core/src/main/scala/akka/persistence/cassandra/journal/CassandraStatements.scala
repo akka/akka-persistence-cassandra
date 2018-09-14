@@ -242,6 +242,7 @@ trait CassandraStatements {
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND
         partition_nr = ? AND
+        sequence_nr >= 0 AND
         sequence_nr <= ?
     """
   }
