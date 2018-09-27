@@ -308,7 +308,7 @@ writes to the `tag_views` table when running persistent actors with the new vers
 The following configuration changes. See `reference.conf` for full details:
 
 * `pubsub-minimum-interval` has been removed. If using DistributedPubsub notifications for tag writes then set `pubsub-notification` to on
-* `delayed-event-timeout` has been replaces by `events-by-tag.gap-timeout` with the restriction removed that all
+* `delayed-event-timeout` has been replaced by `events-by-tag.gap-timeout` with the restriction removed that all
 events have to be tagged. 
 * `first-time-bucket` format has changed to: `yyyyMMddTHH:mm` e.g. `20151120T00:00`
 * `eventual-consistency` has been removed. It may be re-added see [#263](https://github.com/akka/akka-persistence-cassandra/issues/263)
