@@ -38,8 +38,7 @@ object EventAdaptersReadSpec {
       max-buffer-size = 50
       first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
     }
-    """
-  ).withFallback(CassandraLifecycle.config)
+    """).withFallback(CassandraLifecycle.config)
 }
 
 class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) {

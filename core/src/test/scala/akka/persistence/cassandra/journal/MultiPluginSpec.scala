@@ -46,8 +46,7 @@ object MultiPluginSpec {
        |cassandra-snapshot-d=$${cassandra-snapshot-store}
        |cassandra-snapshot-d.table=snapshot_d_messages
        |
-    """.stripMargin
-  )
+    """.stripMargin)
 
   trait Processor extends PersistentActor {
 
@@ -81,8 +80,7 @@ object MultiPluginSpec {
 
 class MultiPluginSpec extends CassandraSpec(
   config.withFallback(ConfigFactory.load("reference.conf")),
-  MultiPluginSpec.journalKeyspace, MultiPluginSpec.snapshotKeyspace
-) {
+  MultiPluginSpec.journalKeyspace, MultiPluginSpec.snapshotKeyspace) {
 
   lazy val cassandraPluginConfig = new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-journal"))
 

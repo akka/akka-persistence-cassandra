@@ -33,8 +33,7 @@ import akka.util.ByteString
     executeStatement:   Statement => Future[Done],
     selectStatement:    Statement => Future[ResultSet],
     tagProgressPs:      Future[PreparedStatement],
-    tagScanningPs:      Future[PreparedStatement]
-  ) {
+    tagScanningPs:      Future[PreparedStatement]) {
 
     def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext): Future[Done] = {
       val batch = new BatchStatement(BatchStatement.Type.UNLOGGED)
@@ -59,8 +58,7 @@ import akka.util.ByteString
                 event.sequenceNr: JLong,
                 event.serId: JInt,
                 event.serManifest,
-                event.writerUuid
-              )
+                event.writerUuid)
               event.meta.foreach { m =>
                 bound.setBytes("meta", m.serialized)
                 bound.setString("meta_ser_manifest", m.serManifest)
@@ -146,8 +144,7 @@ import akka.util.ByteString
       pendingScanning -= pid
       log.debug(
         "Recovering pid [{}] with progress [{}]. Tags to reset as not in progress [{}]",
-        pid, tagProgresses, missingProgress
-      )
+        pid, tagProgresses, missingProgress)
       val tagWriterAcks = Future.sequence(tagProgresses.map {
         case (tag, progress) =>
           log.debug("Sending tag progress: [{}] [{}]", tag, progress)
@@ -222,8 +219,7 @@ import akka.util.ByteString
     context.actorOf(
       TagWriter.props(settings, tagWriterSession, tag)
         .withDispatcher((context.props.dispatcher)),
-      name = URLEncoder.encode(tag, ByteString.UTF_8)
-    )
+      name = URLEncoder.encode(tag, ByteString.UTF_8))
   }
 
 }

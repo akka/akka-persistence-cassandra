@@ -26,8 +26,7 @@ object CassandraJournalDeletionSpec {
     val persistenceId:            String,
     deleteSuccessProbe:           ActorRef,
     deleteFailProbe:              ActorRef,
-    override val journalPluginId: String   = "cassandra-journal"
-  )
+    override val journalPluginId: String   = "cassandra-journal")
     extends PersistentActor {
 
     var recoveredEvents: List[Any] = List.empty
@@ -84,8 +83,7 @@ class CassandraJournalDeletionSpec extends CassandraSpec(
     cassandra-query-journal-small-partition-size {
       write-plugin = cassandra-journal-small-partition-size
     }
-  """
-) {
+  """) {
 
   import CassandraJournalDeletionSpec._
 
@@ -121,8 +119,7 @@ class CassandraJournalDeletionSpec extends CassandraSpec(
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
       val p1 = system.actorOf(Props(
-        new PAThatDeletes("p2", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-low-concurrent-deletes")
-      ))
+        new PAThatDeletes("p2", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-low-concurrent-deletes")))
 
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)
@@ -180,5 +177,10 @@ class CassandraJournalDeletionSpec extends CassandraSpec(
       expectMsg(RecoveredEvents(List(RecoveryCompleted)))
     }
 
+  }
+
+  override protected def externalCassandraCleanup(): Unit = {
+    super.externalCassandraCleanup()
+    cluster.connect().execute(s"drop keyspace if exists DeletionSpecMany")
   }
 }

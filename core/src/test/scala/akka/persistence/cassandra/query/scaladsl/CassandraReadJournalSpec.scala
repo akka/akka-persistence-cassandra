@@ -10,7 +10,6 @@ import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.NoOffset
 import akka.stream.testkit.scaladsl.TestSink
-import com.datastax.driver.core.Cluster
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
@@ -29,8 +28,7 @@ object CassandraReadJournalSpec {
       "java.lang.String" = test-tagger
     }
     cassandra-journal.log-queries = off
-    """
-  ).withFallback(CassandraLifecycle.config)
+    """).withFallback(CassandraLifecycle.config)
 }
 
 class TestTagger extends WriteEventAdapter {

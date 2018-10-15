@@ -56,14 +56,17 @@ object CassandraSpec {
         keyspace = $snapshotStoreKeyspace
         port = $port
       }
-    """
-  )
+    """)
 
   val fallbackConfig = ConfigFactory.parseString(
     s"""
-      first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
-    """
-  )
+        cassandra-query-journal {
+          first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
+          events-by-tag {
+            eventual-consistency-delay = 200ms
+          }
+        }
+    """)
 
 }
 
@@ -80,6 +83,8 @@ abstract class CassandraSpec(config: Config, val journalName: String = getCaller
   def this(config: String) = this(ConfigFactory.parseString(config))
 
   lazy val randomPort = SocketUtil.temporaryLocalPort()
+
+  lazy val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   override def port(): Int = CassandraLifecycle.mode match {
     case External => 9042

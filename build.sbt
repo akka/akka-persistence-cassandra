@@ -2,21 +2,21 @@ import com.typesafe.sbt.SbtScalariform
 import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
-import net.virtualvoid.optimizer._
 
-val AkkaVersion = "2.5.16"
+val AkkaVersion = "2.5.17"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.6.0",
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query"              % AkkaVersion,
-  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion     % "test",
-  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % "test",
-  "ch.qos.logback"          % "logback-classic"                     % "1.2.3"         % "test",
-  "org.scalatest"          %% "scalatest"                           % "3.0.5"         % "test",
-  "org.pegdown"             % "pegdown"                             % "1.6.0"         % "test",
-  "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % "provided"
+  "com.typesafe.akka"      %% "akka-persistence-tck"                % AkkaVersion     % Test,
+  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % Test,
+  "com.typesafe.akka"      %% "akka-multi-node-testkit"             % AkkaVersion     % Test,
+  "ch.qos.logback"          % "logback-classic"                     % "1.2.3"         % Test,
+  "org.scalatest"          %% "scalatest"                           % "3.0.5"         % Test,
+  "org.pegdown"             % "pegdown"                             % "1.6.0"         % Test,
+  "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % Provided
 )
 
 
@@ -25,7 +25,7 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   organizationName := "Lightbend Inc.",
   startYear := Some(2016),
   licenses := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
-  crossScalaVersions := Seq("2.11.12", "2.12.6"),
+  crossScalaVersions := Seq("2.11.12", "2.12.7"),
   scalaVersion := crossScalaVersions.value.last,
   crossVersion := CrossVersion.binary,
 
@@ -51,9 +51,6 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   // show full stack traces and test case durations
   testOptions in Test += Tests.Argument("-oDF"),
 
-  // don't save test output to a file
-  testListeners in (Test, test) := Seq(TestLogger(streams.value.log, {_ => streams.value.log }, logBuffered.value)),
-
   // -v Log "test run started" / "test started" / "test run finished" events on log level "info" instead of "debug".
   // -a Show stack traces and exception class name for AssertionErrors.
   testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a"),
@@ -78,7 +75,7 @@ lazy val root = (project in file("."))
   )
 
 lazy val core = (project in file("core"))
-  .enablePlugins(AutomateHeaderPlugin, SbtOsgi, SbtOptimizerPlugin)
+  .enablePlugins(AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
   .dependsOn(cassandraLauncher % Test)
   .settings(common: _*)
   .settings(osgiSettings: _*)
@@ -91,9 +88,9 @@ lazy val core = (project in file("core"))
     OsgiKeys.privatePackage := Nil,
     testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o"), Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports"))
   )
+  .configs( MultiJvm)
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
-  .enablePlugins(SbtOptimizerPlugin)
   .settings(common: _*)
   .settings(
     name := "akka-persistence-cassandra-launcher",
@@ -104,7 +101,7 @@ lazy val cassandraLauncher = (project in file("cassandra-launcher"))
 // This project doesn't get published directly, rather the assembled artifact is included as part of cassandraLaunchers
 // resources
 lazy val cassandraBundle = (project in file("cassandra-bundle"))
-  .enablePlugins(AutomateHeaderPlugin, SbtOptimizerPlugin)
+  .enablePlugins(AutomateHeaderPlugin)
   .settings(common: _*)
   .settings(
     name := "akka-persistence-cassandra-bundle",

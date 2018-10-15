@@ -176,8 +176,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
   override def eventsByPersistenceId(
     persistenceId:  String,
     fromSequenceNr: Long,
-    toSequenceNr:   Long
-  ): Source[EventEnvelope, NotUsed] =
+    toSequenceNr:   Long): Source[EventEnvelope, NotUsed] =
     scaladslReadJournal.eventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr).asJava
 
   /**
@@ -188,8 +187,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
   override def currentEventsByPersistenceId(
     persistenceId:  String,
     fromSequenceNr: Long,
-    toSequenceNr:   Long
-  ): Source[EventEnvelope, NotUsed] =
+    toSequenceNr:   Long): Source[EventEnvelope, NotUsed] =
     scaladslReadJournal
       .currentEventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr)
       .asJava

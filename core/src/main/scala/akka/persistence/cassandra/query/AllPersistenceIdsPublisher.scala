@@ -20,16 +20,14 @@ import akka.annotation.InternalApi
 @InternalApi private[akka] object AllPersistenceIdsPublisher {
   final case class AllPersistenceIdsSession(
     selectDistinctPersistenceIds: PreparedStatement,
-    session:                      Session
-  ) extends NoSerializationVerificationNeeded
+    session:                      Session) extends NoSerializationVerificationNeeded
   final case class ReplayDone(resultSet: Option[ResultSet])
     extends NoSerializationVerificationNeeded
   final case class AllPersistenceIdsState(knownPersistenceIds: Set[String])
 
   def props(
     refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
-    config: CassandraReadJournalConfig
-  ): Props =
+    config: CassandraReadJournalConfig): Props =
     Props(new AllPersistenceIdsPublisher(refreshInterval, session, config))
 }
 
@@ -38,8 +36,7 @@ import akka.annotation.InternalApi
  */
 @InternalApi private[akka] class AllPersistenceIdsPublisher(
   refreshInterval: Option[FiniteDuration], session: AllPersistenceIdsSession,
-  config: CassandraReadJournalConfig
-)
+  config: CassandraReadJournalConfig)
   extends QueryActorPublisher[String, AllPersistenceIdsState](refreshInterval, config) {
 
   import context.dispatcher
@@ -53,8 +50,7 @@ import akka.annotation.InternalApi
   override protected def completionCondition(state: AllPersistenceIdsState): Boolean = false
 
   override protected def updateState(
-    state: AllPersistenceIdsState, row: Row
-  ): (Option[String], AllPersistenceIdsState) = {
+    state: AllPersistenceIdsState, row: Row): (Option[String], AllPersistenceIdsState) = {
 
     val event = row.getString("persistence_id")
 
@@ -67,14 +63,12 @@ import akka.annotation.InternalApi
 
   override protected def requestNext(
     state:     AllPersistenceIdsState,
-    resultSet: ResultSet
-  ): Future[Action] =
+    resultSet: ResultSet): Future[Action] =
     query(state)
 
   override protected def requestNextFinished(
     state:     AllPersistenceIdsState,
-    resultSet: ResultSet
-  ): Future[Action] =
+    resultSet: ResultSet): Future[Action] =
     requestNext(state, resultSet)
 
   private[this] def query(state: AllPersistenceIdsState): Future[Action] = {

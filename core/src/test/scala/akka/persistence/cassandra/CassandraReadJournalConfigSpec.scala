@@ -24,8 +24,7 @@ class CassandraReadJournalConfigSpec extends TestKit(ActorSystem("CassandraReadJ
         """
           |cassandra-journal.events-by-tag.bucket-size = Day
           |cassandra-query-journal.first-time-bucket = "20151120"
-        """.stripMargin
-      ).withFallback(system.settings.config)
+        """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
       val readConfig = new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)
 
@@ -37,8 +36,7 @@ class CassandraReadJournalConfigSpec extends TestKit(ActorSystem("CassandraReadJ
         """
           |cassandra-journal.events-by-tag.bucket-size = Day
           |cassandra-query-journal.first-time-bucket = "20151120T12:20"
-        """.stripMargin
-      ).withFallback(system.settings.config)
+        """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
       val readConfig = new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)
 
@@ -51,8 +49,7 @@ class CassandraReadJournalConfigSpec extends TestKit(ActorSystem("CassandraReadJ
         """
           |cassandra-journal.events-by-tag.bucket-size = Hour
           |cassandra-query-journal.first-time-bucket = "20151120T00"
-        """.stripMargin
-      ).withFallback(system.settings.config)
+        """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
       val readConfig = new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)
 
@@ -64,8 +61,7 @@ class CassandraReadJournalConfigSpec extends TestKit(ActorSystem("CassandraReadJ
         """
           |cassandra-journal.events-by-tag.bucket-size = Hour
           |cassandra-query-journal.first-time-bucket = "20151120T00:20"
-        """.stripMargin
-      ).withFallback(system.settings.config)
+        """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
       val readConfig = new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)
 
@@ -77,8 +73,7 @@ class CassandraReadJournalConfigSpec extends TestKit(ActorSystem("CassandraReadJ
         """
           |cassandra-journal.events-by-tag.bucket-size = Hour
           |cassandra-query-journal.first-time-bucket = "cats"
-        """.stripMargin
-      ).withFallback(system.settings.config)
+        """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
       val e = intercept[IllegalArgumentException] {
         new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)

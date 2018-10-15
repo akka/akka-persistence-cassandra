@@ -58,13 +58,11 @@ object CassandraReadJournal {
    */
   @InternalApi private[akka] case class CombinedEventsByPersistenceIdStmts(
     preparedSelectEventsByPersistenceId: PreparedStatement,
-    preparedSelectDeletedTo:             PreparedStatement
-  )
+    preparedSelectDeletedTo:             PreparedStatement)
 
   @InternalApi private[akka] case class CombinedEventsByTagStmts(
     byTag:               PreparedStatement,
-    byTagWithUpperLimit: PreparedStatement
-  )
+    byTagWithUpperLimit: PreparedStatement)
 }
 
 /**
@@ -137,8 +135,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     ec,
     log,
     metricsCategory,
-    init = session => executeCreateKeyspaceAndTables(session, writePluginConfig)
-  )
+    init = session => executeCreateKeyspaceAndTables(session, writePluginConfig))
 
   /**
    * Initialize connection to Cassandra and prepared statements.
@@ -152,8 +149,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       preparedSelectDistinctPersistenceIds,
       preparedSelectEventsByPersistenceId,
       preparedSelectFromTagViewWithUpperBound,
-      preparedSelectTagSequenceNrs
-    )).map(_ => Done)
+      preparedSelectTagSequenceNrs)).map(_ => Done)
   }
 
   private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(queryPluginConfig.readRetries))
@@ -313,8 +309,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
             Some(queryPluginConfig.refreshInterval),
             writePluginConfig.bucketSize,
             usingOffset,
-            prereqs._2
-          ))
+            prereqs._2))
         }
           .via(deserializeEventsByTagRow)
           .mapMaterializedValue(_ => NotUsed)
@@ -341,8 +336,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
             manifest = row.getString("event_manifest"),
             deleted = false,
             sender = null,
-            writerUuid = row.getString("writer_uuid")
-          ))
+            writerUuid = row.getString("writer_uuid")))
           UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, repr)
         }
       }
@@ -352,8 +346,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private def eventsByTagPrereqs(
     tag:         String,
     usingOffset: Boolean,
-    fromOffset:  UUID
-  ): Future[(CombinedEventsByTagStmts, Map[Tag, (TagPidSequenceNr, UUID)])] = {
+    fromOffset:  UUID): Future[(CombinedEventsByTagStmts, Map[Tag, (TagPidSequenceNr, UUID)])] = {
     val currentBucket = TimeBucket(System.currentTimeMillis(), writePluginConfig.bucketSize)
     val initialTagPidSequenceNrs = if (usingOffset && currentBucket.within(fromOffset))
       scanTagSequenceNrs(tag, fromOffset)
@@ -377,8 +370,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    */
   @InternalApi private[akka] def createSource[T, P](
     prepStmt: Future[P],
-    source:   (Session, P) => Source[T, NotUsed]
-  ): Source[T, NotUsed] = {
+    source:   (Session, P) => Source[T, NotUsed]): Source[T, NotUsed] = {
     // when we get the PreparedStatement we know that the session is initialized,
     // i.e.the get is safe
     def getSession: Session = session.underlying().value.get.get
@@ -404,8 +396,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * INTERNAL API
    */
   @InternalApi private[akka] def createFutureSource[T, P, M](
-    prepStmt: Future[P]
-  )(source: (Session, P) => Source[T, M]): Source[T, Future[M]] = {
+    prepStmt: Future[P])(source: (Session, P) => Source[T, M]): Source[T, Future[M]] = {
     // when we get the PreparedStatement we know that the session is initialized,
     // i.e.the get is safe
     def getSession: Session = session.underlying().value.get.get
@@ -487,8 +478,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   override def eventsByPersistenceId(
     persistenceId:  String,
     fromSequenceNr: Long,
-    toSequenceNr:   Long
-  ): Source[EventEnvelope, NotUsed] =
+    toSequenceNr:   Long): Source[EventEnvelope, NotUsed] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -497,8 +487,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization)
-    )
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
       .mapMaterializedValue(_ => NotUsed)
       .map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
@@ -511,8 +500,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   override def currentEventsByPersistenceId(
     persistenceId:  String,
     fromSequenceNr: Long,
-    toSequenceNr:   Long
-  ): Source[EventEnvelope, NotUsed] =
+    toSequenceNr:   Long): Source[EventEnvelope, NotUsed] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -521,8 +509,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       None,
       s"currentEventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization)
-    )
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
       .mapMaterializedValue(_ => NotUsed)
       .map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
@@ -534,8 +521,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     persistenceId:   String,
     fromSequenceNr:  Long,
     toSequenceNr:    Long,
-    refreshInterval: Option[FiniteDuration] = None
-  ): Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] =
+    refreshInterval: Option[FiniteDuration] = None): Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -545,8 +531,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization),
-      fastForwardEnabled = true
-    ).map(p => mapEvent(p.persistentRepr))
+      fastForwardEnabled = true).map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
@@ -567,8 +552,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     customConsistencyLevel: Option[ConsistencyLevel] = None,
     customRetryPolicy:      Option[RetryPolicy]      = None,
     extractor:              Extractor[T],
-    fastForwardEnabled:     Boolean                  = false
-  ): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
+    fastForwardEnabled:     Boolean                  = false): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
 
     val deserializeEventAsync = queryPluginConfig.deserializationParallelism > 1
 
@@ -586,11 +570,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
           c.preparedSelectDeletedTo,
           s,
           customConsistencyLevel,
-          customRetryPolicy
-        ),
+          customRetryPolicy),
         queryPluginConfig,
-        fastForwardEnabled
-      ))
+        fastForwardEnabled))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
         .named(name)
     }
@@ -667,16 +649,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
 
   private[this] def persistenceIds(
     refreshInterval: Option[FiniteDuration],
-    name:            String
-  ): Source[String, NotUsed] =
+    name:            String): Source[String, NotUsed] =
     createSource[String, PreparedStatement](preparedSelectDistinctPersistenceIds, (s, ps) =>
       Source.actorPublisher[String](
         AllPersistenceIdsPublisher.props(
           refreshInterval,
           AllPersistenceIdsSession(ps, s),
-          queryPluginConfig
-        )
-      )
+          queryPluginConfig))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
         .mapMaterializedValue(_ => NotUsed)
         .named(name))

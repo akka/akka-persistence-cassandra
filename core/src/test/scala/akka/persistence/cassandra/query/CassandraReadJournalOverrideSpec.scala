@@ -33,8 +33,7 @@ object CassandraReadJournalOverrideSpec {
       cassandra-query-journal {
         class = "akka.persistence.cassandra.query.JournalOverrideProvider"
       }
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+    """.stripMargin).withFallback(CassandraLifecycle.config)
 
 }
 
@@ -44,8 +43,7 @@ class CassandraReadJournalOverrideSpec extends CassandraSpec(CassandraReadJourna
 
   lazy val journal =
     PersistenceQuery(system).readJournalFor[JournalOverride](
-      CassandraReadJournal.Identifier
-    )
+      CassandraReadJournal.Identifier)
 
   "Cassandra read journal override" must {
     "map events" in {

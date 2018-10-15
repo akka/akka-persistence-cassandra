@@ -30,9 +30,7 @@ object LeveledCompactionStrategy extends CassandraCompactionStrategyConfig[Level
 
   override def propertyKeys: List[String] = (
     BaseCompactionStrategy.propertyKeys union List(
-      "sstable_size_in_mb"
-    )
-  ).sorted
+      "sstable_size_in_mb")).sorted
 
   override def fromConfig(config: Config): LeveledCompactionStrategy = new LeveledCompactionStrategy(config)
 }

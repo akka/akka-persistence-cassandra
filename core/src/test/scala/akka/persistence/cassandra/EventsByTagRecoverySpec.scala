@@ -41,8 +41,7 @@ object EventsByTagRecoverySpec {
        |}
        |
        |akka.actor.serialize-messages=off
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+    """.stripMargin).withFallback(CassandraLifecycle.config)
 }
 
 class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.config) {

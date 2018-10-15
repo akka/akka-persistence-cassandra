@@ -50,12 +50,10 @@ final class CassandraSession(delegate: akka.persistence.cassandra.session.scalad
     executionContext: ExecutionContext,
     log:              LoggingAdapter,
     metricsCategory:  String,
-    init:             JFunction[Session, CompletionStage[Done]]
-  ) =
+    init:             JFunction[Session, CompletionStage[Done]]) =
     this(new akka.persistence.cassandra.session.scaladsl.CassandraSession(
       system, sessionProvider, settings, executionContext, log, metricsCategory,
-      (session => init.apply(session).toScala)
-    ))
+      (session => init.apply(session).toScala)))
 
   implicit private val ec = delegate.ec
 

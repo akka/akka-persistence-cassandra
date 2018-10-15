@@ -35,8 +35,7 @@ class CassandraCorruptJournalSpec extends CassandraSpec(
     cassandra-journal-warn {
       replay-filter.mode = warn
     }
-  """.stripMargin
-) with DirectWriting {
+  """.stripMargin) with DirectWriting {
 
   def setup(persistenceId: String, journalId: String = "cassandra-journal"): ActorRef = {
     val ref = system.actorOf(TestActor.props(persistenceId, journalId))

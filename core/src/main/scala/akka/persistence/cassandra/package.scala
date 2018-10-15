@@ -54,6 +54,11 @@ package object cassandra {
     s"$uuid (${timestampFormatter.format(time)})"
   }
 
+  def formatUnixTime(unixTime: Long): String = {
+    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(unixTime), ZoneOffset.UTC)
+    timestampFormatter.format(time)
+  }
+
   val FutureDone: Future[Done] = Future.successful(Done)
 
   def serializeEvent(p: PersistentRepr, tags: Set[String], uuid: UUID,

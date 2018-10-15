@@ -28,7 +28,7 @@ class Persister(override val persistenceId: String, probe: Option[ActorRef] = No
   override def receiveRecover: Receive = {
     case SnapshotOffer(_, s) =>
       snapshot = Some(s)
-    case msg               => probe.foreach(_ ! msg)
+    case msg => probe.foreach(_ ! msg)
   }
   override def receiveCommand: Receive = {
     case GetSnapshot =>

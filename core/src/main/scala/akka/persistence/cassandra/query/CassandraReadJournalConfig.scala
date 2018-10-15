@@ -29,8 +29,7 @@ import scala.concurrent.duration._
   val fetchMoreThreshold: Double = config.getDouble("fetch-more-threshold")
   require(
     0.0 <= fetchMoreThreshold && fetchMoreThreshold <= 1.0,
-    s"fetch-more-threshold must be between 0.0 and 1.0, was $fetchMoreThreshold"
-  )
+    s"fetch-more-threshold must be between 0.0 and 1.0, was $fetchMoreThreshold")
   val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))
   val readRetries: Int = config.getInt("read-retries")
 
@@ -45,8 +44,7 @@ import scala.concurrent.duration._
     val date: LocalDateTime = LocalDateTime.parse(firstBucketPadded, firstBucketFormatter)
     TimeBucket(
       date.toInstant(ZoneOffset.UTC).toEpochMilli,
-      writePluginConfig.bucketSize
-    )
+      writePluginConfig.bucketSize)
   }
 
   val deserializationParallelism: Int = config.getInt("deserialization-parallelism")
@@ -60,6 +58,8 @@ import scala.concurrent.duration._
   val eventsByPersistenceIdEventTimeout: FiniteDuration = config.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 
   val eventsByTagGapTimeout: FiniteDuration = config.getDuration("events-by-tag.gap-timeout", MILLISECONDS).millis
+  val eventsByTagDebug: Boolean = config.getBoolean("events-by-tag.verbose-debug-logging")
+  val eventsByTagEventualConsistency: FiniteDuration = config.getDuration("events-by-tag.eventual-consistency-delay", MILLISECONDS).millis
   val eventsByTagNewPersistenceIdScanTimeout = config.getDuration("events-by-tag.new-persistence-id-scan-timeout", MILLISECONDS).millis
   val eventsByTagOffsetScanning: FiniteDuration = config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis
 

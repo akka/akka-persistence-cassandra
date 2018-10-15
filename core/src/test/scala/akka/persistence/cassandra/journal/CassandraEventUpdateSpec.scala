@@ -23,8 +23,7 @@ object CassandraEventUpdateSpec {
   val config = ConfigFactory.parseString(
     """
         akka.loglevel = INFO
-    """
-  ).withFallback(CassandraLifecycle.config)
+    """).withFallback(CassandraLifecycle.config)
 }
 
 class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.config) { s =>
@@ -46,8 +45,7 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
       ec,
       log,
       systemName,
-      init = _ => Future.successful(Done)
-    )
+      init = _ => Future.successful(Done))
   }
 
   "CassandraEventUpdate" must {
@@ -61,8 +59,7 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
       val originalEvent = eventsBefore.head
       val modifiedEvent = serialize(
         originalEvent.pr.withPayload("secrets"),
-        originalEvent.offset, Set("ignored")
-      )
+        originalEvent.offset, Set("ignored"))
 
       updater.updateEvent(modifiedEvent).futureValue shouldEqual Done
 
@@ -76,8 +73,7 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
       expectMsgType[TestTaggingActor.Ack.type]
       val eventsBefore = events(pid).head
       val modifiedEvent = serialize(
-        eventsBefore.pr.withPayload("hidden"), eventsBefore.offset, Set("ignored")
-      )
+        eventsBefore.pr.withPayload("hidden"), eventsBefore.offset, Set("ignored"))
 
       expectEventsForTag(tag = "red", "e-1")
       expectEventsForTag(tag = "blue", "e-1")

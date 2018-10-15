@@ -20,11 +20,10 @@ object RecoveryLoadSpec {
       cassandra-journal.events-by-tag.enabled = on
       cassandra-journal.events-by-tag.scanning-flush-interval = 2s
       cassandra-journal.replay-filter.mode = off
-      cassandra-journal.log-queries = on
+      cassandra-journal.log-queries = off
       cassandra-snapshot-store.keyspace=RecoveryLoadSpecSnapshot
       cassandra-snapshot-store.log-queries = on
-    """
-  ).withFallback(CassandraLifecycle.config)
+    """).withFallback(CassandraLifecycle.config)
 
   final case class Init(numberOfEvents: Int)
   case object InitDone
@@ -70,8 +69,7 @@ object RecoveryLoadSpec {
           replayDuration1 = (replayStartTime - snapshotEndTime).nanos,
           replayDuration2 = (replayEndTime - replayStartTime).nanos,
           replayedEvents,
-          totalDuration = (replayEndTime - startTime).nanos
-        )
+          totalDuration = (replayEndTime - startTime).nanos)
     }
 
     def init(replyTo: ActorRef): Receive = {

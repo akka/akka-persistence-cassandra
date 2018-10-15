@@ -141,8 +141,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
         .expectNext(
           ("h", 1, Offset.sequence(1)),
           ("h", 2, Offset.sequence(2)),
-          ("h", 3, Offset.sequence(3))
-        )
+          ("h", 3, Offset.sequence(3)))
         .expectComplete()
     }
 
@@ -174,8 +173,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
 
       probe.expectNext(
         ("jo", 1, Offset.sequence(1)),
-        ("jo", 2, Offset.sequence(2))
-      )
+        ("jo", 2, Offset.sequence(2)))
       system.log.debug("Saw evt 1 and 2")
 
       // 4 arrived out of order
@@ -195,8 +193,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       probe.expectNext(
         ("jo", 3, Offset.sequence(3)),
         ("jo", 4, Offset.sequence(4)),
-        ("jo", 5, Offset.sequence(5))
-      )
+        ("jo", 5, Offset.sequence(5)))
 
       killKill.shutdown()
       probe.expectComplete()

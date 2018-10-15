@@ -47,9 +47,7 @@ object SizeTieredCompactionStrategy extends CassandraCompactionStrategyConfig[Si
       "bucket_low",
       "max_threshold",
       "min_threshold",
-      "min_sstable_size"
-    )
-  ).sorted
+      "min_sstable_size")).sorted
 
   override def fromConfig(config: Config): SizeTieredCompactionStrategy = new SizeTieredCompactionStrategy(config)
 }

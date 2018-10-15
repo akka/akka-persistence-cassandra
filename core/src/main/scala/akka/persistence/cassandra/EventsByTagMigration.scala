@@ -71,9 +71,7 @@ object EventsByTagMigration {
                 row.getString("writer_uuid"),
                 meta,
                 timeUuid,
-                timeBucket = TimeBucket(timeUuid, bucketSize)
-              )
-            ))
+                timeBucket = TimeBucket(timeUuid, bucketSize))))
           case bytes =>
             // This is an event from version 0.7 that used to serialise the PersistentRepr in the
             // message column rather than the event column
@@ -105,8 +103,7 @@ class EventsByTagMigration(system: ActorSystem)
     ec,
     log,
     "EventsByTagMigration",
-    init = _ => Future.successful(Done)
-  )
+    init = _ => Future.successful(Done))
 
   def createTables(): Future[Done] = {
     log.info("Creating keyspace and tables")
@@ -162,8 +159,7 @@ class EventsByTagMigration(system: ActorSystem)
   def migrateToTagViews(periodicFlush: Int = 1000, filter: String => Boolean = _ => true): Future[Done] = {
     migrateToTagViewsInternal(
       queries.currentPersistenceIds().filter(filter),
-      periodicFlush
-    )
+      periodicFlush)
   }
 
   private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed], periodicFlush: Int): Future[Done] = {
@@ -174,8 +170,7 @@ class EventsByTagMigration(system: ActorSystem)
       session.executeWrite,
       session.selectResultSet,
       preparedWriteToTagProgress,
-      preparedWriteTagScanning
-    )
+      preparedWriteTagScanning)
     val tagWriters = system.actorOf(TagWriters.props(config.tagWriterSettings, tagWriterSession))
 
     val eventDeserializer: CassandraJournal.EventDeserializer = new CassandraJournal.EventDeserializer(system)
@@ -210,8 +205,7 @@ class EventsByTagMigration(system: ActorSystem)
                 config.replayMaxResultSize,
                 None,
                 s"migrateToTag-$pid",
-                extractor = EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system)
-              ).map(sendMissingTagWriteRaw(tp, tagWriters))
+                extractor = EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system)).map(sendMissingTagWriteRaw(tp, tagWriters))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
                 .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters).mapTo[AllFlushed.type])
             }

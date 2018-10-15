@@ -18,8 +18,7 @@ abstract class BaseCompactionStrategy(config: Config, className: String, propert
       .asScala
       .map(_.getKey)
       .forall(propertyKeys.contains(_)),
-    s"Config contains properties not supported by a $className. Supported: $propertyKeys. Supplied: ${config.entrySet().asScala.map(_.getKey)}"
-  )
+    s"Config contains properties not supported by a $className. Supported: $propertyKeys. Supplied: ${config.entrySet().asScala.map(_.getKey)}")
 
   val enabled: Boolean = if (config.hasPath("enabled")) config.getBoolean("enabled") else true
   val tombstoneCompactionInterval: Long = if (config.hasPath("tombstone_compaction_interval")) config.getLong("tombstone_compaction_interval") else 86400
@@ -45,8 +44,7 @@ object BaseCompactionStrategy extends CassandraCompactionStrategyConfig[BaseComp
     "enabled",
     "tombstone_compaction_interval",
     "tombstone_threshold",
-    "unchecked_tombstone_compaction"
-  )
+    "unchecked_tombstone_compaction")
 
   override def fromConfig(config: Config): BaseCompactionStrategy = {
     val className = if (config.hasPath("class")) config.getString("class") else ""
@@ -65,9 +63,7 @@ object BaseCompactionStrategy extends CassandraCompactionStrategyConfig[BaseComp
           ConfigFactory.parseString(
             s"""
                |class = "${SizeTieredCompactionStrategy.ClassName}"
-             """.stripMargin.trim
-          )
-        )
+             """.stripMargin.trim))
     }
   }
 }

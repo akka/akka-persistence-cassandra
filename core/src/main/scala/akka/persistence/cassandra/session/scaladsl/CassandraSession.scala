@@ -63,8 +63,7 @@ final class CassandraSession(
   executionContext: ExecutionContext,
   log:              LoggingAdapter,
   metricsCategory:  String,
-  init:             Session => Future[Done]
-) extends NoSerializationVerificationNeeded {
+  init:             Session => Future[Done]) extends NoSerializationVerificationNeeded {
   import settings._
 
   implicit private[akka] val ec = executionContext
@@ -135,8 +134,7 @@ final class CassandraSession(
       result.failed.foreach { e =>
         log.warning(
           "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
-          e.getMessage
-        )
+          e.getMessage)
       }
       result
     } else

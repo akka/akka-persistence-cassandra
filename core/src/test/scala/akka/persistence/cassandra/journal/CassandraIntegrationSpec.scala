@@ -23,8 +23,7 @@ object CassandraIntegrationSpec {
       |cassandra-journal.max-result-size = 3
       |cassandra-journal.keyspace=CassandraIntegrationSpec
       |cassandra-snapshot-store.keyspace=CassandraIntegrationSpecSnapshot
-    """.stripMargin
-  ).withFallback(CassandraLifecycle.config)
+    """.stripMargin).withFallback(CassandraLifecycle.config)
 
   case class DeleteTo(snr: Long)
 

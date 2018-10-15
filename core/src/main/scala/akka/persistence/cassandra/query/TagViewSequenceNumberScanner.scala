@@ -31,8 +31,7 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
     tag:            String,
     offset:         UUID,
     bucket:         TimeBucket,
-    scanningPeriod: FiniteDuration
-  ): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
+    scanningPeriod: FiniteDuration): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
     ps.flatMap(ps => {
       val deadline: Deadline = Deadline.now + scanningPeriod
       val to = UUIDs.endOf(System.currentTimeMillis() + scanningPeriod.toMillis)
@@ -41,8 +40,7 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
         val bound = ps.bind(tag, bucket.key: JLong, offset, to)
         log.debug(
           "Scanning tag: {} bucket: {}, from: {}, to: {}",
-          tag, bucket.key, formatOffset(offset), formatOffset(to)
-        )
+          tag, bucket.key, formatOffset(offset), formatOffset(to))
         val source = session.select(bound)
         val doneIt = source
           .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUUID("timestamp")))

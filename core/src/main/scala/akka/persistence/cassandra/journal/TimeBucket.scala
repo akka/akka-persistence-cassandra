@@ -68,5 +68,8 @@ import com.datastax.driver.core.utils.UUIDs
     result = HashCode.hash(result, bucketSize)
     result
   }
-  override def toString = s"TimeBucket($key, $bucketSize, $inPast, $isCurrent)"
+
+  import akka.persistence.cassandra._
+
+  override def toString = s"TimeBucket($key, $bucketSize, inPast: $inPast, currentBucket: $isCurrent. time: ${formatUnixTime(key)} )"
 }
