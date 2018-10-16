@@ -26,21 +26,25 @@ object CassandraLifecycle {
   // Set to external to use your own cassandra instance running on localhost:9042
   // beware that most tests rely on the data directory being removed for clean up
   // which won't happen for an external cassandra unless extending CassandraSpec
-  val mode: CassandraMode = Embedded
-  //  val mode: CassandraMode = External
+  //  val mode: CassandraMode = Embedded
+  val mode: CassandraMode = Option(System.getenv("CASSANDRA_MODE")).map(_.toLowerCase) match {
+    case Some("external") => External
+    case _                => Embedded
+  }
 
   def isExternal: Boolean = mode == External
 
   val config = {
     val always = ConfigFactory.parseString(
-      s"""
+      """
+    akka.test.timefactor = ${?AKKA_TEST_TIMEFACTOR}
     akka.persistence.journal.plugin = "cassandra-journal"
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
     cassandra-journal.circuit-breaker.call-timeout = 30s
     akka.test.single-expect-default = 20s
     akka.test.filter-leeway = 20s
     akka.actor.serialize-messages=on
-    """)
+    """).resolve()
 
     // this isn't used if extending CassandraSpec
     val port = mode match {
