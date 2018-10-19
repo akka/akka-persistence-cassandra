@@ -21,6 +21,8 @@ import akka.util.Timeout
 import com.datastax.driver.core.{ BatchStatement, PreparedStatement, ResultSet, Statement }
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
+import scala.util.Failure
+import scala.util.Success
 
 import akka.actor.Timers
 import akka.util.ByteString
@@ -216,25 +218,59 @@ import akka.util.ByteString
   }
 
   private def writeTagScanning(): Unit = {
-    val updates = toBeWrittenScanning
+
+    val updates = toBeWrittenScanning.toVector
     // current pendingScanning will be written on next tick, if no write failures
     toBeWrittenScanning = pendingScanning
     // collect new until next tick
     pendingScanning = Map.empty
 
-    if (updates.nonEmpty && log.isDebugEnabled)
-      log.debug("Update tag scanning [{}]", updates.toSeq.mkString(","))
+    if (updates.nonEmpty) {
 
-    tagWriterSession.tagScanningPs.foreach { ps =>
-      updates.foreach {
-        case (pid, seqNr) =>
-          tagWriterSession.executeStatement(ps.bind(pid, seqNr: JLong))
-            .failed.foreach { t =>
-              log.warning("Writing tag scanning failed. Reason {}", t)
-              self ! TagWriteFailed(t)
-            }
+      if (log.isDebugEnabled) {
+        val maxPrint = 20
+        log.debug(
+          "Update tag scanning [{}]",
+          if (updates.size <= maxPrint) updates.take(maxPrint).mkString(",")
+          else updates.take(maxPrint).mkString(",") + s" ...and ${updates.size - 20} more")
+      }
+
+      tagWriterSession.tagScanningPs.foreach { ps =>
+
+        val startTime = System.nanoTime()
+
+        def writeTagScanningBatch(group: Seq[(String, Long)]): Future[Done] = {
+          val batch = new BatchStatement(BatchStatement.Type.UNLOGGED)
+          group.foreach {
+            case (pid, seqNr) => batch.add(ps.bind(pid, seqNr: JLong))
+          }
+          tagWriterSession.executeStatement(batch)
+        }
+
+        // Group the updates into 500 statements per UNLOGGED BatchStatement. These
+        // are executed sequentially to not induce too much load that might influence
+        // performance of other writes and reads. See issue #408.
+        // The size of the data is small and fixed so no need to configure the batch size.
+        val batchIterator: Iterator[Future[Done]] = updates.grouped(500).map(writeTagScanningBatch)
+
+        def next(): Future[Done] =
+          if (batchIterator.hasNext) batchIterator.next().flatMap(_ => next())
+          else Future.successful(Done)
+
+        val result: Future[Done] = next()
+
+        result.onComplete {
+          case Success(_) =>
+            if (log.isDebugEnabled)
+              log.debug("Update tag scanning of [{}] pids took [{}] ms", updates.size,
+                (System.nanoTime() - startTime) / 1000 / 1000)
+          case Failure(t) =>
+            log.warning("Writing tag scanning failed. Reason {}", t)
+            self ! TagWriteFailed(t)
+        }
       }
     }
+
   }
 
   private def tagActor(tag: String): ActorRef =
@@ -250,7 +286,7 @@ import akka.util.ByteString
   protected def createTagWriter(tag: String): ActorRef = {
     context.actorOf(
       TagWriter.props(settings, tagWriterSession, tag)
-        .withDispatcher((context.props.dispatcher)),
+        .withDispatcher(context.props.dispatcher),
       name = URLEncoder.encode(tag, ByteString.UTF_8))
   }
 
