@@ -184,7 +184,6 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
     //
     // Note that we assume that all messages have the same persistenceId, which is
     // the case for Akka 2.4.2.
-
     def serialize(aw: Seq[(PersistentRepr, UUID)]): Future[SerializedAtomicWrite] = {
       val serializedEventsFut: Future[Seq[Serialized]] = Future.sequence(aw.map {
         case (pr, uuid) =>
@@ -351,16 +350,20 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
 
     if (config.eventsByTagEnabled) {
       // map to send tag write progress so actor doesn't finish recovery until it is done
+      val persistentActor = sender()
       highestSequenceNr.flatMap { seqNr =>
         if (seqNr == fromSequenceNr && seqNr != 0) {
           log.debug("Snapshot is current so replay won't be required. Calculating tag progress now.")
           val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
           for {
             tp <- lookupTagProgress(persistenceId)
-            _ <- sendTagProgress(persistenceId, tp, tagWrites.get)
+            _ <- persistenceIdStarting(persistenceId, tp, tagWrites.get, persistentActor)
             scanningSeqNr <- scanningSeqNrFut
             _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
           } yield seqNr
+        } else if (seqNr == 0) {
+          log.debug("New persistenceId [{}]. Sending blank tag progress.", persistenceId)
+          persistenceIdStarting(persistenceId, Map.empty, tagWrites.get, persistentActor).map(_ => seqNr)
         } else {
           highestSequenceNr
         }

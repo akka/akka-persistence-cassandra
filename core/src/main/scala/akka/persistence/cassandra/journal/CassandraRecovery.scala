@@ -43,12 +43,14 @@ trait CassandraRecovery extends CassandraTagRecovery
     max:            Long)(replayCallback: PersistentRepr => Unit): Future[Unit] = {
     log.debug("Recovering pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
 
+    val persistentActor = sender()
+
     if (config.eventsByTagEnabled) {
       val recoveryPrep: Future[Map[String, TagProgress]] = {
         val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
         for {
           tp <- lookupTagProgress(persistenceId)
-          _ <- sendTagProgress(persistenceId, tp, tagWrites.get)
+          _ <- persistenceIdStarting(persistenceId, tp, tagWrites.get, persistentActor)
           scanningSeqNr <- scanningSeqNrFut
           _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, max, tp)
         } yield tp
@@ -126,7 +128,7 @@ trait CassandraRecovery extends CassandraTagRecovery
   }
 
   // TODO migrate this to using raw, maybe after offering a way to migrate old events in message?
-  private def sendMissingTagWrite(tp: Map[Tag, TagProgress], to: ActorRef)(tpr: TaggedPersistentRepr): Future[TaggedPersistentRepr] = {
+  private def sendMissingTagWrite(tp: Map[Tag, TagProgress], tagWriters: ActorRef)(tpr: TaggedPersistentRepr): Future[TaggedPersistentRepr] = {
     if (tpr.tags.isEmpty) Future.successful(tpr)
     else {
       val completed: List[Future[Done]] =
@@ -136,12 +138,12 @@ trait CassandraRecovery extends CassandraTagRecovery
               tp.get(tag) match {
                 case None =>
                   log.debug("Tag write not in progress. Sending to TagWriter. Tag {} Sequence Nr {}.", tag, tpr.sequenceNr)
-                  to ! TagWrite(tag, serialized :: Nil)
+                  tagWriters ! TagWrite(tag, serialized :: Nil)
                   Done
                 case Some(progress) =>
                   if (tpr.sequenceNr > progress.sequenceNr) {
                     log.debug("Sequence nr > than write progress. Sending to TagWriter. Tag {} Sequence Nr {}. ", tag, tpr.sequenceNr)
-                    to ! TagWrite(tag, serialized :: Nil)
+                    tagWriters ! TagWrite(tag, serialized :: Nil)
                   }
                   Done
               }

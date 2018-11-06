@@ -10,7 +10,7 @@ import akka.pattern.ask
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ SequenceNr, Tag }
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
-import akka.persistence.cassandra.journal.TagWriters.{ PidRecovering, PidRecoveringAck, TagWrite }
+import akka.persistence.cassandra.journal.TagWriters.{ PersistentActorStarting, PersistentActorStartingAck, TagWrite }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.util.Timeout
 import scala.collection.JavaConverters._
@@ -63,9 +63,13 @@ trait CassandraTagRecovery {
     rawEvent
   }
 
-  private[akka] def sendTagProgress(pid: String, tp: Map[Tag, TagProgress], ref: ActorRef): Future[Done] = {
-    log.debug("Recovery of pid [{}] sending tag progress: {}", pid, tp)
-    (ref ? PidRecovering(pid, tp)).mapTo[PidRecoveringAck.type].map(_ => Done)
+  /**
+   * Before starting to process tagged messages then a [PersistentActorStarting] is sent to the
+   * [TagWriters] to initialise the sequence numbers for each tag.
+   */
+  private[akka] def persistenceIdStarting(pid: String, tagProgress: Map[Tag, TagProgress], tagWriters: ActorRef, persistentActor: ActorRef): Future[Done] = {
+    log.debug("Recovery of pid [{}] sending tag progress: {}", pid, tagProgress)
+    (tagWriters ? PersistentActorStarting(pid, tagProgress, persistentActor)).mapTo[PersistentActorStartingAck.type].map(_ => Done)
   }
 
 }

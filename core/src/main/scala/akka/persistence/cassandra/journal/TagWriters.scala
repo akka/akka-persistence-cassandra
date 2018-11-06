@@ -79,11 +79,18 @@ import akka.util.ByteString
   }
 
   private[akka] object BulkTagWrite {
-    def apply(tw: TagWrite): BulkTagWrite = BulkTagWrite(tw :: Nil, Nil)
+    def apply(tw: TagWrite, owner: ActorRef): BulkTagWrite = BulkTagWrite(tw :: Nil, Nil)
   }
+
+  /**
+   * All tag writes should be for the same persistenceId
+   */
   private[akka] case class BulkTagWrite(tagWrites: immutable.Seq[TagWrite], withoutTags: immutable.Seq[Serialized])
     extends NoSerializationVerificationNeeded
 
+  /**
+   * All serialised should be for the same persistenceId
+   */
   private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized])
     extends NoSerializationVerificationNeeded
 
@@ -93,12 +100,17 @@ import akka.util.ByteString
   final case class TagFlush(tag: String)
   case object FlushAllTagWriters
   case object AllFlushed
-  final case class PidRecovering(pid: String, tagProgresses: Map[Tag, TagProgress])
-  case object PidRecoveringAck
+  final case class PersistentActorStarting(pid: String, tagProgresses: Map[Tag, TagProgress], persistentActor: ActorRef)
+  case object PersistentActorStartingAck
   final case class TagWriteFailed(reason: Throwable)
   private case object WriteTagScanningTick
+
+  private case class PersistentActorTerminated(pid: PersistenceId, ref: ActorRef)
 }
 
+/**
+ * Manages all the tag writers.
+ */
 @InternalApi private[akka] class TagWriters(settings: TagWriterSettings, tagWriterSession: TagWritersSession)
   extends Actor with Timers with ActorLogging {
 
@@ -113,6 +125,8 @@ import akka.util.ByteString
 
   private var toBeWrittenScanning: Map[PersistenceId, SequenceNr] = Map.empty
   private var pendingScanning: Map[PersistenceId, SequenceNr] = Map.empty
+
+  private var currentPersistentActors: Map[PersistenceId, ActorRef] = Map.empty
 
   timers.startPeriodicTimer(WriteTagScanningTick, WriteTagScanningTick, settings.scanningFlushInterval)
 
@@ -138,19 +152,23 @@ import akka.util.ByteString
     case WriteTagScanningTick =>
       writeTagScanning()
 
-    case PidRecovering(pid, tagProgresses: Map[Tag, TagProgress]) =>
-      val replyTo = sender()
+    case PersistentActorStarting(pid, tagProgresses: Map[Tag, TagProgress], persistentActor) =>
       val missingProgress = tagActors.keySet -- tagProgresses.keySet
+      log.debug("Persistent actor [{}] with pid [{}] starting with progress [{}]. Tags to reset as not in progress: [{}]", persistentActor, pid, tagProgresses, missingProgress)
+
+      // EventsByTagMigration uses dead letters are there are no real actors
+      if (persistentActor != context.system.deadLetters) {
+        currentPersistentActors += (pid -> persistentActor)
+        context.watchWith(persistentActor, PersistentActorTerminated(pid, persistentActor))
+      }
+
+      val replyTo = sender()
       pendingScanning -= pid
-      log.debug(
-        "Recovering pid [{}] with progress [{}]. Tags to reset as not in progress [{}]",
-        pid, tagProgresses, missingProgress)
       val tagWriterAcks = Future.sequence(tagProgresses.map {
         case (tag, progress) =>
           log.debug("Sending tag progress: [{}] [{}]", tag, progress)
           (tagActor(tag) ? ResetPersistenceId(tag, progress)).mapTo[ResetPersistenceIdComplete.type]
       })
-
       // We send an empty progress in case the tag actor has buffered events
       // and has never written any tag progress for this tag/pid
       val blankTagWriterAcks = Future.sequence(missingProgress.map { tag =>
@@ -164,11 +182,25 @@ import akka.util.ByteString
       } yield Done
 
       // if this fails (all local actor asks) the recovery will timeout
-      recoveryNotificationComplete.foreach { _ => replyTo ! PidRecoveringAck }
+      recoveryNotificationComplete.foreach { _ => replyTo ! PersistentActorStartingAck }
 
     case TagWriteFailed(_) =>
       toBeWrittenScanning = Map.empty
       pendingScanning = Map.empty
+
+    case PersistentActorTerminated(pid, ref) =>
+      currentPersistentActors.get(pid) match {
+        case Some(currentRef) if currentRef == ref =>
+          log.debug("Persistent actor terminated [{}]. Informing TagWriter actors to drop state for pid: [{}]", ref, pid)
+          tagActors.foreach {
+            case (_, tagWriterRef) => tagWriterRef ! DropState(pid)
+          }
+          currentPersistentActors -= pid
+        case Some(currentRef) =>
+          log.debug("Persistent actor terminated. However new actor ref for pid has been added. [{}]. Terminated ref: [{}] terminatedRef: [{}]", pid, ref, currentRef)
+        case None =>
+          log.warning("Unknown persistent actor terminated. Please raise an issue with debug logs. Pid: [{}]. Ref: [{}]", pid, ref)
+      }
   }
 
   private def updatePendingScanning(serialized: immutable.Seq[Serialized]): Unit = {

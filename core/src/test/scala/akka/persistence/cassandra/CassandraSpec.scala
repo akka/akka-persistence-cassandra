@@ -84,6 +84,8 @@ abstract class CassandraSpec(config: Config, val journalName: String = getCaller
 
   lazy val randomPort = SocketUtil.temporaryLocalPort()
 
+  val shortWait = 10.millis
+
   lazy val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   override def port(): Int = CassandraLifecycle.mode match {

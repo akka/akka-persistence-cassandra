@@ -465,6 +465,50 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
       expectMsg(FlushComplete)
       probe.expectMsg(Vector(toEw(e2, 2), toEw(e3, 3)))
     }
+
+    "forget about a persistence id when idle" in {
+      val (probe, underTest) = setup(settings = defaultSettings.copy(maxBatchSize = 1, flushInterval = 60.seconds))
+      val pid = "p1"
+      val bucket = nowBucket()
+
+      val e1 = event(pid, 1L, "e-1", bucket)
+      underTest ! TagWrite(tagName, Vector(e1))
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      probe.expectMsgType[ProgressWrite]
+
+      underTest ! DropState("p1")
+
+      val e2 = event(pid, 2L, "e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(e2))
+      // tag pid sequence nr 1 again as previous was forgotten.
+      // this isn't a real scenario tag pid sequence numbers are never re-used however
+      // allows testing that the drop state actually did something
+      probe.expectMsg(Vector(toEw(e2, 1)))
+    }
+
+    "forget about a persistence id when write in progress)" in {
+      val pid = "p-1"
+      val writeInProgressPromise = Promise[Done]()
+      val (probe, underTest) = setup(
+        settings = defaultSettings.copy(maxBatchSize = 1),
+        writeResponse = Stream(writeInProgressPromise.future) ++ Stream.continually(Future.successful(Done)))
+      val bucket = nowBucket()
+
+      val e1 = event(pid, 1L, "e-1", bucket)
+      underTest ! TagWrite(tagName, Vector(e1))
+      underTest ! DropState(pid)
+
+      writeInProgressPromise.success(Done)
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      probe.expectMsgType[ProgressWrite]
+
+      val e2 = event(pid, 2L, "e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(e2))
+      // tag pid sequence nr 1 rather than 2
+      probe.expectMsg(Vector(toEw(e2, 1)))
+
+    }
+
   }
 
   "Tag writer error scenarios" must {

@@ -4,7 +4,6 @@
 
 package akka.persistence.cassandra.journal
 
-import scala.collection.immutable
 import java.util.UUID
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, NoSerializationVerificationNeeded, Props, Timers }
@@ -75,6 +74,8 @@ import scala.concurrent.duration._
   final case class TagWriteDone(summary: TagWriteSummary, doneNotify: Option[ActorRef]) extends TagWriteFinished
   private final case class TagWriteFailed(reason: Throwable, failedEvents: Vector[Serialized], previousTagSequenceNrs: Map[String, Long]) extends TagWriteFinished
 
+  private[akka] case class DropState(pid: PersistenceId)
+
   val timeUuidOrdering = new Ordering[UUID] {
     override def compare(x: UUID, y: UUID) = UUIDComparator.comparator.compare(x, y)
   }
@@ -101,8 +102,6 @@ import scala.concurrent.duration._
 
   private val parent = context.parent
 
-  // TODO remove once stable, or make part of the state in stack rather than a var
-  var sequenceNrs = Map.empty[String, Long]
   var lastLoggedBufferNs: Long = -1
   val bufferWarningMinDurationNs: Long = 5.seconds.toNanos
 
@@ -112,27 +111,10 @@ import scala.concurrent.duration._
 
   override def receive: Receive = idle(Vector.empty[Serialized], Map.empty[String, Long])
 
-  def validate(payload: immutable.Seq[Serialized], buffer: Vector[Serialized]): Unit = {
-    payload.foreach { s =>
-      sequenceNrs.get(s.persistenceId) match {
-        case Some(seqNr) =>
-          if (seqNr >= s.sequenceNr) {
-            val currentBuffer = buffer.map(s => (s.persistenceId, s.sequenceNr, formatOffset(s.timeUuid)))
-            val newEvents = buffer.map(s => (s.persistenceId, s.sequenceNr, formatOffset(s.timeUuid)))
-            log.error(
-              "Received sequence numbers out of order. Pid: {}. HighestSeq: {}. New events: {}. Buffered events: {}",
-              s.persistenceId, seqNr, newEvents, currentBuffer)
-            throw new IllegalStateException(s"Not received sequence numbers in order for pid: ${s.persistenceId}, " +
-              s"current highest sequenceNr: ${sequenceNrs(s.persistenceId)}. Sequence nr in event: ${seqNr}")
-          }
-          sequenceNrs += (s.persistenceId -> s.sequenceNr)
-        case None =>
-          sequenceNrs += (s.persistenceId -> s.sequenceNr)
-      }
-    }
-  }
-
-  private def idle(buffer: Vector[Serialized], tagPidSequenceNrs: Map[String, Long]): Receive = {
+  private def idle(buffer: Vector[Serialized], tagPidSequenceNrs: Map[PersistenceId, TagPidSequenceNr]): Receive = {
+    case DropState(pid) =>
+      log.debug("Dropping state for pid: {}", pid)
+      context.become(idle(buffer, tagPidSequenceNrs - pid))
     case InternalFlush =>
       log.debug("Flushing")
       if (buffer.nonEmpty) {
@@ -148,24 +130,25 @@ import scala.concurrent.duration._
         sender() ! FlushComplete
       }
     case TagWrite(_, payload) =>
-      validate(payload, buffer)
       // FIXME, keeping this sorted is over kill. We only need to know if a new timebucket is
       // reached to force a flush or that the batch size is met
       flushIfRequired((buffer ++ payload).sortBy(_.timeUuid)(timeUuidOrdering), tagPidSequenceNrs)
     case twd: TagWriteDone =>
       log.error("Received Done when in idle state. This is a bug. Please report with DEBUG logs: {}", twd)
-    case ResetPersistenceId(_, tp @ TagProgress(pid, sequenceNr, tagPidSequenceNr)) =>
+    case ResetPersistenceId(_, tp @ TagProgress(pid, _, tagPidSequenceNr)) =>
       log.debug("Resetting persistence id {}. TagProgress {}", pid, tp)
-      sequenceNrs += (tp.persistenceId -> sequenceNr)
       become(idle(buffer.filterNot(_.persistenceId == pid), tagPidSequenceNrs + (pid -> tagPidSequenceNr)))
       sender() ! ResetPersistenceIdComplete
   }
 
   private def writeInProgress(
     buffer:             Vector[Serialized],
-    tagPidSequenceNrs:  Map[String, Long],
-    updatedTagProgress: Map[String, Long],
-    awaitingFlush:      Option[ActorRef]   = None): Receive = {
+    tagPidSequenceNrs:  Map[PersistenceId, TagPidSequenceNr],
+    updatedTagProgress: Map[PersistenceId, TagPidSequenceNr],
+    awaitingFlush:      Option[ActorRef]                     = None): Receive = {
+    case DropState(pid) =>
+      log.debug("Dropping state for pid: [{}]", pid)
+      become(writeInProgress(buffer, tagPidSequenceNrs - pid, updatedTagProgress - pid, awaitingFlush))
     case InternalFlush =>
     // Ignore, we will check when the write is done
     case Flush =>
@@ -173,7 +156,6 @@ import scala.concurrent.duration._
       become(writeInProgress(buffer, tagPidSequenceNrs, updatedTagProgress, Some(sender())))
     case TagWrite(_, payload) =>
       val now = System.nanoTime()
-      validate(payload, buffer)
       if (buffer.size > (4 * settings.maxBatchSize) && now > (lastLoggedBufferNs + bufferWarningMinDurationNs)) {
         lastLoggedBufferNs = now
         log.warning("Buffer for tagged events is getting too large ({}), is Cassandra responsive? Are writes failing? " +
@@ -186,7 +168,7 @@ import scala.concurrent.duration._
       val sortedBuffer = buffer.sortBy(_.timeUuid)(timeUuidOrdering)
       log.debug("Tag write done: {}", summary)
       summary.foreach {
-        case (id, p @ PidProgress(_, seqNrTo, tagPidSequenceNr, offset)) =>
+        case (id, PidProgress(_, seqNrTo, tagPidSequenceNr, offset)) =>
           // These writes do not block future writes. We don't read the tag progress again from C*
           // until a restart has happened. This is best effort and expect recovery to replay any
           // events that aren't in the tag progress table
@@ -229,7 +211,6 @@ import scala.concurrent.duration._
 
     case ResetPersistenceId(_, tp @ TagProgress(pid, _, _)) =>
       log.debug("Resetting persistence id {}. TagProgress {}", pid, tp)
-      sequenceNrs += (pid -> tp.sequenceNr)
       become(writeInProgress(buffer.filterNot(_.persistenceId == pid), tagPidSequenceNrs, updatedTagProgress + (pid -> tp.pidTagSequenceNr)))
       sender() ! ResetPersistenceIdComplete
   }
@@ -264,7 +245,6 @@ import scala.concurrent.duration._
   /**
    * Defaults to 1 as if recovery for a persistent Actor based its recovery
    * on anything other than no progress then it sends a msg to the tag writer.
-   * FIXME: Remove logging once stable
    */
   private def calculateTagPidSequenceNr(pid: PersistenceId, tagPidSequenceNrs: Map[String, TagPidSequenceNr]): (Map[String, TagPidSequenceNr], TagPidSequenceNr) = {
     val tagPidSequenceNr = tagPidSequenceNrs.get(pid) match {
