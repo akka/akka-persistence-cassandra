@@ -15,7 +15,7 @@ object TestTaggingActor {
   case object Stop
 
   def props(pId: String, tags: Set[String] = Set(), probe: Option[ActorRef] = None): Props =
-    Props(classOf[TestTaggingActor], pId, tags, probe)
+    Props(new TestTaggingActor(pId, tags, probe))
 }
 
 class TestTaggingActor(val persistenceId: String, tags: Set[String], probe: Option[ActorRef]) extends PersistentActor with ActorLogging {

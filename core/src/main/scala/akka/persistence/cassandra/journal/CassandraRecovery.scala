@@ -41,7 +41,7 @@ trait CassandraRecovery extends CassandraTagRecovery
     fromSequenceNr: Long,
     toSequenceNr:   Long,
     max:            Long)(replayCallback: PersistentRepr => Unit): Future[Unit] = {
-    log.debug("Recovering pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
+    log.debug("asyncReplayMessages pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
 
     val persistentActor = sender()
 
@@ -128,14 +128,14 @@ trait CassandraRecovery extends CassandraTagRecovery
   }
 
   // TODO migrate this to using raw, maybe after offering a way to migrate old events in message?
-  private def sendMissingTagWrite(tp: Map[Tag, TagProgress], tagWriters: ActorRef)(tpr: TaggedPersistentRepr): Future[TaggedPersistentRepr] = {
+  private def sendMissingTagWrite(tagProgress: Map[Tag, TagProgress], tagWriters: ActorRef)(tpr: TaggedPersistentRepr): Future[TaggedPersistentRepr] = {
     if (tpr.tags.isEmpty) Future.successful(tpr)
     else {
       val completed: List[Future[Done]] =
         tpr.tags.toList.map(tag => tag -> serializeEvent(tpr.pr, tpr.tags, tpr.offset, bucketSize, serialization, context.system))
           .map {
             case (tag, serializedFut) => serializedFut.map { serialized =>
-              tp.get(tag) match {
+              tagProgress.get(tag) match {
                 case None =>
                   log.debug("Tag write not in progress. Sending to TagWriter. Tag {} Sequence Nr {}.", tag, tpr.sequenceNr)
                   tagWriters ! TagWrite(tag, serialized :: Nil)

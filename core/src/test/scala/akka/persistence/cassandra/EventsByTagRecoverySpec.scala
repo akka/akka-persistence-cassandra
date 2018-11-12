@@ -23,7 +23,7 @@ object EventsByTagRecoverySpec {
   val config = ConfigFactory.parseString(
     s"""
        |akka {
-       |  loglevel = INFO
+       |  loglevel = DEBUG
        |  actor.debug.unhandled = on
        |}
        |cassandra-journal {
@@ -75,7 +75,7 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
           expectMsg(Ack)
         }
         p1 ! PoisonPill
-
+        system.log.info("Starting p1 on other actor system")
         val p1take2 = system.actorOf(TestTaggingActor.props("p1", Set("blue")))
         (5 to 8) foreach { i =>
           p1take2 ! s"e-$i"
