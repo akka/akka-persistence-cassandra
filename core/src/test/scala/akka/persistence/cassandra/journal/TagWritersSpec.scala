@@ -4,15 +4,13 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.actor.ActorSystem
+import akka.actor.{ Actor, ActorRef, ActorSystem, PoisonPill, Props }
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
-import scala.concurrent.duration._
 
-import akka.actor.ActorRef
-import akka.actor.Props
+import scala.concurrent.duration._
 
 class TagWritersSpec extends TestKit(ActorSystem("TagWriterSpec"))
   with WordSpecLike
@@ -87,14 +85,38 @@ class TagWritersSpec extends TestKit(ActorSystem("TagWriterSpec"))
       tagWriters ! redTagWrite
       redProbe.expectMsg(redTagWrite)
 
-      tagWriters ! PidRecovering("p1", Map("red" -> TagProgress("p1", 2, 1)))
+      tagWriters ! PersistentActorStarting("p1", Map("red" -> TagProgress("p1", 2, 1)), system.deadLetters)
       redProbe.expectMsg(ResetPersistenceId("red", TagProgress("p1", 2, 1)))
       blueProbe.expectMsg(ResetPersistenceId("blue", TagProgress("p1", 0, 0)))
       expectNoMessage(smallWait)
       redProbe.reply(ResetPersistenceIdComplete)
       expectNoMessage(smallWait)
       blueProbe.reply(ResetPersistenceIdComplete)
-      expectMsg(PidRecoveringAck)
+      expectMsg(PersistentActorStartingAck)
+    }
+
+    "informs tag writers when persistent actor terminates" in {
+      val redProbe = TestProbe()
+      val blueProbe = TestProbe()
+      val probes = Map("red" -> redProbe, "blue" -> blueProbe)
+      val tagWriters = system.actorOf(testProps(defaultSettings, tag => probes(tag).ref))
+
+      val persistentActor = system.actorOf(Props(new Actor {
+        override def receive: Receive = { case _ => }
+      }))
+      tagWriters ! PersistentActorStarting("pid1", Map.empty, persistentActor)
+      expectMsg(PersistentActorStartingAck)
+
+      val blueTagWrite = TagWrite("blue", Vector.empty)
+      tagWriters ! blueTagWrite
+      blueProbe.expectMsg(blueTagWrite)
+      val redTagWrite = TagWrite("red", Vector.empty)
+      tagWriters ! redTagWrite
+      redProbe.expectMsg(redTagWrite)
+
+      persistentActor ! PoisonPill
+      blueProbe.expectMsg(DropState("pid1"))
+      redProbe.expectMsg(DropState("pid1"))
     }
   }
 

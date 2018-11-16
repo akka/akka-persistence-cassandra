@@ -16,7 +16,6 @@ import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, TestTaggingActor, _ }
 import akka.serialization.SerializationExtension
 import com.typesafe.config.ConfigFactory
-import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future }
 
 object CassandraEventUpdateSpec {
@@ -30,8 +29,6 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
 
   private[akka] val log = Logging(system, getClass)
   private val serialization = SerializationExtension(system)
-
-  val shortWait = 10.millis
 
   val updater = new CassandraEventUpdate {
 

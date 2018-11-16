@@ -9,7 +9,6 @@ import scala.collection.immutable
 import com.typesafe.config.Config
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.actor.ActorSystem
-import akka.persistence.cassandra.journal.CassandraJournalConfig
 
 class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
   val maxLoadAttempts = config.getInt("max-load-attempts")
