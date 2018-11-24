@@ -8,9 +8,10 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.Done
-import akka.persistence.cassandra.FutureDone
+import akka.cassandra.session.FutureDone
+import akka.cassandra.session._
 import com.datastax.driver.core.Session
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.indent
 
 trait CassandraStatements {
@@ -89,18 +90,14 @@ trait CassandraStatements {
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
    */
-  def executeCreateKeyspaceAndTables(session: Session, config: CassandraSnapshotStoreConfig)(
-      implicit ec: ExecutionContext): Future[Done] = {
-    import akka.persistence.cassandra.listenableFutureToFuture
+  def executeCreateKeyspaceAndTables(session: Session, config: CassandraSnapshotStoreConfig)(implicit ec: ExecutionContext): Future[Done] = {
 
     def create(): Future[Done] = {
       val keyspace: Future[Done] =
-        if (config.keyspaceAutoCreate)
-          session.executeAsync(createKeyspace).map(_ => Done)
+        if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).asScala.map(_ => Done)
         else FutureDone
 
-      if (config.tablesAutoCreate)
-        keyspace.flatMap(_ => session.executeAsync(createTable)).map(_ => Done)
+      if (config.tablesAutoCreate) keyspace.flatMap(_ => session.executeAsync(createTable).asScala).map(_ => Done)
       else keyspace
     }
 

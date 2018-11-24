@@ -8,10 +8,10 @@ import java.lang.{ Long => JLong }
 import java.util.UUID
 
 import akka.annotation.InternalApi
+import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TimeBucket
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.formatOffset
 import akka.stream.ActorMaterializer
 import com.datastax.driver.core.PreparedStatement
@@ -75,10 +75,10 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
       // Make a fake UUID for this tagPidSequenceNr that will be used to search for this tagPidSequenceNr in the unlikely
       // event that the stage can't find the event found during this scan
       doIt().map { progress =>
-        progress.map {
-          case (key, ((tagPidSequenceNr, uuid))) =>
+        progress.mapValues {
+          case (tagPidSequenceNr, uuid) =>
             val unixTime = UUIDs.unixTimestamp(uuid)
-            (key, (tagPidSequenceNr - 1, UUIDs.startOf(unixTime - 1)))
+            (tagPidSequenceNr - 1, UUIDs.startOf(unixTime - 1))
         }
       }
     })

@@ -7,8 +7,8 @@ package akka.persistence.cassandra.query.javadsl
 import java.util.UUID
 import java.util.concurrent.CompletionStage
 
+import akka.cassandra.session.javadsl.CassandraSession
 import akka.{ Done, NotUsed }
-import akka.persistence.cassandra.session.javadsl.CassandraSession
 import akka.persistence.query.EventEnvelope
 import akka.persistence.query.Offset
 import akka.persistence.query.TimeBasedUUID

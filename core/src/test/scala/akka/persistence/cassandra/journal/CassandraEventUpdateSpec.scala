@@ -12,7 +12,7 @@ import akka.Done
 import akka.event.Logging
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal.Serialized
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, TestTaggingActor, _ }
 import akka.serialization.SerializationExtension
 import com.typesafe.config.ConfigFactory

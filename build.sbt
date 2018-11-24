@@ -4,6 +4,12 @@ import sbtassembly.AssemblyPlugin.autoImport._
 val AkkaVersion = "2.5.23"
 val CassandraVersionInDocs = "4.0"
 
+val akkaCassandraSessionDependencies = Seq(
+  "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.7.1",
+  "com.typesafe.akka"      %% "akka-stream"                    % AkkaVersion,
+  "com.typesafe.akka"      %% "akka-stream-testkit"                 % AkkaVersion     % Test
+)
+
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
   // Specifying guava dependency because older transitive dependency has security vulnerability
@@ -26,7 +32,8 @@ val akkaPersistenceCassandraDependencies = Seq(
   "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
   "org.scalatest" %% "scalatest" % "3.0.8-RC2" % Test,
   "org.pegdown" % "pegdown" % "1.6.0" % Test,
-  "org.osgi" % "org.osgi.core" % "5.0.0" % Provided)
+  "org.osgi" % "org.osgi.core" % "5.0.0" % Provided
+)
 
 def common: Seq[Setting[_]] = Seq(
   organization := "com.typesafe.akka",
@@ -80,18 +87,31 @@ def common: Seq[Setting[_]] = Seq(
 lazy val root = (project in file("."))
   .enablePlugins(ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
-  .aggregate(core, cassandraLauncher)
+  .aggregate(core, cassandraLauncher, session)
   .settings(common: _*)
   .settings(
     name := "akka-persistence-cassandra-root",
     publishArtifact := false,
-    publishTo := Some(Resolver.file("Unused transient repository", file("target/unusedrepo"))),
+    publishTo := Some(
+      Resolver.file("Unused transient repository", file("target/unusedrepo"))),
     publish := {},
-    PgpKeys.publishSigned := {})
+    PgpKeys.publishSigned := {}
+  )
+
+lazy val session = (project in file("session"))
+  .enablePlugins(AutomateHeaderPlugin, SbtOsgi)
+  .dependsOn(
+    cassandraLauncher % Test)
+  .settings(common: _*)
+  .settings(osgiSettings: _*)
+  .settings(
+     name := "akka-cassandra-session",
+     libraryDependencies ++=  akkaCassandraSessionDependencies
+  )
 
 lazy val core = (project in file("core"))
   .enablePlugins(AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
-  .dependsOn(cassandraLauncher % Test)
+  .dependsOn(cassandraLauncher % Test, session)
   .settings(common: _*)
   .settings(osgiSettings: _*)
   .settings({
@@ -108,11 +128,14 @@ lazy val core = (project in file("core"))
     name := "akka-persistence-cassandra",
     libraryDependencies ++= akkaPersistenceCassandraDependencies,
     OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*"),
-    OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
+    OsgiKeys.importPackage := Seq(akkaImport(),
+                                  optionalImport("org.apache.cassandra.*"),
+                                  "*"),
     OsgiKeys.privatePackage := Nil,
     testOptions in Test ++= Seq(
-        Tests.Argument(TestFrameworks.ScalaTest, "-o"),
-        Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports")))
+      Tests.Argument(TestFrameworks.ScalaTest, "-o"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports"))
+  )
   .configs(MultiJvm)
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
@@ -120,7 +143,8 @@ lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .settings(
     name := "akka-persistence-cassandra-launcher",
     managedResourceDirectories in Compile += (target in cassandraBundle).value / "bundle",
-    managedResources in Compile += (assembly in cassandraBundle).value)
+    managedResources in Compile += (assembly in cassandraBundle).value
+  )
 
 // This project doesn't get published directly, rather the assembled artifact is included as part of cassandraLaunchers
 // resources

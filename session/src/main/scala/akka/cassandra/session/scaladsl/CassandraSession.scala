@@ -2,7 +2,7 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.persistence.cassandra.session.scaladsl
+package akka.cassandra.session.scaladsl
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
@@ -16,15 +16,10 @@ import scala.concurrent.Promise
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
 import akka.event.LoggingAdapter
-import akka.persistence.cassandra.CassandraMetricsRegistry
-import akka.persistence.cassandra.ListenableFutureConverter
-import akka.persistence.cassandra.SessionProvider
-import akka.persistence.cassandra.session.CassandraSessionSettings
 import akka.stream.ActorMaterializer
 import akka.stream.Attributes
 import akka.stream.Outlet
@@ -44,7 +39,8 @@ import com.datastax.driver.core.Row
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.Statement
 import akka.annotation.InternalApi
-import akka.persistence.cassandra.FutureDone
+import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
+import akka.cassandra.session._
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
@@ -94,7 +90,7 @@ final class CassandraSession(
    * Can be used in case you need to do something that is not provided by the
    * API exposed by this class. Be careful to not use blocking calls.
    */
-  final def underlying(): Future[Session] = {
+  def underlying(): Future[Session] = {
 
     def initialize(session: Future[Session]): Future[Session] =
       session.flatMap { s =>
@@ -457,7 +453,7 @@ final class CassandraSession(
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] final object CassandraSession {
+@InternalApi private[akka] object CassandraSession {
   private val serializedExecutionProgress =
     new AtomicReference[Future[Done]](FutureDone)
 

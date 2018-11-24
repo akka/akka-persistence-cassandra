@@ -7,7 +7,7 @@ package akka.persistence.cassandra.snapshot
 import akka.Done
 import akka.actor.Props
 import akka.event.Logging
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.{ CassandraSpec, Persister }
 import com.typesafe.config.ConfigFactory
 

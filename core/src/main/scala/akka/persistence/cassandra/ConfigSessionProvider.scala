@@ -15,6 +15,8 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.concurrent.duration.FiniteDuration
 import akka.actor.ActorSystem
+import akka.cassandra.session.SessionProvider
+import akka.cassandra.session._
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
 import com.datastax.driver.core.policies.ExponentialReconnectionPolicy
@@ -47,7 +49,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
         case Some(logger) => cluster.register(logger)
         case None         =>
       }
-      cluster.connectAsync()
+      cluster.connectAsync().asScala
     }
   }
 
