@@ -4,15 +4,14 @@
 
 package akka.persistence.cassandra
 
-import akka.actor.{ ActorSystem, PoisonPill }
+import akka.actor.{ActorSystem, PoisonPill}
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import com.datastax.driver.core.Session
-import com.typesafe.config.{ Config, ConfigFactory }
+import com.typesafe.config.{Config, ConfigFactory}
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
 
-object TestSessionProvider {
-}
+object TestSessionProvider {}
 
 class TestSessionProvider(as: ActorSystem, config: Config) extends ConfigSessionProvider(as, config) {
   override def connect()(implicit ec: ExecutionContext): Future[Session] = {
@@ -26,8 +25,7 @@ class TestSessionProvider(as: ActorSystem, config: Config) extends ConfigSession
 }
 
 object EagerInitializationSpec {
-  val config = ConfigFactory.parseString(
-    """
+  val config = ConfigFactory.parseString("""
     cassandra-journal {
       session-provider = akka.persistence.cassandra.TestSessionProvider
     }

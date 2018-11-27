@@ -33,9 +33,7 @@ class CassandraMetricsRegistry extends Extension {
     }
 }
 
-object CassandraMetricsRegistry
-  extends ExtensionId[CassandraMetricsRegistry]
-  with ExtensionIdProvider {
+object CassandraMetricsRegistry extends ExtensionId[CassandraMetricsRegistry] with ExtensionIdProvider {
   override def lookup = CassandraMetricsRegistry
   override def createExtension(system: ExtendedActorSystem) = new CassandraMetricsRegistry
   override def get(system: ActorSystem): CassandraMetricsRegistry = super.get(system)

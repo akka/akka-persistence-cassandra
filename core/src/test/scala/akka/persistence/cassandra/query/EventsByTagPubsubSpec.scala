@@ -4,12 +4,12 @@
 
 package akka.persistence.cassandra.query
 
-import java.time.{ LocalDate, ZoneOffset }
+import java.time.{LocalDate, ZoneOffset}
 
 import akka.cluster.Cluster
 import akka.persistence.cassandra.CassandraSpec
 import akka.persistence.cassandra.journal.CassandraJournalConfig
-import akka.persistence.query.{ EventEnvelope, NoOffset }
+import akka.persistence.query.{EventEnvelope, NoOffset}
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
 
@@ -79,4 +79,3 @@ class EventsByTagPubsubSpec extends CassandraSpec(EventsByTagPubsubSpec.config) 
     }
   }
 }
-

@@ -8,11 +8,11 @@ import akka.actor.ExtendedActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, TestTaggingActor }
-import akka.persistence.query.{ PersistenceQuery, ReadJournalProvider }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec, TestTaggingActor}
+import akka.persistence.query.{PersistenceQuery, ReadJournalProvider}
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
-import com.typesafe.config.{ Config, ConfigFactory }
+import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.concurrent.duration._
 
@@ -28,8 +28,7 @@ class JournalOverrideProvider(as: ExtendedActorSystem, config: Config) extends R
 
 object CassandraReadJournalOverrideSpec {
 
-  val config = ConfigFactory.parseString(
-    """
+  val config = ConfigFactory.parseString("""
       cassandra-query-journal {
         class = "akka.persistence.cassandra.query.JournalOverrideProvider"
       }
@@ -42,8 +41,7 @@ class CassandraReadJournalOverrideSpec extends CassandraSpec(CassandraReadJourna
   implicit val materialiser = ActorMaterializer()
 
   lazy val journal =
-    PersistenceQuery(system).readJournalFor[JournalOverride](
-      CassandraReadJournal.Identifier)
+    PersistenceQuery(system).readJournalFor[JournalOverride](CassandraReadJournal.Identifier)
 
   "Cassandra read journal override" must {
     "map events" in {

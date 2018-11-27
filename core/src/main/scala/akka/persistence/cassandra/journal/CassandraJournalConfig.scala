@@ -7,7 +7,7 @@ package akka.persistence.cassandra.journal
 import scala.collection.immutable
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
+import akka.actor.{ActorSystem, NoSerializationVerificationNeeded}
 import akka.annotation.InternalApi
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
@@ -35,15 +35,20 @@ private[akka] case object Second extends BucketSize {
 }
 
 private[akka] object BucketSize {
-  def fromString(value: String): BucketSize = {
-    Vector(Day, Hour, Minute, Second).find(_.toString.toLowerCase == value.toLowerCase)
+  def fromString(value: String): BucketSize =
+    Vector(Day, Hour, Minute, Second)
+      .find(_.toString.toLowerCase == value.toLowerCase)
       .getOrElse(throw new IllegalArgumentException("Invalid value for bucket size: " + value))
-  }
 }
 
-case class TableSettings(name: String, compactionStrategy: CassandraCompactionStrategy, gcGraceSeconds: Long, ttl: Option[Duration])
+case class TableSettings(name: String,
+                         compactionStrategy: CassandraCompactionStrategy,
+                         gcGraceSeconds: Long,
+                         ttl: Option[Duration])
 
-class CassandraJournalConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) with NoSerializationVerificationNeeded {
+class CassandraJournalConfig(system: ActorSystem, config: Config)
+    extends CassandraPluginConfig(system, config)
+    with NoSerializationVerificationNeeded {
   val targetPartitionSize: Long = config.getLong(CassandraJournalConfig.TargetPartitionProperty)
   val maxResultSize: Int = config.getInt("max-result-size")
   val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
@@ -69,13 +74,17 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
     config.getString("events-by-tag.table"),
     CassandraCompactionStrategy(config.getConfig("events-by-tag.compaction-strategy")),
     config.getLong("events-by-tag.gc-grace-seconds"),
-    if (config.hasPath("events-by-tag.time-to-live")) Some(config.getDuration("events-by-tag.time-to-live", TimeUnit.MILLISECONDS).millis) else None)
+    if (config.hasPath("events-by-tag.time-to-live"))
+      Some(config.getDuration("events-by-tag.time-to-live", TimeUnit.MILLISECONDS).millis)
+    else None
+  )
 
   val tagWriterSettings = TagWriterSettings(
     config.getInt("events-by-tag.max-message-batch-size"),
     config.getDuration("events-by-tag.flush-interval", TimeUnit.MILLISECONDS).millis,
     config.getDuration("events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
-    config.getBoolean("pubsub-notification"))
+    config.getBoolean("pubsub-notification")
+  )
 
   /**
    * The Cassandra statement that can be used to create the configured keyspace.
@@ -104,14 +113,13 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
    * *
    * * @see [[CassandraJournalConfig#createKeyspaceStatement]]
    */
-  def createTablesStatements: immutable.Seq[String] = {
+  def createTablesStatements: immutable.Seq[String] =
     statements.createTable ::
-      statements.createTagsTable ::
-      statements.createTagsProgressTable ::
-      statements.createTagScanningTable ::
-      statements.createMetadataTable ::
-      Nil
-  }
+    statements.createTagsTable ::
+    statements.createTagsProgressTable ::
+    statements.createTagScanningTable ::
+    statements.createMetadataTable ::
+    Nil
 
   /**
    * Java API: The Cassandra statements that can be used to create the configured tables.
@@ -130,14 +138,12 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
     createTablesStatements.asJava
   }
 
-  private def statements: CassandraStatements = {
+  private def statements: CassandraStatements =
     new CassandraStatements {
       override def config: CassandraJournalConfig = CassandraJournalConfig.this
     }
-  }
 }
 
 object CassandraJournalConfig {
   val TargetPartitionProperty: String = "target-partition-size"
 }
-

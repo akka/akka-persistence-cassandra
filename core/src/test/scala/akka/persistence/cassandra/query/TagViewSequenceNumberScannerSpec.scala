@@ -7,11 +7,11 @@ package akka.persistence.cassandra.query
 import java.util.UUID
 
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, TagPidSequenceNr }
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Hour }
+import akka.persistence.cassandra.journal.CassandraJournal.{PersistenceId, TagPidSequenceNr}
+import akka.persistence.cassandra.journal.{CassandraJournalConfig, Hour}
 import akka.persistence.cassandra.query.TagViewSequenceNumberScannerSpec.config
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
-import akka.serialization.{ Serialization, SerializationExtension }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
+import akka.serialization.{Serialization, SerializationExtension}
 import com.datastax.driver.core.Session
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
@@ -23,15 +23,13 @@ import scala.util.Try
 object TagViewSequenceNumberScannerSpec {
   val bucketSize = Hour
   val name = "EventsByTagSequenceNumberScanningSpec"
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
       |akka.loglevel = INFO
       |cassandra-journal.events-by-tag.bucket-size = ${bucketSize.toString}
     """.stripMargin).withFallback(CassandraLifecycle.config)
 }
 
-class TagViewSequenceNumberScannerSpec extends CassandraSpec(config)
-  with TestTagWriter {
+class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTagWriter {
 
   import TagViewSequenceNumberScannerSpec._
 
@@ -67,9 +65,7 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config)
       writeTaggedEvent(PersistentRepr("p2e2", persistenceId = "p2"), Set("blue"), 6, bucketSize)
       writeTaggedEvent(PersistentRepr("p2e3", persistenceId = "p2"), Set("blue"), 7, bucketSize)
       val pidSequenceNrs = queries.scanTagSequenceNrs("blue", now).futureValue.mapValues(_._1)
-      pidSequenceNrs should equal(Map(
-        "p1" -> 0,
-        "p2" -> 4))
+      pidSequenceNrs should equal(Map("p1" -> 0, "p2" -> 4))
     }
   }
 }

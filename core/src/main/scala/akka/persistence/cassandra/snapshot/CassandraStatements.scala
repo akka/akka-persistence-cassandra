@@ -82,7 +82,9 @@ trait CassandraStatements {
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
    */
-  def executeCreateKeyspaceAndTables(session: Session, config: CassandraSnapshotStoreConfig)(implicit ec: ExecutionContext): Future[Done] = {
+  def executeCreateKeyspaceAndTables(session: Session, config: CassandraSnapshotStoreConfig)(
+      implicit ec: ExecutionContext
+  ): Future[Done] = {
     import akka.persistence.cassandra.listenableFutureToFuture
 
     def create(): Future[Done] = {
@@ -94,8 +96,7 @@ trait CassandraStatements {
       else keyspace
     }
 
-    CassandraSession.serializedExecution(
-      recur = () => executeCreateKeyspaceAndTables(session, config),
-      exec = () => create())
+    CassandraSession.serializedExecution(recur = () => executeCreateKeyspaceAndTables(session, config),
+                                         exec = () => create())
   }
 }

@@ -7,7 +7,7 @@ package akka.persistence.cassandra.journal
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra.journal.CassandraSslSpec._
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
 import javax.crypto.Cipher
@@ -62,9 +62,8 @@ object CassandraSslSpec {
 
 trait CassandraSslSpec extends WordSpecLike {
 
-  def hasJCESupport: Boolean = {
+  def hasJCESupport: Boolean =
     Cipher.getMaxAllowedKeyLength("AES") == Int.MaxValue
-  }
 
   def skipIfNoJCESupport(): Unit =
     if (!hasJCESupport) {
@@ -74,21 +73,21 @@ trait CassandraSslSpec extends WordSpecLike {
 
 }
 
-class CassandraSslSpecWithClientAuth extends TestKit(ActorSystem("CassandraSslSpecWithClientAuth", config(true)))
-  with ImplicitSender
-  with WordSpecLike
-  with Matchers
-  with CassandraLifecycle
-  with CassandraSslSpec {
+class CassandraSslSpecWithClientAuth
+    extends TestKit(ActorSystem("CassandraSslSpecWithClientAuth", config(true)))
+    with ImplicitSender
+    with WordSpecLike
+    with Matchers
+    with CassandraLifecycle
+    with CassandraSslSpec {
 
   override def cassandraConfigResource: String = "test-embedded-cassandra-ssl-server-client.yaml"
 
   override def systemName: String = "CassandraSslSpec"
 
-  override protected def beforeAll(): Unit = {
+  override protected def beforeAll(): Unit =
     if (hasJCESupport)
       super.beforeAll()
-  }
 
   "A Cassandra journal with 2-way SSL setup" must {
 
@@ -113,10 +112,9 @@ class CassandraSslSpecWithoutClientAuth extends CassandraSpec(config(false)) wit
 
   override def cassandraConfigResource: String = "test-embedded-cassandra-ssl-server.yaml"
 
-  override protected def beforeAll(): Unit = {
+  override protected def beforeAll(): Unit =
     if (hasJCESupport)
       super.beforeAll()
-  }
 
   "A Cassandra journal with 1-way SSL setup" must {
 

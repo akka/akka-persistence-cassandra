@@ -7,11 +7,11 @@ package akka.persistence.cassandra.query
 import java.util.UUID
 
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
-import org.scalatest.time.{ Milliseconds, Seconds, Span }
+import org.scalatest.time.{Milliseconds, Seconds, Span}
 
 object EventsByPersistenceIdFastForwardSpec {
 
@@ -25,8 +25,9 @@ object EventsByPersistenceIdFastForwardSpec {
     """).withFallback(CassandraLifecycle.config)
 }
 
-class EventsByPersistenceIdFastForwardSpec extends CassandraSpec(EventsByPersistenceIdFastForwardSpec.config)
-  with DirectWriting {
+class EventsByPersistenceIdFastForwardSpec
+    extends CassandraSpec(EventsByPersistenceIdFastForwardSpec.config)
+    with DirectWriting {
 
   override implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
 
@@ -61,4 +62,3 @@ class EventsByPersistenceIdFastForwardSpec extends CassandraSpec(EventsByPersist
     probe.cancel()
   }
 }
-

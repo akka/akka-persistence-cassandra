@@ -5,13 +5,13 @@
 package akka.persistence
 
 import java.nio.ByteBuffer
-import java.time.{ Instant, LocalDateTime, ZoneOffset }
+import java.time.{Instant, LocalDateTime, ZoneOffset}
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import java.util.concurrent.Executor
 
-import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
-import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, SerializedMeta }
+import akka.persistence.cassandra.journal.{BucketSize, TimeBucket}
+import akka.persistence.cassandra.journal.CassandraJournal.{Serialized, SerializedMeta}
 import akka.serialization.Serialization
 import com.datastax.driver.core.utils.UUIDs
 import com.google.common.util.concurrent.ListenableFuture
@@ -31,7 +31,9 @@ package object cassandra {
   private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
 
   // TODO we should use the more explicit ListenableFutureConverter asScala instead
-  implicit def listenableFutureToFuture[A](lf: ListenableFuture[A])(implicit executionContext: ExecutionContext): Future[A] = {
+  implicit def listenableFutureToFuture[A](
+      lf: ListenableFuture[A]
+  )(implicit executionContext: ExecutionContext): Future[A] = {
     val promise = Promise[A]
     lf.addListener(new Runnable {
       def run() = promise.complete(Try(lf.get()))
@@ -61,13 +63,17 @@ package object cassandra {
 
   val FutureDone: Future[Done] = Future.successful(Done)
 
-  def serializeEvent(p: PersistentRepr, tags: Set[String], uuid: UUID,
-                     bucketSize: BucketSize, serialization: Serialization, system: ActorSystem)(implicit executionContext: ExecutionContext): Future[Serialized] = {
+  def serializeEvent(p: PersistentRepr,
+                     tags: Set[String],
+                     uuid: UUID,
+                     bucketSize: BucketSize,
+                     serialization: Serialization,
+                     system: ActorSystem)(implicit executionContext: ExecutionContext): Future[Serialized] =
     try {
       // use same clock source as the UUID for the timeBucket
       val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), bucketSize)
 
-      def serializeMeta(): Option[SerializedMeta] = {
+      def serializeMeta(): Option[SerializedMeta] =
         // meta data, if any
         p.payload match {
           case EventWithMetaData(_, m) =>
@@ -78,11 +84,10 @@ package object cassandra {
             Some(SerializedMeta(metaBuf, serManifest, serializer.identifier))
           case _ => None
         }
-      }
 
       val event: AnyRef = (p.payload match {
         case EventWithMetaData(evt, _) => evt // unwrap
-        case evt                       => evt
+        case evt => evt
       }).asInstanceOf[AnyRef]
 
       val serializer = serialization.findSerializerFor(event)
@@ -93,14 +98,19 @@ package object cassandra {
           Serialization.withTransportInformation(system.asInstanceOf[ExtendedActorSystem]) { () =>
             asyncSer.toBinaryAsync(event).map { bytes =>
               val serEvent = ByteBuffer.wrap(bytes)
-              Serialized(p.persistenceId, p.sequenceNr, serEvent, tags,
+              Serialized(
+                p.persistenceId,
+                p.sequenceNr,
+                serEvent,
+                tags,
                 eventAdapterManifest = p.manifest,
                 serManifest = serManifest,
                 serId = serializer.identifier,
                 p.writerUuid,
                 serializeMeta(),
                 uuid,
-                timeBucket)
+                timeBucket
+              )
             }
           }
 
@@ -108,27 +118,30 @@ package object cassandra {
           Future {
             // Serialization.serialize adds transport info
             val serEvent = ByteBuffer.wrap(serialization.serialize(event).get)
-            Serialized(p.persistenceId, p.sequenceNr, serEvent, tags,
+            Serialized(
+              p.persistenceId,
+              p.sequenceNr,
+              serEvent,
+              tags,
               eventAdapterManifest = p.manifest,
               serManifest = serManifest,
               serId = serializer.identifier,
               p.writerUuid,
               serializeMeta(),
               uuid,
-              timeBucket)
+              timeBucket
+            )
           }
       }
 
     } catch {
       case NonFatal(e) => Future.failed(e)
     }
-  }
 
   /**
    * INTERNAL API
    */
-  @InternalApi private[akka] def indent(stmt: String, prefix: String): String = {
+  @InternalApi private[akka] def indent(stmt: String, prefix: String): String =
     stmt.split('\n').mkString("\n" + prefix)
-  }
 
 }

@@ -12,8 +12,8 @@ import scala.reflect.ClassTag
 import akka.actor._
 import akka.pattern.pipe
 import akka.stream.actor.ActorPublisher
-import akka.stream.actor.ActorPublisherMessage.{ Cancel, Request, SubscriptionTimeoutExceeded }
-import com.datastax.driver.core.{ ResultSet, Row }
+import akka.stream.actor.ActorPublisherMessage.{Cancel, Request, SubscriptionTimeoutExceeded}
+import com.datastax.driver.core.{ResultSet, Row}
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.QueryActorPublisher._
 
@@ -25,8 +25,7 @@ import java.util.concurrent.ThreadLocalRandom
  * INTERNAL API
  */
 @InternalApi private[akka] object QueryActorPublisher {
-  final case class ReplayFailed(cause: Throwable)
-    extends DeadLetterSuppression with NoSerializationVerificationNeeded
+  final case class ReplayFailed(cause: Throwable) extends DeadLetterSuppression with NoSerializationVerificationNeeded
 
   sealed trait Action extends DeadLetterSuppression with NoSerializationVerificationNeeded
   final case class NewResultSet(rs: ResultSet) extends Action
@@ -52,10 +51,10 @@ import java.util.concurrent.ThreadLocalRandom
  * @tparam State Type of state.
  */
 @InternalApi private[akka] abstract class QueryActorPublisher[MessageType, State: ClassTag](
-  refreshInterval: Option[FiniteDuration],
-  config:          CassandraReadJournalConfig)
-  extends ActorPublisher[MessageType]
-  with ActorLogging {
+    refreshInterval: Option[FiniteDuration],
+    config: CassandraReadJournalConfig
+) extends ActorPublisher[MessageType]
+    with ActorLogging {
 
   private[this] sealed trait InitialAction extends NoSerializationVerificationNeeded
   private[this] case class InitialNewResultSet(s: State, rs: ResultSet) extends InitialAction
@@ -76,15 +75,16 @@ import java.util.concurrent.ThreadLocalRandom
     super.postStop()
   }
 
-  override def preStart(): Unit = initialState
-    .flatMap { state =>
-      initialQuery(state).map {
-        case NewResultSet(rs)     => InitialNewResultSet(state, rs)
-        case FetchedResultSet(rs) => InitialNewResultSet(state, rs)
-        case Finished(rs)         => InitialFinished(state, rs)
+  override def preStart(): Unit =
+    initialState
+      .flatMap { state =>
+        initialQuery(state).map {
+          case NewResultSet(rs) => InitialNewResultSet(state, rs)
+          case FetchedResultSet(rs) => InitialNewResultSet(state, rs)
+          case Finished(rs) => InitialFinished(state, rs)
+        }
       }
-    }
-    .pipeTo(self)
+      .pipeTo(self)
 
   private[this] val starting: Receive = {
     case _: Cancel | SubscriptionTimeoutExceeded => context.stop(self)
@@ -122,19 +122,17 @@ import java.util.concurrent.ThreadLocalRandom
 
   override def receive: Receive = starting
 
-  private[this] def exhaustFetchAndBecome(
-    resultSet: ResultSet,
-    state:     State,
-    finished:  Boolean,
-    continue:  Boolean,
-    behaviour: Option[(ResultSet, State, Boolean) => Receive] = None): Receive = {
-
+  private[this] def exhaustFetchAndBecome(resultSet: ResultSet,
+                                          state: State,
+                                          finished: Boolean,
+                                          continue: Boolean,
+                                          behaviour: Option[(ResultSet, State, Boolean) => Receive] = None): Receive =
     try {
       val (newRs, newState) =
         exhaustFetch(resultSet, state, resultSet.getAvailableWithoutFetching, 0, totalDemand)
 
       behaviour match {
-        case None    => nextBehavior(newRs, newState, finished, continue)
+        case None => nextBehavior(newRs, newState, finished, continue)
         case Some(b) => b(newRs, newState, finished)
       }
     } catch {
@@ -142,20 +140,14 @@ import java.util.concurrent.ThreadLocalRandom
         onErrorThenStop(t)
         Actor.ignoringBehavior
     }
-  }
 
   // TODO: Optimize.
-  private[this] def nextBehavior(
-    resultSet: ResultSet,
-    state:     State,
-    finished:  Boolean,
-    continue:  Boolean): Receive = {
+  private[this] def nextBehavior(resultSet: ResultSet, state: State, finished: Boolean, continue: Boolean): Receive = {
 
     val availableWithoutFetching = resultSet.getAvailableWithoutFetching
     val isFullyFetched = resultSet.isFullyFetched
 
-    if (shouldFetchMore(
-      availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue)) {
+    if (shouldFetchMore(availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue)) {
       listenableFutureToFuture(resultSet.fetchMoreResults())
         .map(FetchedResultSet)
         .pipeTo(self)
@@ -181,33 +173,30 @@ import java.util.concurrent.ThreadLocalRandom
   private[this] def shouldIdle(availableWithoutFetching: Int, state: State) =
     availableWithoutFetching > 0 && !completionCondition(state)
 
-  private[this] def shouldFetchMore(
-    availableWithoutFetching: Int,
-    isFullyFetched:           Boolean,
-    demand:                   Long,
-    state:                    State,
-    finished:                 Boolean,
-    continue:                 Boolean) =
+  private[this] def shouldFetchMore(availableWithoutFetching: Int,
+                                    isFullyFetched: Boolean,
+                                    demand: Long,
+                                    state: State,
+                                    finished: Boolean,
+                                    continue: Boolean) =
     !isFullyFetched &&
-      (availableWithoutFetching + config.fetchSize <= config.maxBufferSize
-        || availableWithoutFetching == 0) &&
-        !completionCondition(state)
+    (availableWithoutFetching + config.fetchSize <= config.maxBufferSize
+    || availableWithoutFetching == 0) &&
+    !completionCondition(state)
 
-  private[this] def shouldRequestMore(
-    isExhausted: Boolean,
-    demand:      Long,
-    state:       State,
-    finished:    Boolean,
-    continue:    Boolean) =
+  private[this] def shouldRequestMore(isExhausted: Boolean,
+                                      demand: Long,
+                                      state: State,
+                                      finished: Boolean,
+                                      continue: Boolean) =
     (!completionCondition(state) || refreshInterval.isDefined) &&
-      !(finished && !continue) &&
-      isExhausted
+    !(finished && !continue) &&
+    isExhausted
 
-  private[this] def shouldComplete(
-    isExhausted:     Boolean,
-    refreshInterval: Option[FiniteDuration],
-    state:           State,
-    finished:        Boolean) =
+  private[this] def shouldComplete(isExhausted: Boolean,
+                                   refreshInterval: Option[FiniteDuration],
+                                   state: State,
+                                   finished: Boolean) =
     (finished && refreshInterval.isEmpty && isExhausted) || completionCondition(state)
 
   // ResultSet methods isExhausted(), one() etc. cause blocking database fetch if there aren't
@@ -216,23 +205,21 @@ import java.util.concurrent.ThreadLocalRandom
   private[this] def isExhausted(resultSet: ResultSet): Boolean = resultSet.isExhausted
 
   @tailrec
-  final protected def exhaustFetch(
-    resultSet: ResultSet,
-    state:     State,
-    available: Int,
-    count:     Long,
-    max:       Long): (ResultSet, State) = {
+  final protected def exhaustFetch(resultSet: ResultSet,
+                                   state: State,
+                                   available: Int,
+                                   count: Long,
+                                   max: Long): (ResultSet, State) =
     if (available == 0 || count == max || completionCondition(state)) {
       (resultSet, state)
     } else {
       val (event, nextState) = updateState(state, resultSet.one())
       event match {
         case Some(evt) => onNext(evt)
-        case None      =>
+        case None =>
       }
       exhaustFetch(resultSet, nextState, available - 1, count + 1, max)
     }
-  }
 
   protected def initialState: Future[State]
   protected def initialQuery(initialState: State): Future[Action]

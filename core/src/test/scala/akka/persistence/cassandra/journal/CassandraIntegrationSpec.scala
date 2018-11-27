@@ -8,14 +8,13 @@ import java.util.UUID
 
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 object CassandraIntegrationSpec {
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
       |akka.persistence.journal.max-deletion-batch-size = 3
       |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
@@ -93,7 +92,8 @@ object CassandraIntegrationSpec {
     }
   }
 
-  class ProcessorCNoRecover(override val persistenceId: String, probe: ActorRef, recoverConfig: Recovery) extends ProcessorC(persistenceId, probe) {
+  class ProcessorCNoRecover(override val persistenceId: String, probe: ActorRef, recoverConfig: Recovery)
+      extends ProcessorC(persistenceId, probe) {
     override def recovery = recoverConfig
     override def preStart() = ()
   }
@@ -260,7 +260,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
         expectMsg(s"updated-a-${i}")
       }
 
-      val processor2 = system.actorOf(Props(classOf[ProcessorCNoRecover], persistenceId, testActor, Recovery(toSequenceNr = 3L)))
+      val processor2 =
+        system.actorOf(Props(classOf[ProcessorCNoRecover], persistenceId, testActor, Recovery(toSequenceNr = 3L)))
       expectMsg("offered-a-1")
       expectMsg("updated-a-2")
       expectMsg("updated-a-3")

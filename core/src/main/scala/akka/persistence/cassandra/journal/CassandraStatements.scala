@@ -7,7 +7,7 @@ package akka.persistence.cassandra.journal
 import akka.Done
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.Session
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
 
 import akka.persistence.cassandra.FutureDone
 import akka.persistence.cassandra.indent
@@ -229,7 +229,7 @@ trait CassandraStatements {
         sequence_nr = ?
     """
 
-  private[akka] def deleteMessages = {
+  private[akka] def deleteMessages =
     if (config.cassandra2xCompat)
       s"""
       DELETE FROM ${tableName} WHERE
@@ -245,7 +245,6 @@ trait CassandraStatements {
         sequence_nr >= 0 AND
         sequence_nr <= ?
     """
-  }
 
   private[akka] def selectMessages =
     s"""
@@ -296,7 +295,9 @@ trait CassandraStatements {
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
    */
-  private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(implicit ec: ExecutionContext): Future[Done] = {
+  private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(
+      implicit ec: ExecutionContext
+  ): Future[Done] = {
     import akka.persistence.cassandra.listenableFutureToFuture
 
     def create(): Future[Done] = {
@@ -324,8 +325,7 @@ trait CassandraStatements {
       } else keyspace
     }
 
-    CassandraSession.serializedExecution(
-      recur = () => executeCreateKeyspaceAndTables(session, config),
-      exec = () => create())
+    CassandraSession.serializedExecution(recur = () => executeCreateKeyspaceAndTables(session, config),
+                                         exec = () => create())
   }
 }

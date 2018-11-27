@@ -22,18 +22,22 @@ import org.scalatest.BeforeAndAfterAll
 
 object CassandraPluginConfigSpec {
   class TestContactPointsProvider(system: ActorSystem, config: Config) extends ConfigSessionProvider(system, config) {
-    override def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
+    override def lookupContactPoints(
+        clusterId: String
+    )(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] =
       if (clusterId == "cluster1")
         Future.successful(List(new InetSocketAddress("host1", 9041)))
       else
         Future.successful(List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042)))
-    }
 
   }
 }
 
-class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConfigSpec"))
-  with WordSpecLike with MustMatchers with BeforeAndAfterAll {
+class CassandraPluginConfigSpec
+    extends TestKit(ActorSystem("CassandraPluginConfigSpec"))
+    with WordSpecLike
+    with MustMatchers
+    with BeforeAndAfterAll {
   import CassandraPluginConfigSpec._
   import system.dispatcher
   lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-journal")
@@ -65,7 +69,8 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
       ("\"missing_trailing_quote", false),
       ("missing_leading_quote\"", false),
       ('"' + maxKey + '"', true),
-      (maxKey + "_", false))
+      (maxKey + "_", false)
+    )
   }
 
   override protected def afterAll(): Unit = {
@@ -90,57 +95,55 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
     }
 
     "parse config with host:port values as contact points" in {
-      val configWithHostPortPair = ConfigFactory.parseString("""contact-points = ["127.0.0.1:19142", "127.0.0.1:29142"]""").withFallback(defaultConfig)
+      val configWithHostPortPair = ConfigFactory
+        .parseString("""contact-points = ["127.0.0.1:19142", "127.0.0.1:29142"]""")
+        .withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHostPortPair)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(
-          new InetSocketAddress("127.0.0.1", 19142),
-          new InetSocketAddress("127.0.0.1", 29142)))
+        List(new InetSocketAddress("127.0.0.1", 19142), new InetSocketAddress("127.0.0.1", 29142))
+      )
     }
 
     "ignore the port configuration with host:port values as contact points" in {
-      val configWithHostPortPairAndPort = ConfigFactory.parseString(
-        """
+      val configWithHostPortPairAndPort =
+        ConfigFactory.parseString("""
           contact-points = ["127.0.0.1:19142", "127.0.0.1:29142", "127.0.0.1"]
           port = 39142
         """).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHostPortPairAndPort)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(
-          new InetSocketAddress("127.0.0.1", 19142),
-          new InetSocketAddress("127.0.0.1", 29142),
-          new InetSocketAddress("127.0.0.1", 39142)))
+        List(new InetSocketAddress("127.0.0.1", 19142),
+             new InetSocketAddress("127.0.0.1", 29142),
+             new InetSocketAddress("127.0.0.1", 39142))
+      )
     }
 
     "parse config with a list of contact points without port" in {
-      lazy val configWithHosts = ConfigFactory.parseString("""contact-points = ["127.0.0.1", "127.0.0.2"]""").withFallback(defaultConfig)
+      lazy val configWithHosts =
+        ConfigFactory.parseString("""contact-points = ["127.0.0.1", "127.0.0.2"]""").withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHosts)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(
-          new InetSocketAddress("127.0.0.1", 9042),
-          new InetSocketAddress("127.0.0.2", 9042)))
+        List(new InetSocketAddress("127.0.0.1", 9042), new InetSocketAddress("127.0.0.2", 9042))
+      )
     }
 
     "use the port configuration with a list of contact points without port" in {
-      lazy val configWithHostsAndPort = ConfigFactory.parseString(
-        """
+      lazy val configWithHostsAndPort = ConfigFactory.parseString("""
           contact-points = ["127.0.0.1", "127.0.0.2"]
           port = 19042
         """).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHostsAndPort)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(
-          new InetSocketAddress("127.0.0.1", 19042),
-          new InetSocketAddress("127.0.0.2", 19042)))
+        List(new InetSocketAddress("127.0.0.1", 19042), new InetSocketAddress("127.0.0.2", 19042))
+      )
     }
 
     "set the port configuration on the cluster builder" in {
-      lazy val configWithHostsAndPort = ConfigFactory.parseString(
-        """
+      lazy val configWithHostsAndPort = ConfigFactory.parseString("""
           contact-points = ["127.0.0.1", "127.0.0.2"]
           port = 19042
         """).withFallback(defaultConfig)
@@ -158,7 +161,8 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
       val config = new CassandraPluginConfig(system, configWithContactPointsProvider)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints("cluster1"), 3.seconds) must be(
-        List(new InetSocketAddress("host1", 9041)))
+        List(new InetSocketAddress("host1", 9041))
+      )
     }
 
     "use custom ConfigSessionProvider for cluster2" in {
@@ -169,7 +173,8 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
       val config = new CassandraPluginConfig(system, configWithContactPointsProvider)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints("cluster2"), 3.seconds) must be(
-        List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042)))
+        List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042))
+      )
     }
 
     "throw an exception when contact point list is empty" in {
@@ -186,8 +191,8 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
     }
 
     "parse config with a list of datacenters configured for NetworkTopologyStrategy" in {
-      lazy val configWithNetworkStrategy = ConfigFactory.parseString(
-        """
+      lazy val configWithNetworkStrategy =
+        ConfigFactory.parseString("""
           |replication-strategy = "NetworkTopologyStrategy"
           |data-center-replication-factors = ["dc1:3", "dc2:2"]
         """.stripMargin).withFallback(defaultConfig)
@@ -216,30 +221,34 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
     "validate keyspace parameter" in {
       forAll(keyspaceNames) { (keyspace, isValid) =>
         if (isValid) CassandraPluginConfig.validateKeyspaceName(keyspace) must be(keyspace)
-        else intercept[IllegalArgumentException] {
-          CassandraPluginConfig.validateKeyspaceName(keyspace)
-        }
+        else
+          intercept[IllegalArgumentException] {
+            CassandraPluginConfig.validateKeyspaceName(keyspace)
+          }
       }
     }
 
     "validate table name parameter" in {
       forAll(keyspaceNames) { (tableName, isValid) =>
         if (isValid) CassandraPluginConfig.validateKeyspaceName(tableName) must be(tableName)
-        else intercept[IllegalArgumentException] {
-          CassandraPluginConfig.validateKeyspaceName(tableName)
-        }
+        else
+          intercept[IllegalArgumentException] {
+            CassandraPluginConfig.validateKeyspaceName(tableName)
+          }
       }
     }
 
     "parse keyspace-autocreate parameter" in {
-      val configWithFalseKeyspaceAutocreate = ConfigFactory.parseString("""keyspace-autocreate = false""").withFallback(defaultConfig)
+      val configWithFalseKeyspaceAutocreate =
+        ConfigFactory.parseString("""keyspace-autocreate = false""").withFallback(defaultConfig)
 
       val config = new CassandraPluginConfig(system, configWithFalseKeyspaceAutocreate)
       config.keyspaceAutoCreate must be(false)
     }
 
     "parse tables-autocreate parameter" in {
-      val configWithFalseTablesAutocreate = ConfigFactory.parseString("""tables-autocreate = false""").withFallback(defaultConfig)
+      val configWithFalseTablesAutocreate =
+        ConfigFactory.parseString("""tables-autocreate = false""").withFallback(defaultConfig)
 
       val config = new CassandraPluginConfig(system, configWithFalseTablesAutocreate)
       config.tablesAutoCreate must be(false)

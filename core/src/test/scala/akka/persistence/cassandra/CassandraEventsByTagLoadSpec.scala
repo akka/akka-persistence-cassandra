@@ -4,24 +4,23 @@
 
 package akka.persistence.cassandra
 
-import java.time.{ LocalDateTime, ZoneOffset }
+import java.time.{LocalDateTime, ZoneOffset}
 
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{ NoOffset, PersistenceQuery }
+import akka.persistence.query.{NoOffset, PersistenceQuery}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
-import org.scalatest.time.{ Seconds, Span }
+import org.scalatest.time.{Seconds, Span}
 
 import scala.concurrent.duration._
 
 object CassandraEventsByTagLoadSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
        akka {
          loglevel = INFO
        }
@@ -105,7 +104,9 @@ class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoa
         case Some(currentSeqNr) =>
           if (event.sequenceNr != currentSeqNr + 1) {
             fail = true
-            system.log.error(s"Out of order sequence nrs for pid ${event.persistenceId}. This was event nr [$i]. Expected ${currentSeqNr + 1}, got: ${event.sequenceNr}")
+            system.log.error(
+              s"Out of order sequence nrs for pid ${event.persistenceId}. This was event nr [$i]. Expected ${currentSeqNr + 1}, got: ${event.sequenceNr}"
+            )
           }
           sequenceNrsPerPid += (event.persistenceId -> event.sequenceNr)
         case None =>

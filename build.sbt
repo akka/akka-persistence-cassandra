@@ -1,5 +1,3 @@
-import com.typesafe.sbt.SbtScalariform
-import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
@@ -20,7 +18,7 @@ val akkaPersistenceCassandraDependencies = Seq(
 )
 
 
-def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
+def common: Seq[Setting[_]] = Seq(
   organization := "com.typesafe.akka",
   organizationName := "Lightbend Inc.",
   startYear := Some(2016),
@@ -44,6 +42,8 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
     """Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>"""
   )),
 
+  scalafmtOnCompile := true,
+
   releaseCrossBuild := true,
 
   logBuffered in Test := System.getProperty("akka.logBufferedTests", "false").toBoolean,
@@ -57,9 +57,6 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
 
   // disable parallel tests
   parallelExecution in Test := false,
-
-  ScalariformKeys.preferences in Compile  := formattingPreferences,
-  ScalariformKeys.preferences in Test     := formattingPreferences
 )
 
 lazy val root = (project in file("."))
@@ -111,15 +108,6 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assemblyJarName in assembly := "cassandra-bundle.jar"
   )
-
-def formattingPreferences = {
-  import scalariform.formatter.preferences._
-  FormattingPreferences()
-    .setPreference(RewriteArrowSymbols, false)
-    .setPreference(AlignParameters, true)
-    .setPreference(AlignSingleLineCaseStatements, true)
-    .setPreference(SpacesAroundMultiImports, true)
-}
 
 def akkaImport(packageName: String = "akka.*") = versionedImport(packageName, "2.4", "2.5")
 def configImport(packageName: String = "com.typesafe.config.*") = versionedImport(packageName, "1.3.0", "1.4.0")

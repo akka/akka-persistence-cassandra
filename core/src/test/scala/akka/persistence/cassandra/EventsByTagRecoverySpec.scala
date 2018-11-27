@@ -4,12 +4,12 @@
 
 package akka.persistence.cassandra
 
-import java.time.{ LocalDateTime, ZoneOffset }
+import java.time.{LocalDateTime, ZoneOffset}
 
-import akka.actor.{ ActorSystem, PoisonPill }
-import akka.persistence.cassandra.TestTaggingActor.{ Ack, DoASnapshotPlease, SnapShotAck }
+import akka.actor.{ActorSystem, PoisonPill}
+import akka.persistence.cassandra.TestTaggingActor.{Ack, DoASnapshotPlease, SnapShotAck}
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
+import akka.persistence.query.{EventEnvelope, NoOffset, PersistenceQuery}
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
@@ -20,8 +20,7 @@ import scala.util.Try
 object EventsByTagRecoverySpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   val keyspaceName = "EventsByTagRecoverySpec"
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
        |akka {
        |  loglevel = DEBUG
        |  actor.debug.unhandled = on
@@ -137,7 +136,8 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
           tProbe.expectMsg(Ack)
         }
 
-        val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+        val queryJournal =
+          PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
         val greenTags = queryJournal.eventsByTag(tag = "red", offset = NoOffset)
         val probe = greenTags.runWith(TestSink.probe[Any](system))
         probe.request(9)
@@ -182,7 +182,8 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
           tProbe.expectMsg(Ack)
         }
 
-        val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+        val queryJournal =
+          PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
         val greenTags = queryJournal.eventsByTag(tag = "red", offset = NoOffset)
         val probe = greenTags.runWith(TestSink.probe[Any](system))
         probe.request(13)
@@ -219,7 +220,8 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
       expectMsg(Ack)
 
       try {
-        val queryJournal = PersistenceQuery(systemTwo).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+        val queryJournal =
+          PersistenceQuery(systemTwo).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
         val blueTags = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
         val probe = blueTags.runWith(TestSink.probe[Any](systemTwo))
         probe.request(6)

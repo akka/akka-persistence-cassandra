@@ -7,16 +7,16 @@ package akka.persistence.cassandra
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ ActorSystem, Props }
+import akka.actor.{ActorSystem, Props}
 import akka.persistence.PersistentActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.testkit.{ TestKitBase, TestProbe }
+import akka.testkit.{TestKitBase, TestProbe}
 import com.datastax.driver.core.Cluster
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 import scala.concurrent.duration._
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success, Try}
 
 object CassandraLifecycle {
   sealed trait CassandraMode
@@ -29,14 +29,13 @@ object CassandraLifecycle {
   //  val mode: CassandraMode = Embedded
   val mode: CassandraMode = Option(System.getenv("CASSANDRA_MODE")).map(_.toLowerCase) match {
     case Some("external") => External
-    case _                => Embedded
+    case _ => Embedded
   }
 
   def isExternal: Boolean = mode == External
 
   val config = {
-    val always = ConfigFactory.parseString(
-      """
+    val always = ConfigFactory.parseString("""
     akka.test.timefactor = ${?AKKA_TEST_TIMEFACTOR}
     akka.persistence.journal.plugin = "cassandra-journal"
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
@@ -54,8 +53,7 @@ object CassandraLifecycle {
         9042
     }
 
-    always.withFallback(ConfigFactory.parseString(
-      s"""
+    always.withFallback(ConfigFactory.parseString(s"""
       cassandra-journal.port = $port
       cassandra-snapshot-store.port = $port
     """))
@@ -68,16 +66,19 @@ object CassandraLifecycle {
     probe.within(45.seconds) {
       probe.awaitAssert {
         n += 1
-        system.actorOf(Props(classOf[AwaitPersistenceInit], journalPluginId, snapshotPluginId), "persistenceInit" + n).tell("hello", probe.ref)
+        system
+          .actorOf(Props(classOf[AwaitPersistenceInit], journalPluginId, snapshotPluginId), "persistenceInit" + n)
+          .tell("hello", probe.ref)
         probe.expectMsg(5.seconds, "hello")
-        system.log.debug("awaitPersistenceInit took {} ms {}", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0), system.name)
+        system.log.debug("awaitPersistenceInit took {} ms {}",
+                         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0),
+                         system.name)
       }
     }
   }
 
-  class AwaitPersistenceInit(
-    override val journalPluginId:  String,
-    override val snapshotPluginId: String) extends PersistentActor {
+  class AwaitPersistenceInit(override val journalPluginId: String, override val snapshotPluginId: String)
+      extends PersistentActor {
     def persistenceId: String = "persistenceInit"
 
     def receiveRecover: Receive = {
@@ -104,7 +105,8 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   def cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource
 
   lazy val cluster = {
-    Cluster.builder()
+    Cluster
+      .builder()
       .addContactPoint("localhost")
       .withClusterName(systemName + "TestCluster")
       .withPort(system.settings.config.getInt("cassandra-journal.port"))
@@ -119,29 +121,25 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
 
   def port(): Int = 0
 
-  def startCassandra(): Unit = {
+  def startCassandra(): Unit =
     startCassandra(port())
-  }
 
-  def startCassandra(port: Int): Unit = {
+  def startCassandra(port: Int): Unit =
     mode match {
       case Embedded =>
         val cassandraDirectory = new File("target/" + systemName)
-        CassandraLauncher.start(
-          cassandraDirectory,
-          configResource = cassandraConfigResource,
-          clean = true,
-          port = port,
-          CassandraLauncher.classpathForResources("logback-test.xml"))
+        CassandraLauncher.start(cassandraDirectory,
+                                configResource = cassandraConfigResource,
+                                clean = true,
+                                port = port,
+                                CassandraLauncher.classpathForResources("logback-test.xml"))
       case External =>
     }
-  }
 
-  def awaitPersistenceInit(): Unit = {
+  def awaitPersistenceInit(): Unit =
     CassandraLifecycle.awaitPersistenceInit(system)
-  }
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     try {
       shutdown(system, verifySystemShutdown = true)
     } finally {
@@ -153,8 +151,6 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
       }
       super.afterAll()
     }
-
-  }
 
   def dropKeyspaces(): Unit = {
     val journalKeyspace = system.settings.config.getString("cassandra-journal.keyspace")

@@ -5,7 +5,7 @@
 package akka.persistence.cassandra
 
 import java.time.format.DateTimeFormatter
-import java.time.{ LocalDateTime, ZoneId, ZoneOffset }
+import java.time.{LocalDateTime, ZoneId, ZoneOffset}
 import java.util.UUID
 
 import com.datastax.driver.core.utils.UUIDs

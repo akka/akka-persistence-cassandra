@@ -4,8 +4,8 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.actor.{ ActorRef, PoisonPill, Props }
-import akka.persistence.{ DeleteMessagesFailure, DeleteMessagesSuccess, PersistentActor, RecoveryCompleted }
+import akka.actor.{ActorRef, PoisonPill, Props}
+import akka.persistence.{DeleteMessagesFailure, DeleteMessagesSuccess, PersistentActor, RecoveryCompleted}
 import akka.persistence.cassandra.CassandraSpec
 import akka.testkit.TestProbe
 
@@ -22,12 +22,11 @@ object CassandraJournalDeletionSpec {
 
   case class Deleted(sequenceNr: Long)
 
-  class PAThatDeletes(
-    val persistenceId:            String,
-    deleteSuccessProbe:           ActorRef,
-    deleteFailProbe:              ActorRef,
-    override val journalPluginId: String   = "cassandra-journal")
-    extends PersistentActor {
+  class PAThatDeletes(val persistenceId: String,
+                      deleteSuccessProbe: ActorRef,
+                      deleteFailProbe: ActorRef,
+                      override val journalPluginId: String = "cassandra-journal")
+      extends PersistentActor {
 
     var recoveredEvents: List[Any] = List.empty
 
@@ -39,9 +38,10 @@ object CassandraJournalDeletionSpec {
     var lastDeletedTo: Long = 0
 
     override def receiveCommand: Receive = {
-      case p: PersistMe => persist(p) { _ =>
-        sender() ! Ack
-      }
+      case p: PersistMe =>
+        persist(p) { _ =>
+          sender() ! Ack
+        }
       case GetRecoveredEvents =>
         sender() ! RecoveredEvents(recoveredEvents.reverse)
       case DeleteTo(to) => deleteMessages(to)
@@ -58,8 +58,8 @@ object CassandraJournalDeletionSpec {
   }
 }
 
-class CassandraJournalDeletionSpec extends CassandraSpec(
-  """
+class CassandraJournalDeletionSpec
+    extends CassandraSpec("""
     akka.loglevel = DEBUG
     cassandra-journal.max-concurrent-deletes = 100
 
@@ -118,8 +118,9 @@ class CassandraJournalDeletionSpec extends CassandraSpec(
     "fail fast if too many concurrent deletes" in {
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
-      val p1 = system.actorOf(Props(
-        new PAThatDeletes("p2", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-low-concurrent-deletes")))
+      val p1 = system.actorOf(
+        Props(new PAThatDeletes("p2", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-low-concurrent-deletes"))
+      )
 
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)
@@ -143,7 +144,8 @@ class CassandraJournalDeletionSpec extends CassandraSpec(
     "handle deletes over many partitions" in {
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
-      val props = Props(new PAThatDeletes("p3", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-small-partition-size"))
+      val props =
+        Props(new PAThatDeletes("p3", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-small-partition-size"))
       val p1 = system.actorOf(props)
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)

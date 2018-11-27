@@ -4,20 +4,19 @@
 
 package akka.persistence.cassandra
 
-import java.time.{ LocalDateTime, ZoneOffset }
+import java.time.{LocalDateTime, ZoneOffset}
 
 import akka.persistence.cassandra.query.TestActor
 import akka.persistence.cassandra.query._
 import akka.persistence.journal.Tagged
-import akka.persistence.query.{ EventEnvelope, NoOffset }
+import akka.persistence.query.{EventEnvelope, NoOffset}
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 
 import scala.collection.immutable
 import scala.concurrent.Future
 
-class EventsByTagStressSpec extends CassandraSpec(
-  s"""
+class EventsByTagStressSpec extends CassandraSpec(s"""
     akka {
       loglevel = INFO
     }
@@ -44,7 +43,8 @@ class EventsByTagStressSpec extends CassandraSpec(
       }
 
       val eventsByTagQueries: immutable.Seq[(Int, TestSubscriber.Probe[(String, Int)])] = (0 until readers) map { i =>
-        val probe = queryJournal.eventsByTag("all", NoOffset)
+        val probe = queryJournal
+          .eventsByTag("all", NoOffset)
           .map(i => {
             (i.persistenceId, i.event.asInstanceOf[Int])
           })

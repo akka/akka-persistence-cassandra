@@ -6,8 +6,8 @@ package akka.persistence.cassandra.query.scaladsl
 
 import akka.actor.Props
 import akka.persistence.cassandra.query.TestActor
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry, CassandraSpec }
-import akka.persistence.journal.{ Tagged, WriteEventAdapter }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraMetricsRegistry, CassandraSpec}
+import akka.persistence.journal.{Tagged, WriteEventAdapter}
 import akka.persistence.query.NoOffset
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
@@ -15,8 +15,7 @@ import com.typesafe.config.ConfigFactory
 import scala.concurrent.duration._
 
 object CassandraReadJournalSpec {
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
     akka.actor.serialize-messages=off
     cassandra-query-journal.max-buffer-size = 10
@@ -50,7 +49,9 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("a-1-done")
 
       val src = queries.eventsByPersistenceId("a", 0L, Long.MaxValue)
-      src.map(_.persistenceId).runWith(TestSink.probe[Any])
+      src
+        .map(_.persistenceId)
+        .runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("a")
         .cancel()
@@ -62,7 +63,9 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("b-1-done")
 
       val src = queries.currentEventsByPersistenceId("b", 0L, Long.MaxValue)
-      src.map(_.persistenceId).runWith(TestSink.probe[Any])
+      src
+        .map(_.persistenceId)
+        .runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("b")
         .expectComplete()
@@ -71,7 +74,9 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
     // these tests rely on events written in previous tests
     "start eventsByTag query" in {
       val src = queries.eventsByTag("a", NoOffset)
-      src.map(_.persistenceId).runWith(TestSink.probe[Any])
+      src
+        .map(_.persistenceId)
+        .runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("a")
         .expectNoMessage(100.millis)
@@ -80,7 +85,9 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
 
     "start current eventsByTag query" in {
       val src = queries.currentEventsByTag("a", NoOffset)
-      src.map(_.persistenceId).runWith(TestSink.probe[Any])
+      src
+        .map(_.persistenceId)
+        .runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("a")
         .expectComplete()
@@ -88,7 +95,8 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
 
     "insert Cassandra metrics to Cassandra Metrics Registry" in {
       val registry = CassandraMetricsRegistry(system).getRegistry
-      val snapshots = registry.getNames.toArray().filter(value => value.toString.startsWith(s"${CassandraReadJournal.Identifier}"))
+      val snapshots =
+        registry.getNames.toArray().filter(value => value.toString.startsWith(s"${CassandraReadJournal.Identifier}"))
       snapshots.length should be > 0
     }
   }

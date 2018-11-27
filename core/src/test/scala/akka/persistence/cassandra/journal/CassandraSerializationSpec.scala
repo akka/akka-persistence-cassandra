@@ -4,17 +4,16 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.actor.{ ExtendedActorSystem, Props }
+import akka.actor.{ExtendedActorSystem, Props}
 import akka.persistence.RecoveryCompleted
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, EventWithMetaData, Persister }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec, EventWithMetaData, Persister}
 import akka.serialization.BaseSerializer
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 
 object CassandraSerializationSpec {
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
        |akka.actor.serialize-messages=false
        |akka.actor.serializers.crap="akka.persistence.cassandra.journal.BrokenDeSerialization"
        |akka.actor.serialization-identifiers."akka.persistence.cassandra.journal.BrokenDeSerialization" = 666
@@ -35,13 +34,11 @@ object CassandraSerializationSpec {
 
 class BrokenDeSerialization(override val system: ExtendedActorSystem) extends BaseSerializer {
   override def includeManifest: Boolean = false
-  override def toBinary(o: AnyRef): Array[Byte] = {
+  override def toBinary(o: AnyRef): Array[Byte] =
     // I was serious with the class name
     Array.emptyByteArray
-  }
-  override def fromBinary(bytes: Array[Byte], manifest: Option[Class[_]]): AnyRef = {
+  override def fromBinary(bytes: Array[Byte], manifest: Option[Class[_]]): AnyRef =
     throw new RuntimeException("I can't deserialize a single thing")
-  }
 }
 
 class CassandraSerializationSpec extends CassandraSpec(CassandraSerializationSpec.config) {

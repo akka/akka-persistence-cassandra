@@ -4,12 +4,11 @@
 
 package akka.persistence.cassandra
 
-import akka.actor.{ ActorRef, PoisonPill }
-import akka.persistence.cassandra.query.{ DirectWriting, TestActor }
+import akka.actor.{ActorRef, PoisonPill}
+import akka.persistence.cassandra.query.{DirectWriting, TestActor}
 import akka.testkit.EventFilter
 
-class CassandraCorruptJournalSpec extends CassandraSpec(
-  """
+class CassandraCorruptJournalSpec extends CassandraSpec("""
     akka {
       loglevel = DEBUG
       loggers = ["akka.testkit.TestEventListener"]

@@ -7,7 +7,7 @@ package akka.persistence.cassandra.query.javadsl
 import java.util.UUID
 import java.util.concurrent.CompletionStage
 
-import akka.{ Done, NotUsed }
+import akka.{Done, NotUsed}
 import akka.persistence.cassandra.session.javadsl.CassandraSession
 import akka.persistence.query.EventEnvelope
 import akka.persistence.query.Offset
@@ -18,6 +18,7 @@ import akka.stream.javadsl.Source
 import scala.compat.java8.FutureConverters
 
 object CassandraReadJournal {
+
   /**
    * The default identifier for [[CassandraReadJournal]] to be used with
    * `akka.persistence.query.PersistenceQuery#getReadJournalFor`.
@@ -45,13 +46,13 @@ object CassandraReadJournal {
  *
  */
 class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query.scaladsl.CassandraReadJournal)
-  extends ReadJournal
-  with PersistenceIdsQuery
-  with CurrentPersistenceIdsQuery
-  with EventsByPersistenceIdQuery
-  with CurrentEventsByPersistenceIdQuery
-  with EventsByTagQuery
-  with CurrentEventsByTagQuery {
+    extends ReadJournal
+    with PersistenceIdsQuery
+    with CurrentPersistenceIdsQuery
+    with EventsByPersistenceIdQuery
+    with CurrentEventsByPersistenceIdQuery
+    with EventsByTagQuery
+    with CurrentEventsByTagQuery {
 
   /**
    * Data Access Object for arbitrary queries or updates.
@@ -173,10 +174,9 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * Corresponding query that is completed when it reaches the end of the currently
    * stored events is provided by `currentEventsByPersistenceId`.
    */
-  override def eventsByPersistenceId(
-    persistenceId:  String,
-    fromSequenceNr: Long,
-    toSequenceNr:   Long): Source[EventEnvelope, NotUsed] =
+  override def eventsByPersistenceId(persistenceId: String,
+                                     fromSequenceNr: Long,
+                                     toSequenceNr: Long): Source[EventEnvelope, NotUsed] =
     scaladslReadJournal.eventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr).asJava
 
   /**
@@ -184,10 +184,9 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * is completed immediately when it reaches the end of the "result set". Events that are
    * stored after the query is completed are not included in the event stream.
    */
-  override def currentEventsByPersistenceId(
-    persistenceId:  String,
-    fromSequenceNr: Long,
-    toSequenceNr:   Long): Source[EventEnvelope, NotUsed] =
+  override def currentEventsByPersistenceId(persistenceId: String,
+                                            fromSequenceNr: Long,
+                                            toSequenceNr: Long): Source[EventEnvelope, NotUsed] =
     scaladslReadJournal
       .currentEventsByPersistenceId(persistenceId, fromSequenceNr, toSequenceNr)
       .asJava

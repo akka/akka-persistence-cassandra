@@ -60,9 +60,8 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
     createTablesStatements.asJava
   }
 
-  private def statements: CassandraStatements = {
+  private def statements: CassandraStatements =
     new CassandraStatements {
       override def snapshotConfig: CassandraSnapshotStoreConfig = CassandraSnapshotStoreConfig.this
     }
-  }
 }
