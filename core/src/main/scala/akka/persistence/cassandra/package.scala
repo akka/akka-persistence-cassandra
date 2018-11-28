@@ -19,6 +19,8 @@ import scala.concurrent._
 import scala.language.implicitConversions
 import scala.util.Try
 import scala.util.control.NonFatal
+import scala.collection.JavaConverters._
+import com.typesafe.config.{ Config, ConfigValueType }
 
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
@@ -129,6 +131,16 @@ package object cassandra {
    */
   @InternalApi private[akka] def indent(stmt: String, prefix: String): String = {
     stmt.split('\n').mkString("\n" + prefix)
+  }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[cassandra] def getListFromConfig(config: Config, key: String): List[String] = {
+    config.getValue(key).valueType() match {
+      case ConfigValueType.LIST   => config.getStringList(key).asScala.toList
+      case ConfigValueType.STRING => config.getString(key).split(",").toList
+    }
   }
 
 }

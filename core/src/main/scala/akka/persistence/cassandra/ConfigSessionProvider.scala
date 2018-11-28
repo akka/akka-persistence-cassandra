@@ -14,6 +14,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.concurrent.duration.FiniteDuration
+
 import akka.actor.ActorSystem
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
@@ -187,7 +188,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
    * @param clusterId the configured `cluster-id` to lookup
    */
   def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
-    val contactPoints = config.getStringList("contact-points").asScala.toList
+    val contactPoints = getListFromConfig(config, "contact-points")
     Future.successful(buildContactPoints(contactPoints, port))
   }
 

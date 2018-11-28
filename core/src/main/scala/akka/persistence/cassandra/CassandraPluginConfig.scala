@@ -7,7 +7,7 @@ package akka.persistence.cassandra
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
 import com.datastax.driver.core._
 import com.typesafe.config.Config
-import scala.collection.JavaConverters._
+
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
 import akka.persistence.cassandra.session.CassandraSessionSettings
@@ -37,7 +37,7 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val replicationStrategy: String = getReplicationStrategy(
     config.getString("replication-strategy"),
     config.getInt("replication-factor"),
-    config.getStringList("data-center-replication-factors").asScala)
+    getListFromConfig(config, "data-center-replication-factors"))
 
   val readConsistency: ConsistencyLevel = sessionSettings.readConsistency
   val writeConsistency: ConsistencyLevel = sessionSettings.writeConsistency
