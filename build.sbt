@@ -7,6 +7,8 @@ val AkkaVersion = "2.5.17"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.6.0",
+  // Specifying guava dependency because older transitive dependency has security vulnerability
+  "com.google.guava"        % "guava"                               % "27.0.1-jre",
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query"              % AkkaVersion,
