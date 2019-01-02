@@ -3,7 +3,7 @@ import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
-val AkkaVersion = "2.5.17"
+val AkkaVersion = "2.5.19"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.6.0",
