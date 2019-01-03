@@ -585,7 +585,8 @@ class TagWriterSpec extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.c
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
-    val session = new TagWritersSession(fakePs, fakePs, successfulWrite, null, fakePs, fakePs) {
+    val session = new TagWritersSession(() => fakePs, () => fakePs, successfulWrite, null,
+      () => fakePs, () => fakePs) {
 
       override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
         probe.ref ! events.map {

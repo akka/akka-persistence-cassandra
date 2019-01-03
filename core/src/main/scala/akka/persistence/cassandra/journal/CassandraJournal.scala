@@ -82,12 +82,12 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
       executeCreateKeyspaceAndTables(session, config))
 
   private val tagWriterSession = TagWritersSession(
-    preparedWriteToTagViewWithoutMeta,
-    preparedWriteToTagViewWithMeta,
+    () => preparedWriteToTagViewWithoutMeta,
+    () => preparedWriteToTagViewWithMeta,
     session.executeWrite,
     session.selectResultSet,
-    preparedWriteToTagProgress,
-    preparedWriteTagScanning)
+    () => preparedWriteToTagProgress,
+    () => preparedWriteTagScanning)
 
   protected val tagWrites: Option[ActorRef] =
     if (config.eventsByTagEnabled)

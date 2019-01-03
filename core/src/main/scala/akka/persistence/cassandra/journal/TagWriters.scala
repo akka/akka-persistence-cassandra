@@ -30,18 +30,18 @@ import akka.util.ByteString
 @InternalApi private[akka] object TagWriters {
 
   private[akka] case class TagWritersSession(
-    tagWritePs:         Future[PreparedStatement],
-    tagWriteWithMetaPs: Future[PreparedStatement],
+    tagWritePs:         () => Future[PreparedStatement],
+    tagWriteWithMetaPs: () => Future[PreparedStatement],
     executeStatement:   Statement => Future[Done],
     selectStatement:    Statement => Future[ResultSet],
-    tagProgressPs:      Future[PreparedStatement],
-    tagScanningPs:      Future[PreparedStatement]) {
+    tagProgressPs:      () => Future[PreparedStatement],
+    tagScanningPs:      () => Future[PreparedStatement]) {
 
     def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext): Future[Done] = {
       val batch = new BatchStatement(BatchStatement.Type.UNLOGGED)
       val tagWritePSs = for {
-        withMeta <- tagWriteWithMetaPs
-        withoutMeta <- tagWritePs
+        withMeta <- tagWriteWithMetaPs()
+        withoutMeta <- tagWritePs()
       } yield (withMeta, withoutMeta)
 
       tagWritePSs.map {
@@ -74,7 +74,7 @@ import akka.util.ByteString
     }
 
     def writeProgress(tag: Tag, persistenceId: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
-      tagProgressPs.map(ps =>
+      tagProgressPs().map(ps =>
         ps.bind(persistenceId, tag, seqNr: JLong, tagPidSequenceNr: JLong, offset)).flatMap(executeStatement)
     }
 
@@ -235,7 +235,7 @@ import akka.util.ByteString
           else updates.take(maxPrint).mkString(",") + s" ...and ${updates.size - 20} more")
       }
 
-      tagWriterSession.tagScanningPs.foreach { ps =>
+      tagWriterSession.tagScanningPs().foreach { ps =>
 
         val startTime = System.nanoTime()
 

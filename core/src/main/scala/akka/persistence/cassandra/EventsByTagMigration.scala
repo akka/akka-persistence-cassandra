@@ -165,12 +165,12 @@ class EventsByTagMigration(system: ActorSystem)
   private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed], periodicFlush: Int): Future[Done] = {
     log.info("Beginning migration of data to tag_views table")
     val tagWriterSession = TagWritersSession(
-      preparedWriteToTagViewWithoutMeta,
-      preparedWriteToTagViewWithMeta,
+      () => preparedWriteToTagViewWithoutMeta,
+      () => preparedWriteToTagViewWithMeta,
       session.executeWrite,
       session.selectResultSet,
-      preparedWriteToTagProgress,
-      preparedWriteTagScanning)
+      () => preparedWriteToTagProgress,
+      () => preparedWriteTagScanning)
     val tagWriters = system.actorOf(TagWriters.props(config.tagWriterSettings, tagWriterSession))
 
     val eventDeserializer: CassandraJournal.EventDeserializer = new CassandraJournal.EventDeserializer(system)
