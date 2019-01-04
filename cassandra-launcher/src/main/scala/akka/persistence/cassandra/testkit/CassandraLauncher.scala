@@ -97,6 +97,11 @@ object CassandraLauncher {
    *   CassandraLauncher.classpathForResources("logback.xml")
    * )
    * ```
+   *
+   * Files ending with `assembly.jar` are not included in the result because an
+   * assembly jar will likely contain incompatible classes that shouldn't be on the
+   * classpath of the Cassandra server, such as incompatible dependency of Guava.
+   * Assembly jars are used when running multi-node testing.
    */
   @varargs
   def classpathForResources(resources: String*): immutable.Seq[String] = {
@@ -108,7 +113,7 @@ object CassandraLauncher {
         case jarUrl if jarUrl.getProtocol == "jar" =>
           new File(URI.create(jarUrl.getPath.takeWhile(_ != '!'))).getCanonicalPath
       }
-    }.distinct.to[immutable.Seq]
+    }.distinct.to[immutable.Seq].filterNot(_.endsWith("assembly.jar"))
   }
 
   /**
