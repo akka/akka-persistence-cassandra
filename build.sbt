@@ -32,7 +32,7 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   organizationName := "Lightbend Inc.",
   startYear := Some(2016),
   licenses := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
-  crossScalaVersions := Seq("2.11.12", "2.12.7"),
+  crossScalaVersions := Seq("2.11.12", "2.13.0-M5", "2.12.7"),
   scalaVersion := crossScalaVersions.value.last,
   crossVersion := CrossVersion.binary,
 
@@ -42,7 +42,6 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
     "-unchecked",
     "-deprecation",
     "-Xlint",
-    "-Yno-adapted-args",
     "-Ywarn-dead-code",
     "-Xfuture"
   ),
