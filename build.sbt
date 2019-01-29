@@ -9,6 +9,11 @@ val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.6.0",
   // Specifying guava dependency because older transitive dependency has security vulnerability
   "com.google.guava"        % "guava"                               % "27.0.1-jre",
+  // Specifying jnr-posix version for licensing reasons: cassandra-driver-core
+  // depends on version 3.0.44, but for this version the LICENSE.txt and the
+  // pom.xml have conflicting licensing information. 3.0.45 fixes this and
+  // makes it clear this library is available under (among others) the EPL
+  "com.github.jnr"          % "jnr-posix"                           % "3.0.45",
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query"              % AkkaVersion,
