@@ -9,12 +9,10 @@ import java.nio.ByteBuffer
 import java.util.NoSuchElementException
 
 import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
@@ -42,7 +40,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
   val snapshotConfig = new CassandraSnapshotStoreConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
   val snapshotDeserializer = new SnapshotDeserializer(context.system)
-  implicit val ec: ExecutionContext = context.dispatcher
+  implicit val ec: ExecutionContextExecutor = context.dispatcher
 
   import snapshotConfig._
 
@@ -208,7 +206,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore
   def executeBatch(body: BatchStatement => Unit): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
     body(batch)
-    session.underlying().flatMap(_.executeAsync(batch)).map(_ => ())
+    session.underlying().flatMap(_.executeAsync(batch).asScala).map(_ => ())
   }
 
   private def serialize(payload: Any): Future[Serialized] = try {

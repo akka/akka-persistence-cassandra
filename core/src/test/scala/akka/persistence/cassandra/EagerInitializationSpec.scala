@@ -4,18 +4,20 @@
 
 package akka.persistence.cassandra
 
+import java.util.concurrent.Executor
+
 import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import com.datastax.driver.core.Session
 import com.typesafe.config.{ Config, ConfigFactory }
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.Future
 
 object TestSessionProvider {
 }
 
 class TestSessionProvider(as: ActorSystem, config: Config) extends ConfigSessionProvider(as, config) {
-  override def connect()(implicit ec: ExecutionContext): Future[Session] = {
+  override def connect()(implicit ec: Executor): Future[Session] = {
     val e = new Exception()
     if (e.getStackTrace.exists(s => { s.toString.contains("eventsByPersistenceId") })) {
       as.log.error(e, "Stack trace for your debugging pleasure")

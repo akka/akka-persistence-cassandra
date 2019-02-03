@@ -7,7 +7,7 @@ package akka.persistence.cassandra.query
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 import java.util.UUID
-import java.util.concurrent.ThreadLocalRandom
+import java.util.concurrent.{ Executor, ThreadLocalRandom }
 
 import akka.Done
 import akka.annotation.InternalApi
@@ -20,9 +20,10 @@ import akka.stream.stage._
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RetryPolicy
 import com.datastax.driver.core.utils.Bytes
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.concurrent.{ ExecutionContext, Future, Promise }
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future, Promise }
 import scala.concurrent.duration.{ FiniteDuration, _ }
 import scala.util.{ Failure, Success, Try }
 import akka.util.OptionVal
@@ -74,18 +75,18 @@ import akka.util.OptionVal
       partitionNr:   Long,
       progress:      Long,
       toSeqNr:       Long,
-      fetchSize:     Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
+      fetchSize:     Int)(implicit ec: Executor): Future[ResultSet] = {
       val boundStatement = selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
       executeStatement(boundStatement)
     }
 
-    def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContext): Future[Long] = {
+    def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContextExecutor): Future[Long] = {
       executeStatement(selectDeletedToQuery.bind(persistenceId))
         .map(r => Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
     }
 
-    private def executeStatement(statement: Statement)(implicit ec: ExecutionContext): Future[ResultSet] =
+    private def executeStatement(statement: Statement)(implicit ec: Executor): Future[ResultSet] =
       session.executeAsync(withCustom(statement)).asScala
 
     private def withCustom(statement: Statement): Statement = {

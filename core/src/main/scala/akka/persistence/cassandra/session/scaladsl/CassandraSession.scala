@@ -10,13 +10,10 @@ import java.util.function.{ Function => JFunction }
 
 import scala.annotation.tailrec
 import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.Promise
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future, Promise }
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
@@ -60,7 +57,7 @@ final class CassandraSession(
   system:           ActorSystem,
   sessionProvider:  SessionProvider,
   settings:         CassandraSessionSettings,
-  executionContext: ExecutionContext,
+  executionContext: ExecutionContextExecutor,
   log:              LoggingAdapter,
   metricsCategory:  String,
   init:             Session => Future[Done]) extends NoSerializationVerificationNeeded {

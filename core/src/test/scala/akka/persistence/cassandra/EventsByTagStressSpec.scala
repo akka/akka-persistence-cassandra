@@ -9,7 +9,7 @@ import java.time.{ LocalDateTime, ZoneOffset }
 import akka.persistence.cassandra.query.TestActor
 import akka.persistence.cassandra.query._
 import akka.persistence.journal.Tagged
-import akka.persistence.query.{ EventEnvelope, NoOffset }
+import akka.persistence.query.NoOffset
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 

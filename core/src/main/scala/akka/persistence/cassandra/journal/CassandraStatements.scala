@@ -7,10 +7,9 @@ package akka.persistence.cassandra.journal
 import akka.Done
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.Session
-import scala.concurrent.{ ExecutionContext, Future }
 
-import akka.persistence.cassandra.FutureDone
-import akka.persistence.cassandra.indent
+import scala.concurrent.{ ExecutionContextExecutor, Future }
+import akka.persistence.cassandra.{ FutureDone, indent, ListenableFutureConverter }
 
 trait CassandraStatements {
   private[akka] def config: CassandraJournalConfig
@@ -296,29 +295,28 @@ trait CassandraStatements {
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
    */
-  private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(implicit ec: ExecutionContext): Future[Done] = {
-    import akka.persistence.cassandra.listenableFutureToFuture
+  private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(implicit ec: ExecutionContextExecutor): Future[Done] = {
 
     def create(): Future[Done] = {
 
       def tagStatements: Future[Done] =
         if (config.eventsByTagEnabled) {
           for {
-            _ <- session.executeAsync(createTagsTable)
-            _ <- session.executeAsync(createTagsProgressTable)
-            _ <- session.executeAsync(createTagScanningTable)
+            _ <- session.executeAsync(createTagsTable).asScala
+            _ <- session.executeAsync(createTagsProgressTable).asScala
+            _ <- session.executeAsync(createTagScanningTable).asScala
           } yield Done
         } else FutureDone
 
       val keyspace: Future[Done] =
-        if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).map(_ => Done)
+        if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).asScala.map(_ => Done)
         else Future.successful(Done)
 
       if (config.tablesAutoCreate) {
         for {
           _ <- keyspace
-          _ <- session.executeAsync(createTable)
-          _ <- session.executeAsync(createMetadataTable)
+          _ <- session.executeAsync(createTable).asScala
+          _ <- session.executeAsync(createMetadataTable).asScala
           done <- tagStatements
         } yield done
       } else keyspace

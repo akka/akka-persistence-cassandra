@@ -5,16 +5,14 @@
 package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ Executor, TimeUnit }
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.concurrent.duration.FiniteDuration
-
 import akka.actor.ActorSystem
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
@@ -39,22 +37,13 @@ import com.datastax.driver.core.policies.ConstantSpeculativeExecutionPolicy
  */
 class ConfigSessionProvider(system: ActorSystem, config: Config) extends SessionProvider {
 
-  def connect()(implicit ec: ExecutionContext): Future[Session] = {
+  def connect()(implicit ec: Executor): Future[Session] = {
     val clusterId = config.getString("cluster-id")
-    clusterBuilder(clusterId).flatMap { b =>
-      val cluster = b.build()
-      createQueryLogger() match {
-        case Some(logger) => cluster.register(logger)
-        case None         =>
-      }
-      cluster.connectAsync()
+    val cluster = clusterBuilder(clusterId).build()
+    if (config.getBoolean("log-queries")) {
+      cluster.register(QueryLogger.builder().build())
     }
-  }
-
-  protected def createQueryLogger(): Option[QueryLogger] = {
-    if (config.getBoolean("log-queries"))
-      Some(QueryLogger.builder().build())
-    else None
+    cluster.connectAsync().asScala
   }
 
   val fetchSize = config.getInt("max-result-size")
@@ -102,82 +91,74 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
         Some(new ConstantSpeculativeExecutionPolicy(delayMs, n))
     }
 
-  def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
-    lookupContactPoints(clusterId).map { cp =>
-      val b = Cluster.builder
-        .withClusterName(s"${system.name}-${ConfigSessionProvider.clusterIdentifier.getAndIncrement()}")
-        .addContactPointsWithPorts(cp.asJava)
-        .withPoolingOptions(poolingOptions)
-        .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
-        .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
-        .withPort(port)
+  def clusterBuilder(clusterId: String): Cluster.Builder = {
+    val cp = lookupContactPoints(clusterId)
+    val b = Cluster.builder
+      .withClusterName(s"${system.name}-${ConfigSessionProvider.clusterIdentifier.getAndIncrement()}")
+      .addContactPointsWithPorts(cp.asJava)
+      .withPoolingOptions(poolingOptions)
+      .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
+      .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
+      .withPort(port)
 
-      speculativeExecution match {
-        case Some(policy) => b.withSpeculativeExecutionPolicy(policy)
-        case None         =>
-      }
+    speculativeExecution.foreach(b.withSpeculativeExecutionPolicy)
+    protocolVersion.foreach(b.withProtocolVersion)
 
-      protocolVersion match {
-        case None    => b
-        case Some(v) => b.withProtocolVersion(v)
-      }
-
-      val username = config.getString("authentication.username")
-      if (username != "") {
-        b.withCredentials(
-          username,
-          config.getString("authentication.password"))
-      }
-
-      val localDatacenter = config.getString("local-datacenter")
-      if (localDatacenter != "") {
-        val usedHostsPerRemoteDc = config.getInt("used-hosts-per-remote-dc")
-        b.withLoadBalancingPolicy(
-          new TokenAwarePolicy(
-            DCAwareRoundRobinPolicy.builder
-              .withLocalDc(localDatacenter)
-              .withUsedHostsPerRemoteDc(usedHostsPerRemoteDc)
-              .build()))
-      }
-
-      val truststorePath = config.getString("ssl.truststore.path")
-      if (truststorePath != "") {
-        val trustStore = StorePathPasswordConfig(
-          truststorePath,
-          config.getString("ssl.truststore.password"))
-
-        val keystorePath = config.getString("ssl.keystore.path")
-        val keyStore: Option[StorePathPasswordConfig] =
-          if (keystorePath != "") {
-            val keyStore = StorePathPasswordConfig(
-              keystorePath,
-              config.getString("ssl.keystore.password"))
-            Some(keyStore)
-          } else None
-
-        val context = SSLSetup.constructContext(trustStore, keyStore)
-
-        b.withSSL(JdkSSLOptions.builder.withSSLContext(context).build())
-      }
-
-      val socketConfig = config.getConfig("socket")
-      val socketOptions = new SocketOptions()
-      socketOptions.setConnectTimeoutMillis(socketConfig.getInt("connection-timeout-millis"))
-      socketOptions.setReadTimeoutMillis(socketConfig.getInt("read-timeout-millis"))
-
-      val sendBufferSize = socketConfig.getInt("send-buffer-size")
-      val receiveBufferSize = socketConfig.getInt("receive-buffer-size")
-
-      if (sendBufferSize > 0) {
-        socketOptions.setSendBufferSize(sendBufferSize)
-      }
-      if (receiveBufferSize > 0) {
-        socketOptions.setReceiveBufferSize(receiveBufferSize)
-      }
-
-      b.withSocketOptions(socketOptions)
-      b
+    val username = config.getString("authentication.username")
+    if (username != "") {
+      b.withCredentials(
+        username,
+        config.getString("authentication.password"))
     }
+
+    val localDatacenter = config.getString("local-datacenter")
+    if (localDatacenter != "") {
+      val usedHostsPerRemoteDc = config.getInt("used-hosts-per-remote-dc")
+      b.withLoadBalancingPolicy(
+        new TokenAwarePolicy(
+          DCAwareRoundRobinPolicy.builder
+            .withLocalDc(localDatacenter)
+            .withUsedHostsPerRemoteDc(usedHostsPerRemoteDc)
+            .build()))
+    }
+
+    val truststorePath = config.getString("ssl.truststore.path")
+    if (truststorePath != "") {
+      val trustStore = StorePathPasswordConfig(
+        truststorePath,
+        config.getString("ssl.truststore.password"))
+
+      val keystorePath = config.getString("ssl.keystore.path")
+      val keyStore: Option[StorePathPasswordConfig] =
+        if (keystorePath != "") {
+          val keyStore = StorePathPasswordConfig(
+            keystorePath,
+            config.getString("ssl.keystore.password"))
+          Some(keyStore)
+        } else None
+
+      val context = SSLSetup.constructContext(trustStore, keyStore)
+
+      b.withSSL(RemoteEndpointAwareJdkSSLOptions.builder.withSSLContext(context).build())
+    }
+
+    val socketConfig = config.getConfig("socket")
+    val socketOptions = new SocketOptions()
+    socketOptions.setConnectTimeoutMillis(socketConfig.getInt("connection-timeout-millis"))
+    socketOptions.setReadTimeoutMillis(socketConfig.getInt("read-timeout-millis"))
+
+    val sendBufferSize = socketConfig.getInt("send-buffer-size")
+    val receiveBufferSize = socketConfig.getInt("receive-buffer-size")
+
+    if (sendBufferSize > 0) {
+      socketOptions.setSendBufferSize(sendBufferSize)
+    }
+    if (receiveBufferSize > 0) {
+      socketOptions.setReceiveBufferSize(receiveBufferSize)
+    }
+
+    b.withSocketOptions(socketOptions)
+    b
   }
 
   /**
@@ -187,9 +168,9 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
    *
    * @param clusterId the configured `cluster-id` to lookup
    */
-  def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
+  def lookupContactPoints(clusterId: String): immutable.Seq[InetSocketAddress] = {
     val contactPoints = getListFromConfig(config, "contact-points")
-    Future.successful(buildContactPoints(contactPoints, port))
+    buildContactPoints(contactPoints, port)
   }
 
   /**

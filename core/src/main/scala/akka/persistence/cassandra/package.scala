@@ -16,7 +16,6 @@ import akka.serialization.Serialization
 import com.datastax.driver.core.utils.UUIDs
 import com.google.common.util.concurrent.ListenableFuture
 import scala.concurrent._
-import scala.language.implicitConversions
 import scala.util.Try
 import scala.util.control.NonFatal
 import scala.collection.JavaConverters._
@@ -32,21 +31,10 @@ import akka.annotation.InternalApi
 package object cassandra {
   private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
 
-  // TODO we should use the more explicit ListenableFutureConverter asScala instead
-  implicit def listenableFutureToFuture[A](lf: ListenableFuture[A])(implicit executionContext: ExecutionContext): Future[A] = {
-    val promise = Promise[A]
-    lf.addListener(new Runnable {
-      def run() = promise.complete(Try(lf.get()))
-    }, executionContext.asInstanceOf[Executor])
-    promise.future
-  }
-
   implicit class ListenableFutureConverter[A](val lf: ListenableFuture[A]) extends AnyVal {
-    def asScala(implicit ec: ExecutionContext): Future[A] = {
+    def asScala(implicit ec: Executor): Future[A] = {
       val promise = Promise[A]
-      lf.addListener(new Runnable {
-        def run() = promise.complete(Try(lf.get()))
-      }, ec.asInstanceOf[Executor])
+      lf.addListener(() => promise.complete(Try(lf.get())), ec)
       promise.future
     }
   }
@@ -137,9 +125,11 @@ package object cassandra {
    * INTERNAL API
    */
   @InternalApi private[cassandra] def getListFromConfig(config: Config, key: String): List[String] = {
-    config.getValue(key).valueType() match {
+    val value = config.getValue(key)
+    value.valueType() match {
       case ConfigValueType.LIST   => config.getStringList(key).asScala.toList
       case ConfigValueType.STRING => config.getString(key).split(",").toList
+      case _                      => throw new IllegalArgumentException(s"Malformed config value $value at key $key")
     }
   }
 

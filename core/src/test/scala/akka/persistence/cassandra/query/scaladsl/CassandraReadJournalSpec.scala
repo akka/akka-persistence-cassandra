@@ -4,7 +4,6 @@
 
 package akka.persistence.cassandra.query.scaladsl
 
-import akka.actor.Props
 import akka.persistence.cassandra.query.TestActor
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry, CassandraSpec }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }

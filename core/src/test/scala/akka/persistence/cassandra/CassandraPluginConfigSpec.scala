@@ -15,18 +15,16 @@ import org.scalatest.WordSpecLike
 import akka.testkit.TestKit
 import akka.actor.ActorSystem
 import scala.concurrent.Await
-import scala.concurrent.Future
 import com.typesafe.config.Config
-import scala.concurrent.ExecutionContext
 import org.scalatest.BeforeAndAfterAll
 
 object CassandraPluginConfigSpec {
   class TestContactPointsProvider(system: ActorSystem, config: Config) extends ConfigSessionProvider(system, config) {
-    override def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
+    override def lookupContactPoints(clusterId: String): immutable.Seq[InetSocketAddress] = {
       if (clusterId == "cluster1")
-        Future.successful(List(new InetSocketAddress("host1", 9041)))
+        List(new InetSocketAddress("host1", 9041))
       else
-        Future.successful(List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042)))
+        List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042))
     }
 
   }
@@ -93,7 +91,7 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
       val configWithHostPortPair = ConfigFactory.parseString("""contact-points = ["127.0.0.1:19142", "127.0.0.1:29142"]""").withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHostPortPair)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
+      sessionProvider.lookupContactPoints("") must be(
         List(
           new InetSocketAddress("127.0.0.1", 19142),
           new InetSocketAddress("127.0.0.1", 29142)))
@@ -107,7 +105,7 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
         """).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHostPortPairAndPort)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
+      sessionProvider.lookupContactPoints("") must be(
         List(
           new InetSocketAddress("127.0.0.1", 19142),
           new InetSocketAddress("127.0.0.1", 29142),
@@ -118,7 +116,7 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
       lazy val configWithHosts = ConfigFactory.parseString("""contact-points = ["127.0.0.1", "127.0.0.2"]""").withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHosts)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
+      sessionProvider.lookupContactPoints("") must be(
         List(
           new InetSocketAddress("127.0.0.1", 9042),
           new InetSocketAddress("127.0.0.2", 9042)))
@@ -128,7 +126,7 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
       lazy val configWithHosts = ConfigFactory.parseString("""contact-points = "127.0.0.1,127.0.0.2"""").withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHosts)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
+      sessionProvider.lookupContactPoints("") must be(
         List(
           new InetSocketAddress("127.0.0.1", 9042),
           new InetSocketAddress("127.0.0.2", 9042)))
@@ -142,7 +140,7 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
         """).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHostsAndPort)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
+      sessionProvider.lookupContactPoints("") must be(
         List(
           new InetSocketAddress("127.0.0.1", 19042),
           new InetSocketAddress("127.0.0.2", 19042)))
@@ -156,7 +154,7 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
         """).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHostsAndPort)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      val clusterBuilder = Await.result(sessionProvider.clusterBuilder(""), 3.seconds)
+      val clusterBuilder = sessionProvider.clusterBuilder("")
       clusterBuilder.getConfiguration.getProtocolOptions.getPort mustBe 19042
     }
 
@@ -167,7 +165,7 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
       """).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithContactPointsProvider)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      Await.result(sessionProvider.lookupContactPoints("cluster1"), 3.seconds) must be(
+      sessionProvider.lookupContactPoints("cluster1") must be(
         List(new InetSocketAddress("host1", 9041)))
     }
 
@@ -178,7 +176,7 @@ class CassandraPluginConfigSpec extends TestKit(ActorSystem("CassandraPluginConf
       """).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithContactPointsProvider)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      Await.result(sessionProvider.lookupContactPoints("cluster2"), 3.seconds) must be(
+      sessionProvider.lookupContactPoints("cluster2") must be(
         List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042)))
     }
 

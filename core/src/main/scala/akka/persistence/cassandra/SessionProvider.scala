@@ -4,13 +4,15 @@
 
 package akka.persistence.cassandra
 
+import java.util.concurrent.Executor
+
 import scala.collection.immutable
 import scala.concurrent.Future
 import com.datastax.driver.core.Session
 import com.typesafe.config.Config
-import scala.concurrent.ExecutionContext
 import akka.actor.ExtendedActorSystem
 import akka.actor.ActorSystem
+
 import scala.util.Failure
 
 /**
@@ -26,7 +28,7 @@ import scala.util.Failure
  */
 trait SessionProvider {
 
-  def connect()(implicit ec: ExecutionContext): Future[Session]
+  def connect()(implicit ec: Executor): Future[Session]
 
 }
 

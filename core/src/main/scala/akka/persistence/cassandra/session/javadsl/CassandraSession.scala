@@ -13,8 +13,7 @@ import scala.annotation.varargs
 import scala.collection.JavaConverters._
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
-import scala.concurrent.ExecutionContext
-
+import scala.concurrent.ExecutionContextExecutor
 import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
@@ -47,13 +46,13 @@ final class CassandraSession(delegate: akka.persistence.cassandra.session.scalad
     system:           ActorSystem,
     sessionProvider:  SessionProvider,
     settings:         CassandraSessionSettings,
-    executionContext: ExecutionContext,
+    executionContext: ExecutionContextExecutor,
     log:              LoggingAdapter,
     metricsCategory:  String,
     init:             JFunction[Session, CompletionStage[Done]]) =
     this(new akka.persistence.cassandra.session.scaladsl.CassandraSession(
       system, sessionProvider, settings, executionContext, log, metricsCategory,
-      (session => init.apply(session).toScala)))
+      init(_).toScala))
 
   implicit private val ec = delegate.ec
 

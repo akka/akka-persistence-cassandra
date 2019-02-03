@@ -14,7 +14,6 @@ import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
 import akka.persistence.cassandra.journal._
-import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
@@ -32,12 +31,12 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
+
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
-
 import akka.serialization.SerializationExtension
 
 object CassandraReadJournal {
@@ -598,10 +597,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
     }
 
-  private[this] def internalUuidToOffset(uuid: UUID): Offset =
-    if (uuid == firstOffset) NoOffset
-    else TimeBasedUUID(uuid)
-
   private[this] def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =
     offset match {
       case TimeBasedUUID(uuid) => (uuid, true)
@@ -647,15 +642,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   override def currentPersistenceIds(): Source[String, NotUsed] =
     persistenceIds(None, "currentPersistenceIds")
 
-  private[this] def persistenceIds(
-    refreshInterval: Option[FiniteDuration],
-    name:            String): Source[String, NotUsed] =
+  private[this] def persistenceIds(refreshInterval: Option[FiniteDuration], name: String): Source[String, NotUsed] =
     createSource[String, PreparedStatement](preparedSelectDistinctPersistenceIds, (s, ps) =>
-      Source.actorPublisher[String](
-        AllPersistenceIdsPublisher.props(
-          refreshInterval,
-          AllPersistenceIdsSession(ps, s),
-          queryPluginConfig))
+      Source.fromGraph(new AllPersistenceIdsStage(refreshInterval, queryPluginConfig.fetchSize, ps, s))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
         .mapMaterializedValue(_ => NotUsed)
         .named(name))

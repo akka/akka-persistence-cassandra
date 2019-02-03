@@ -58,7 +58,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
   import CassandraJournal._
   import config._
 
-  implicit override val ec: ExecutionContext = context.dispatcher
+  implicit override val ec: ExecutionContextExecutor = context.dispatcher
 
   // readHighestSequence must be performed after pending write for a persistenceId
   // when the persistent actor is restarted.
@@ -550,7 +550,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal
   private def executeBatch(body: BatchStatement ⇒ Unit, retryPolicy: RetryPolicy): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy).asInstanceOf[BatchStatement]
     body(batch)
-    session.underlying().flatMap(_.executeAsync(batch)).map(_ => ())
+    session.underlying().flatMap(_.executeAsync(batch).asScala).map(_ => ())
   }
 
   private def minSequenceNr(partitionNr: Long): Long =
