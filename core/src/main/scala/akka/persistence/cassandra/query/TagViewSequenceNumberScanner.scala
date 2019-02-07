@@ -69,10 +69,10 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
       // Make a fake UUID for this tagPidSequenceNr that will be used to search for this tagPidSequenceNr in the unlikely
       // event that the stage can't find the event found during this scan
       doIt().map { progress =>
-        progress.mapValues {
-          case ((tagPidSequenceNr, uuid)) =>
+        progress.map {
+          case (key, ((tagPidSequenceNr, uuid))) =>
             val unixTime = UUIDs.unixTimestamp(uuid)
-            (tagPidSequenceNr - 1, UUIDs.startOf(unixTime - 1))
+            (key, (tagPidSequenceNr - 1, UUIDs.startOf(unixTime - 1)))
         }
       }
     })

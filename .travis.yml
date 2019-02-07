@@ -3,7 +3,8 @@ sudo: true
 dist: trusty
 scala:
   - "2.11.12"
-  - "2.12.6"
+  - "2.13.0-M5"
+  - "2.12.8"
 jdk:
   - oraclejdk8
 sbt_args: -d -J-XX:ReservedCodeCacheSize=128m

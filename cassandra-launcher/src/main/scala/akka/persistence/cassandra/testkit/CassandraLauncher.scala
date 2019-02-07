@@ -113,7 +113,7 @@ object CassandraLauncher {
         case jarUrl if jarUrl.getProtocol == "jar" =>
           new File(URI.create(jarUrl.getPath.takeWhile(_ != '!'))).getCanonicalPath
       }
-    }.distinct.to[immutable.Seq].filterNot(_.endsWith("assembly.jar"))
+    }.distinct.toList.filterNot(_.endsWith("assembly.jar"))
   }
 
   /**
