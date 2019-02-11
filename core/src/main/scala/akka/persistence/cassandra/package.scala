@@ -139,6 +139,9 @@ package object cassandra {
   @InternalApi private[cassandra] def getListFromConfig(config: Config, key: String): List[String] = {
     config.getValue(key).valueType() match {
       case ConfigValueType.LIST   => config.getStringList(key).asScala.toList
+      // case ConfigValueType.OBJECT is needed to handle dot notation (x.0=y x.1=z) due to Typesafe Config implementation quirk.
+      // https://github.com/lightbend/config/blob/master/config/src/main/java/com/typesafe/config/impl/DefaultTransformer.java#L83
+      case ConfigValueType.OBJECT => config.getStringList(key).asScala.toList
       case ConfigValueType.STRING => config.getString(key).split(",").toList
     }
   }
