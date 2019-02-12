@@ -5,7 +5,7 @@
 package akka.persistence.cassandra.testkit
 
 import java.io._
-import java.net.{InetSocketAddress, Socket, URI}
+import java.net.{ InetSocketAddress, Socket, URI }
 import java.nio.channels.ServerSocketChannel
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
@@ -97,21 +97,24 @@ object CassandraLauncher {
    *   CassandraLauncher.classpathForResources("logback.xml")
    * )
    * ```
+   *
+   * Files ending with `assembly.jar` are not included in the result because an
+   * assembly jar will likely contain incompatible classes that shouldn't be on the
+   * classpath of the Cassandra server, such as incompatible dependency of Guava.
+   * Assembly jars are used when running multi-node testing.
    */
   @varargs
-  def classpathForResources(resources: String*): immutable.Seq[String] =
-    resources
-      .map { resource =>
-        this.getClass.getClassLoader.getResource(resource) match {
-          case null => sys.error("Resource not found: " + resource)
-          case fileUrl if fileUrl.getProtocol == "file" =>
-            new File(URI.create(fileUrl.toString.stripSuffix(resource))).getCanonicalPath
-          case jarUrl if jarUrl.getProtocol == "jar" =>
-            new File(URI.create(jarUrl.getPath.takeWhile(_ != '!'))).getCanonicalPath
-        }
+  def classpathForResources(resources: String*): immutable.Seq[String] = {
+    resources.map { resource =>
+      this.getClass.getClassLoader.getResource(resource) match {
+        case null => sys.error("Resource not found: " + resource)
+        case fileUrl if fileUrl.getProtocol == "file" =>
+          new File(URI.create(fileUrl.toString.stripSuffix(resource))).getCanonicalPath
+        case jarUrl if jarUrl.getProtocol == "jar" =>
+          new File(URI.create(jarUrl.getPath.takeWhile(_ != '!'))).getCanonicalPath
       }
-      .distinct
-      .to[immutable.Seq]
+    }.distinct.toList.filterNot(_.endsWith("assembly.jar"))
+  }
 
   /**
    * Start Cassandra
@@ -146,11 +149,7 @@ object CassandraLauncher {
    * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
    *   is `true` and removal of the directory fails
    */
-  def start(cassandraDirectory: File,
-            configResource: String,
-            clean: Boolean,
-            port: Int,
-            classpath: immutable.Seq[String]): Unit =
+  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int, classpath: immutable.Seq[String]): Unit =
     start(cassandraDirectory, configResource, clean, port, classpath, None)
 
   /**
@@ -170,12 +169,7 @@ object CassandraLauncher {
    * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
    *   is `true` and removal of the directory fails
    */
-  def start(cassandraDirectory: File,
-            configResource: String,
-            clean: Boolean,
-            port: Int,
-            classpath: immutable.Seq[String],
-            host: Option[String]): Unit = this.synchronized {
+  def start(cassandraDirectory: File, configResource: String, clean: Boolean, port: Int, classpath: immutable.Seq[String], host: Option[String]): Unit = this.synchronized {
     if (cassandraDaemon.isEmpty) {
 
       prepareCassandraDirectory(cassandraDirectory, clean)
@@ -198,8 +192,7 @@ object CassandraLauncher {
       // Extract the cassandra bundle to the directory
       val cassandraBundleFile = new File(cassandraDirectory, "cassandra-bundle.jar")
       if (!cassandraBundleFile.exists()) {
-        val is =
-          this.getClass.getClassLoader.getResourceAsStream("akka/persistence/cassandra/launcher/cassandra-bundle.jar")
+        val is = this.getClass.getClassLoader.getResourceAsStream("akka/persistence/cassandra/launcher/cassandra-bundle.jar")
         try {
           Files.copy(is, cassandraBundleFile.toPath)
         } finally {
@@ -218,7 +211,7 @@ object CassandraLauncher {
       } catch {
         // deleteRecursive may throw AssertionError
         case e: AssertionError => throw new CleanFailedException(e.getMessage, e)
-        case NonFatal(e) => throw new CleanFailedException(e.getMessage, e)
+        case NonFatal(e)       => throw new CleanFailedException(e.getMessage, e)
       }
     }
 
@@ -226,30 +219,23 @@ object CassandraLauncher {
       require(cassandraDirectory.mkdirs(), s"Couldn't create Cassandra directory [$cassandraDirectory]")
   }
 
-  private def startForked(configFile: File,
-                          cassandraBundle: File,
-                          classpath: immutable.Seq[String],
-                          host: String,
-                          port: Int): Unit = {
+  private def startForked(configFile: File, cassandraBundle: File, classpath: immutable.Seq[String], host: String, port: Int): Unit = {
     // Calculate classpath
     val / = File.separator
     val javaBin = s"${System.getProperty("java.home")}${/}bin${/}java"
     val className = "org.apache.cassandra.service.CassandraDaemon"
     val classpathArgument = (classpath :+ cassandraBundle.getAbsolutePath).mkString(File.pathSeparator)
 
-    val builder = new ProcessBuilder(javaBin,
-                                     "-cp",
-                                     classpathArgument,
-                                     "-Dcassandra.config=file:" + configFile.getAbsoluteFile,
-                                     "-Dcassandra-foreground=true",
-                                     className)
+    val builder = new ProcessBuilder(javaBin, "-cp", classpathArgument,
+      "-Dcassandra.config=file:" + configFile.getAbsoluteFile, "-Dcassandra-foreground=true", className)
       .inheritIO()
 
     val process = builder.start()
 
     val shutdownHook = new Thread {
-      override def run(): Unit =
+      override def run(): Unit = {
         process.destroyForcibly()
+      }
     }
     Runtime.getRuntime.addShutdownHook(shutdownHook)
 
@@ -337,3 +323,4 @@ object CassandraLauncher {
   }
 
 }
+

@@ -6,10 +6,10 @@ package akka.persistence.cassandra.compaction
 
 import java.util.concurrent.TimeUnit
 
-import akka.persistence.cassandra.compaction.TimeWindowCompactionStrategy._
 import com.typesafe.config.Config
 
-class TimeWindowCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, ClassName, propertyKeys) {
+class TimeWindowCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, TimeWindowCompactionStrategy.ClassName, TimeWindowCompactionStrategy.propertyKeys) {
+  import TimeWindowCompactionStrategy._
 
   val compactionWindowUnit: TimeUnit =
     if (config.hasPath("compaction_window_unit")) TimeUnit.valueOf(config.getString("compaction_window_unit"))

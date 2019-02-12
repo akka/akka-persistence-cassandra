@@ -130,6 +130,30 @@ class CassandraPluginConfigSpec
       )
     }
 
+    "parse config with a list of contact points using dot syntax" in {
+      lazy val configWithHosts = ConfigFactory.parseString(
+        """
+          |contact-points.0 = "127.0.0.1"
+          |contact-points.1 = "127.0.0.2"
+        """.stripMargin).withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, configWithHosts)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
+        List(
+          new InetSocketAddress("127.0.0.1", 9042),
+          new InetSocketAddress("127.0.0.2", 9042)))
+    }
+
+    "parse config with comma-separated contact-points" in {
+      lazy val configWithHosts = ConfigFactory.parseString("""contact-points = "127.0.0.1,127.0.0.2"""").withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, configWithHosts)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
+        List(
+          new InetSocketAddress("127.0.0.1", 9042),
+          new InetSocketAddress("127.0.0.2", 9042)))
+    }
+
     "use the port configuration with a list of contact points without port" in {
       lazy val configWithHostsAndPort = ConfigFactory.parseString("""
           contact-points = ["127.0.0.1", "127.0.0.2"]
@@ -195,6 +219,27 @@ class CassandraPluginConfigSpec
         ConfigFactory.parseString("""
           |replication-strategy = "NetworkTopologyStrategy"
           |data-center-replication-factors = ["dc1:3", "dc2:2"]
+        """.stripMargin).withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, configWithNetworkStrategy)
+      config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
+    }
+
+    "parse config with a list of datacenters configured for NetworkTopologyStrategy using dot syntax" in {
+      lazy val configWithNetworkStrategy = ConfigFactory.parseString(
+        """
+          |replication-strategy = "NetworkTopologyStrategy"
+          |data-center-replication-factors.0 = "dc1:3"
+          |data-center-replication-factors.1 = "dc2:2"
+        """.stripMargin).withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, configWithNetworkStrategy)
+      config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
+    }
+
+    "parse config with comma-separated data-center-replication-factors" in {
+      lazy val configWithNetworkStrategy = ConfigFactory.parseString(
+        """
+          |replication-strategy = "NetworkTopologyStrategy"
+          |data-center-replication-factors = "dc1:3,dc2:2"
         """.stripMargin).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")

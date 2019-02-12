@@ -12,7 +12,7 @@ import akka.event.Logging
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
-import akka.persistence.cassandra.journal.TagWriters.{AllFlushed, FlushAllTagWriters, TagWritersSession}
+import akka.persistence.cassandra.journal.TagWriters.{ AllFlushed, FlushAllTagWriters, TagWritersSession }
 import akka.persistence.cassandra.journal._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
@@ -20,10 +20,10 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query.PersistenceQuery
 import akka.serialization.SerializationExtension
-import akka.stream.{ActorMaterializer, OverflowStrategy}
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.{ ActorMaterializer, OverflowStrategy }
+import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
-import akka.{Done, NotUsed}
+import akka.{ Done, NotUsed }
 import com.datastax.driver.core.Row
 import com.datastax.driver.core.utils.Bytes
 import scala.concurrent.Future
@@ -33,9 +33,7 @@ object EventsByTagMigration {
   def apply(system: ActorSystem): EventsByTagMigration = new EventsByTagMigration(system)
 
   // Extracts a Cassandra Row, assuming the pre 0.80 schema into a [[RawEvent]]
-  def rawPayloadOldTagSchemaExtractor(bucketSize: BucketSize,
-                                      ed: EventDeserializer,
-                                      system: ActorSystem): Extractor[RawEvent] =
+  def rawPayloadOldTagSchemaExtractor(bucketSize: BucketSize, ed: EventDeserializer, system: ActorSystem): Extractor[RawEvent] =
     new Extractor[RawEvent](ed, SerializationExtension(system)) {
       override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[RawEvent] = {
         // Get the tags from the old location i.e. tag1, tag2, tag3
@@ -60,24 +58,20 @@ object EventsByTagMigration {
 
         row.getBytes("message") match {
           case null =>
-            Future.successful(
-              RawEvent(
-                sequenceNr,
-                Serialized(
-                  row.getString("persistence_id"),
-                  row.getLong("sequence_nr"),
-                  row.getBytes("event"),
-                  tags,
-                  row.getString("event_manifest"),
-                  row.getString("ser_manifest"),
-                  row.getInt("ser_id"),
-                  row.getString("writer_uuid"),
-                  meta,
-                  timeUuid,
-                  timeBucket = TimeBucket(timeUuid, bucketSize)
-                )
-              )
-            )
+            Future.successful(RawEvent(
+              sequenceNr,
+              Serialized(
+                row.getString("persistence_id"),
+                row.getLong("sequence_nr"),
+                row.getBytes("event"),
+                tags,
+                row.getString("event_manifest"),
+                row.getString("ser_manifest"),
+                row.getInt("ser_id"),
+                row.getString("writer_uuid"),
+                meta,
+                timeUuid,
+                timeBucket = TimeBucket(timeUuid, bucketSize))))
           case bytes =>
             // This is an event from version 0.7 that used to serialise the PersistentRepr in the
             // message column rather than the event column
@@ -92,24 +86,24 @@ object EventsByTagMigration {
 }
 
 class EventsByTagMigration(system: ActorSystem)
-    extends CassandraStatements
-    with TaggedPreparedStatements
-    with CassandraTagRecovery {
+  extends CassandraStatements
+  with TaggedPreparedStatements
+  with CassandraTagRecovery {
 
   private[akka] val log = Logging.getLogger(system, getClass)
   private val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
   private implicit val materialiser = ActorMaterializer()(system)
 
   implicit val ec = system.dispatchers.lookup(system.settings.config.getString("cassandra-journal.plugin-dispatcher"))
-  override def config: CassandraJournalConfig =
-    new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
-  val session: CassandraSession = new CassandraSession(system,
-                                                       config.sessionProvider,
-                                                       config.sessionSettings,
-                                                       ec,
-                                                       log,
-                                                       "EventsByTagMigration",
-                                                       init = _ => Future.successful(Done))
+  override def config: CassandraJournalConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+  val session: CassandraSession = new CassandraSession(
+    system,
+    config.sessionProvider,
+    config.sessionSettings,
+    ec,
+    log,
+    "EventsByTagMigration",
+    init = _ => Future.successful(Done))
 
   def createTables(): Future[Done] = {
     log.info("Creating keyspace and tables")
@@ -121,10 +115,11 @@ class EventsByTagMigration(system: ActorSystem)
     } yield Done
   }
 
-  def addTagsColumn(): Future[Done] =
+  def addTagsColumn(): Future[Done] = {
     for {
       _ <- session.executeWrite(s"ALTER TABLE ${tableName} ADD tags set<text>")
     } yield Done
+  }
 
   // TODO might be nice to return a summary of what was done rather than just Done
 
@@ -145,8 +140,9 @@ class EventsByTagMigration(system: ActorSystem)
    * @param pids PersistenceIds to migrate
    * @return A Future that completes when the migration is complete
    */
-  def migratePidsToTagViews(pids: Seq[PersistenceId], periodicFlush: Int = 1000): Future[Done] =
+  def migratePidsToTagViews(pids: Seq[PersistenceId], periodicFlush: Int = 1000): Future[Done] = {
     migrateToTagViewsInternal(Source.fromIterator(() => pids.iterator), periodicFlush)
+  }
 
   /**
    * Migrates the entire `messages` table to the the new `tag_views` table.
@@ -160,19 +156,21 @@ class EventsByTagMigration(system: ActorSystem)
    *
    * @return A Future that completes when the migration is complete.
    */
-  def migrateToTagViews(periodicFlush: Int = 1000, filter: String => Boolean = _ => true): Future[Done] =
-    migrateToTagViewsInternal(queries.currentPersistenceIds().filter(filter), periodicFlush)
+  def migrateToTagViews(periodicFlush: Int = 1000, filter: String => Boolean = _ => true): Future[Done] = {
+    migrateToTagViewsInternal(
+      queries.currentPersistenceIds().filter(filter),
+      periodicFlush)
+  }
 
   private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed], periodicFlush: Int): Future[Done] = {
     log.info("Beginning migration of data to tag_views table")
     val tagWriterSession = TagWritersSession(
-      preparedWriteToTagViewWithoutMeta,
-      preparedWriteToTagViewWithMeta,
+      () => preparedWriteToTagViewWithoutMeta,
+      () => preparedWriteToTagViewWithMeta,
       session.executeWrite,
       session.selectResultSet,
-      preparedWriteToTagProgress,
-      preparedWriteTagScanning
-    )
+      () => preparedWriteToTagProgress,
+      () => preparedWriteTagScanning)
     val tagWriters = system.actorOf(TagWriters.props(config.tagWriterSettings, tagWriterSession))
 
     val eventDeserializer: CassandraJournal.EventDeserializer = new CassandraJournal.EventDeserializer(system)
@@ -183,8 +181,7 @@ class EventsByTagMigration(system: ActorSystem)
       .map { pids =>
         log.info("Migrating the following persistence ids {}", pids)
         pids
-      }
-      .flatMapConcat(pid => {
+      }.flatMapConcat(pid => {
         val prereqs: Future[(Map[Tag, TagProgress], SequenceNr)] = {
           val startingSeqFut = tagScanningStartingSequenceNr(pid)
           for {
@@ -199,23 +196,16 @@ class EventsByTagMigration(system: ActorSystem)
         Source.fromFutureSource {
           prereqs.map {
             case (tp, startingSeq) => {
-              log.info("Starting migration for pid: {} based on progress: {} starting at sequence nr: {}",
-                       pid,
-                       tp,
-                       startingSeq)
-              queries
-                .eventsByPersistenceId[RawEvent](
-                  pid,
-                  startingSeq,
-                  Long.MaxValue,
-                  Long.MaxValue,
-                  config.replayMaxResultSize,
-                  None,
-                  s"migrateToTag-$pid",
-                  extractor =
-                    EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system)
-                )
-                .map(sendMissingTagWriteRaw(tp, tagWriters))
+              log.info("Starting migration for pid: {} based on progress: {} starting at sequence nr: {}", pid, tp, startingSeq)
+              queries.eventsByPersistenceId[RawEvent](
+                pid,
+                startingSeq,
+                Long.MaxValue,
+                Long.MaxValue,
+                config.replayMaxResultSize,
+                None,
+                s"migrateToTag-$pid",
+                extractor = EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system)).map(sendMissingTagWriteRaw(tp, tagWriters))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
                 .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters).mapTo[AllFlushed.type])
             }

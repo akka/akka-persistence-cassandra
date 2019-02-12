@@ -8,13 +8,13 @@ import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.Config
 
-import DateTieredCompactionStrategy._
-
 /*
  * Based upon https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/DateTieredCompactionStrategy.java
  */
 @deprecated("DateTieredCompaction is deprecated in Cassandra. Use TimeWindowCompaction.", "0.56")
-class DateTieredCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, ClassName, propertyKeys) {
+class DateTieredCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, DateTieredCompactionStrategy.ClassName, DateTieredCompactionStrategy.propertyKeys) {
+  import DateTieredCompactionStrategy._
+
   val baseTimeSeconds: Long = if (config.hasPath("base_time_seconds")) config.getLong("base_time_seconds") else 3600
   val maxSSTableAgeDays: Int =
     if (config.hasPath("max_sstable_age_days")) config.getInt("max_sstable_age_days") else 365

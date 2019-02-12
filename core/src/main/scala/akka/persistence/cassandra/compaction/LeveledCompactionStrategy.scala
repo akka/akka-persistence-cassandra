@@ -6,12 +6,10 @@ package akka.persistence.cassandra.compaction
 
 import com.typesafe.config.Config
 
-import LeveledCompactionStrategy._
-
 /*
  * https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/LeveledCompactionStrategy.java
  */
-class LeveledCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, ClassName, propertyKeys) {
+class LeveledCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, LeveledCompactionStrategy.ClassName, LeveledCompactionStrategy.propertyKeys) {
   val ssTableSizeInMB: Long = if (config.hasPath("sstable_size_in_mb")) config.getLong("sstable_size_in_mb") else 160
 
   require(ssTableSizeInMB > 0, s"sstable_size_in_mb must be larger than 0, but was $ssTableSizeInMB")

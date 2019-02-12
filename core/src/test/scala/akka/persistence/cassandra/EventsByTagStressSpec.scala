@@ -63,7 +63,7 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
       }
 
       system.log.info("Reading messages")
-      var latestValues = Map.empty[(Int, String), Int].withDefault(_ => -1)
+      var latestValues: Map[(Int, String), Int] = Map.empty.withDefault(_ => -1)
       (0 until messages) foreach { i =>
         (0 until writers) foreach { writer =>
           eventsByTagQueries.foreach {

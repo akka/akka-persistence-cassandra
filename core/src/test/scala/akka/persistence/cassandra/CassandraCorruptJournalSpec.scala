@@ -4,13 +4,59 @@
 
 package akka.persistence.cassandra
 
-import akka.actor.{ActorRef, PoisonPill}
-import akka.persistence.cassandra.query.{DirectWriting, TestActor}
-import akka.testkit.EventFilter
+import akka.actor.{ ActorLogging, ActorRef, PoisonPill, Props }
+import akka.persistence.{ PersistentActor, RecoveryCompleted }
+import akka.persistence.cassandra.CassandraCorruptJournalSpec.{ FullEventLog, GetEventLog, Ping, Pong }
+import akka.testkit.{ EventFilter, TestProbe }
 
-class CassandraCorruptJournalSpec extends CassandraSpec("""
+object CassandraCorruptJournalSpec {
+
+  case object GetEventLog
+
+  case object Ping
+
+  case object Pong
+
+  class FullEventLog(val persistenceId: String, override val journalPluginId: String) extends PersistentActor with ActorLogging {
+
+    var events: Vector[String] = Vector.empty
+
+    override def receiveRecover: Receive = {
+      case s: String =>
+        log.info("Received event during recovery: {}", s)
+        events = events :+ s
+      case RecoveryCompleted =>
+        log.info("Recovery complete: {}", events)
+
+    }
+
+    override def postStop(): Unit = {
+      log.info("Stopping with events: {}", events)
+    }
+
+    override def receiveCommand: Receive = {
+      case s: String =>
+        persist(s) { e =>
+          events = events :+ s
+          sender() ! e + "-done"
+        }
+      case GetEventLog =>
+        sender() ! events
+      case Ping =>
+        sender() ! Pong
+    }
+  }
+
+  object FullEventLog {
+    def props(persistenceId: String, journalId: String): Props = Props(new FullEventLog(persistenceId, journalId))
+  }
+
+}
+
+class CassandraCorruptJournalSpec extends CassandraSpec(
+  """
     akka {
-      loglevel = DEBUG
+      loglevel = debug
       loggers = ["akka.testkit.TestEventListener"]
     }
 
@@ -23,6 +69,7 @@ class CassandraCorruptJournalSpec extends CassandraSpec("""
    # `warn` : log warning but emit events untouched
    # `off` : disable this feature completely
       mode = repair-by-discard-old
+      debug = yes
     }
 
     cassandra-journal-fail = ${cassandra-journal}
@@ -34,51 +81,60 @@ class CassandraCorruptJournalSpec extends CassandraSpec("""
     cassandra-journal-warn {
       replay-filter.mode = warn
     }
-  """.stripMargin) with DirectWriting {
+  """.stripMargin) {
 
   def setup(persistenceId: String, journalId: String = "cassandra-journal"): ActorRef = {
-    val ref = system.actorOf(TestActor.props(persistenceId, journalId))
+    val ref = system.actorOf(FullEventLog.props(persistenceId, journalId))
     ref
+  }
+
+  def runConcurrentPersistentActors(journal: String): String = {
+    val probe = TestProbe()
+    val pid = nextPid
+    val p1a = setup(pid, journalId = journal)
+    probe.watch(p1a)
+    val p1b = setup(pid)
+    probe.watch(p1b)
+
+    // Check PAs have finished recovery
+    p1a ! Ping
+    expectMsg(Pong)
+    p1b ! Ping
+    expectMsg(Pong)
+
+    p1a ! "p1a-1" // seq 1
+    expectMsg("p1a-1-done")
+
+    p1b ! "p1b-1" // seq 1
+    expectMsg("p1b-1-done")
+
+    p1a ! "p1a-2" // seq 2
+    expectMsg("p1a-2-done")
+
+    p1a ! PoisonPill
+    probe.expectTerminated(p1a)
+    p1b ! PoisonPill
+    probe.expectTerminated(p1b)
+    pid
   }
 
   "Cassandra recovery" must {
     "work with replay-filter = repair-by-discard-old" in {
-      val pid = nextPid
-      val p1a = setup(pid)
-      val p1b = setup(pid)
 
-      p1a ! "p1a-1"
-      expectMsg("p1a-1-done")
-      p1a ! "p1a-2"
-      expectMsg("p1a-2-done")
-      p1b ! "p1b-1"
-      expectMsg("p1b-1-done")
+      val pid = runConcurrentPersistentActors("cassandra-journal")
 
-      p1a ! PoisonPill
-      p1b ! PoisonPill
-
-      // Two logs. One for the new writer sequenceNr 1, another for the old writer sequenceNr 2
-      EventFilter.warning(pattern = "Invalid replayed event", occurrences = 2) intercept {
+      EventFilter.warning(pattern = "Invalid replayed event", occurrences = 2).intercept {
         val p1c = setup(pid)
         p1c ! "p1c-1"
         expectMsg("p1c-1-done")
+        p1c ! GetEventLog
+        expectMsg(Vector("p1b-1", "p1c-1"))
       }
     }
 
     "work with replay-filter = fail" in {
-      val pid = nextPid
-      val p1a = setup(pid, journalId = "cassandra-journal-fail")
-      val p1b = setup(pid, journalId = "cassandra-journal-fail")
 
-      p1a ! "p1a-1"
-      expectMsg("p1a-1-done")
-      p1a ! "p1a-2"
-      expectMsg("p1a-2-done")
-      p1b ! "p1b-1"
-      expectMsg("p1b-1-done")
-
-      p1a ! PoisonPill
-      p1b ! PoisonPill
+      val pid = runConcurrentPersistentActors("cassandra-journal-fail")
 
       EventFilter[IllegalStateException](pattern = "Invalid replayed event", occurrences = 1) intercept {
         setup(pid, journalId = "cassandra-journal-fail")
@@ -86,24 +142,14 @@ class CassandraCorruptJournalSpec extends CassandraSpec("""
     }
 
     "work with replay-filter = warn" in {
-      val pid = nextPid
-      val p1a = setup(pid, journalId = "cassandra-journal-warn")
-      val p1b = setup(pid, journalId = "cassandra-journal-warn")
 
-      p1a ! "p1a-1"
-      expectMsg("p1a-1-done")
-      p1a ! "p1a-2"
-      expectMsg("p1a-2-done")
-      p1b ! "p1b-1"
-      expectMsg("p1b-1-done")
-
-      p1a ! PoisonPill
-      p1b ! PoisonPill
-
+      val pid = runConcurrentPersistentActors("cassandra-journal-warn")
       EventFilter.warning(pattern = "Invalid replayed event", occurrences = 2) intercept {
-        val p1c = setup(pid)
+        val p1c = setup(pid, journalId = "cassandra-journal-warn")
         p1c ! "p1c-1"
         expectMsg("p1c-1-done")
+        p1c ! GetEventLog
+        expectMsg(Vector("p1a-1", "p1b-1", "p1a-2", "p1c-1"))
       }
     }
   }

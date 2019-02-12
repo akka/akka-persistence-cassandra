@@ -1,10 +1,17 @@
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
-val AkkaVersion = "2.5.17"
+val AkkaVersion = "2.5.19"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.6.0",
+  // Specifying guava dependency because older transitive dependency has security vulnerability
+  "com.google.guava"        % "guava"                               % "27.0.1-jre",
+  // Specifying jnr-posix version for licensing reasons: cassandra-driver-core
+  // depends on version 3.0.44, but for this version the LICENSE.txt and the
+  // pom.xml have conflicting licensing information. 3.0.45 fixes this and
+  // makes it clear this library is available under (among others) the EPL
+  "com.github.jnr"          % "jnr-posix"                           % "3.0.45",
   "com.typesafe.akka"      %% "akka-persistence"                    % AkkaVersion,
   "com.typesafe.akka"      %% "akka-cluster-tools"                  % AkkaVersion,
   "com.typesafe.akka"      %% "akka-persistence-query"              % AkkaVersion,
@@ -23,7 +30,7 @@ def common: Seq[Setting[_]] = Seq(
   organizationName := "Lightbend Inc.",
   startYear := Some(2016),
   licenses := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
-  crossScalaVersions := Seq("2.11.12", "2.12.7"),
+  crossScalaVersions := Seq("2.11.12", "2.13.0-M5", "2.12.8"),
   scalaVersion := crossScalaVersions.value.last,
   crossVersion := CrossVersion.binary,
 
@@ -33,7 +40,6 @@ def common: Seq[Setting[_]] = Seq(
     "-unchecked",
     "-deprecation",
     "-Xlint",
-    "-Yno-adapted-args",
     "-Ywarn-dead-code",
     "-Xfuture"
   ),
@@ -104,7 +110,7 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     name := "akka-persistence-cassandra-bundle",
     crossPaths := false,
     autoScalaLibrary := false,
-    libraryDependencies += "org.apache.cassandra" % "cassandra-all" % "3.11.2" exclude("commons-logging", "commons-logging"),
+    libraryDependencies += "org.apache.cassandra" % "cassandra-all" % "3.11.3" exclude("commons-logging", "commons-logging"),
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assemblyJarName in assembly := "cassandra-bundle.jar"
   )
