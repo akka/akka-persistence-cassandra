@@ -48,18 +48,17 @@ class UUIDComparator extends Comparator[UUID] {
       diff
   }
 
-  private def compareUInts(i1: Int, i2: Int): Int = {
+  private def compareUInts(i1: Int, i2: Int): Int =
     /* bit messier due to java's insistence on signed values: if both
-         * have same sign, normal comparison (by subtraction) works fine;
-         * but if signs don't agree need to resolve differently
-         */
+     * have same sign, normal comparison (by subtraction) works fine;
+     * but if signs don't agree need to resolve differently
+     */
     if (i1 < 0) {
       if (i2 < 0) (i1 - i2) else 1
     } else {
       if (i2 < 0) -1 else (i1 - i2)
     }
 
-  }
 }
 
 object UUIDComparator {

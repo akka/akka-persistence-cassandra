@@ -4,8 +4,8 @@
 
 package akka.persistence.cassandra
 
-import akka.actor.{ ActorLogging, ActorRef, Props }
-import akka.persistence.{ PersistentActor, RecoveryCompleted, SaveSnapshotSuccess }
+import akka.actor.{ActorLogging, ActorRef, Props}
+import akka.persistence.{PersistentActor, RecoveryCompleted, SaveSnapshotSuccess}
 import akka.persistence.journal.Tagged
 
 object TestTaggingActor {
@@ -18,7 +18,9 @@ object TestTaggingActor {
     Props(new TestTaggingActor(pId, tags, probe))
 }
 
-class TestTaggingActor(val persistenceId: String, tags: Set[String], probe: Option[ActorRef]) extends PersistentActor with ActorLogging {
+class TestTaggingActor(val persistenceId: String, tags: Set[String], probe: Option[ActorRef])
+    extends PersistentActor
+    with ActorLogging {
   import TestTaggingActor._
 
   def receiveRecover: Receive = {

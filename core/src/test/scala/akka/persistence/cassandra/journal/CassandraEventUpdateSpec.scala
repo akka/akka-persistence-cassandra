@@ -13,14 +13,13 @@ import akka.event.Logging
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal.Serialized
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, TestTaggingActor, _ }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec, TestTaggingActor, _}
 import akka.serialization.SerializationExtension
 import com.typesafe.config.ConfigFactory
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
 
 object CassandraEventUpdateSpec {
-  val config = ConfigFactory.parseString(
-    """
+  val config = ConfigFactory.parseString("""
         akka.loglevel = INFO
     """).withFallback(CassandraLifecycle.config)
 }
@@ -33,16 +32,16 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
   val updater = new CassandraEventUpdate {
 
     override private[akka] val log = s.log
-    override private[akka] def config: CassandraJournalConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+    override private[akka] def config: CassandraJournalConfig =
+      new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
     override private[akka] implicit val ec: ExecutionContext = system.dispatcher
-    override private[akka] val session: CassandraSession = new CassandraSession(
-      system,
-      config.sessionProvider,
-      config.sessionSettings,
-      ec,
-      log,
-      systemName,
-      init = _ => Future.successful(Done))
+    override private[akka] val session: CassandraSession = new CassandraSession(system,
+                                                                                config.sessionProvider,
+                                                                                config.sessionSettings,
+                                                                                ec,
+                                                                                log,
+                                                                                systemName,
+                                                                                init = _ => Future.successful(Done))
   }
 
   "CassandraEventUpdate" must {
@@ -54,9 +53,7 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
       val eventsBefore = events(pid)
       eventsBefore.map(_.pr.payload) shouldEqual Seq("e-1")
       val originalEvent = eventsBefore.head
-      val modifiedEvent = serialize(
-        originalEvent.pr.withPayload("secrets"),
-        originalEvent.offset, Set("ignored"))
+      val modifiedEvent = serialize(originalEvent.pr.withPayload("secrets"), originalEvent.offset, Set("ignored"))
 
       updater.updateEvent(modifiedEvent).futureValue shouldEqual Done
 
@@ -69,8 +66,7 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
       b ! "e-1"
       expectMsgType[TestTaggingActor.Ack.type]
       val eventsBefore = events(pid).head
-      val modifiedEvent = serialize(
-        eventsBefore.pr.withPayload("hidden"), eventsBefore.offset, Set("ignored"))
+      val modifiedEvent = serialize(eventsBefore.pr.withPayload("hidden"), eventsBefore.offset, Set("ignored"))
 
       expectEventsForTag(tag = "red", "e-1")
       expectEventsForTag(tag = "blue", "e-1")

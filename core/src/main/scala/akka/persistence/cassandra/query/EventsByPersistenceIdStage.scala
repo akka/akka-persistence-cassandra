@@ -4,7 +4,7 @@
 
 package akka.persistence.cassandra.query
 
-import java.lang.{ Long => JLong }
+import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
@@ -13,18 +13,18 @@ import akka.Done
 import akka.annotation.InternalApi
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.ListenableFutureConverter
-import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, Serialized }
+import akka.persistence.cassandra.journal.CassandraJournal.{EventDeserializer, Serialized}
 import akka.serialization.Serialization
-import akka.stream.{ Attributes, Outlet, SourceShape }
+import akka.stream.{Attributes, Outlet, SourceShape}
 import akka.stream.stage._
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RetryPolicy
 import com.datastax.driver.core.utils.Bytes
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.concurrent.{ ExecutionContext, Future, Promise }
-import scala.concurrent.duration.{ FiniteDuration, _ }
-import scala.util.{ Failure, Success, Try }
+import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.duration.{FiniteDuration, _}
+import scala.util.{Failure, Success, Try}
 import akka.util.OptionVal
 
 /**
@@ -42,6 +42,7 @@ import akka.util.OptionVal
 
   // materialized value
   trait Control {
+
     /**
      * Trigger a request to fetch more eventEvens.
      */
@@ -62,28 +63,26 @@ import akka.util.OptionVal
     def done: Future[Done]
   }
 
-  final case class EventsByPersistenceIdSession(
-    selectEventsByPersistenceIdQuery: PreparedStatement,
-    selectDeletedToQuery:             PreparedStatement,
-    session:                          Session,
-    customConsistencyLevel:           Option[ConsistencyLevel],
-    customRetryPolicy:                Option[RetryPolicy]) {
+  final case class EventsByPersistenceIdSession(selectEventsByPersistenceIdQuery: PreparedStatement,
+                                                selectDeletedToQuery: PreparedStatement,
+                                                session: Session,
+                                                customConsistencyLevel: Option[ConsistencyLevel],
+                                                customRetryPolicy: Option[RetryPolicy]) {
 
-    def selectEventsByPersistenceId(
-      persistenceId: String,
-      partitionNr:   Long,
-      progress:      Long,
-      toSeqNr:       Long,
-      fetchSize:     Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
-      val boundStatement = selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
+    def selectEventsByPersistenceId(persistenceId: String,
+                                    partitionNr: Long,
+                                    progress: Long,
+                                    toSeqNr: Long,
+                                    fetchSize: Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
+      val boundStatement =
+        selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
       executeStatement(boundStatement)
     }
 
-    def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContext): Future[Long] = {
+    def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContext): Future[Long] =
       executeStatement(selectDeletedToQuery.bind(persistenceId))
         .map(r => Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
-    }
 
     private def executeStatement(statement: Statement)(implicit ec: ExecutionContext): Future[ResultSet] =
       session.executeAsync(withCustom(statement)).asScala
@@ -102,8 +101,10 @@ import akka.util.OptionVal
 
   private sealed trait QueryState
   private case object QueryIdle extends QueryState
-  private final case class QueryInProgress(switchPartition: Boolean, fetchMore: Boolean, startTime: Long) extends QueryState
-  private final case class QueryResult(resultSet: ResultSet, empty: Boolean, switchPartition: Boolean) extends QueryState {
+  private final case class QueryInProgress(switchPartition: Boolean, fetchMore: Boolean, startTime: Long)
+      extends QueryState
+  private final case class QueryResult(resultSet: ResultSet, empty: Boolean, switchPartition: Boolean)
+      extends QueryState {
     override def toString: String = s"QueryResult($switchPartition)"
   }
 
@@ -127,12 +128,11 @@ import akka.util.OptionVal
 
     def taggedPersistentRepr(ed: EventDeserializer, s: Serialization): Extractor[TaggedPersistentRepr] =
       new Extractor[TaggedPersistentRepr](ed, s) {
-        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[TaggedPersistentRepr] = {
+        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[TaggedPersistentRepr] =
           extractPersistentRepr(row, ed, s, async).map { persistentRepr =>
             val tags = extractTags(row, ed)
             TaggedPersistentRepr(persistentRepr, tags, row.getUUID("timestamp"))
           }
-        }
       }
 
     def optionalTaggedPersistentRepr(ed: EventDeserializer, s: Serialization): Extractor[OptionalTagged] =
@@ -159,7 +159,9 @@ import akka.util.OptionVal
           Future.successful(SeqNrValue(row.getLong("sequence_nr")))
       }
 
-    private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization, async: Boolean)(implicit ec: ExecutionContext): Future[PersistentRepr] = {
+    private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization, async: Boolean)(
+        implicit ec: ExecutionContext
+    ): Future[PersistentRepr] =
       row.getBytes("message") match {
         case null =>
           ed.deserializeEvent(row, async).map { payload =>
@@ -170,13 +172,13 @@ import akka.util.OptionVal
               manifest = row.getString("event_manifest"), // manifest for event adapters
               deleted = false,
               sender = null,
-              writerUuid = row.getString("writer_uuid"))
+              writerUuid = row.getString("writer_uuid")
+            )
           }
         case b =>
           // for backwards compatibility
           Future.successful(persistentFromByteBuffer(s, b))
       }
-    }
 
     private def extractTags(row: Row, ed: EventDeserializer): Set[String] = {
       // TODO can be removed in 1.0, this is only used during migration from the old version on initial recovery
@@ -198,21 +200,26 @@ import akka.util.OptionVal
       oldTags.union(newTags)
     }
 
-    def persistentFromByteBuffer(serialization: Serialization, b: ByteBuffer): PersistentRepr = {
+    def persistentFromByteBuffer(serialization: Serialization, b: ByteBuffer): PersistentRepr =
       // we know that such old rows can't have meta data because that feature was added later
       serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
-    }
   }
 }
 
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class EventsByPersistenceIdStage(persistenceId: String, fromSeqNr: Long, toSeqNr: Long, max: Long,
-                                                            fetchSize: Int, refreshInterval: Option[FiniteDuration],
-                                                            session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
-                                                            config:  CassandraReadJournalConfig, fastForwardEnabled: Boolean = false)
-  extends GraphStageWithMaterializedValue[SourceShape[Row], EventsByPersistenceIdStage.Control] {
+@InternalApi private[akka] class EventsByPersistenceIdStage(
+    persistenceId: String,
+    fromSeqNr: Long,
+    toSeqNr: Long,
+    max: Long,
+    fetchSize: Int,
+    refreshInterval: Option[FiniteDuration],
+    session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
+    config: CassandraReadJournalConfig,
+    fastForwardEnabled: Boolean = false
+) extends GraphStageWithMaterializedValue[SourceShape[Row], EventsByPersistenceIdStage.Control] {
 
   import EventsByPersistenceIdStage._
 
@@ -248,9 +255,10 @@ import akka.util.OptionVal
           }
           val empty = rs.isExhausted() && !q.fetchMore
           if (log.isDebugEnabled)
-            log.debug("EventsByPersistenceId [{}] Query took [{}] ms {}", persistenceId,
-              (System.nanoTime() - q.startTime).nanos.toMillis,
-              if (empty) "(empty)" else "")
+            log.debug("EventsByPersistenceId [{}] Query took [{}] ms {}",
+                      persistenceId,
+                      (System.nanoTime() - q.startTime).nanos.toMillis,
+                      if (empty) "(empty)" else "")
           queryState = QueryResult(rs, empty, q.switchPartition)
           tryPushOne()
         case Failure(e) => onFailure(e)
@@ -276,7 +284,9 @@ import akka.util.OptionVal
         if (!fastForwardEnabled)
           throw new IllegalStateException("Fast forward has been disabled")
 
-        log.debug("Fast forward request being processed: Next Sequence Nr: {} Current Sequence Nr: {}", nextSeqNr, expectedNextSeqNr)
+        log.debug("Fast forward request being processed: Next Sequence Nr: {} Current Sequence Nr: {}",
+                  nextSeqNr,
+                  expectedNextSeqNr)
         if (nextSeqNr > expectedNextSeqNr) {
           queryState match {
             case QueryIdle => internalFastForward(nextSeqNr)
@@ -288,9 +298,10 @@ import akka.util.OptionVal
       }
 
       private def internalFastForward(nextSeqNr: Long): Unit = {
-        log.debug(
-          "EventsByPersistenceId [{}] External fast-forward to seqNr [{}] from current [{}]",
-          persistenceId, nextSeqNr, expectedNextSeqNr)
+        log.debug("EventsByPersistenceId [{}] External fast-forward to seqNr [{}] from current [{}]",
+                  persistenceId,
+                  nextSeqNr,
+                  expectedNextSeqNr)
         expectedNextSeqNr = nextSeqNr
         val nextPartition = partitionNr(nextSeqNr)
         if (nextPartition > partition)
@@ -340,38 +351,40 @@ import akka.util.OptionVal
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
-        case Continue            => continue()
+        case Continue => continue()
         case LookForMissingSeqNr => lookForMissingSeqNr()
       }
 
-      def continue(): Unit = {
+      def continue(): Unit =
         // regular continue-by-tick disabled when looking for missing seqNr
         if (lookingForMissingSeqNr.isEmpty) {
           queryState match {
-            case QueryIdle          => query(switchPartition = false)
-            case _: QueryResult     => tryPushOne()
+            case QueryIdle => query(switchPartition = false)
+            case _: QueryResult => tryPushOne()
             case _: QueryInProgress => // result will come
           }
         }
-      }
 
-      def lookForMissingSeqNr(): Unit = {
+      def lookForMissingSeqNr(): Unit =
         lookingForMissingSeqNr match {
           case Some(m) if m.deadline.isOverdue() =>
             import akka.util.PrettyDuration.PrettyPrintableDuration
-            onFailure(new IllegalStateException(s"Sequence number [$expectedNextSeqNr] still missing after " +
-              s"[${config.eventsByPersistenceIdEventTimeout.pretty}], " +
-              s"saw unexpected seqNr [${m.sawSeqNr}] for persistenceId [$persistenceId]."))
+            onFailure(
+              new IllegalStateException(
+                s"Sequence number [$expectedNextSeqNr] still missing after " +
+                s"[${config.eventsByPersistenceIdEventTimeout.pretty}], " +
+                s"saw unexpected seqNr [${m.sawSeqNr}] for persistenceId [$persistenceId]."
+              )
+            )
           case Some(_) =>
             queryState = QueryIdle
             query(false)
           case None => throw new IllegalStateException("Should not be able to get here")
         }
-      }
 
       def query(switchPartition: Boolean): Unit = {
         queryState match {
-          case QueryIdle          => // good
+          case QueryIdle => // good
           case _: QueryInProgress => throw new IllegalStateException("Query already in progress")
           case QueryResult(rs, _, _) =>
             if (!rs.isExhausted) throw new IllegalStateException("Previous query was not exhausted")
@@ -381,23 +394,25 @@ import akka.util.OptionVal
 
         val endNr = lookingForMissingSeqNr match {
           case Some(_) =>
-            log.debug(
-              "EventsByPersistenceId [{}] Query for missing seqNr [{}] in partition [{}]",
-              persistenceId, expectedNextSeqNr, pnr)
+            log.debug("EventsByPersistenceId [{}] Query for missing seqNr [{}] in partition [{}]",
+                      persistenceId,
+                      expectedNextSeqNr,
+                      pnr)
             expectedNextSeqNr
           case _ =>
-            log.debug(
-              "EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
-              persistenceId, expectedNextSeqNr, pnr)
+            log.debug("EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
+                      persistenceId,
+                      expectedNextSeqNr,
+                      pnr)
             toSeqNr
         }
-        session.selectEventsByPersistenceId(persistenceId, pnr, expectedNextSeqNr, endNr, fetchSize)
+        session
+          .selectEventsByPersistenceId(persistenceId, pnr, expectedNextSeqNr, endNr, fetchSize)
           .onComplete(newResultSetCb.invoke)
       }
 
-      override def onPull(): Unit = {
+      override def onPull(): Unit =
         tryPushOne()
-      }
 
       @tailrec private def tryPushOne(): Unit = {
 
@@ -434,9 +449,9 @@ import akka.util.OptionVal
             else if (rs.isExhausted) {
               (lookingForMissingSeqNr, pendingFastForward) match {
                 case (Some(MissingSeqNr(_, sawSeqNr)), Some(fastForwardTo)) if fastForwardTo >= sawSeqNr =>
-                  log.debug(
-                    "Aborting missing sequence search: {} nr due to fast forward to next sequence nr: {}",
-                    lookingForMissingSeqNr, fastForwardTo)
+                  log.debug("Aborting missing sequence search: {} nr due to fast forward to next sequence nr: {}",
+                            lookingForMissingSeqNr,
+                            fastForwardTo)
                   internalFastForward(fastForwardTo)
                   pendingFastForward = None
                   lookingForMissingSeqNr = None
@@ -461,14 +476,20 @@ import akka.util.OptionVal
               } else if (pendingFastForward.isEmpty && (config.gapFreeSequenceNumbers && sequenceNr > expectedNextSeqNr)) {
                 // we will probably now come in here which isn't what we want
                 lookingForMissingSeqNr match {
-                  case Some(_) => throw new IllegalStateException(
-                    s"Should not be able to get here when already looking for missing seqNr [$expectedNextSeqNr] for entity [$persistenceId]")
+                  case Some(_) =>
+                    throw new IllegalStateException(
+                      s"Should not be able to get here when already looking for missing seqNr [$expectedNextSeqNr] for entity [$persistenceId]"
+                    )
                   case None =>
                     log.debug(
                       "EventsByPersistenceId [{}] Missing seqNr [{}], found [{}], looking for event eventually appear",
-                      persistenceId, expectedNextSeqNr, sequenceNr)
+                      persistenceId,
+                      expectedNextSeqNr,
+                      sequenceNr
+                    )
                     lookingForMissingSeqNr = Some(
-                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, sequenceNr))
+                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, sequenceNr)
+                    )
                     // Forget about any other rows in this result set until we find
                     // the missing sequence nrs
                     queryState = QueryIdle
@@ -484,9 +505,7 @@ import akka.util.OptionVal
                   completeStage()
                 else if (lookingForMissingSeqNr.isDefined) {
                   // we found that missing seqNr
-                  log.debug(
-                    "EventsByPersistenceId [{}] Found missing seqNr [{}]",
-                    persistenceId, sequenceNr)
+                  log.debug("EventsByPersistenceId [{}] Found missing seqNr [{}]", persistenceId, sequenceNr)
                   lookingForMissingSeqNr = None
                   queryState = QueryIdle
                   if (refreshInterval.isEmpty) query(false)
@@ -512,7 +531,8 @@ import akka.util.OptionVal
 
       // external call via Control materialized value
       override def poll(knownSeqNr: Long): Unit =
-        try pollCb.invoke(knownSeqNr) catch {
+        try pollCb.invoke(knownSeqNr)
+        catch {
           case _: IllegalStateException =>
           // not initialized, see Akka issue #20503, but that is ok since this
           // is just best effort
@@ -524,7 +544,8 @@ import akka.util.OptionVal
         if (!fastForwardEnabled)
           throw new IllegalStateException("Fast forward only has been disabled")
 
-        try fastForwardCb.invoke(nextSeqNr) catch {
+        try fastForwardCb.invoke(nextSeqNr)
+        catch {
           case e: IllegalStateException =>
           // not initialized, see Akka issue #20503, but that is ok since this
           // is just best effort

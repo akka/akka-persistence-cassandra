@@ -39,13 +39,12 @@ class SizeTieredCompactionStrategy(config: Config) extends BaseCompactionStrateg
 object SizeTieredCompactionStrategy extends CassandraCompactionStrategyConfig[SizeTieredCompactionStrategy] {
   override val ClassName: String = "SizeTieredCompactionStrategy"
 
-  override def propertyKeys: List[String] = (
-    BaseCompactionStrategy.propertyKeys union List(
-      "bucket_high",
-      "bucket_low",
-      "max_threshold",
-      "min_threshold",
-      "min_sstable_size")).sorted
+  override def propertyKeys: List[String] =
+    (BaseCompactionStrategy.propertyKeys union List("bucket_high",
+                                                    "bucket_low",
+                                                    "max_threshold",
+                                                    "min_threshold",
+                                                    "min_sstable_size")).sorted
 
   override def fromConfig(config: Config): SizeTieredCompactionStrategy = new SizeTieredCompactionStrategy(config)
 }

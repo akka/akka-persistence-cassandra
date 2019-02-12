@@ -6,15 +6,14 @@ package akka.persistence.cassandra.journal
 
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 
 object StartupLoadSpec {
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
       |cassandra-journal.keyspace=StartupLoadSpec
       |cassandra-snapshot-store.keyspace=StartupLoadSpecSnapshot
     """.stripMargin).withFallback(CassandraLifecycle.config)

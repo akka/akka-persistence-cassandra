@@ -8,11 +8,11 @@ import java.net.URLEncoder
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
-import akka.{ Done, NotUsed }
+import akka.{Done, NotUsed}
 import akka.actor.ExtendedActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
+import akka.persistence.cassandra.journal.CassandraJournal.{PersistenceId, Tag, TagPidSequenceNr}
 import akka.persistence.cassandra.journal._
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
@@ -23,19 +23,19 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.CombinedEv
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
-import akka.persistence.{ Persistence, PersistentRepr }
+import akka.persistence.{Persistence, PersistentRepr}
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
-import akka.stream.{ ActorAttributes, ActorMaterializer }
+import akka.stream.{ActorAttributes, ActorMaterializer}
 import akka.util.ByteString
 import com.datastax.driver.core._
-import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
+import com.datastax.driver.core.policies.{LoggingRetryPolicy, RetryPolicy}
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.{ Failure, Success }
+import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
 import akka.serialization.SerializationExtension
@@ -44,6 +44,7 @@ object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
   // TODO: remove after akka/akka#19822 is fixed
   private val InstanceUID = new AtomicLong(-1)
+
   /**
    * The default identifier for [[CassandraReadJournal]] to be used with
    * `akka.persistence.query.PersistenceQuery#readJournalFor`.
@@ -57,12 +58,12 @@ object CassandraReadJournal {
    * INTERNAL API
    */
   @InternalApi private[akka] case class CombinedEventsByPersistenceIdStmts(
-    preparedSelectEventsByPersistenceId: PreparedStatement,
-    preparedSelectDeletedTo:             PreparedStatement)
+      preparedSelectEventsByPersistenceId: PreparedStatement,
+      preparedSelectDeletedTo: PreparedStatement
+  )
 
-  @InternalApi private[akka] case class CombinedEventsByTagStmts(
-    byTag:               PreparedStatement,
-    byTagWithUpperLimit: PreparedStatement)
+  @InternalApi private[akka] case class CombinedEventsByTagStmts(byTag: PreparedStatement,
+                                                                 byTagWithUpperLimit: PreparedStatement)
 }
 
 /**
@@ -80,14 +81,14 @@ object CassandraReadJournal {
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  */
 class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
-  extends ReadJournal
-  with PersistenceIdsQuery
-  with CurrentPersistenceIdsQuery
-  with EventsByPersistenceIdQuery
-  with CurrentEventsByPersistenceIdQuery
-  with EventsByTagQuery
-  with CurrentEventsByTagQuery
-  with CassandraStatements {
+    extends ReadJournal
+    with PersistenceIdsQuery
+    with CurrentPersistenceIdsQuery
+    with EventsByPersistenceIdQuery
+    with CurrentEventsByPersistenceIdQuery
+    with EventsByTagQuery
+    with CurrentEventsByTagQuery
+    with CassandraStatements {
 
   import CassandraReadJournal.CombinedEventsByPersistenceIdStmts
 
@@ -113,7 +114,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private val metricsCategory = {
     val categoryUid =
       CassandraReadJournal.InstanceUID.incrementAndGet() match {
-        case 0     => ""
+        case 0 => ""
         case other => other
       }
     s"${CassandraReadJournal.Identifier}$categoryUid"
@@ -135,7 +136,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     ec,
     log,
     metricsCategory,
-    init = session => executeCreateKeyspaceAndTables(session, writePluginConfig))
+    init = session => executeCreateKeyspaceAndTables(session, writePluginConfig)
+  )
 
   /**
    * Initialize connection to Cassandra and prepared statements.
@@ -143,51 +145,74 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * It is also not required to wait until this Future is complete to start
    * using the read journal.
    */
-  def initialize(): Future[Done] = {
-    Future.sequence(List(
-      preparedSelectDeletedTo,
-      preparedSelectDistinctPersistenceIds,
-      preparedSelectEventsByPersistenceId,
-      preparedSelectFromTagViewWithUpperBound,
-      preparedSelectTagSequenceNrs)).map(_ => Done)
-  }
+  def initialize(): Future[Done] =
+    Future
+      .sequence(
+        List(
+          preparedSelectDeletedTo,
+          preparedSelectDistinctPersistenceIds,
+          preparedSelectEventsByPersistenceId,
+          preparedSelectFromTagViewWithUpperBound,
+          preparedSelectTagSequenceNrs
+        )
+      )
+      .map(_ => Done)
 
   private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(queryPluginConfig.readRetries))
 
   private def preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
     session
       .prepare(selectMessages)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
-        .setRetryPolicy(readRetryPolicy))
+      .map(
+        _.setConsistencyLevel(queryPluginConfig.readConsistency)
+          .setIdempotent(true)
+          .setRetryPolicy(readRetryPolicy)
+      )
 
   private def preparedSelectDeletedTo: Future[PreparedStatement] =
     session
       .prepare(selectDeletedTo)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
-        .setRetryPolicy(readRetryPolicy))
+      .map(
+        _.setConsistencyLevel(queryPluginConfig.readConsistency)
+          .setIdempotent(true)
+          .setRetryPolicy(readRetryPolicy)
+      )
 
   private def preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
     session
       .prepare(queryStatements.selectDistinctPersistenceIds)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
-        .setRetryPolicy(readRetryPolicy))
+      .map(
+        _.setConsistencyLevel(queryPluginConfig.readConsistency)
+          .setIdempotent(true)
+          .setRetryPolicy(readRetryPolicy)
+      )
 
   private def prepareSelectFromTagView: Future[PreparedStatement] =
     session
       .prepare(queryStatements.selectEventsFromTagView)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency)
-        .setIdempotent(true).setRetryPolicy(readRetryPolicy))
+      .map(
+        _.setConsistencyLevel(queryPluginConfig.readConsistency)
+          .setIdempotent(true)
+          .setRetryPolicy(readRetryPolicy)
+      )
 
   private def preparedSelectFromTagViewWithUpperBound: Future[PreparedStatement] =
     session
       .prepare(queryStatements.selectEventsFromTagViewWithUpperBound)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
-        .setRetryPolicy(readRetryPolicy))
+      .map(
+        _.setConsistencyLevel(queryPluginConfig.readConsistency)
+          .setIdempotent(true)
+          .setRetryPolicy(readRetryPolicy)
+      )
 
   private def preparedSelectTagSequenceNrs: Future[PreparedStatement] =
-    session.prepare(queryStatements.selectTagSequenceNrs)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true)
-        .setRetryPolicy(readRetryPolicy))
+    session
+      .prepare(queryStatements.selectTagSequenceNrs)
+      .map(
+        _.setConsistencyLevel(queryPluginConfig.readConsistency)
+          .setIdempotent(true)
+          .setRetryPolicy(readRetryPolicy)
+      )
 
   /**
    * INTERNAL API
@@ -232,10 +257,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * queries. The `timestamp` is a unix timestamp (as returned by
    * `System#currentTimeMillis`.
    */
-  def timeBasedUUIDFrom(timestamp: Long): Offset = {
+  def timeBasedUUIDFrom(timestamp: Long): Offset =
     if (timestamp == 0L) NoOffset
     else TimeBasedUUID(offsetUuid(timestamp))
-  }
 
   /**
    * Convert a `TimeBasedUUID` to a unix timestamp (as returned by
@@ -287,14 +311,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * The stream is completed with failure if there is a failure in executing the query in the
    * backend journal.
    */
-  override def eventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
-    eventsByTagInternal(tag, offset).mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
+  override def eventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] =
+    eventsByTagInternal(tag, offset)
+      .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
       .mapMaterializedValue(_ => NotUsed)
       .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
 
-  }
-
-  private[akka] def eventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] = {
+  private[akka] def eventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
     if (!config.eventsByTagEnabled)
       Source.failed(new IllegalStateException("Events by tag queries are disabled"))
     else {
@@ -303,15 +326,17 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
         createFutureSource(prereqs) { (s, prereqs) =>
           val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
-          Source.fromGraph(EventsByTagStage(
-            session, fromOffset,
-            None, queryPluginConfig,
-            Some(queryPluginConfig.refreshInterval),
-            writePluginConfig.bucketSize,
-            usingOffset,
-            prereqs._2))
-        }
-          .via(deserializeEventsByTagRow)
+          Source.fromGraph(
+            EventsByTagStage(session,
+                             fromOffset,
+                             None,
+                             queryPluginConfig,
+                             Some(queryPluginConfig.refreshInterval),
+                             writePluginConfig.bucketSize,
+                             usingOffset,
+                             prereqs._2)
+          )
+        }.via(deserializeEventsByTagRow)
           .mapMaterializedValue(_ => NotUsed)
 
       } catch {
@@ -321,7 +346,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
           Source.failed(e)
       }
     }
-  }
 
   private def deserializeEventsByTagRow: Flow[EventsByTagStage.UUIDRow, UUIDPersistentRepr, NotUsed] = {
     val deserializeEventAsync = queryPluginConfig.deserializationParallelism > 1
@@ -329,14 +353,17 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       .mapAsync(queryPluginConfig.deserializationParallelism) { uuidRow =>
         val row = uuidRow.row
         eventsByTagDeserializer.deserializeEvent(row, deserializeEventAsync).map { payload =>
-          val repr = mapEvent(PersistentRepr(
-            payload,
-            sequenceNr = uuidRow.sequenceNr,
-            persistenceId = uuidRow.persistenceId,
-            manifest = row.getString("event_manifest"),
-            deleted = false,
-            sender = null,
-            writerUuid = row.getString("writer_uuid")))
+          val repr = mapEvent(
+            PersistentRepr(
+              payload,
+              sequenceNr = uuidRow.sequenceNr,
+              persistenceId = uuidRow.persistenceId,
+              manifest = row.getString("event_manifest"),
+              deleted = false,
+              sender = null,
+              writerUuid = row.getString("writer_uuid")
+            )
+          )
           UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, repr)
         }
       }
@@ -344,14 +371,16 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   }
 
   private def eventsByTagPrereqs(
-    tag:         String,
-    usingOffset: Boolean,
-    fromOffset:  UUID): Future[(CombinedEventsByTagStmts, Map[Tag, (TagPidSequenceNr, UUID)])] = {
+      tag: String,
+      usingOffset: Boolean,
+      fromOffset: UUID
+  ): Future[(CombinedEventsByTagStmts, Map[Tag, (TagPidSequenceNr, UUID)])] = {
     val currentBucket = TimeBucket(System.currentTimeMillis(), writePluginConfig.bucketSize)
-    val initialTagPidSequenceNrs = if (usingOffset && currentBucket.within(fromOffset))
-      scanTagSequenceNrs(tag, fromOffset)
-    else
-      Future.successful(Map.empty[Tag, (TagPidSequenceNr, UUID)])
+    val initialTagPidSequenceNrs =
+      if (usingOffset && currentBucket.within(fromOffset))
+        scanTagSequenceNrs(tag, fromOffset)
+      else
+        Future.successful(Map.empty[Tag, (TagPidSequenceNr, UUID)])
 
     for {
       statements <- combinedEventsByTagStmts
@@ -359,7 +388,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     } yield (statements, tagSequenceNrs)
   }
 
-  private[akka] def scanTagSequenceNrs(tag: String, fromOffset: UUID): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
+  private[akka] def scanTagSequenceNrs(tag: String,
+                                       fromOffset: UUID): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
     val scanner = new TagViewSequenceNumberScanner(session, preparedSelectTagSequenceNrs)
     val bucket = TimeBucket(fromOffset, writePluginConfig.bucketSize)
     scanner.scan(tag, fromOffset, bucket, queryPluginConfig.eventsByTagOffsetScanning)
@@ -368,19 +398,19 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   /**
    * INTERNAL API
    */
-  @InternalApi private[akka] def createSource[T, P](
-    prepStmt: Future[P],
-    source:   (Session, P) => Source[T, NotUsed]): Source[T, NotUsed] = {
+  @InternalApi private[akka] def createSource[T, P](prepStmt: Future[P],
+                                                    source: (Session, P) => Source[T, NotUsed]): Source[T, NotUsed] = {
     // when we get the PreparedStatement we know that the session is initialized,
     // i.e.the get is safe
     def getSession: Session = session.underlying().value.get.get
 
     prepStmt.value match {
       case Some(Success(ps)) => source(getSession, ps)
-      case Some(Failure(e))  => Source.failed(e)
+      case Some(Failure(e)) => Source.failed(e)
       case None =>
         // completed later
-        Source.maybe[P]
+        Source
+          .maybe[P]
           .mapMaterializedValue { promise =>
             promise.completeWith(prepStmt.map(Option(_)))
             NotUsed
@@ -396,7 +426,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * INTERNAL API
    */
   @InternalApi private[akka] def createFutureSource[T, P, M](
-    prepStmt: Future[P])(source: (Session, P) => Source[T, M]): Source[T, Future[M]] = {
+      prepStmt: Future[P]
+  )(source: (Session, P) => Source[T, M]): Source[T, Future[M]] = {
     // when we get the PreparedStatement we know that the session is initialized,
     // i.e.the get is safe
     def getSession: Session = session.underlying().value.get.get
@@ -422,13 +453,12 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * To acquire an offset from a long unix timestamp to use with this query, you can use [[timeBasedUUIDFrom]].
    *
    */
-  override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] = {
+  override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] =
     currentEventsByTagInternal(tag, offset)
       .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
       .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
-  }
 
-  private[akka] def currentEventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] = {
+  private[akka] def currentEventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
     if (!config.eventsByTagEnabled)
       Source.failed(new IllegalStateException("Events by tag queries are disabled"))
     else {
@@ -439,9 +469,17 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
 
         createFutureSource(prereqs) { (s, prereqs) =>
           val session = TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
-          Source.fromGraph(EventsByTagStage(session, fromOffset, toOffset, queryPluginConfig, None, writePluginConfig.bucketSize, usingOffset, prereqs._2))
-        }
-          .via(deserializeEventsByTagRow)
+          Source.fromGraph(
+            EventsByTagStage(session,
+                             fromOffset,
+                             toOffset,
+                             queryPluginConfig,
+                             None,
+                             writePluginConfig.bucketSize,
+                             usingOffset,
+                             prereqs._2)
+          )
+        }.via(deserializeEventsByTagRow)
           .mapMaterializedValue(_ => NotUsed)
 
       } catch {
@@ -451,7 +489,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
           Source.failed(e)
       }
     }
-  }
+
   /**
    * `eventsByPersistenceId` is used to retrieve a stream of events for a particular persistenceId.
    *
@@ -475,10 +513,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * Corresponding query that is completed when it reaches the end of the currently
    * stored events is provided by `currentEventsByPersistenceId`.
    */
-  override def eventsByPersistenceId(
-    persistenceId:  String,
-    fromSequenceNr: Long,
-    toSequenceNr:   Long): Source[EventEnvelope, NotUsed] =
+  override def eventsByPersistenceId(persistenceId: String,
+                                     fromSequenceNr: Long,
+                                     toSequenceNr: Long): Source[EventEnvelope, NotUsed] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -487,8 +524,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
-      .mapMaterializedValue(_ => NotUsed)
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization)
+    ).mapMaterializedValue(_ => NotUsed)
       .map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
@@ -497,10 +534,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * is completed immediately when it reaches the end of the "result set". Events that are
    * stored after the query is completed are not included in the event stream.
    */
-  override def currentEventsByPersistenceId(
-    persistenceId:  String,
-    fromSequenceNr: Long,
-    toSequenceNr:   Long): Source[EventEnvelope, NotUsed] =
+  override def currentEventsByPersistenceId(persistenceId: String,
+                                            fromSequenceNr: Long,
+                                            toSequenceNr: Long): Source[EventEnvelope, NotUsed] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -509,8 +545,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       None,
       s"currentEventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
-      .mapMaterializedValue(_ => NotUsed)
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization)
+    ).mapMaterializedValue(_ => NotUsed)
       .map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
@@ -518,10 +554,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * INTERNAL API
    */
   @InternalApi private[akka] def eventsByPersistenceIdWithControl(
-    persistenceId:   String,
-    fromSequenceNr:  Long,
-    toSequenceNr:    Long,
-    refreshInterval: Option[FiniteDuration] = None): Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] =
+      persistenceId: String,
+      fromSequenceNr: Long,
+      toSequenceNr: Long,
+      refreshInterval: Option[FiniteDuration] = None
+  ): Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] =
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -531,7 +568,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization),
-      fastForwardEnabled = true).map(p => mapEvent(p.persistentRepr))
+      fastForwardEnabled = true
+    ).map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
@@ -542,41 +580,44 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    *  - In the public eventsByPersistenceId and currentEventsByPersistenceId queries.
    */
   @InternalApi private[akka] def eventsByPersistenceId[T](
-    persistenceId:          String,
-    fromSequenceNr:         Long,
-    toSequenceNr:           Long,
-    max:                    Long,
-    fetchSize:              Int,
-    refreshInterval:        Option[FiniteDuration],
-    name:                   String,
-    customConsistencyLevel: Option[ConsistencyLevel] = None,
-    customRetryPolicy:      Option[RetryPolicy]      = None,
-    extractor:              Extractor[T],
-    fastForwardEnabled:     Boolean                  = false): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
+      persistenceId: String,
+      fromSequenceNr: Long,
+      toSequenceNr: Long,
+      max: Long,
+      fetchSize: Int,
+      refreshInterval: Option[FiniteDuration],
+      name: String,
+      customConsistencyLevel: Option[ConsistencyLevel] = None,
+      customRetryPolicy: Option[RetryPolicy] = None,
+      extractor: Extractor[T],
+      fastForwardEnabled: Boolean = false
+  ): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
 
     val deserializeEventAsync = queryPluginConfig.deserializationParallelism > 1
 
     createFutureSource(combinedEventsByPersistenceIdStmts) { (s, c) =>
       log.debug("Creating EventByPersistentIdState graph")
-      Source.fromGraph(new EventsByPersistenceIdStage(
-        persistenceId,
-        fromSequenceNr,
-        toSequenceNr,
-        max,
-        fetchSize,
-        refreshInterval,
-        EventsByPersistenceIdStage.EventsByPersistenceIdSession(
-          c.preparedSelectEventsByPersistenceId,
-          c.preparedSelectDeletedTo,
-          s,
-          customConsistencyLevel,
-          customRetryPolicy),
-        queryPluginConfig,
-        fastForwardEnabled))
+      Source
+        .fromGraph(
+          new EventsByPersistenceIdStage(
+            persistenceId,
+            fromSequenceNr,
+            toSequenceNr,
+            max,
+            fetchSize,
+            refreshInterval,
+            EventsByPersistenceIdStage.EventsByPersistenceIdSession(c.preparedSelectEventsByPersistenceId,
+                                                                    c.preparedSelectDeletedTo,
+                                                                    s,
+                                                                    customConsistencyLevel,
+                                                                    customRetryPolicy),
+            queryPluginConfig,
+            fastForwardEnabled
+          )
+        )
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
         .named(name)
-    }
-      .mapAsync(queryPluginConfig.deserializationParallelism) { row =>
+    }.mapAsync(queryPluginConfig.deserializationParallelism) { row =>
         extractor.extract(row, deserializeEventAsync)
       }
       .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
@@ -605,7 +646,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private[this] def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =
     offset match {
       case TimeBasedUUID(uuid) => (uuid, true)
-      case NoOffset            => (firstOffset, false)
+      case NoOffset => (firstOffset, false)
       case unsupported =>
         throw new IllegalArgumentException("Cassandra does not support " + unsupported.getClass.getName + " offsets")
     }
@@ -647,16 +688,16 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   override def currentPersistenceIds(): Source[String, NotUsed] =
     persistenceIds(None, "currentPersistenceIds")
 
-  private[this] def persistenceIds(
-    refreshInterval: Option[FiniteDuration],
-    name:            String): Source[String, NotUsed] =
-    createSource[String, PreparedStatement](preparedSelectDistinctPersistenceIds, (s, ps) =>
-      Source.actorPublisher[String](
-        AllPersistenceIdsPublisher.props(
-          refreshInterval,
-          AllPersistenceIdsSession(ps, s),
-          queryPluginConfig))
-        .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
-        .mapMaterializedValue(_ => NotUsed)
-        .named(name))
+  private[this] def persistenceIds(refreshInterval: Option[FiniteDuration], name: String): Source[String, NotUsed] =
+    createSource[String, PreparedStatement](
+      preparedSelectDistinctPersistenceIds,
+      (s, ps) =>
+        Source
+          .actorPublisher[String](
+            AllPersistenceIdsPublisher.props(refreshInterval, AllPersistenceIdsSession(ps, s), queryPluginConfig)
+          )
+          .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
+          .mapMaterializedValue(_ => NotUsed)
+          .named(name)
+    )
 }

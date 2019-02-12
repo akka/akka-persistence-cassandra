@@ -5,7 +5,7 @@
 package akka.persistence.cassandra.query
 
 import akka.actor.ActorRef
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.TestSubscriber.Probe
 import akka.stream.testkit.scaladsl.TestSink
@@ -25,8 +25,7 @@ object EventsByPersistenceIdWithControlSpec {
     """).withFallback(CassandraLifecycle.config)
 }
 
-class EventsByPersistenceIdWithControlSpec
-  extends CassandraSpec(EventsByPersistenceIdWithControlSpec.config) {
+class EventsByPersistenceIdWithControlSpec extends CassandraSpec(EventsByPersistenceIdWithControlSpec.config) {
 
   val noMsgTimeout = 100.millis
 

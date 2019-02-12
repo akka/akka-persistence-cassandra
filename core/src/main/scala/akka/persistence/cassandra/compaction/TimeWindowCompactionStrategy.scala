@@ -11,10 +11,14 @@ import com.typesafe.config.Config
 class TimeWindowCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, TimeWindowCompactionStrategy.ClassName, TimeWindowCompactionStrategy.propertyKeys) {
   import TimeWindowCompactionStrategy._
 
-  val compactionWindowUnit: TimeUnit = if (config.hasPath("compaction_window_unit")) TimeUnit.valueOf(config.getString("compaction_window_unit")) else TimeUnit.DAYS
-  val compactionWindowSize: Int = if (config.hasPath("compaction_window_size")) config.getInt("compaction_window_size") else 1
+  val compactionWindowUnit: TimeUnit =
+    if (config.hasPath("compaction_window_unit")) TimeUnit.valueOf(config.getString("compaction_window_unit"))
+    else TimeUnit.DAYS
+  val compactionWindowSize: Int =
+    if (config.hasPath("compaction_window_size")) config.getInt("compaction_window_size") else 1
 
-  require(compactionWindowSize >= 1, s"compaction_window_size must be larger than or equal to 1, but was $compactionWindowSize")
+  require(compactionWindowSize >= 1,
+          s"compaction_window_size must be larger than or equal to 1, but was $compactionWindowSize")
 
   override def asCQL: String =
     s"""{
@@ -29,10 +33,8 @@ class TimeWindowCompactionStrategy(config: Config) extends BaseCompactionStrateg
 object TimeWindowCompactionStrategy extends CassandraCompactionStrategyConfig[TimeWindowCompactionStrategy] {
   override val ClassName: String = "TimeWindowCompactionStrategy"
 
-  override def propertyKeys: List[String] = (
-    BaseCompactionStrategy.propertyKeys union List(
-      "compaction_window_size",
-      "compaction_window_unit")).sorted
+  override def propertyKeys: List[String] =
+    (BaseCompactionStrategy.propertyKeys union List("compaction_window_size", "compaction_window_unit")).sorted
 
   override def fromConfig(config: Config): TimeWindowCompactionStrategy = new TimeWindowCompactionStrategy(config)
 }

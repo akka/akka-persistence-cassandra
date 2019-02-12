@@ -8,15 +8,14 @@ import akka.Done
 import akka.actor.Props
 import akka.event.Logging
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.cassandra.{ CassandraSpec, Persister }
+import akka.persistence.cassandra.{CassandraSpec, Persister}
 import com.typesafe.config.ConfigFactory
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
 import Persister._
 
 object CassandraSnapshotCleanupSpec {
-  val config = ConfigFactory.parseString(
-    """
+  val config = ConfigFactory.parseString("""
       akka.loglevel = INFO
     """.stripMargin)
 }
@@ -27,14 +26,13 @@ class CassandraSnapshotCleanupSpec extends CassandraSpec(CassandraSnapshotCleanu
   val snapshotCleanup = new CassandraSnapshotCleanup {
     override def snapshotConfig: CassandraSnapshotStoreConfig =
       new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-snapshot-store"))
-    override val session: CassandraSession = new CassandraSession(
-      system,
-      snapshotConfig.sessionProvider,
-      snapshotConfig.sessionSettings,
-      system.dispatcher,
-      log,
-      systemName,
-      init = _ => Future.successful(Done))
+    override val session: CassandraSession = new CassandraSession(system,
+                                                                  snapshotConfig.sessionProvider,
+                                                                  snapshotConfig.sessionSettings,
+                                                                  system.dispatcher,
+                                                                  log,
+                                                                  systemName,
+                                                                  init = _ => Future.successful(Done))
     override implicit val ec: ExecutionContext = system.dispatcher
   }
 

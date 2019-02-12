@@ -5,6 +5,7 @@
 package akka.persistence.cassandra
 
 object SnapshotWithMetaData {
+
   /**
    * If meta data could not be deserialized it will not fail the query.
    * The "invalid" meta data is represented with this `UnknownMetaData` and

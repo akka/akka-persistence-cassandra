@@ -26,9 +26,8 @@ class LeveledCompactionStrategy(config: Config) extends BaseCompactionStrategy(c
 object LeveledCompactionStrategy extends CassandraCompactionStrategyConfig[LeveledCompactionStrategy] {
   override val ClassName: String = "LeveledCompactionStrategy"
 
-  override def propertyKeys: List[String] = (
-    BaseCompactionStrategy.propertyKeys union List(
-      "sstable_size_in_mb")).sorted
+  override def propertyKeys: List[String] =
+    (BaseCompactionStrategy.propertyKeys union List("sstable_size_in_mb")).sorted
 
   override def fromConfig(config: Config): LeveledCompactionStrategy = new LeveledCompactionStrategy(config)
 }

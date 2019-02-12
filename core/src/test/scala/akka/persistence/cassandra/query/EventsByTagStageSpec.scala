@@ -4,18 +4,18 @@
 
 package akka.persistence.cassandra.query
 
-import java.time.{ LocalDateTime, ZoneOffset }
+import java.time.{LocalDateTime, ZoneOffset}
 
 import akka.NotUsed
 import akka.actor.ActorRef
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Minute, TimeBucket }
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.cassandra.journal.{CassandraJournalConfig, Minute, TimeBucket}
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
 import akka.persistence.journal.Tagged
 import akka.persistence.query.scaladsl.EventsByTagQuery
-import akka.persistence.query.{ EventEnvelope, NoOffset }
-import akka.serialization.{ Serialization, SerializationExtension }
-import akka.stream.scaladsl.{ Keep, Source }
+import akka.persistence.query.{EventEnvelope, NoOffset}
+import akka.serialization.{Serialization, SerializationExtension}
+import akka.stream.scaladsl.{Keep, Source}
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.ImplicitSender
 import com.datastax.driver.core.utils.UUIDs
@@ -29,8 +29,7 @@ import scala.concurrent.duration._
 object EventsByTagStageSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   val fetchSize = 3L
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
         akka.loglevel = INFO
 
         akka.actor.serialize-messages=on
@@ -59,10 +58,11 @@ object EventsByTagStageSpec {
 
 }
 
-class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
-  with BeforeAndAfterAll
-  with TestTagWriter
-  with ImplicitSender {
+class EventsByTagStageSpec
+    extends CassandraSpec(EventsByTagStageSpec.config)
+    with BeforeAndAfterAll
+    with TestTagWriter
+    with ImplicitSender {
 
   import EventsByTagStageSpec._
 
@@ -136,7 +136,11 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       val nowTime = LocalDateTime.now(ZoneOffset.UTC)
       val lastBucket = nowTime.minusMinutes(1)
       writeTaggedEvent(lastBucket, PersistentRepr("e-1", 1, "p-3"), Set("CurrentPreviousBuckets"), 1, bucketSize)
-      writeTaggedEvent(lastBucket.plusSeconds(1), PersistentRepr("e-2", 2, "p-3"), Set("CurrentPreviousBuckets"), 2, bucketSize)
+      writeTaggedEvent(lastBucket.plusSeconds(1),
+                       PersistentRepr("e-2", 2, "p-3"),
+                       Set("CurrentPreviousBuckets"),
+                       2,
+                       bucketSize)
 
       val tagStream = queries.currentEventsByTag("CurrentPreviousBuckets", NoOffset)
       val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
@@ -151,10 +155,26 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       val nowTime = LocalDateTime.now(ZoneOffset.UTC)
       val twoBucketsAgo = nowTime.minusMinutes(2)
       val lastBucket = nowTime.minusMinutes(1)
-      writeTaggedEvent(twoBucketsAgo, PersistentRepr("e-1", 1, "l-4"), Set("CurrentPreviousMultipleBuckets"), 1, bucketSize)
-      writeTaggedEvent(twoBucketsAgo.plusSeconds(1), PersistentRepr("e-2", 2, "l-4"), Set("CurrentPreviousMultipleBuckets"), 2, bucketSize)
-      writeTaggedEvent(lastBucket, PersistentRepr("e-3", 3, "l-4"), Set("CurrentPreviousMultipleBuckets"), 3, bucketSize)
-      writeTaggedEvent(lastBucket.plusSeconds(1), PersistentRepr("e-4", 4, "l-4"), Set("CurrentPreviousMultipleBuckets"), 4, bucketSize)
+      writeTaggedEvent(twoBucketsAgo,
+                       PersistentRepr("e-1", 1, "l-4"),
+                       Set("CurrentPreviousMultipleBuckets"),
+                       1,
+                       bucketSize)
+      writeTaggedEvent(twoBucketsAgo.plusSeconds(1),
+                       PersistentRepr("e-2", 2, "l-4"),
+                       Set("CurrentPreviousMultipleBuckets"),
+                       2,
+                       bucketSize)
+      writeTaggedEvent(lastBucket,
+                       PersistentRepr("e-3", 3, "l-4"),
+                       Set("CurrentPreviousMultipleBuckets"),
+                       3,
+                       bucketSize)
+      writeTaggedEvent(lastBucket.plusSeconds(1),
+                       PersistentRepr("e-4", 4, "l-4"),
+                       Set("CurrentPreviousMultipleBuckets"),
+                       4,
+                       bucketSize)
 
       val tagStream = queries.currentEventsByTag("CurrentPreviousMultipleBuckets", NoOffset)
       val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
@@ -221,8 +241,10 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       sub.expectNextPF { case EventEnvelope(_, "p-2", 1, "p2e1") => }
       sub.expectNoMessage(longWaitTime)
 
-      sub.expectError().getMessage should equal(s"Unable to find missing tagged event: " +
-        s"PersistenceId: p-1. Tag: $tag. TagPidSequenceNr: Set(3). Previous offset: ${times(1)}")
+      sub.expectError().getMessage should equal(
+        s"Unable to find missing tagged event: " +
+        s"PersistenceId: p-1. Tag: $tag. TagPidSequenceNr: Set(3). Previous offset: ${times(1)}"
+      )
     }
 
     "find multiple missing messages that span time buckets" in {
@@ -262,7 +284,10 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       writeTaggedEvent(twoBucketsAgo, PersistentRepr("p1e10", 10, "p-1"), Set(tag), 10, bucketSize)
       writeTaggedEvent(nowTime, PersistentRepr("p1e11", 11, "p-1"), Set(tag), 11, bucketSize)
 
-      val tagStream = queries.currentEventsByTag(tag, queries.timeBasedUUIDFrom(twoBucketsAgo.minusMinutes(1).toInstant(ZoneOffset.UTC).toEpochMilli))
+      val tagStream = queries.currentEventsByTag(
+        tag,
+        queries.timeBasedUUIDFrom(twoBucketsAgo.minusMinutes(1).toInstant(ZoneOffset.UTC).toEpochMilli)
+      )
       val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(3)
@@ -315,9 +340,17 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       val twoBucketsAgo = nowTime.minusMinutes(2)
       val lastBucket = nowTime.minusMinutes(1)
       writeTaggedEvent(twoBucketsAgo, PersistentRepr("e-1", 1, "l-4"), Set("LivePreviousBuckets"), 1, bucketSize)
-      writeTaggedEvent(twoBucketsAgo.plusSeconds(1), PersistentRepr("e-2", 2, "l-4"), Set("LivePreviousBuckets"), 2, bucketSize)
+      writeTaggedEvent(twoBucketsAgo.plusSeconds(1),
+                       PersistentRepr("e-2", 2, "l-4"),
+                       Set("LivePreviousBuckets"),
+                       2,
+                       bucketSize)
       writeTaggedEvent(lastBucket, PersistentRepr("e-3", 3, "l-4"), Set("LivePreviousBuckets"), 3, bucketSize)
-      writeTaggedEvent(lastBucket.plusSeconds(1), PersistentRepr("e-4", 4, "l-4"), Set("LivePreviousBuckets"), 4, bucketSize)
+      writeTaggedEvent(lastBucket.plusSeconds(1),
+                       PersistentRepr("e-4", 4, "l-4"),
+                       Set("LivePreviousBuckets"),
+                       4,
+                       bucketSize)
 
       val tagStream = queries.eventsByTag("LivePreviousBuckets", NoOffset)
       val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
@@ -332,7 +365,11 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       sub.expectNextPF { case EventEnvelope(_, "l-4", 4, "e-4") => }
 
       writeTaggedEvent(nowTime, PersistentRepr("e-5", 5, "l-4"), Set("LivePreviousBuckets"), 5, bucketSize)
-      writeTaggedEvent(nowTime.plusSeconds(1), PersistentRepr("e-6", 6, "l-4"), Set("LivePreviousBuckets"), 6, bucketSize)
+      writeTaggedEvent(nowTime.plusSeconds(1),
+                       PersistentRepr("e-6", 6, "l-4"),
+                       Set("LivePreviousBuckets"),
+                       6,
+                       bucketSize)
 
       sub.expectNoMessage(waitTime)
 
@@ -493,7 +530,9 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
       val nowTime = LocalDateTime.now(ZoneOffset.UTC)
       val tag = "CurrentOffsetMissingInInitialBucket"
 
-      val tagStream = queries.eventsByTag(tag, queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
+      val tagStream =
+        queries.eventsByTag(tag,
+                            queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
       val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(4)
@@ -525,7 +564,6 @@ class EventsByTagStageSpec extends CassandraSpec(EventsByTagStageSpec.config)
     expectMsg(waitTime, a.payload + "-done")
   }
 
-  private def setup(persistenceId: String): ActorRef = {
+  private def setup(persistenceId: String): ActorRef =
     system.actorOf(TestActor.props(persistenceId))
-  }
 }

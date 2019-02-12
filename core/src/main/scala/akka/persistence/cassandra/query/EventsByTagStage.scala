@@ -9,22 +9,22 @@ import java.util.concurrent.ThreadLocalRandom
 
 import akka.annotation.InternalApi
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
+import akka.persistence.cassandra.journal.{BucketSize, TimeBucket}
 import akka.persistence.cassandra.query.EventsByTagStage._
-import akka.stream.stage.{ GraphStage, _ }
-import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
+import akka.stream.stage.{GraphStage, _}
+import akka.stream.{ActorMaterializer, Attributes, Outlet, SourceShape}
 
 import scala.annotation.tailrec
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
-import scala.util.{ Failure, Success, Try }
-import java.lang.{ Long => JLong }
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
+import scala.util.{Failure, Success, Try}
+import java.lang.{Long => JLong}
 
-import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
+import akka.cluster.pubsub.{DistributedPubSub, DistributedPubSubMediator}
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.CombinedEventsByTagStmts
-import com.datastax.driver.core.{ ResultSet, Row, Session }
+import com.datastax.driver.core.{ResultSet, Row, Session}
 import com.datastax.driver.core.utils.UUIDs
 
 /**
@@ -43,36 +43,42 @@ import com.datastax.driver.core.utils.UUIDs
  */
 @InternalApi private[akka] object EventsByTagStage {
 
-  final case class UUIDRow(
-    persistenceId:    PersistenceId,
-    sequenceNr:       SequenceNr,
-    offset:           UUID,
-    tagPidSequenceNr: TagPidSequenceNr,
-    row:              Row) {
+  final case class UUIDRow(persistenceId: PersistenceId,
+                           sequenceNr: SequenceNr,
+                           offset: UUID,
+                           tagPidSequenceNr: TagPidSequenceNr,
+                           row: Row) {
     // don't include row
-    override def toString: String = s"pid: $persistenceId, sequenceNr: $sequenceNr, offset: $offset, tagPidSequenceNr: $tagPidSequenceNr"
+    override def toString: String =
+      s"pid: $persistenceId, sequenceNr: $sequenceNr, offset: $offset, tagPidSequenceNr: $tagPidSequenceNr"
   }
 
-  def apply(
-    session:                  TagStageSession,
-    fromOffset:               UUID,
-    toOffset:                 Option[UUID],
-    settings:                 CassandraReadJournalConfig,
-    refreshInterval:          Option[FiniteDuration],
-    bucketSize:               BucketSize,
-    usingOffset:              Boolean,
-    initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)]): EventsByTagStage = {
-    new EventsByTagStage(session, fromOffset, toOffset, settings, refreshInterval, bucketSize, usingOffset, initialTagPidSequenceNrs)
-  }
+  def apply(session: TagStageSession,
+            fromOffset: UUID,
+            toOffset: Option[UUID],
+            settings: CassandraReadJournalConfig,
+            refreshInterval: Option[FiniteDuration],
+            bucketSize: BucketSize,
+            usingOffset: Boolean,
+            initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)]): EventsByTagStage =
+    new EventsByTagStage(session,
+                         fromOffset,
+                         toOffset,
+                         settings,
+                         refreshInterval,
+                         bucketSize,
+                         usingOffset,
+                         initialTagPidSequenceNrs)
 
-  private[akka] class TagStageSession(val tag: String, session: Session, statements: CombinedEventsByTagStmts, fetchSize: Int) {
-    def selectEventsForBucket(bucket: TimeBucket, from: UUID, to: UUID)(implicit ec: ExecutionContext): Future[ResultSet] = {
+  private[akka] class TagStageSession(val tag: String,
+                                      session: Session,
+                                      statements: CombinedEventsByTagStmts,
+                                      fetchSize: Int) {
+    def selectEventsForBucket(bucket: TimeBucket, from: UUID, to: UUID)(
+        implicit ec: ExecutionContext
+    ): Future[ResultSet] = {
       val bound =
-        statements.byTagWithUpperLimit.bind(
-          tag,
-          bucket.key: JLong,
-          from,
-          to).setFetchSize(fetchSize)
+        statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setFetchSize(fetchSize)
 
       session.executeAsync(bound).asScala
     }
@@ -89,20 +95,20 @@ import com.datastax.driver.core.utils.UUIDs
   private final case class QueryResult(resultSet: ResultSet) extends QueryState
   private final case class BufferedEvents(events: List[UUIDRow]) extends QueryState
 
-  private final case class LookingForMissing(
-    buffered:       List[UUIDRow],
-    previousOffset: UUID,
-    bucket:         TimeBucket,
-    queryPrevious:  Boolean,
-    maxOffset:      UUID,
-    persistenceId:  String,
-    maxSequenceNr:  Long,
-    missing:        Set[Long],
-    deadline:       Deadline,
-    failIfNotFound: Boolean) {
+  private final case class LookingForMissing(buffered: List[UUIDRow],
+                                             previousOffset: UUID,
+                                             bucket: TimeBucket,
+                                             queryPrevious: Boolean,
+                                             maxOffset: UUID,
+                                             persistenceId: String,
+                                             maxSequenceNr: Long,
+                                             missing: Set[Long],
+                                             deadline: Deadline,
+                                             failIfNotFound: Boolean) {
 
     // don't include buffered in the toString
-    override def toString = s"LookingForMissing{previousOffset=$previousOffset bucket=$bucket " +
+    override def toString =
+      s"LookingForMissing{previousOffset=$previousOffset bucket=$bucket " +
       s"queryPrevious=$queryPrevious maxOffset=$maxOffset persistenceId=$persistenceId maxSequenceNr=$maxSequenceNr " +
       s"missing=$missing deadline=$deadline failIfNotFound=$failIfNotFound"
   }
@@ -110,18 +116,17 @@ import com.datastax.driver.core.utils.UUIDs
   private case object QueryPoll
   private case object TagNotification
 
-  private case class StageState(
-    state: QueryState,
-    // updated each time a new row is read, may skip delayed events with lower offsets
-    // these gaps will be detected for the same pid, for cross pid delayed events it
-    // relies on the eventual consistency delay
-    fromOffset: UUID,
-    // upper limit for next. Always kept at least the eventual consistency in the past
-    toOffset: UUID,
-    // for each persistence id what is the latest tag pid sequenceNr number and offset
-    tagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID)],
-    missingLookup:     Option[LookingForMissing],
-    bucketSize:        BucketSize) {
+  private case class StageState(state: QueryState,
+                                // updated each time a new row is read, may skip delayed events with lower offsets
+                                // these gaps will be detected for the same pid, for cross pid delayed events it
+                                // relies on the eventual consistency delay
+                                fromOffset: UUID,
+                                // upper limit for next. Always kept at least the eventual consistency in the past
+                                toOffset: UUID,
+                                // for each persistence id what is the latest tag pid sequenceNr number and offset
+                                tagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID)],
+                                missingLookup: Option[LookingForMissing],
+                                bucketSize: BucketSize) {
 
     val isLookingForMissing: Boolean = missingLookup.isDefined
 
@@ -132,9 +137,8 @@ import com.datastax.driver.core.utils.UUIDs
      * delay has set a toOffset within this bucket stay in ths bucket until it is updated
      * to be after.
      */
-    def shouldMoveBucket(): Boolean = {
+    def shouldMoveBucket(): Boolean =
       currentTimeBucket.inPast && !currentTimeBucket.within(toOffset)
-    }
 
     def tagPidSequenceNumberUpdate(pid: PersistenceId, tagPidSequenceNr: (TagPidSequenceNr, UUID)): StageState =
       copy(tagPidSequenceNrs = tagPidSequenceNrs + (pid -> tagPidSequenceNr))
@@ -142,15 +146,15 @@ import com.datastax.driver.core.utils.UUIDs
   }
 }
 
-@InternalApi private[akka] class EventsByTagStage(
-  session:                  TagStageSession,
-  fromOffset:               UUID,
-  toOffset:                 Option[UUID],
-  settings:                 CassandraReadJournalConfig,
-  refreshInterval:          Option[FiniteDuration],
-  bucketSize:               BucketSize,
-  usingOffset:              Boolean,
-  initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)]) extends GraphStage[SourceShape[UUIDRow]] {
+@InternalApi private[akka] class EventsByTagStage(session: TagStageSession,
+                                                  fromOffset: UUID,
+                                                  toOffset: Option[UUID],
+                                                  settings: CassandraReadJournalConfig,
+                                                  refreshInterval: Option[FiniteDuration],
+                                                  bucketSize: BucketSize,
+                                                  usingOffset: Boolean,
+                                                  initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)])
+    extends GraphStage[SourceShape[UUIDRow]] {
 
   private val out: Outlet[UUIDRow] = Outlet("event.out")
   private val verboseDebug = settings.eventsByTagDebug
@@ -193,13 +197,11 @@ import com.datastax.driver.core.utils.UUIDs
         tOff
       }
 
-      private def updateToOffset(): Unit = {
+      private def updateToOffset(): Unit =
         updateStageState(_.copy(toOffset = calculateToOffset()))
-      }
 
-      private def updateQueryState(state: QueryState): Unit = {
+      private def updateQueryState(state: QueryState): Unit =
         updateStageState(_.copy(state = state))
-      }
 
       implicit def ec: ExecutionContextExecutor = materializer.executionContext
 
@@ -218,14 +220,11 @@ import com.datastax.driver.core.utils.UUIDs
       }
 
       override def preStart(): Unit = {
-        stageState = StageState(
-          QueryIdle,
-          fromOffset,
-          calculateToOffset(),
-          initialTagPidSequenceNrs,
-          None,
-          bucketSize)
-        log.debug("[{}]: EventsByTag query starting with EC delay {}ms: {} ", stageUuid, settings.eventsByTagEventualConsistency.toMillis, stageState)
+        stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs, None, bucketSize)
+        log.debug("[{}]: EventsByTag query starting with EC delay {}ms: {} ",
+                  stageUuid,
+                  settings.eventsByTagEventualConsistency.toMillis,
+                  stageState)
 
         if (settings.pubsubNotification) {
           Try {
@@ -243,7 +242,7 @@ import com.datastax.driver.core.utils.UUIDs
                 }
             }
             DistributedPubSub(system).mediator !
-              DistributedPubSubMediator.Subscribe("akka.persistence.cassandra.journal.tag", this.stageActor.ref)
+            DistributedPubSubMediator.Subscribe("akka.persistence.cassandra.journal.tag", this.stageActor.ref)
           }
         }
         query()
@@ -266,11 +265,10 @@ import com.datastax.driver.core.utils.UUIDs
           continue()
       }
 
-      override def onPull(): Unit = {
+      override def onPull(): Unit =
         tryPushOne()
-      }
 
-      private def continue(): Unit = {
+      private def continue(): Unit =
         stageState.state match {
           case QueryIdle =>
             if (stageState.isLookingForMissing)
@@ -282,29 +280,48 @@ import com.datastax.driver.core.utils.UUIDs
             tryPushOne()
           case _: QueryInProgress =>
         }
-      }
 
       private def query(): Unit = {
         updateToOffset()
         if (log.isDebugEnabled) {
-          log.debug("[{}] Executing query: timeBucket: {} from offset: {} to offset: {}", stageUuid, stageState.currentTimeBucket, formatOffset(stageState.fromOffset), formatOffset(stageState.toOffset))
+          log.debug(
+            "[{}] Executing query: timeBucket: {} from offset: {} to offset: {}",
+            stageUuid,
+            stageState.currentTimeBucket,
+            formatOffset(stageState.fromOffset),
+            formatOffset(stageState.toOffset)
+          )
         }
         updateStageState(_.copy(state = QueryInProgress()))
-        session.selectEventsForBucket(stageState.currentTimeBucket, stageState.fromOffset, stageState.toOffset).onComplete(newResultSetCb.invoke)
+        session
+          .selectEventsForBucket(stageState.currentTimeBucket, stageState.fromOffset, stageState.toOffset)
+          .onComplete(newResultSetCb.invoke)
       }
 
       private def lookForMissing(): Unit = {
         val missing = stageState.missingLookup match {
           case Some(m) => m
-          case None => throw new IllegalStateException(s"lookingForMissingCalled for tag ${session.tag} when there " +
-            s"is no missing. Raise a bug with debug logging.")
+          case None =>
+            throw new IllegalStateException(
+              s"lookingForMissingCalled for tag ${session.tag} when there " +
+              s"is no missing. Raise a bug with debug logging."
+            )
         }
 
         if (missing.deadline.isOverdue()) {
-          log.info("[{}] {}: Failed to find missing sequence nr: {}. PersistenceId: {}", stageUuid, session.tag, stageState.missingLookup, missing.persistenceId)
+          log.info("[{}] {}: Failed to find missing sequence nr: {}. PersistenceId: {}",
+                   stageUuid,
+                   session.tag,
+                   stageState.missingLookup,
+                   missing.persistenceId)
           if (missing.failIfNotFound) {
-            fail(out, new IllegalStateException(s"Unable to find missing tagged event: PersistenceId: ${missing.persistenceId}. " +
-              s"Tag: ${session.tag}. TagPidSequenceNr: ${missing.missing}. Previous offset: ${missing.previousOffset}"))
+            fail(
+              out,
+              new IllegalStateException(
+                s"Unable to find missing tagged event: PersistenceId: ${missing.persistenceId}. " +
+                s"Tag: ${session.tag}. TagPidSequenceNr: ${missing.missing}. Previous offset: ${missing.previousOffset}"
+              )
+            )
           } else {
             stopLookingForMissing(missing, missing.buffered)
             tryPushOne()
@@ -314,9 +331,14 @@ import com.datastax.driver.core.utils.UUIDs
           if (log.isInfoEnabled) {
             log.info(
               s"[${stageUuid}] " + "{}: Executing query to look for missing. Timebucket: {}. From: {}. To: {}",
-              session.tag, missing.bucket, formatOffset(missing.previousOffset), formatOffset(missing.maxOffset))
+              session.tag,
+              missing.bucket,
+              formatOffset(missing.previousOffset),
+              formatOffset(missing.maxOffset)
+            )
           }
-          session.selectEventsForBucket(missing.bucket, missing.previousOffset, missing.maxOffset)
+          session
+            .selectEventsForBucket(missing.bucket, missing.previousOffset, missing.maxOffset)
             .onComplete(newResultSetCb.invoke)
         }
       }
@@ -329,23 +351,25 @@ import com.datastax.driver.core.utils.UUIDs
         if (rowPersistenceId == m.persistenceId && m.missing.contains(rowTagPidSequenceNr)) {
           val uuidRow = extractUuidRow(row)
           val remainingEvents = m.missing - uuidRow.tagPidSequenceNr
-          log.info(
-            "[{}] {}: Found a missing event, sequence nr {}. Remaining missing: {}",
-            stageUuid, session.tag, uuidRow.tagPidSequenceNr, remainingEvents)
+          log.info("[{}] {}: Found a missing event, sequence nr {}. Remaining missing: {}",
+                   stageUuid,
+                   session.tag,
+                   uuidRow.tagPidSequenceNr,
+                   remainingEvents)
           if (remainingEvents.isEmpty) {
             stopLookingForMissing(m, uuidRow :: m.buffered)
           } else {
             log.info("[{}] {}: There are more missing events. {}", stageUuid, session.tag, remainingEvents)
-            stageState = stageState.copy(missingLookup = stageState.missingLookup.map(m => m.copy(
-              missing = remainingEvents,
-              buffered = uuidRow :: m.buffered)))
+            stageState = stageState.copy(
+              missingLookup =
+                stageState.missingLookup.map(m => m.copy(missing = remainingEvents, buffered = uuidRow :: m.buffered))
+            )
           }
         }
       }
 
-      private def updateStageState(f: StageState => StageState): Unit = {
+      private def updateStageState(f: StageState => StageState): Unit =
         stageState = f(stageState)
-      }
 
       /**
        * Works out if this is an acceptable [[TagPidSequenceNr]].
@@ -359,8 +383,10 @@ import com.datastax.driver.core.utils.UUIDs
       def handleFirstTimePersistenceId(repr: UUIDRow): Boolean = {
         val expectedSequenceNr = 1L
         if (repr.tagPidSequenceNr == expectedSequenceNr) {
-          updateStageState(_.copy(fromOffset = repr.offset)
-            .tagPidSequenceNumberUpdate(repr.persistenceId, (1, repr.offset)))
+          updateStageState(
+            _.copy(fromOffset = repr.offset)
+              .tagPidSequenceNumberUpdate(repr.persistenceId, (1, repr.offset))
+          )
           push(out, repr)
           false
         } else if (usingOffset && (stageState.currentTimeBucket.inPast || settings.eventsByTagNewPersistenceIdScanTimeout == Duration.Zero)) {
@@ -368,15 +394,25 @@ import com.datastax.driver.core.utils.UUIDs
           // the first tagPidSequenceNr
           log.debug(
             "[{}] New persistence id: {}. Timebucket: {}. Tag pid sequence nr: {}",
-            stageUuid, repr.persistenceId, stageState.currentTimeBucket, repr.tagPidSequenceNr)
-          updateStageState(_.copy(fromOffset = repr.offset)
-            .tagPidSequenceNumberUpdate(repr.persistenceId, (repr.tagPidSequenceNr, repr.offset)))
+            stageUuid,
+            repr.persistenceId,
+            stageState.currentTimeBucket,
+            repr.tagPidSequenceNr
+          )
+          updateStageState(
+            _.copy(fromOffset = repr.offset)
+              .tagPidSequenceNumberUpdate(repr.persistenceId, (repr.tagPidSequenceNr, repr.offset))
+          )
           push(out, repr)
           false
         } else {
           log.info(
             s"[${stageUuid}] " + " {}: Missing event for new persistence id: {}. Expected tag pid sequence nr: {}, actual: {}.",
-            session.tag, repr.persistenceId, expectedSequenceNr, repr.tagPidSequenceNr)
+            session.tag,
+            repr.persistenceId,
+            expectedSequenceNr,
+            repr.tagPidSequenceNr
+          )
           val previousBucketStart = UUIDs.startOf(stageState.currentTimeBucket.previous(1).key)
           val startingOffset: UUID = if (UUIDComparator.comparator.compare(previousBucketStart, fromOffset) < 0) {
             log.debug("[{}] Starting at fromOffset", stageUuid)
@@ -387,18 +423,24 @@ import com.datastax.driver.core.utils.UUIDs
           }
           val bucket = TimeBucket(startingOffset, bucketSize)
           val lookInPrevious = !bucket.within(startingOffset)
-          updateStageState(_.copy(missingLookup =
-            Some(LookingForMissing(
-              repr :: Nil,
-              startingOffset,
-              bucket,
-              lookInPrevious,
-              repr.offset,
-              repr.persistenceId,
-              repr.tagPidSequenceNr,
-              (1L until repr.tagPidSequenceNr).toSet,
-              failIfNotFound = false,
-              deadline = Deadline.now + settings.eventsByTagNewPersistenceIdScanTimeout))))
+          updateStageState(
+            _.copy(
+              missingLookup = Some(
+                LookingForMissing(
+                  repr :: Nil,
+                  startingOffset,
+                  bucket,
+                  lookInPrevious,
+                  repr.offset,
+                  repr.persistenceId,
+                  repr.tagPidSequenceNr,
+                  (1L until repr.tagPidSequenceNr).toSet,
+                  failIfNotFound = false,
+                  deadline = Deadline.now + settings.eventsByTagNewPersistenceIdScanTimeout
+                )
+              )
+            )
+          )
           true
         }
       }
@@ -407,40 +449,65 @@ import com.datastax.driver.core.utils.UUIDs
         val expectedSequenceNr = lastSequenceNr + 1
         val pid = repr.persistenceId
         if (repr.tagPidSequenceNr < expectedSequenceNr) {
-          log.warning(s"[${stageUuid}] " + "Duplicate sequence number. Persistence id: {}. Tag: {}. Expected sequence nr: {}. " +
-            "Actual {}. This will be dropped.", pid, session.tag, expectedSequenceNr, repr.tagPidSequenceNr)
+          log.warning(
+            s"[${stageUuid}] " + "Duplicate sequence number. Persistence id: {}. Tag: {}. Expected sequence nr: {}. " +
+            "Actual {}. This will be dropped.",
+            pid,
+            session.tag,
+            expectedSequenceNr,
+            repr.tagPidSequenceNr
+          )
           false
         } else if (repr.tagPidSequenceNr > expectedSequenceNr) {
           log.info(
             s"[${stageUuid}] " + "{}: Missing event for persistence id: {}. Expected sequence nr: {}, actual: {}.",
-            session.tag, pid, expectedSequenceNr, repr.tagPidSequenceNr)
+            session.tag,
+            pid,
+            expectedSequenceNr,
+            repr.tagPidSequenceNr
+          )
           val bucket = TimeBucket(repr.offset, bucketSize)
           val lookInPrevious = !bucket.within(lastUUID)
-          updateStageState(_.copy(missingLookup = Some(LookingForMissing(
-            repr :: Nil,
-            lastUUID,
-            bucket,
-            lookInPrevious,
-            repr.offset,
-            repr.persistenceId,
-            repr.tagPidSequenceNr,
-            (expectedSequenceNr until repr.tagPidSequenceNr).toSet,
-            failIfNotFound = true,
-            deadline = Deadline.now + settings.eventsByTagGapTimeout))))
+          updateStageState(
+            _.copy(
+              missingLookup = Some(
+                LookingForMissing(
+                  repr :: Nil,
+                  lastUUID,
+                  bucket,
+                  lookInPrevious,
+                  repr.offset,
+                  repr.persistenceId,
+                  repr.tagPidSequenceNr,
+                  (expectedSequenceNr until repr.tagPidSequenceNr).toSet,
+                  failIfNotFound = true,
+                  deadline = Deadline.now + settings.eventsByTagGapTimeout
+                )
+              )
+            )
+          )
           true
         } else {
           // this is per row so put behind a flag. Per query logging is on at debug without this flag
           if (verboseDebug)
-            log.debug(s"[${stageUuid}] " + " Updating offset to {} from pId {} seqNr {} tagPidSequenceNr {}", formatOffset(stageState.fromOffset),
-              pid, repr.sequenceNr, repr.tagPidSequenceNr)
+            log.debug(
+              s"[${stageUuid}] " + " Updating offset to {} from pId {} seqNr {} tagPidSequenceNr {}",
+              formatOffset(stageState.fromOffset),
+              pid,
+              repr.sequenceNr,
+              repr.tagPidSequenceNr
+            )
 
-          updateStageState(_.copy(fromOffset = repr.offset).tagPidSequenceNumberUpdate(repr.persistenceId, (expectedSequenceNr, repr.offset)))
+          updateStageState(
+            _.copy(fromOffset = repr.offset)
+              .tagPidSequenceNumberUpdate(repr.persistenceId, (expectedSequenceNr, repr.offset))
+          )
           push(out, repr)
           false
         }
       }
 
-      @tailrec def tryPushOne(): Unit = {
+      @tailrec def tryPushOne(): Unit =
         stageState.state match {
           case QueryResult(rs) if isAvailable(out) =>
             if (rs.isExhausted) {
@@ -491,32 +558,41 @@ import com.datastax.driver.core.utils.UUIDs
             }
 
           case _ =>
-            log.debug("[{}] Trying to push one but no query results currently {} or demand {}", stageUuid, stageState.state, isAvailable(out))
+            log.debug("[{}] Trying to push one but no query results currently {} or demand {}",
+                      stageUuid,
+                      stageState.state,
+                      isAvailable(out))
         }
-      }
 
       private def queryExhausted(): Unit = {
         updateQueryState(QueryIdle)
 
         if (log.isDebugEnabled) {
-          log.debug("[{}] Query exhausted, next query: from: {} to: {}", stageUuid, formatOffset(stageState.fromOffset), formatOffset(stageState.toOffset))
+          log.debug("[{}] Query exhausted, next query: from: {} to: {}",
+                    stageUuid,
+                    formatOffset(stageState.fromOffset),
+                    formatOffset(stageState.toOffset))
         }
 
         if (stageState.isLookingForMissing) {
           val missing = stageState.missingLookup.get
           if (missing.queryPrevious) {
             log.info("[{}] {}: Missing could be in previous bucket. Querying right away.", stageUuid, session.tag)
-            updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => m.copy(
-              queryPrevious = false,
-              bucket = m.bucket.previous(1)))))
+            updateStageState(
+              _.copy(
+                missingLookup =
+                  stageState.missingLookup.map(m => m.copy(queryPrevious = false, bucket = m.bucket.previous(1)))
+              )
+            )
             lookForMissing()
           } else {
-            log.info("[{}] {}: Still looking for missing. {}. Waiting for next poll.", stageUuid, session.tag, stageState)
+            log.info("[{}] {}: Still looking for missing. {}. Waiting for next poll.",
+                     stageUuid,
+                     session.tag,
+                     stageState)
             updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => {
               val newBucket = TimeBucket(m.maxOffset, bucketSize)
-              m.copy(
-                bucket = newBucket,
-                queryPrevious = !newBucket.within(m.previousOffset))
+              m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.previousOffset))
             })))
             // a current query doesn't have a poll we schedule
             if (!isLiveQuery())
@@ -534,7 +610,9 @@ import com.datastax.driver.core.utils.UUIDs
             log.debug("[{}] Nothing todo, waiting for next poll", stageUuid)
             if (!isLiveQuery()) {
               // As this isn't a live query schedule a poll for now
-              log.debug("[{}] Scheduling poll for eventual consistency delay: {}", stageUuid, settings.eventsByTagEventualConsistency)
+              log.debug("[{}] Scheduling poll for eventual consistency delay: {}",
+                        stageUuid,
+                        settings.eventsByTagEventualConsistency)
               scheduleOnce(QueryPoll, settings.eventsByTagEventualConsistency)
             }
           }
@@ -548,8 +626,10 @@ import com.datastax.driver.core.utils.UUIDs
           BufferedEvents(buffered.sortBy(_.tagPidSequenceNr))
         })
         log.info("[{}] No more missing events. Sending buffered events. {}", stageUuid, stageState.state)
-        updateStageState(_.copy(fromOffset = m.maxOffset, missingLookup = None)
-          .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset)))
+        updateStageState(
+          _.copy(fromOffset = m.maxOffset, missingLookup = None)
+            .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset))
+        )
       }
 
       private def fetchMore(rs: ResultSet): Unit = {
@@ -559,14 +639,14 @@ import com.datastax.driver.core.utils.UUIDs
         moreResults.onComplete(newResultSetCb.invoke)
       }
 
-      private def extractUuidRow(row: Row): UUIDRow = {
+      private def extractUuidRow(row: Row): UUIDRow =
         UUIDRow(
           persistenceId = row.getString("persistence_id"),
           sequenceNr = row.getLong("sequence_nr"),
           offset = row.getUUID("timestamp"),
           tagPidSequenceNr = row.getLong("tag_pid_sequence_nr"),
-          row)
-      }
+          row
+        )
 
       private def nextTimeBucket(): Unit = {
         updateStageState(_.copy(fromOffset = UUIDs.startOf(stageState.currentTimeBucket.next().key)))

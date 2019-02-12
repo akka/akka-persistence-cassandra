@@ -4,7 +4,7 @@
 
 package akka.persistence.cassandra.query
 
-import java.lang.{ Long => JLong }
+import java.lang.{Long => JLong}
 import java.util.UUID
 
 import akka.annotation.InternalApi
@@ -17,30 +17,35 @@ import akka.stream.ActorMaterializer
 import com.datastax.driver.core.PreparedStatement
 import com.datastax.driver.core.utils.UUIDs
 
-import scala.concurrent.duration.{ Deadline, FiniteDuration }
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.duration.{Deadline, FiniteDuration}
+import scala.concurrent.{ExecutionContext, Future}
 
 @InternalApi
-private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: Future[PreparedStatement])(implicit materializer: ActorMaterializer, ec: ExecutionContext) {
+private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: Future[PreparedStatement])(
+    implicit materializer: ActorMaterializer,
+    ec: ExecutionContext
+) {
   private val log = Logging(materializer.system, getClass)
+
   /**
    * This could be its own stage and return half way through a query to better meet the deadline
    * but this is a quick and simple way to do it given we're scanning a small segment
    */
-  private[akka] def scan(
-    tag:            String,
-    offset:         UUID,
-    bucket:         TimeBucket,
-    scanningPeriod: FiniteDuration): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
+  private[akka] def scan(tag: String,
+                         offset: UUID,
+                         bucket: TimeBucket,
+                         scanningPeriod: FiniteDuration): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] =
     ps.flatMap(ps => {
       val deadline: Deadline = Deadline.now + scanningPeriod
       val to = UUIDs.endOf(System.currentTimeMillis() + scanningPeriod.toMillis)
 
       def doIt(): Future[Map[Tag, (TagPidSequenceNr, UUID)]] = {
         val bound = ps.bind(tag, bucket.key: JLong, offset, to)
-        log.debug(
-          "Scanning tag: {} bucket: {}, from: {}, to: {}",
-          tag, bucket.key, formatOffset(offset), formatOffset(to))
+        log.debug("Scanning tag: {} bucket: {}, from: {}, to: {}",
+                  tag,
+                  bucket.key,
+                  formatOffset(offset),
+                  formatOffset(to))
         val source = session.select(bound)
         val doneIt = source
           .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUUID("timestamp")))
@@ -76,5 +81,4 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
         }
       }
     })
-  }
 }

@@ -8,7 +8,7 @@ import java.util.UUID
 
 import akka.NotUsed
 import akka.actor.ActorRef
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraPluginConfig, CassandraSpec}
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import com.datastax.driver.core.Session
@@ -29,8 +29,7 @@ object AllPersistenceIdsSpec {
     """).withFallback(CassandraLifecycle.config)
 }
 
-class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config)
-  with BeforeAndAfterEach {
+class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) with BeforeAndAfterEach {
 
   val cfg = system.settings.config.getConfig("cassandra-journal")
   val pluginConfig = new CassandraPluginConfig(system, cfg)
@@ -60,9 +59,8 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config)
 
   def current(): Source[String, NotUsed] = queries.currentPersistenceIds().filterNot(_ == "persistenceInit")
 
-  private[this] def deleteAllEvents(): Unit = {
+  private[this] def deleteAllEvents(): Unit =
     session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.table}")
-  }
 
   private[this] def setup(persistenceId: String, n: Int): ActorRef = {
     val ref = system.actorOf(TestActor.props(persistenceId))
@@ -81,7 +79,8 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config)
       setup("c", 1)
 
       val src = current()
-      src.runWith(TestSink.probe[Any])
+      src
+        .runWith(TestSink.probe[Any])
         .request(4)
         .expectNextUnordered("a", "b", "c")
         .expectComplete()
@@ -91,7 +90,8 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config)
       setup("d", 100)
 
       val src = current()
-      src.runWith(TestSink.probe[Any])
+      src
+        .runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("d")
         .expectComplete()
@@ -120,7 +120,8 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config)
       setup("f", 1)
 
       val src = all()
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src
+        .runWith(TestSink.probe[Any])
         .request(5)
         .expectNextUnordered("e", "f")
 

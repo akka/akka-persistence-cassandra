@@ -4,10 +4,10 @@
 
 package akka.persistence.cassandra.query
 
-import java.time.{ LocalDateTime, ZoneOffset }
+import java.time.{LocalDateTime, ZoneOffset}
 
 import akka.actor.ActorRef
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
 import akka.persistence.query.NoOffset
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
@@ -17,8 +17,7 @@ import scala.concurrent.duration._
 object EventAdaptersReadSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
     akka.actor.serialize-messages=off
     cassandra-journal.keyspace=EventAdaptersReadSpec
@@ -65,11 +64,13 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
     "not replay dropped events by the event-adapter" in {
       setup("a", 6, {
         case x if x % 2 == 0 => "dropped:"
-        case _               => ""
+        case _ => ""
       })
 
       val src = queries.currentEventsByPersistenceId("a", 0L, Long.MaxValue)
-      src.map(_.event).runWith(TestSink.probe[Any])
+      src
+        .map(_.event)
+        .runWith(TestSink.probe[Any])
         .request(2)
         .expectNext("a-1", "a-3")
         .expectNoMessage(500.millis)
@@ -82,11 +83,13 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
 
       setup("b", 3, {
         case x if x % 2 == 0 => "duplicated:"
-        case _               => ""
+        case _ => ""
       })
 
       val src = queries.currentEventsByPersistenceId("b", 0L, Long.MaxValue)
-      src.map(_.event).runWith(TestSink.probe[Any])
+      src
+        .map(_.event)
+        .runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("b-1", "b-2", "b-2", "b-3")
         .expectComplete()
@@ -97,7 +100,9 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
       setup("c", 1, _ => "prefixed:foo:")
 
       val src = queries.currentEventsByPersistenceId("c", 0L, Long.MaxValue)
-      src.map(_.event).runWith(TestSink.probe[Any])
+      src
+        .map(_.event)
+        .runWith(TestSink.probe[Any])
         .request(10)
         .expectNext("foo-c-1")
         .expectComplete()
@@ -110,7 +115,7 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
 
       setup("d", 6, tagged("red") {
         case x if x % 2 == 0 => "dropped:"
-        case _               => ""
+        case _ => ""
       })
 
       val src = queries.eventsByTag("red", NoOffset)
@@ -125,13 +130,14 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
 
       setup("e", 3, tagged("yellow") {
         case x if x % 2 == 0 => "duplicated:"
-        case _               => ""
+        case _ => ""
       })
 
       val src = queries.eventsByTag("yellow", NoOffset)
       val sub = src.map(_.event).runWith(TestSink.probe[Any])
 
-      sub.request(10)
+      sub
+        .request(10)
         .expectNext("e-1", "e-2", "e-2", "e-3")
         .expectNoMessage(waitTime)
       sub.cancel()
@@ -141,12 +147,13 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
 
       setup("e", 3, tagged("green") {
         case x if x % 2 == 0 => "prefixed:foo:"
-        case _               => ""
+        case _ => ""
       })
 
       val src = queries.eventsByTag("green", NoOffset)
       val sub = src.map(_.event).runWith(TestSink.probe[Any])
-      sub.request(10)
+      sub
+        .request(10)
         .expectNext("e-1", "foo-e-2", "e-3")
         .expectNoMessage(waitTime)
       sub.cancel()

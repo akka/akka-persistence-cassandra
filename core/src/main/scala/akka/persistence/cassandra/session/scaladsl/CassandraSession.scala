@@ -6,7 +6,7 @@ package akka.persistence.cassandra.session.scaladsl
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
-import java.util.function.{ Function => JFunction }
+import java.util.function.{Function => JFunction}
 
 import scala.annotation.tailrec
 import scala.collection.immutable
@@ -19,7 +19,7 @@ import scala.util.control.NonFatal
 
 import akka.Done
 import akka.NotUsed
-import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
+import akka.actor.{ActorSystem, NoSerializationVerificationNeeded}
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.CassandraMetricsRegistry
 import akka.persistence.cassandra.ListenableFutureConverter
@@ -56,14 +56,14 @@ import akka.persistence.cassandra.FutureDone
  *
  * All methods are non-blocking.
  */
-final class CassandraSession(
-  system:           ActorSystem,
-  sessionProvider:  SessionProvider,
-  settings:         CassandraSessionSettings,
-  executionContext: ExecutionContext,
-  log:              LoggingAdapter,
-  metricsCategory:  String,
-  init:             Session => Future[Done]) extends NoSerializationVerificationNeeded {
+final class CassandraSession(system: ActorSystem,
+                             sessionProvider: SessionProvider,
+                             settings: CassandraSessionSettings,
+                             executionContext: ExecutionContext,
+                             log: LoggingAdapter,
+                             metricsCategory: String,
+                             init: Session => Future[Done])
+    extends NoSerializationVerificationNeeded {
   import settings._
 
   implicit private[akka] val ec = executionContext
@@ -75,9 +75,11 @@ final class CassandraSession(
     override def apply(key: String): Future[PreparedStatement] =
       underlying().flatMap { s =>
         val prepared = s.prepareAsync(key).asScala
-        prepared.failed.foreach(_ =>
-          // this is async, i.e. we are not updating the map from the compute function
-          preparedStatements.remove(key))
+        prepared.failed.foreach(
+          _ =>
+            // this is async, i.e. we are not updating the map from the compute function
+            preparedStatements.remove(key)
+        )
         prepared
       }
   }
@@ -92,13 +94,12 @@ final class CassandraSession(
    */
   final def underlying(): Future[Session] = {
 
-    def initialize(session: Future[Session]): Future[Session] = {
+    def initialize(session: Future[Session]): Future[Session] =
       session.flatMap { s =>
         val result = init(s)
         result.failed.foreach(_ => close(s))
         result.map(_ => s)
       }
-    }
 
     @tailrec def setup(): Future[Session] = {
       val existing = _underlyingSession.get
@@ -132,9 +133,8 @@ final class CassandraSession(
     if (existing == null) {
       val result = retry(() => setup())
       result.failed.foreach { e =>
-        log.warning(
-          "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
-          e.getMessage)
+        log.warning("Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
+                    e.getMessage)
       }
       result
     } else
@@ -144,7 +144,7 @@ final class CassandraSession(
   private def retry(setup: () => Future[Session]): Future[Session] = {
     val promise = Promise[Session]
 
-    def tryAgain(count: Int, cause: Throwable): Unit = {
+    def tryAgain(count: Int, cause: Throwable): Unit =
       if (count == 0)
         promise.failure(cause)
       else {
@@ -152,20 +152,18 @@ final class CassandraSession(
           trySetup(count)
         }
       }
-    }
 
-    def trySetup(count: Int): Unit = {
+    def trySetup(count: Int): Unit =
       try {
         setup().onComplete {
           case Success(session) => promise.success(session)
-          case Failure(cause)   => tryAgain(count - 1, cause)
+          case Failure(cause) => tryAgain(count - 1, cause)
         }
       } catch {
         case NonFatal(e) =>
           // this is only in case the direct calls, such as sessionProvider, throws
           promise.failure(e)
       }
-    }
 
     trySetup(settings.connectionRetries)
 
@@ -178,12 +176,11 @@ final class CassandraSession(
     CassandraMetricsRegistry(system).removeMetrics(metricsCategory)
   }
 
-  def close(): Unit = {
+  def close(): Unit =
     _underlyingSession.getAndSet(null) match {
-      case null     =>
+      case null =>
       case existing => existing.foreach(close)
     }
-  }
 
   /**
    * This can only be used after successful initialization,
@@ -192,7 +189,7 @@ final class CassandraSession(
   def protocolVersion: ProtocolVersion =
     underlying().value match {
       case Some(Success(s)) => s.getCluster.getConfiguration.getProtocolOptions.getProtocolVersion
-      case _                => throw new IllegalStateException("protocolVersion can only be accessed after successful init")
+      case _ => throw new IllegalStateException("protocolVersion can only be accessed after successful init")
     }
 
   /**
@@ -201,12 +198,11 @@ final class CassandraSession(
    * The returned `Future` is completed when the table has been created,
    * or if the statement fails.
    */
-  def executeCreateTable(stmt: String): Future[Done] = {
+  def executeCreateTable(stmt: String): Future[Done] =
     for {
       s <- underlying()
       _ <- s.executeAsync(stmt).asScala
     } yield Done
-  }
 
   /**
    * Create a `PreparedStatement` that can be bound and used in
@@ -263,8 +259,9 @@ final class CassandraSession(
    */
   def executeWrite(stmt: String, bindValues: AnyRef*): Future[Done] = {
     val bound: Future[BoundStatement] = prepare(stmt).map { ps =>
-      val bs = if (bindValues.isEmpty) ps.bind()
-      else ps.bind(bindValues: _*)
+      val bs =
+        if (bindValues.isEmpty) ps.bind()
+        else ps.bind(bindValues: _*)
       bs
     }
     bound.flatMap(b => executeWrite(b))
@@ -311,8 +308,9 @@ final class CassandraSession(
    */
   def select(stmt: String, bindValues: AnyRef*): Source[Row, NotUsed] = {
     val bound: Future[BoundStatement] = prepare(stmt).map { ps =>
-      val bs = if (bindValues.isEmpty) ps.bind()
-      else ps.bind(bindValues: _*)
+      val bs =
+        if (bindValues.isEmpty) ps.bind()
+        else ps.bind(bindValues: _*)
       bs.setConsistencyLevel(readConsistency)
       bs
     }
@@ -333,8 +331,10 @@ final class CassandraSession(
   def selectAll(stmt: Statement): Future[immutable.Seq[Row]] = {
     if (stmt.getConsistencyLevel == null)
       stmt.setConsistencyLevel(readConsistency)
-    Source.fromGraph(new SelectSource(Future.successful(stmt)))
-      .runWith(Sink.seq).map(_.toVector) // Sink.seq returns Seq, not immutable.Seq (compilation issue in Eclipse)
+    Source
+      .fromGraph(new SelectSource(Future.successful(stmt)))
+      .runWith(Sink.seq)
+      .map(_.toVector) // Sink.seq returns Seq, not immutable.Seq (compilation issue in Eclipse)
   }
 
   /**
@@ -347,9 +347,11 @@ final class CassandraSession(
    * The returned `Future` is completed with the found rows.
    */
   def selectAll(stmt: String, bindValues: AnyRef*): Future[immutable.Seq[Row]] = {
-    val bound: Future[BoundStatement] = prepare(stmt).map(ps =>
-      if (bindValues.isEmpty) ps.bind()
-      else ps.bind(bindValues: _*))
+    val bound: Future[BoundStatement] = prepare(stmt).map(
+      ps =>
+        if (bindValues.isEmpty) ps.bind()
+        else ps.bind(bindValues: _*)
+    )
     bound.flatMap(bs => selectAll(bs))
   }
 
@@ -381,9 +383,11 @@ final class CassandraSession(
    * if any.
    */
   def selectOne(stmt: String, bindValues: AnyRef*): Future[Option[Row]] = {
-    val bound: Future[BoundStatement] = prepare(stmt).map(ps =>
-      if (bindValues.isEmpty) ps.bind()
-      else ps.bind(bindValues: _*))
+    val bound: Future[BoundStatement] = prepare(stmt).map(
+      ps =>
+        if (bindValues.isEmpty) ps.bind()
+        else ps.bind(bindValues: _*)
+    )
     bound.flatMap(bs => selectOne(bs))
   }
 
@@ -410,7 +414,9 @@ final class CassandraSession(
           stmt.failed.foreach(e => asyncFailure.invoke(e))
           stmt.foreach { s =>
             val rsFut = underlying().flatMap(_.executeAsync(s).asScala)
-            rsFut.failed.foreach { e => asyncFailure.invoke(e) }
+            rsFut.failed.foreach { e =>
+              asyncFailure.invoke(e)
+            }
             rsFut.foreach(asyncResult.invoke)
           }
         }
@@ -430,7 +436,9 @@ final class CassandraSession(
               else {
                 resultSet = None
                 val rsFut = rs.fetchMoreResults().asScala
-                rsFut.failed.foreach { e => asyncFailure.invoke(e) }
+                rsFut.failed.foreach { e =>
+                  asyncFailure.invoke(e)
+                }
                 rsFut.foreach(asyncResult.invoke)
               }
 
@@ -447,7 +455,8 @@ final class CassandraSession(
 @InternalApi private[akka] final object CassandraSession {
   private val serializedExecutionProgress = new AtomicReference[Future[Done]](FutureDone)
 
-  def serializedExecution(recur: () => Future[Done], exec: () => Future[Done])(implicit ec: ExecutionContext): Future[Done] = {
+  def serializedExecution(recur: () => Future[Done],
+                          exec: () => Future[Done])(implicit ec: ExecutionContext): Future[Done] = {
     val progress = serializedExecutionProgress.get
     val p = Promise[Done]()
     progress.onComplete { _ =>

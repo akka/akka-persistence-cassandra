@@ -31,6 +31,7 @@ trait SessionProvider {
 }
 
 object SessionProvider {
+
   /**
    * Create a `SessionProvider` from configuration.
    * The `session-provider` config property defines the fully qualified
@@ -50,8 +51,14 @@ object SessionProvider {
       .recoverWith { case x: NoSuchMethodException ⇒ instantiate(Nil) }
       .recoverWith {
         case ex: Exception ⇒
-          Failure(new IllegalArgumentException(s"Unable to create SessionProvider instance for class [$className], " +
-            "tried constructor with ActorSystem, Config, and only ActorSystem, and no parameters", ex))
-      }.get
+          Failure(
+            new IllegalArgumentException(
+              s"Unable to create SessionProvider instance for class [$className], " +
+              "tried constructor with ActorSystem, Config, and only ActorSystem, and no parameters",
+              ex
+            )
+          )
+      }
+      .get
   }
 }

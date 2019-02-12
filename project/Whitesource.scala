@@ -13,14 +13,19 @@ object Whitesource extends AutoPlugin {
     // do not change the value of whitesourceProduct
     whitesourceProduct := "Lightbend Reactive Platform",
     whitesourceAggregateProjectName := {
-      val projectName = (moduleName in LocalRootProject).value.replace("-root", "")
-      projectName + "-" + (
-        if (isSnapshot.value)
-          if (gitCurrentBranch.value == "master") "master"
-          else "adhoc"
-        else CrossVersion.partialVersion((version in LocalRootProject).value)
-          .map { case (major,minor) => s"$major.$minor-stable" }
-          .getOrElse("adhoc"))
+      val projectName =
+        (moduleName in LocalRootProject).value.replace("-root", "")
+      projectName + "-" + (if (isSnapshot.value)
+                             if (gitCurrentBranch.value == "master") "master"
+                             else "adhoc"
+                           else
+                             CrossVersion
+                               .partialVersion(
+                                 (version in LocalRootProject).value)
+                               .map {
+                                 case (major, minor) => s"$major.$minor-stable"
+                               }
+                               .getOrElse("adhoc"))
     },
     whitesourceForceCheckAllDependencies := true,
     whitesourceFailOnError := true

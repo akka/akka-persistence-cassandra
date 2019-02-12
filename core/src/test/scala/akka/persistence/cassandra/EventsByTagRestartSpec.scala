@@ -5,11 +5,11 @@
 package akka.persistence.cassandra
 
 import java.time.format.DateTimeFormatter
-import java.time.{ LocalDateTime, ZoneOffset }
+import java.time.{LocalDateTime, ZoneOffset}
 
-import akka.persistence.cassandra.TestTaggingActor.{ Ack, Stop }
+import akka.persistence.cassandra.TestTaggingActor.{Ack, Stop}
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
+import akka.persistence.query.{EventEnvelope, NoOffset, PersistenceQuery}
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
@@ -23,8 +23,7 @@ object EventsByTagRestartSpec {
   val firstBucketFormat: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyyMMdd'T'HH:mm")
 
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
        |akka {
        |  loglevel = INFO
        |  actor.debug.unhandled = on

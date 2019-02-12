@@ -5,16 +5,15 @@
 package akka.persistence.cassandra.journal
 
 import akka.actor._
-import akka.persistence.{ PersistentActor, RecoveryCompleted, SnapshotOffer }
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.{PersistentActor, RecoveryCompleted, SnapshotOffer}
+import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
 import akka.persistence.journal.Tagged
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 
 object RecoveryLoadSpec {
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
       akka.loglevel = INFO
       cassandra-journal.keyspace=RecoveryLoadSpec
       cassandra-journal.events-by-tag.enabled = on
@@ -30,14 +29,17 @@ object RecoveryLoadSpec {
   private final case class Next(remaining: Int)
   final case class Delete(seqNr: Long)
   case object GetMetrics
-  final case class Metrics(snapshotDuration: FiniteDuration, replayDuration1: FiniteDuration,
-                           replayDuration2: FiniteDuration, replayedEvents: Int,
+  final case class Metrics(snapshotDuration: FiniteDuration,
+                           replayDuration1: FiniteDuration,
+                           replayDuration2: FiniteDuration,
+                           replayedEvents: Int,
                            totalDuration: FiniteDuration)
 
   def props(persistenceId: String, snapshotEvery: Int, tagging: Long => Set[String]): Props =
     Props(new ProcessorA(persistenceId, snapshotEvery, tagging))
 
-  class ProcessorA(val persistenceId: String, snapshotEvery: Int, tagging: Long => Set[String]) extends PersistentActor {
+  class ProcessorA(val persistenceId: String, snapshotEvery: Int, tagging: Long => Set[String])
+      extends PersistentActor {
     val startTime = System.nanoTime()
     var snapshotEndTime = startTime
     var replayStartTime = startTime
@@ -69,7 +71,8 @@ object RecoveryLoadSpec {
           replayDuration1 = (replayStartTime - snapshotEndTime).nanos,
           replayDuration2 = (replayEndTime - replayStartTime).nanos,
           replayedEvents,
-          totalDuration = (replayEndTime - startTime).nanos)
+          totalDuration = (replayEndTime - startTime).nanos
+        )
     }
 
     def init(replyTo: ActorRef): Receive = {
@@ -111,7 +114,9 @@ class RecoveryLoadSpec extends CassandraSpec(RecoveryLoadSpec.config) {
     "have some reasonable performance" in {
       val pid = "a1"
       val snapshotEvery = 1000
-      val tagging: Long => Set[String] = { _ => Set.empty }
+      val tagging: Long => Set[String] = { _ =>
+        Set.empty
+      }
       //      val tagging: Long => Set[String] = { seqNr =>
       //        if (seqNr % 10 == 0) Set("blue")
       //        else if (seqNr % 17 == 0) Set("blue", "green")

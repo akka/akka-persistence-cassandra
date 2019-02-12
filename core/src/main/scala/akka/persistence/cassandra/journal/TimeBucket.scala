@@ -15,10 +15,9 @@ import com.datastax.driver.core.utils.UUIDs
   def apply(timeuuid: UUID, bucketSize: BucketSize): TimeBucket =
     apply(UUIDs.unixTimestamp(timeuuid), bucketSize)
 
-  def apply(epochTimestamp: Long, bucketSize: BucketSize): TimeBucket = {
+  def apply(epochTimestamp: Long, bucketSize: BucketSize): TimeBucket =
     // round down to bucket size so the times are deterministic
     new TimeBucket(roundDownBucketSize(epochTimestamp, bucketSize), bucketSize)
-  }
 
   private def roundDownBucketSize(time: Long, bucketSize: BucketSize): Long = {
     val key: Long = time / bucketSize.durationMillis
@@ -47,18 +46,16 @@ import com.datastax.driver.core.utils.UUIDs
     if (steps == 0) this
     else new TimeBucket(key - steps * bucketSize.durationMillis, bucketSize)
 
-  def >(other: TimeBucket): Boolean = {
+  def >(other: TimeBucket): Boolean =
     key > other.key
-  }
 
-  def <(other: TimeBucket): Boolean = {
+  def <(other: TimeBucket): Boolean =
     key < other.key
-  }
 
   override def equals(other: Any): Boolean = other match {
     case that: TimeBucket =>
       key == that.key &&
-        bucketSize == that.bucketSize
+      bucketSize == that.bucketSize
     case _ => false
   }
 
@@ -71,5 +68,6 @@ import com.datastax.driver.core.utils.UUIDs
 
   import akka.persistence.cassandra._
 
-  override def toString = s"TimeBucket($key, $bucketSize, inPast: $inPast, currentBucket: $isCurrent. time: ${formatUnixTime(key)} )"
+  override def toString =
+    s"TimeBucket($key, $bucketSize, inPast: $inPast, currentBucket: $isCurrent. time: ${formatUnixTime(key)} )"
 }
