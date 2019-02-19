@@ -30,7 +30,6 @@ jobs:
       script:
         - jabba use $JDK
         - java -version
-        - sbt -jvm-opts .jvmopts-travis test
 
     - stage: whitesource
       name: "White Source"
