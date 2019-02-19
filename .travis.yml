@@ -23,26 +23,13 @@ before_script:
 
 sbt_args: -d -J-XX:ReservedCodeCacheSize=128m
 
+
 jobs:
   include:
     - stage: test
-      name: "Compile with all Scala versions"
       script:
-        - jabba use "adopt@1.8.192-12"
-        - git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH"
-        - sbt -jvm-opts .jvmopts-travis ";+test:compile"
-        -
-    - stage: test
-      name: "Test Java 8"
-      script:
-        - jabba use adopt@1.8.192-12
+        - jabba use $JDK
         - java -version
-        - sbt -jvm-opts .jvmopts-travis test
-        -
-    - stage: test
-      name: "Test Java 11"
-      script:
-        - jabba use adopt@1.11.0-1
         - sbt -jvm-opts .jvmopts-travis test
 
     - stage: whitesource
@@ -64,6 +51,10 @@ cache:
     - $HOME/.jabba/jdk
 
 env:
+  matrix:
+   - JDK="adopt@1.8.192-12"
+   - JDK="adopt@1.11.0-1"
+
   global:
     # encrypt with: travis encrypt WHITESOURCE_KEY=...
     - secure: "tQ7+MgNNH5Y8wE8w6KTlbSHe3jtgQ4yc1SVaty7KK7ImZLEjLC5yO9PvXMUst/+5E4G2DsAuZdG8LInD3L7Y5tNNPer9NFOTJnzhAZf8R1YeuvX76ofMf31oyfqR8IPJPxOBkBAmMiz/Xioa+oqmsdbXlVP6OUsic7jegMPqjamy/ZAJ8/8MCn6g9AQNqajg8z27aOPXO96wLEEMR82FXffARIDlwbrtxBpEq1g9HywTIwLP9+BgLaQ+TBz+ND1WYVByqnKWwQYYFnWDo8xTZmDVxHirml1mLevR7PUbMg55FFxAo4H9K64d4RQJF6FsZhRFpMihTwdsut1BQQJ9lTML133q5ID+XX3L5yr+1GqAgnHh9Qt/Fdt4pG1iRymBR++RBZiBxANpoE23xy5QVySQ4BYlO0s37rhw0SiFlvuSXmKyTB6j52r/71ocCFbZcUDgjKQ8Q0tokzsBvSTuDwV8yh4nw4ec3/zNp03ByeuOwzJ1S7st+vnAF65Ed7v+kcLHzWLZ+ocnXWtt4+47pZm4YdPMukpCQYxNdWrHap9ughtVxOchNbP3QchOx2TA1mVo4S1pI+gNfpjEap8uhyRLTirI0g1weEBWvndKtwHQrauYyW2awOeU/IGZCPPAY71gmvy9O+JZmBOz517zia4YH2wUctI4t/p0j2MDwo8="
