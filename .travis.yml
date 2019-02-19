@@ -26,22 +26,20 @@ sbt_args: -d -J-XX:ReservedCodeCacheSize=128m
 jobs:
   include:
     - stage: test
+      name: "Test Java 8"
       script:
         - jabba use ${JDK:=adopt@1.8.192-12}
         - java -version
-        - sbt -jvm-opts .jvmopts-travis "$CMD"
-      env: TEST
-
-#    - stage: test Add java 8
-#      env: CMD="+test"
-
+        - sbt -jvm-opts .jvmopts-travis test
+        -
     - stage: test
+      name: "Test Java 11"
       script:
-      env:
-        - JDK="adopt@1.11.0-1"
-        - CMD="+test"
+        - jabba use ${JDK:=adopt@1.11.0-1}
+        - sbt -jvm-opts .jvmopts-travis test
 
     - stage: whitesource
+      name: "White source"
       script:
         # check policies, if on master and secure env vars are available
         - if [[ "$TRAVIS_SECURE_ENV_VARS" == "true" ]]; then if [[ "$TRAVIS_BRANCH" == "master" && "$TRAVIS_EVENT_TYPE" == "push" ]]; then sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies whitesourceUpdate; else sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies; fi ; fi
