@@ -21,16 +21,12 @@ before_install:
 before_script:
   - unset _JAVA_OPTIONS
 
-sbt_args: -d -J-XX:ReservedCodeCacheSize=128m
-
-
 jobs:
   include:
     - stage: test
       script:
         - jabba use $JDK
         - java -version
-        - sbt ++$TRAVIS_SCALA_VERSION -jvm-opts travis/jvmopts test
 
     - stage: whitesource
       name: "White Source"
