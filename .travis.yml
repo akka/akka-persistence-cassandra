@@ -26,31 +26,36 @@ sbt_args: -d -J-XX:ReservedCodeCacheSize=128m
 jobs:
   include:
     - stage: test
+      name: "Compile with all Scala versions"
+      script:
+        - jabba use "adopt@1.8.192-12"
+        - git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH"
+        - sbt -jvm-opts .jvmopts-travis ";+test:compile"
+        -
+    - stage: test
       name: "Test Java 8"
       script:
-        - jabba use ${JDK:=adopt@1.8.192-12}
+        - jabba use adopt@1.8.192-12
         - java -version
         - sbt -jvm-opts .jvmopts-travis test
         -
     - stage: test
       name: "Test Java 11"
       script:
-        - jabba use ${JDK:=adopt@1.11.0-1}
+        - jabba use adopt@1.11.0-1
         - sbt -jvm-opts .jvmopts-travis test
 
     - stage: whitesource
-      name: "White source"
+      name: "White Source"
       script:
         # check policies, if on master and secure env vars are available
         - if [[ "$TRAVIS_SECURE_ENV_VARS" == "true" ]]; then if [[ "$TRAVIS_BRANCH" == "master" && "$TRAVIS_EVENT_TYPE" == "push" ]]; then sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies whitesourceUpdate; else sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies; fi ; fi
 
 stages:
-  - name: check
-    if: NOT tag =~ ^v
   - name: test
     if: NOT tag =~ ^v
   - name: whitesource
-    if: repo = akka/akka-management AND ( ( branch = master AND type = push ) OR tag =~ ^v )
+    if: repo = akka/akka-cassandra AND ( ( branch = master AND type = push ) OR tag =~ ^v )
 
 cache:
   directories:
