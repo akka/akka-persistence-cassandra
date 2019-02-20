@@ -177,7 +177,7 @@ object CassandraLauncher {
       val realHost = host.getOrElse("127.0.0.1")
       val realPort = if (port == 0) randomPort else port
       val storagePort = freePort()
-      println(s"Starting Cassandra on port $realPort")
+      println(s"Starting Cassandra on port client port: $realPort storage port $storagePort host $realHost java version ${System.getProperty("java.runtime.version")}")
 
       // http://wiki.apache.org/cassandra/StorageConfiguration
       val conf = readResource(configResource)
