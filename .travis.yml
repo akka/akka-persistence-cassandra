@@ -27,6 +27,7 @@ jobs:
       script:
         - jabba use $JDK
         - java -version
+        - sbt ++$TRAVIS_SCALA_VERSION test
 
     - stage: whitesource
       name: "White Source"
