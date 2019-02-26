@@ -70,8 +70,11 @@ trait CassandraStatements {
       |  meta blob,
       |  PRIMARY KEY ((tag_name, timebucket), timestamp, persistence_id, tag_pid_sequence_nr))
       |  WITH gc_grace_seconds =${config.tagTable.gcGraceSeconds}
-      |  AND compaction = ${indent(config.tagTable.compactionStrategy.asCQL, "    ")}
-      |  ${if (config.tagTable.ttl.isDefined) "AND default_time_to_live = " + config.tagTable.ttl.get.toSeconds else ""}
+      |  AND compaction = ${indent(config.tagTable.compactionStrategy.asCQL,
+                                   "    ")}
+      |  ${if (config.tagTable.ttl.isDefined)
+         "AND default_time_to_live = " + config.tagTable.ttl.get.toSeconds
+       else ""}
     """.stripMargin.trim
 
   def createTagsProgressTable =
@@ -289,13 +292,15 @@ trait CassandraStatements {
   private def metadataTableName = s"${config.keyspace}.${config.metadataTable}"
 
   /**
-   * Execute creation of keyspace and tables is limited to one thread at a time
-   * reduce the risk of (annoying) "Column family ID mismatch" exception
-   * when write and read-side plugins are started at the same time.
-   * Those statements are retried, because that could happen across different
-   * nodes also but serializing those statements gives a better "experience".
-   */
-  private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(
+    * Execute creation of keyspace and tables is limited to one thread at a time
+    * reduce the risk of (annoying) "Column family ID mismatch" exception
+    * when write and read-side plugins are started at the same time.
+    * Those statements are retried, because that could happen across different
+    * nodes also but serializing those statements gives a better "experience".
+    */
+  private[akka] def executeCreateKeyspaceAndTables(
+      session: Session,
+      config: CassandraJournalConfig)(
       implicit ec: ExecutionContext
   ): Future[Done] = {
     import akka.persistence.cassandra.listenableFutureToFuture
@@ -312,7 +317,8 @@ trait CassandraStatements {
         } else FutureDone
 
       val keyspace: Future[Done] =
-        if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).map(_ => Done)
+        if (config.keyspaceAutoCreate)
+          session.executeAsync(createKeyspace).map(_ => Done)
         else Future.successful(Done)
 
       if (config.tablesAutoCreate) {
@@ -325,7 +331,8 @@ trait CassandraStatements {
       } else keyspace
     }
 
-    CassandraSession.serializedExecution(recur = () => executeCreateKeyspaceAndTables(session, config),
-                                         exec = () => create())
+    CassandraSession.serializedExecution(
+      recur = () => executeCreateKeyspaceAndTables(session, config),
+      exec = () => create())
   }
 }

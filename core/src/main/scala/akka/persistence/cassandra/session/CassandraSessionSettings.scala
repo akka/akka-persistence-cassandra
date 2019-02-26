@@ -19,8 +19,11 @@ object CassandraSessionSettings {
 
 class CassandraSessionSettings(val config: Config) {
   val fetchSize = config.getInt("max-result-size")
-  val readConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("read-consistency"))
-  val writeConsistency: ConsistencyLevel = ConsistencyLevel.valueOf(config.getString("write-consistency"))
+  val readConsistency: ConsistencyLevel =
+    ConsistencyLevel.valueOf(config.getString("read-consistency"))
+  val writeConsistency: ConsistencyLevel =
+    ConsistencyLevel.valueOf(config.getString("write-consistency"))
   val connectionRetries: Int = config.getInt("connect-retries")
-  val connectionRetryDelay: FiniteDuration = config.getDuration("connect-retry-delay", TimeUnit.MILLISECONDS).millis
+  val connectionRetryDelay: FiniteDuration =
+    config.getDuration("connect-retry-delay", TimeUnit.MILLISECONDS).millis
 }

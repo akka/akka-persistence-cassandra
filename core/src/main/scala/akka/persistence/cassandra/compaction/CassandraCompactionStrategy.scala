@@ -14,5 +14,6 @@ trait CassandraCompactionStrategy {
 }
 
 object CassandraCompactionStrategy {
-  def apply(config: Config): CassandraCompactionStrategy = BaseCompactionStrategy.fromConfig(config)
+  def apply(config: Config): CassandraCompactionStrategy =
+    BaseCompactionStrategy.fromConfig(config)
 }

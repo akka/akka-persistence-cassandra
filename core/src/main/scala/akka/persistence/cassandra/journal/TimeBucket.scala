@@ -25,7 +25,9 @@ import com.datastax.driver.core.utils.UUIDs
   }
 }
 
-@InternalApi private[akka] final class TimeBucket private (val key: Long, val bucketSize: BucketSize) {
+@InternalApi private[akka] final class TimeBucket private (
+    val key: Long,
+    val bucketSize: BucketSize) {
   def inPast: Boolean =
     key < TimeBucket.roundDownBucketSize(System.currentTimeMillis(), bucketSize)
 
@@ -55,7 +57,7 @@ import com.datastax.driver.core.utils.UUIDs
   override def equals(other: Any): Boolean = other match {
     case that: TimeBucket =>
       key == that.key &&
-      bucketSize == that.bucketSize
+        bucketSize == that.bucketSize
     case _ => false
   }
 

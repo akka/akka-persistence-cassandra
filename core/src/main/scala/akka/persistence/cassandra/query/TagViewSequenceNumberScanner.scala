@@ -21,20 +21,22 @@ import scala.concurrent.duration.{Deadline, FiniteDuration}
 import scala.concurrent.{ExecutionContext, Future}
 
 @InternalApi
-private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: Future[PreparedStatement])(
+private[akka] class TagViewSequenceNumberScanner(session: CassandraSession,
+                                                 ps: Future[PreparedStatement])(
     implicit materializer: ActorMaterializer,
     ec: ExecutionContext
 ) {
   private val log = Logging(materializer.system, getClass)
 
   /**
-   * This could be its own stage and return half way through a query to better meet the deadline
-   * but this is a quick and simple way to do it given we're scanning a small segment
-   */
+    * This could be its own stage and return half way through a query to better meet the deadline
+    * but this is a quick and simple way to do it given we're scanning a small segment
+    */
   private[akka] def scan(tag: String,
                          offset: UUID,
                          bucket: TimeBucket,
-                         scanningPeriod: FiniteDuration): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] =
+                         scanningPeriod: FiniteDuration)
+    : Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] =
     ps.flatMap(ps => {
       val deadline: Deadline = Deadline.now + scanningPeriod
       val to = UUIDs.endOf(System.currentTimeMillis() + scanningPeriod.toMillis)
@@ -48,7 +50,11 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
                   formatOffset(to))
         val source = session.select(bound)
         val doneIt = source
-          .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUUID("timestamp")))
+          .map(
+            row =>
+              (row.getString("persistence_id"),
+               row.getLong("tag_pid_sequence_nr"),
+               row.getUUID("timestamp")))
           .runFold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) {
             case (acc, (pid, tagPidSequenceNr, timestamp)) =>
               val (newTagPidSequenceNr, newTimestamp) = acc.get(pid) match {
