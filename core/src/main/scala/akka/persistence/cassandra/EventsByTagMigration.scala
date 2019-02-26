@@ -107,22 +107,31 @@ object EventsByTagMigration {
 
 }
 
-class EventsByTagMigration(system: ActorSystem)
+/**
+  *
+  * @param journalNamespace The config namespace where the journal is configured, default is `cassandra-journal`
+  * @param readJournalNamespace The config namespace where the query-journal is configured, default is the same
+  *                             as `CassandraReadJournal.Identifier`
+  */
+class EventsByTagMigration(system: ActorSystem,
+                           journalNamespace: String = "cassandra-journal",
+                           readJournalNamespace: String =
+                             CassandraReadJournal.Identifier)
     extends CassandraStatements
     with TaggedPreparedStatements
     with CassandraTagRecovery {
 
   private[akka] val log = Logging.getLogger(system, getClass)
   private val queries = PersistenceQuery(system)
-    .readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+    .readJournalFor[CassandraReadJournal](readJournalNamespace)
   private implicit val materialiser = ActorMaterializer()(system)
 
   implicit val ec = system.dispatchers.lookup(
-    system.settings.config.getString("cassandra-journal.plugin-dispatcher"))
+    system.settings.config.getString(s"$journalNamespace.plugin-dispatcher"))
   override def config: CassandraJournalConfig =
     new CassandraJournalConfig(
       system,
-      system.settings.config.getConfig("cassandra-journal"))
+      system.settings.config.getConfig(journalNamespace))
   val session: CassandraSession = new CassandraSession(
     system,
     config.sessionProvider,
@@ -133,7 +142,7 @@ class EventsByTagMigration(system: ActorSystem)
     init = _ => Future.successful(Done))
 
   def createTables(): Future[Done] = {
-    log.info("Creating keyspace and tables")
+    log.info("Creating keyspace {} and tables", config.keyspace)
     for {
       _ <- session.executeWrite(createKeyspace)
       _ <- session.executeWrite(createTagsTable)
@@ -193,7 +202,8 @@ class EventsByTagMigration(system: ActorSystem)
 
   private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed],
                                         periodicFlush: Int): Future[Done] = {
-    log.info("Beginning migration of data to tag_views table")
+    log.info("Beginning migration of data to tag_views table in keyspace {}",
+             config.keyspace)
     val tagWriterSession = TagWritersSession(
       () => preparedWriteToTagViewWithoutMeta,
       () => preparedWriteToTagViewWithMeta,
