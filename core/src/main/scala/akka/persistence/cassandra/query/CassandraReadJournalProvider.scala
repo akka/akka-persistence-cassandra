@@ -9,7 +9,8 @@ import akka.persistence.query.ReadJournalProvider
 import com.typesafe.config.Config
 import scala.util.control.NonFatal
 
-class CassandraReadJournalProvider(system: ExtendedActorSystem, config: Config) extends ReadJournalProvider {
+class CassandraReadJournalProvider(system: ExtendedActorSystem, config: Config)
+    extends ReadJournalProvider {
 
   override val scaladslReadJournal: scaladsl.CassandraReadJournal =
     try {

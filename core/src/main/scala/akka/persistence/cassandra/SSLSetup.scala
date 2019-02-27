@@ -6,18 +6,26 @@ package akka.persistence.cassandra
 
 import java.io.{File, FileInputStream}
 import java.security.{KeyStore, SecureRandom}
-import javax.net.ssl.{KeyManager, KeyManagerFactory, SSLContext, TrustManager, TrustManagerFactory}
+import javax.net.ssl.{
+  KeyManager,
+  KeyManagerFactory,
+  SSLContext,
+  TrustManager,
+  TrustManagerFactory
+}
 import akka.annotation.InternalApi
 
 /**
- * INTERNAL API
- */
+  * INTERNAL API
+  */
 @InternalApi private[akka] object SSLSetup {
 
   /**
-   * creates a new SSLContext
-   */
-  def constructContext(trustStore: StorePathPasswordConfig, keyStore: Option[StorePathPasswordConfig]): SSLContext = {
+    * creates a new SSLContext
+    */
+  def constructContext(
+      trustStore: StorePathPasswordConfig,
+      keyStore: Option[StorePathPasswordConfig]): SSLContext = {
 
     val tmf = loadTrustManagerFactory(trustStore.path, trustStore.password)
 
@@ -41,7 +49,8 @@ import akka.annotation.InternalApi
   def loadKeyStore(storePath: String, storePassword: String): KeyStore = {
     val ks = KeyStore.getInstance("JKS")
     val f = new File(storePath)
-    if (!f.isFile) throw new IllegalArgumentException(s"JKSs path $storePath not found.")
+    if (!f.isFile)
+      throw new IllegalArgumentException(s"JKSs path $storePath not found.")
     val is = new FileInputStream(f)
 
     try {
@@ -51,18 +60,23 @@ import akka.annotation.InternalApi
     ks
   }
 
-  def loadTrustManagerFactory(trustStorePath: String, trustStorePassword: String): TrustManagerFactory = {
+  def loadTrustManagerFactory(
+      trustStorePath: String,
+      trustStorePassword: String): TrustManagerFactory = {
 
     val ts = loadKeyStore(trustStorePath, trustStorePassword)
-    val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm)
+    val tmf =
+      TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm)
     tmf.init(ts)
     tmf
   }
 
-  def loadKeyManagerFactory(keyStorePath: String, keyStorePassword: String): KeyManagerFactory = {
+  def loadKeyManagerFactory(keyStorePath: String,
+                            keyStorePassword: String): KeyManagerFactory = {
 
     val ks = loadKeyStore(keyStorePath, keyStorePassword)
-    val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm)
+    val kmf =
+      KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm)
     val keyPassword = keyStorePassword.toCharArray
     kmf.init(ks, keyPassword)
     kmf

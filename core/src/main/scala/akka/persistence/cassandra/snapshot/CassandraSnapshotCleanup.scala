@@ -20,20 +20,28 @@ trait CassandraSnapshotCleanup extends CassandraStatements {
   def session: CassandraSession
   private[akka] implicit val ec: ExecutionContext
 
-  private lazy val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.deleteRetries))
+  private lazy val deleteRetryPolicy = new LoggingRetryPolicy(
+    new FixedRetryPolicy(snapshotConfig.deleteRetries))
 
   def preparedDeleteSnapshot =
     session
       .prepare(deleteSnapshot)
-      .map(_.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy))
+      .map(
+        _.setConsistencyLevel(snapshotConfig.writeConsistency)
+          .setIdempotent(true)
+          .setRetryPolicy(deleteRetryPolicy))
 
   def preparedDeleteAllSnapshotsForPid =
     session
       .prepare(deleteAllSnapshotForPersistenceId)
-      .map(_.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy))
+      .map(
+        _.setConsistencyLevel(snapshotConfig.writeConsistency)
+          .setIdempotent(true)
+          .setRetryPolicy(deleteRetryPolicy))
 
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
-    val boundDeleteSnapshot = preparedDeleteSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
+    val boundDeleteSnapshot = preparedDeleteSnapshot.map(
+      _.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
     boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
   }
 

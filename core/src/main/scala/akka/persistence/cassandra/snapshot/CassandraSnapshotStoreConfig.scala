@@ -10,51 +10,52 @@ import com.typesafe.config.Config
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.actor.ActorSystem
 
-class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
+class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config)
+    extends CassandraPluginConfig(system, config) {
   val maxLoadAttempts = config.getInt("max-load-attempts")
 
   /**
-   * The Cassandra statement that can be used to create the configured keyspace.
-   *
-   * This can be queried in for example a startup script without accessing the actual
-   * Cassandra plugin actor.
-   *
-   * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-snapshot-store")).createKeyspaceStatement
-   * }}}
-   *
-   * @see [[CassandraSnapshotStoreConfig#createTablesStatements]]
-   */
+    * The Cassandra statement that can be used to create the configured keyspace.
+    *
+    * This can be queried in for example a startup script without accessing the actual
+    * Cassandra plugin actor.
+    *
+    * {{{
+    * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-snapshot-store")).createKeyspaceStatement
+    * }}}
+    *
+    * @see [[CassandraSnapshotStoreConfig#createTablesStatements]]
+    */
   def createKeyspaceStatement: String =
     statements.createKeyspace
 
   /**
-   * Scala API: The Cassandra statements that can be used to create the configured tables.
-   *
-   * This can be queried in for example a startup script without accessing the actual
-   * Cassandra plugin actor.
-   *
-   * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-snapshot-store")).createTablesStatements
-   * }}}
-   * *
-   * * @see [[CassandraSnapshotStoreConfig#createKeyspaceStatement]]
-   */
+    * Scala API: The Cassandra statements that can be used to create the configured tables.
+    *
+    * This can be queried in for example a startup script without accessing the actual
+    * Cassandra plugin actor.
+    *
+    * {{{
+    * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-snapshot-store")).createTablesStatements
+    * }}}
+    * *
+    * * @see [[CassandraSnapshotStoreConfig#createKeyspaceStatement]]
+    */
   def createTablesStatements: immutable.Seq[String] =
     statements.createTable :: Nil
 
   /**
-   * Java API: The Cassandra statements that can be used to create the configured tables.
-   *
-   * This can be queried in for example a startup script without accessing the actual
-   * Cassandra plugin actor.
-   *
-   * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-snapshot-store")).getCreateTablesStatements();
-   * }}}
-   * *
-   * * @see [[CassandraSnapshotStoreConfig#createKeyspaceStatement]]
-   */
+    * Java API: The Cassandra statements that can be used to create the configured tables.
+    *
+    * This can be queried in for example a startup script without accessing the actual
+    * Cassandra plugin actor.
+    *
+    * {{{
+    * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-snapshot-store")).getCreateTablesStatements();
+    * }}}
+    * *
+    * * @see [[CassandraSnapshotStoreConfig#createKeyspaceStatement]]
+    */
   def getCreateTablesStatements: java.util.List[String] = {
     import scala.collection.JavaConverters._
     createTablesStatements.asJava
@@ -62,6 +63,7 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
 
   private def statements: CassandraStatements =
     new CassandraStatements {
-      override def snapshotConfig: CassandraSnapshotStoreConfig = CassandraSnapshotStoreConfig.this
+      override def snapshotConfig: CassandraSnapshotStoreConfig =
+        CassandraSnapshotStoreConfig.this
     }
 }

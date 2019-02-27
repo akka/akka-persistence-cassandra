@@ -25,19 +25,20 @@ import com.datastax.driver.core.policies.SpeculativeExecutionPolicy
 import com.datastax.driver.core.policies.ConstantSpeculativeExecutionPolicy
 
 /**
- * Default implementation of the `SessionProvider` that is used for creating the
- * Cassandra Session. This class is building the Cluster from configuration
- * properties.
- *
- * You may create a subclass of this that performs lookup the contact points
- * of the Cassandra cluster asynchronously instead of reading them in the
- * configuration. Such a subclass should override the [[lookupContactPoints]]
- * method.
- *
- * The implementation is defined in configuration `session-provider` property.
- * The config parameter is the config section of the plugin.
- */
-class ConfigSessionProvider(system: ActorSystem, config: Config) extends SessionProvider {
+  * Default implementation of the `SessionProvider` that is used for creating the
+  * Cassandra Session. This class is building the Cluster from configuration
+  * properties.
+  *
+  * You may create a subclass of this that performs lookup the contact points
+  * of the Cassandra cluster asynchronously instead of reading them in the
+  * configuration. Such a subclass should override the [[lookupContactPoints]]
+  * method.
+  *
+  * The implementation is defined in configuration `session-provider` property.
+  * The config parameter is the config section of the plugin.
+  */
+class ConfigSessionProvider(system: ActorSystem, config: Config)
+    extends SessionProvider {
 
   def connect()(implicit ec: ExecutionContext): Future[Session] = {
     val clusterId = config.getString("cluster-id")
@@ -58,10 +59,11 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   }
 
   val fetchSize = config.getInt("max-result-size")
-  val protocolVersion: Option[ProtocolVersion] = config.getString("protocol-version") match {
-    case "" => None
-    case _  => Some(ProtocolVersion.fromInt(config.getInt("protocol-version")))
-  }
+  val protocolVersion: Option[ProtocolVersion] =
+    config.getString("protocol-version") match {
+      case "" => None
+      case _  => Some(ProtocolVersion.fromInt(config.getInt("protocol-version")))
+    }
   val port: Int = config.getInt("port")
 
   private[this] val connectionPoolConfig = config.getConfig("connection-pool")
@@ -87,28 +89,31 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
       HostDistance.REMOTE,
       connectionPoolConfig.getInt("connections-per-host-core-remote"),
       connectionPoolConfig.getInt("connections-per-host-max-remote"))
-    .setPoolTimeoutMillis(
-      connectionPoolConfig.getInt("pool-timeout-millis"))
-    .setMaxQueueSize(
-      connectionPoolConfig.getInt("max-queue-size"))
+    .setPoolTimeoutMillis(connectionPoolConfig.getInt("pool-timeout-millis"))
+    .setMaxQueueSize(connectionPoolConfig.getInt("max-queue-size"))
 
-  val reconnectMaxDelay: FiniteDuration = config.getDuration("reconnect-max-delay", TimeUnit.MILLISECONDS).millis
+  val reconnectMaxDelay: FiniteDuration =
+    config.getDuration("reconnect-max-delay", TimeUnit.MILLISECONDS).millis
 
   val speculativeExecution: Option[SpeculativeExecutionPolicy] =
     config.getInt("speculative-executions") match {
       case 0 => None
       case n =>
-        val delayMs = config.getDuration("speculative-executions-delay", MILLISECONDS)
+        val delayMs =
+          config.getDuration("speculative-executions-delay", MILLISECONDS)
         Some(new ConstantSpeculativeExecutionPolicy(delayMs, n))
     }
 
-  def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
+  def clusterBuilder(clusterId: String)(
+      implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
       val b = Cluster.builder
-        .withClusterName(s"${system.name}-${ConfigSessionProvider.clusterIdentifier.getAndIncrement()}")
+        .withClusterName(
+          s"${system.name}-${ConfigSessionProvider.clusterIdentifier.getAndIncrement()}")
         .addContactPointsWithPorts(cp.asJava)
         .withPoolingOptions(poolingOptions)
-        .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
+        .withReconnectionPolicy(
+          new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
         .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
         .withPort(port)
 
@@ -124,9 +129,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
 
       val username = config.getString("authentication.username")
       if (username != "") {
-        b.withCredentials(
-          username,
-          config.getString("authentication.password"))
+        b.withCredentials(username, config.getString("authentication.password"))
       }
 
       val localDatacenter = config.getString("local-datacenter")
@@ -142,16 +145,16 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
 
       val truststorePath = config.getString("ssl.truststore.path")
       if (truststorePath != "") {
-        val trustStore = StorePathPasswordConfig(
-          truststorePath,
-          config.getString("ssl.truststore.password"))
+        val trustStore =
+          StorePathPasswordConfig(truststorePath,
+                                  config.getString("ssl.truststore.password"))
 
         val keystorePath = config.getString("ssl.keystore.path")
         val keyStore: Option[StorePathPasswordConfig] =
           if (keystorePath != "") {
-            val keyStore = StorePathPasswordConfig(
-              keystorePath,
-              config.getString("ssl.keystore.password"))
+            val keyStore =
+              StorePathPasswordConfig(keystorePath,
+                                      config.getString("ssl.keystore.password"))
             Some(keyStore)
           } else None
 
@@ -162,8 +165,10 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
 
       val socketConfig = config.getConfig("socket")
       val socketOptions = new SocketOptions()
-      socketOptions.setConnectTimeoutMillis(socketConfig.getInt("connection-timeout-millis"))
-      socketOptions.setReadTimeoutMillis(socketConfig.getInt("read-timeout-millis"))
+      socketOptions.setConnectTimeoutMillis(
+        socketConfig.getInt("connection-timeout-millis"))
+      socketOptions.setReadTimeoutMillis(
+        socketConfig.getInt("read-timeout-millis"))
 
       val sendBufferSize = socketConfig.getInt("send-buffer-size")
       val receiveBufferSize = socketConfig.getInt("receive-buffer-size")
@@ -181,31 +186,38 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   }
 
   /**
-   * Subclass may override this method to perform lookup the contact points
-   * of the Cassandra cluster asynchronously instead of reading them from the
-   * configuration.
-   *
-   * @param clusterId the configured `cluster-id` to lookup
-   */
-  def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
+    * Subclass may override this method to perform lookup the contact points
+    * of the Cassandra cluster asynchronously instead of reading them from the
+    * configuration.
+    *
+    * @param clusterId the configured `cluster-id` to lookup
+    */
+  def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext)
+    : Future[immutable.Seq[InetSocketAddress]] = {
     val contactPoints = getListFromConfig(config, "contact-points")
     Future.successful(buildContactPoints(contactPoints, port))
   }
 
   /**
-   * Builds list of InetSocketAddress out of host:port pairs or host entries + given port parameter.
-   */
-  protected def buildContactPoints(contactPoints: immutable.Seq[String], port: Int): immutable.Seq[InetSocketAddress] = {
+    * Builds list of InetSocketAddress out of host:port pairs or host entries + given port parameter.
+    */
+  protected def buildContactPoints(
+      contactPoints: immutable.Seq[String],
+      port: Int): immutable.Seq[InetSocketAddress] = {
     contactPoints match {
-      case null | Nil => throw new IllegalArgumentException("A contact point list cannot be empty.")
-      case hosts => hosts map {
-        ipWithPort =>
+      case null | Nil =>
+        throw new IllegalArgumentException(
+          "A contact point list cannot be empty.")
+      case hosts =>
+        hosts map { ipWithPort =>
           ipWithPort.split(":") match {
             case Array(host, port) => new InetSocketAddress(host, port.toInt)
             case Array(host)       => new InetSocketAddress(host, port)
-            case msg               => throw new IllegalArgumentException(s"A contact point should have the form [host:port] or [host] but was: $msg.")
+            case msg =>
+              throw new IllegalArgumentException(
+                s"A contact point should have the form [host:port] or [host] but was: $msg.")
           }
-      }
+        }
     }
   }
 }

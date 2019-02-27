@@ -22,8 +22,13 @@ trait TaggedPreparedStatements extends CassandraStatements {
   def preparedSelectTagProgress: Future[PreparedStatement] =
     session.prepare(selectTagProgress).map(_.setIdempotent(true))
   def preparedSelectTagProgressForPersistenceId: Future[PreparedStatement] =
-    session.prepare(selectTagProgressForPersistenceId).map(_.setIdempotent(true))
-  def preparedWriteTagScanning: Future[PreparedStatement] = session.prepare(writeTagScanning).map(_.setIdempotent(true))
+    session
+      .prepare(selectTagProgressForPersistenceId)
+      .map(_.setIdempotent(true))
+  def preparedWriteTagScanning: Future[PreparedStatement] =
+    session.prepare(writeTagScanning).map(_.setIdempotent(true))
   def preparedSelectTagScanningForPersistenceId: Future[PreparedStatement] =
-    session.prepare(selectTagScanningForPersistenceId).map(_.setIdempotent(true))
+    session
+      .prepare(selectTagScanningForPersistenceId)
+      .map(_.setIdempotent(true))
 }
