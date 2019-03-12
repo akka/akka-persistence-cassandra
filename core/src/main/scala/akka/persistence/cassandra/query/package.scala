@@ -5,7 +5,7 @@
 package akka.persistence.cassandra
 
 import java.time.format.DateTimeFormatter
-import java.time.{LocalDateTime, ZoneId, ZoneOffset}
+import java.time.{ LocalDateTime, ZoneId, ZoneOffset }
 import java.util.UUID
 
 import com.datastax.driver.core.utils.UUIDs
@@ -20,11 +20,7 @@ package object query {
     def makeMsb(time: Long): Long = {
       // copied from UUIDs.makeMsb
       // UUID v1 timestamp must be in 100-nanoseconds interval since 00:00:00.000 15 Oct 1582.
-      val uuidEpoch = LocalDateTime
-        .of(1582, 10, 15, 0, 0)
-        .atZone(ZoneId.of("GMT-0"))
-        .toInstant
-        .toEpochMilli
+      val uuidEpoch = LocalDateTime.of(1582, 10, 15, 0, 0).atZone(ZoneId.of("GMT-0")).toInstant.toEpochMilli
       val timestamp = (time - uuidEpoch) * 10000
 
       var msb = 0L

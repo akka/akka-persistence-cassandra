@@ -4,28 +4,20 @@
 
 package akka.persistence.cassandra
 
-import java.io.{File, FileInputStream}
-import java.security.{KeyStore, SecureRandom}
-import javax.net.ssl.{
-  KeyManager,
-  KeyManagerFactory,
-  SSLContext,
-  TrustManager,
-  TrustManagerFactory
-}
+import java.io.{ File, FileInputStream }
+import java.security.{ KeyStore, SecureRandom }
+import javax.net.ssl.{ KeyManager, KeyManagerFactory, SSLContext, TrustManager, TrustManagerFactory }
 import akka.annotation.InternalApi
 
 /**
-  * INTERNAL API
-  */
+ * INTERNAL API
+ */
 @InternalApi private[akka] object SSLSetup {
 
   /**
-    * creates a new SSLContext
-    */
-  def constructContext(
-      trustStore: StorePathPasswordConfig,
-      keyStore: Option[StorePathPasswordConfig]): SSLContext = {
+   * creates a new SSLContext
+   */
+  def constructContext(trustStore: StorePathPasswordConfig, keyStore: Option[StorePathPasswordConfig]): SSLContext = {
 
     val tmf = loadTrustManagerFactory(trustStore.path, trustStore.password)
 
@@ -60,9 +52,7 @@ import akka.annotation.InternalApi
     ks
   }
 
-  def loadTrustManagerFactory(
-      trustStorePath: String,
-      trustStorePassword: String): TrustManagerFactory = {
+  def loadTrustManagerFactory(trustStorePath: String, trustStorePassword: String): TrustManagerFactory = {
 
     val ts = loadKeyStore(trustStorePath, trustStorePassword)
     val tmf =
@@ -71,8 +61,7 @@ import akka.annotation.InternalApi
     tmf
   }
 
-  def loadKeyManagerFactory(keyStorePath: String,
-                            keyStorePassword: String): KeyManagerFactory = {
+  def loadKeyManagerFactory(keyStorePath: String, keyStorePassword: String): KeyManagerFactory = {
 
     val ks = loadKeyStore(keyStorePath, keyStorePassword)
     val kmf =

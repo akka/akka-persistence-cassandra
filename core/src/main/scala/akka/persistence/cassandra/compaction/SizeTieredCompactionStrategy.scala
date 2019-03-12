@@ -26,17 +26,11 @@ class SizeTieredCompactionStrategy(config: Config)
     if (config.hasPath("min_sstable_size")) config.getLong("min_sstable_size")
     else 50
 
-  require(bucketHigh > bucketLow,
-          s"bucket_high must be larger than bucket_low, but was $bucketHigh")
-  require(maxThreshold > 0,
-          s"max_threshold must be larger than 0, but was $maxThreshold")
-  require(minThreshold > 1,
-          s"min_threshold must be larger than 1, but was $minThreshold")
-  require(
-    maxThreshold > minThreshold,
-    s"max_threshold must be larger than min_threshold, but was $maxThreshold")
-  require(minSSTableSize > 0,
-          s"min_sstable_size must be larger than 0, but was $minSSTableSize")
+  require(bucketHigh > bucketLow, s"bucket_high must be larger than bucket_low, but was $bucketHigh")
+  require(maxThreshold > 0, s"max_threshold must be larger than 0, but was $maxThreshold")
+  require(minThreshold > 1, s"min_threshold must be larger than 1, but was $minThreshold")
+  require(maxThreshold > minThreshold, s"max_threshold must be larger than min_threshold, but was $maxThreshold")
+  require(minSSTableSize > 0, s"min_sstable_size must be larger than 0, but was $minSSTableSize")
 
   override def asCQL: String =
     s"""{
@@ -51,16 +45,13 @@ class SizeTieredCompactionStrategy(config: Config)
      """.stripMargin.trim
 }
 
-object SizeTieredCompactionStrategy
-    extends CassandraCompactionStrategyConfig[SizeTieredCompactionStrategy] {
+object SizeTieredCompactionStrategy extends CassandraCompactionStrategyConfig[SizeTieredCompactionStrategy] {
   override val ClassName: String = "SizeTieredCompactionStrategy"
 
   override def propertyKeys: List[String] =
-    (BaseCompactionStrategy.propertyKeys union List("bucket_high",
-                                                    "bucket_low",
-                                                    "max_threshold",
-                                                    "min_threshold",
-                                                    "min_sstable_size")).sorted
+    BaseCompactionStrategy.propertyKeys
+      .union(List("bucket_high", "bucket_low", "max_threshold", "min_threshold", "min_sstable_size"))
+      .sorted
 
   override def fromConfig(config: Config): SizeTieredCompactionStrategy =
     new SizeTieredCompactionStrategy(config)

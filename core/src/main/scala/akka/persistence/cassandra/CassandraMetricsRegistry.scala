@@ -10,23 +10,22 @@ import scala.collection.JavaConverters._
 import akka.annotation.InternalApi
 
 /**
-  * Retrieves Cassandra metrics registry for an actor system
-  */
+ * Retrieves Cassandra metrics registry for an actor system
+ */
 class CassandraMetricsRegistry extends Extension {
   private val metricRegistry = new MetricRegistry()
 
   def getRegistry: MetricRegistry = metricRegistry
 
   /**
-    * INTERNAL API
-    */
-  @InternalApi private[akka] def addMetrics(category: String,
-                                            registry: MetricRegistry): Unit =
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def addMetrics(category: String, registry: MetricRegistry): Unit =
     metricRegistry.register(category, registry)
 
   /**
-    * INTERNAL API
-    */
+   * INTERNAL API
+   */
   @InternalApi private[akka] def removeMetrics(category: String): Unit =
     metricRegistry.getNames.iterator.asScala.foreach { name =>
       if (name.startsWith(category))
@@ -34,9 +33,7 @@ class CassandraMetricsRegistry extends Extension {
     }
 }
 
-object CassandraMetricsRegistry
-    extends ExtensionId[CassandraMetricsRegistry]
-    with ExtensionIdProvider {
+object CassandraMetricsRegistry extends ExtensionId[CassandraMetricsRegistry] with ExtensionIdProvider {
   override def lookup = CassandraMetricsRegistry
   override def createExtension(system: ExtendedActorSystem) =
     new CassandraMetricsRegistry

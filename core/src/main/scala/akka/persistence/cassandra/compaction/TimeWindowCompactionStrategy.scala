@@ -23,9 +23,8 @@ class TimeWindowCompactionStrategy(config: Config)
       config.getInt("compaction_window_size")
     else 1
 
-  require(
-    compactionWindowSize >= 1,
-    s"compaction_window_size must be larger than or equal to 1, but was $compactionWindowSize")
+  require(compactionWindowSize >= 1,
+          s"compaction_window_size must be larger than or equal to 1, but was $compactionWindowSize")
 
   override def asCQL: String =
     s"""{
@@ -37,14 +36,11 @@ class TimeWindowCompactionStrategy(config: Config)
      """.stripMargin.trim
 }
 
-object TimeWindowCompactionStrategy
-    extends CassandraCompactionStrategyConfig[TimeWindowCompactionStrategy] {
+object TimeWindowCompactionStrategy extends CassandraCompactionStrategyConfig[TimeWindowCompactionStrategy] {
   override val ClassName: String = "TimeWindowCompactionStrategy"
 
   override def propertyKeys: List[String] =
-    (BaseCompactionStrategy.propertyKeys union List(
-      "compaction_window_size",
-      "compaction_window_unit")).sorted
+    BaseCompactionStrategy.propertyKeys.union(List("compaction_window_size", "compaction_window_unit")).sorted
 
   override def fromConfig(config: Config): TimeWindowCompactionStrategy =
     new TimeWindowCompactionStrategy(config)

@@ -5,32 +5,21 @@
 package akka.persistence.cassandra.journal
 
 import scala.collection.immutable
-import java.lang.{Integer => JInt, Long => JLong}
+import java.lang.{ Integer => JInt, Long => JLong }
 import java.net.URLEncoder
 import java.util.UUID
 
 import akka.Done
 import akka.pattern.ask
 import akka.pattern.pipe
-import akka.actor.{
-  Actor,
-  ActorLogging,
-  ActorRef,
-  NoSerializationVerificationNeeded,
-  Props
-}
+import akka.actor.{ Actor, ActorLogging, ActorRef, NoSerializationVerificationNeeded, Props }
 import akka.annotation.InternalApi
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
-import com.datastax.driver.core.{
-  BatchStatement,
-  PreparedStatement,
-  ResultSet,
-  Statement
-}
-import scala.concurrent.{ExecutionContext, Future}
+import com.datastax.driver.core.{ BatchStatement, PreparedStatement, ResultSet, Statement }
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
@@ -40,16 +29,14 @@ import akka.util.ByteString
 
 @InternalApi private[akka] object TagWriters {
 
-  private[akka] case class TagWritersSession(
-      tagWritePs: () => Future[PreparedStatement],
-      tagWriteWithMetaPs: () => Future[PreparedStatement],
-      executeStatement: Statement => Future[Done],
-      selectStatement: Statement => Future[ResultSet],
-      tagProgressPs: () => Future[PreparedStatement],
-      tagScanningPs: () => Future[PreparedStatement]) {
+  private[akka] case class TagWritersSession(tagWritePs: () => Future[PreparedStatement],
+                                             tagWriteWithMetaPs: () => Future[PreparedStatement],
+                                             executeStatement: Statement => Future[Done],
+                                             selectStatement: Statement => Future[ResultSet],
+                                             tagProgressPs: () => Future[PreparedStatement],
+                                             tagScanningPs: () => Future[PreparedStatement]) {
 
-    def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(
-        implicit ec: ExecutionContext): Future[Done] = {
+    def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext): Future[Done] = {
       val batch = new BatchStatement(BatchStatement.Type.UNLOGGED)
       val tagWritePSs = for {
         withMeta <- tagWriteWithMetaPs()
@@ -62,19 +49,17 @@ import akka.util.ByteString
             events.foreach {
               case (event, pidTagSequenceNr) => {
                 val ps = if (event.meta.isDefined) withMeta else withoutMeta
-                val bound = ps.bind(
-                  tag,
-                  event.timeBucket.key: JLong,
-                  event.timeUuid,
-                  pidTagSequenceNr: JLong,
-                  event.serialized,
-                  event.eventAdapterManifest,
-                  event.persistenceId,
-                  event.sequenceNr: JLong,
-                  event.serId: JInt,
-                  event.serManifest,
-                  event.writerUuid
-                )
+                val bound = ps.bind(tag,
+                                    event.timeBucket.key: JLong,
+                                    event.timeUuid,
+                                    pidTagSequenceNr: JLong,
+                                    event.serialized,
+                                    event.eventAdapterManifest,
+                                    event.persistenceId,
+                                    event.sequenceNr: JLong,
+                                    event.serId: JInt,
+                                    event.serManifest,
+                                    event.writerUuid)
                 event.meta.foreach { m =>
                   bound.setBytes("meta", m.serialized)
                   bound.setString("meta_ser_manifest", m.serManifest)
@@ -88,20 +73,10 @@ import akka.util.ByteString
         .flatMap(executeStatement)
     }
 
-    def writeProgress(
-        tag: Tag,
-        persistenceId: String,
-        seqNr: Long,
-        tagPidSequenceNr: Long,
-        offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
+    def writeProgress(tag: Tag, persistenceId: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)(
+        implicit ec: ExecutionContext): Future[Done] = {
       tagProgressPs()
-        .map(
-          ps =>
-            ps.bind(persistenceId,
-                    tag,
-                    seqNr: JLong,
-                    tagPidSequenceNr: JLong,
-                    offset))
+        .map(ps => ps.bind(persistenceId, tag, seqNr: JLong, tagPidSequenceNr: JLong, offset))
         .flatMap(executeStatement)
     }
 
@@ -113,42 +88,35 @@ import akka.util.ByteString
   }
 
   /**
-    * All tag writes should be for the same persistenceId
-    */
-  private[akka] case class BulkTagWrite(tagWrites: immutable.Seq[TagWrite],
-                                        withoutTags: immutable.Seq[Serialized])
+   * All tag writes should be for the same persistenceId
+   */
+  private[akka] case class BulkTagWrite(tagWrites: immutable.Seq[TagWrite], withoutTags: immutable.Seq[Serialized])
       extends NoSerializationVerificationNeeded
 
   /**
-    * All serialised should be for the same persistenceId
-    */
-  private[akka] case class TagWrite(tag: Tag,
-                                    serialised: immutable.Seq[Serialized])
+   * All serialised should be for the same persistenceId
+   */
+  private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized])
       extends NoSerializationVerificationNeeded
 
-  def props(settings: TagWriterSettings,
-            tagWriterSession: TagWritersSession): Props =
+  def props(settings: TagWriterSettings, tagWriterSession: TagWritersSession): Props =
     Props(new TagWriters(settings, tagWriterSession))
 
   final case class TagFlush(tag: String)
   case object FlushAllTagWriters
   case object AllFlushed
-  final case class PersistentActorStarting(pid: String,
-                                           tagProgresses: Map[Tag, TagProgress],
-                                           persistentActor: ActorRef)
+  final case class PersistentActorStarting(pid: String, tagProgresses: Map[Tag, TagProgress], persistentActor: ActorRef)
   case object PersistentActorStartingAck
   final case class TagWriteFailed(reason: Throwable)
   private case object WriteTagScanningTick
 
-  private case class PersistentActorTerminated(pid: PersistenceId,
-                                               ref: ActorRef)
+  private case class PersistentActorTerminated(pid: PersistenceId, ref: ActorRef)
 }
 
 /**
-  * Manages all the tag writers.
-  */
-@InternalApi private[akka] class TagWriters(settings: TagWriterSettings,
-                                            tagWriterSession: TagWritersSession)
+ * Manages all the tag writers.
+ */
+@InternalApi private[akka] class TagWriters(settings: TagWriterSettings, tagWriterSession: TagWritersSession)
     extends Actor
     with Timers
     with ActorLogging {
@@ -167,9 +135,7 @@ import akka.util.ByteString
 
   private var currentPersistentActors: Map[PersistenceId, ActorRef] = Map.empty
 
-  timers.startPeriodicTimer(WriteTagScanningTick,
-                            WriteTagScanningTick,
-                            settings.scanningFlushInterval)
+  timers.startPeriodicTimer(WriteTagScanningTick, WriteTagScanningTick, settings.scanningFlushInterval)
 
   def receive: Receive = {
     case FlushAllTagWriters =>
@@ -180,38 +146,34 @@ import akka.util.ByteString
       val flushes = tagActors.map {
         case (_, ref) => (ref ? Flush).mapTo[FlushComplete.type]
       }
-      Future.sequence(flushes).map(_ => AllFlushed) pipeTo replyTo
+      Future.sequence(flushes).map(_ => AllFlushed).pipeTo(replyTo)
     case TagFlush(tag) =>
       tagActor(tag).tell(Flush, sender())
     case tw: TagWrite =>
       updatePendingScanning(tw.serialised)
-      tagActor(tw.tag) forward tw
+      tagActor(tw.tag).forward(tw)
     case BulkTagWrite(tws, withoutTags) =>
       tws.foreach { tw =>
         updatePendingScanning(tw.serialised)
-        tagActor(tw.tag) forward tw
+        tagActor(tw.tag).forward(tw)
       }
       updatePendingScanning(withoutTags)
     case WriteTagScanningTick =>
       writeTagScanning()
 
-    case PersistentActorStarting(pid,
-                                 tagProgresses: Map[Tag, TagProgress],
-                                 persistentActor) =>
+    case PersistentActorStarting(pid, tagProgresses: Map[Tag, TagProgress], persistentActor) =>
       val missingProgress = tagActors.keySet -- tagProgresses.keySet
       log.debug(
         "Persistent actor [{}] with pid [{}] starting with progress [{}]. Tags to reset as not in progress: [{}]",
         persistentActor,
         pid,
         tagProgresses,
-        missingProgress
-      )
+        missingProgress)
 
       // EventsByTagMigration uses dead letters are there are no real actors
       if (persistentActor != context.system.deadLetters) {
         currentPersistentActors += (pid -> persistentActor)
-        context.watchWith(persistentActor,
-                          PersistentActorTerminated(pid, persistentActor))
+        context.watchWith(persistentActor, PersistentActorTerminated(pid, persistentActor))
       }
 
       val replyTo = sender()
@@ -219,15 +181,13 @@ import akka.util.ByteString
       val tagWriterAcks = Future.sequence(tagProgresses.map {
         case (tag, progress) =>
           log.debug("Sending tag progress: [{}] [{}]", tag, progress)
-          (tagActor(tag) ? ResetPersistenceId(tag, progress))
-            .mapTo[ResetPersistenceIdComplete.type]
+          (tagActor(tag) ? ResetPersistenceId(tag, progress)).mapTo[ResetPersistenceIdComplete.type]
       })
       // We send an empty progress in case the tag actor has buffered events
       // and has never written any tag progress for this tag/pid
       val blankTagWriterAcks = Future.sequence(missingProgress.map { tag =>
         log.debug("Sending blank progress for tag [{}] pid [{}]", tag, pid)
-        (tagActor(tag) ? ResetPersistenceId(tag, TagProgress(pid, 0, 0)))
-          .mapTo[ResetPersistenceIdComplete.type]
+        (tagActor(tag) ? ResetPersistenceId(tag, TagProgress(pid, 0, 0))).mapTo[ResetPersistenceIdComplete.type]
       })
 
       val recoveryNotificationComplete = for {
@@ -247,10 +207,9 @@ import akka.util.ByteString
     case PersistentActorTerminated(pid, ref) =>
       currentPersistentActors.get(pid) match {
         case Some(currentRef) if currentRef == ref =>
-          log.debug(
-            "Persistent actor terminated [{}]. Informing TagWriter actors to drop state for pid: [{}]",
-            ref,
-            pid)
+          log.debug("Persistent actor terminated [{}]. Informing TagWriter actors to drop state for pid: [{}]",
+                    ref,
+                    pid)
           tagActors.foreach {
             case (_, tagWriterRef) => tagWriterRef ! DropState(pid)
           }
@@ -269,17 +228,14 @@ import akka.util.ByteString
       }
   }
 
-  private def updatePendingScanning(
-      serialized: immutable.Seq[Serialized]): Unit = {
+  private def updatePendingScanning(serialized: immutable.Seq[Serialized]): Unit = {
     serialized.foreach { ser =>
       pendingScanning.get(ser.persistenceId) match {
         case Some(seqNr) =>
           if (ser.sequenceNr > seqNr) // collect highest
-            pendingScanning =
-              pendingScanning.updated(ser.persistenceId, ser.sequenceNr)
+            pendingScanning = pendingScanning.updated(ser.persistenceId, ser.sequenceNr)
         case None =>
-          pendingScanning =
-            pendingScanning.updated(ser.persistenceId, ser.sequenceNr)
+          pendingScanning = pendingScanning.updated(ser.persistenceId, ser.sequenceNr)
       }
     }
   }
@@ -296,14 +252,10 @@ import akka.util.ByteString
 
       if (log.isDebugEnabled) {
         val maxPrint = 20
-        log.debug(
-          "Update tag scanning [{}]",
-          if (updates.size <= maxPrint) updates.take(maxPrint).mkString(",")
-          else
-            updates
-              .take(maxPrint)
-              .mkString(",") + s" ...and ${updates.size - 20} more"
-        )
+        log.debug("Update tag scanning [{}]",
+                  if (updates.size <= maxPrint) updates.take(maxPrint).mkString(",")
+                  else
+                    updates.take(maxPrint).mkString(",") + s" ...and ${updates.size - 20} more")
       }
 
       tagWriterSession.tagScanningPs().foreach { ps =>
@@ -356,9 +308,7 @@ import akka.util.ByteString
 
   // protected for testing purposes
   protected def createTagWriter(tag: String): ActorRef = {
-    context.actorOf(TagWriter
-                      .props(settings, tagWriterSession, tag)
-                      .withDispatcher(context.props.dispatcher),
+    context.actorOf(TagWriter.props(settings, tagWriterSession, tag).withDispatcher(context.props.dispatcher),
                     name = URLEncoder.encode(tag, ByteString.UTF_8))
   }
 
