@@ -104,6 +104,9 @@ class ConfigSessionProvider(system: ActorSystem, config: Config)
         Some(new ConstantSpeculativeExecutionPolicy(delayMs, n))
     }
 
+  val metricsEnabled: Boolean = config.getBoolean("metrics-enabled")
+  val jmxReportingEnabled: Boolean = config.getBoolean("jmx-reporting-enabled")
+
   def clusterBuilder(clusterId: String)(
       implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
@@ -181,6 +184,8 @@ class ConfigSessionProvider(system: ActorSystem, config: Config)
       }
 
       b.withSocketOptions(socketOptions)
+      if (!metricsEnabled) b.withoutMetrics()
+      if (!jmxReportingEnabled) b.withoutJMXReporting()
       b
     }
   }

@@ -298,5 +298,17 @@ class CassandraPluginConfigSpec
       val config = new CassandraPluginConfig(system, configWithFalseTablesAutocreate)
       config.tablesAutoCreate must be(false)
     }
+
+    "disable dropwizard metrics" in {
+      lazy val metricsConfig = ConfigFactory.parseString("""
+          metrics-enabled = off
+          jmx-reporting-enabled = off
+        """).withFallback(defaultConfig)
+      val config = new CassandraPluginConfig(system, metricsConfig)
+      val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
+      val clusterBuilder = Await.result(sessionProvider.clusterBuilder(""), 3.seconds)
+      clusterBuilder.getConfiguration.getMetricsOptions.isEnabled mustBe false
+      clusterBuilder.getConfiguration.getMetricsOptions.isJMXReportingEnabled mustBe false
+    }
   }
 }
