@@ -3,7 +3,7 @@
 This directory contains a test keystore and truststore for the Cassandra client and Server respectively to test SSL communication. 
 
 Createad based on instructions from: 
-http://docs.datastax.com/en/cassandra/2.0/cassandra/security/secureSslEncryptionTOC.html
+https://docs.datastax.com/en/archived/cassandra/2.0/cassandra/security/secureSslEncryptionTOC.html
 
 #### Manual instructions
 Keystores used in tests were generated with these commands. This really only needs to be done once, the certificates expires ≈100 years into the future. 
