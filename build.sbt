@@ -29,7 +29,7 @@ def common: Seq[Setting[_]] = Seq(
   organizationName := "Lightbend Inc.",
   startYear := Some(2016),
   licenses := Seq(
-    ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
+    ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
   crossScalaVersions := Seq("2.11.12", "2.13.0-M5", "2.12.8"),
   scalaVersion := crossScalaVersions.value.last,
   crossVersion := CrossVersion.binary,
@@ -45,7 +45,7 @@ def common: Seq[Setting[_]] = Seq(
   ),
   headerLicense := Some(
     HeaderLicense.Custom(
-      """Copyright (C) 2016-2017 Lightbend Inc. <http://www.lightbend.com>"""
+      """Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>"""
     )),
   scalafmtOnCompile := true,
   releaseCrossBuild := true,

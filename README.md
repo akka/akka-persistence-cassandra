@@ -5,7 +5,7 @@ For questions please use the [discuss.akka.io](https://discuss.lightbend.com/c/a
 
 [![Join the chat at https://gitter.im/akka/akka-persistence-cassandra](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/akka/akka-persistence-cassandra?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-Replicated [Akka Persistence](https://doc.akka.io/docs/akka/current/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](http://cassandra.apache.org/).
+Replicated [Akka Persistence](https://doc.akka.io/docs/akka/current/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](https://cassandra.apache.org/).
 
 [![Build Status](https://travis-ci.org/akka/akka-persistence-cassandra.svg?branch=master)](https://travis-ci.org/akka/akka-persistence-cassandra)
 
@@ -337,7 +337,7 @@ alter table akka_snapshot.snapshots add meta blob;
 
 These columns are used when the event is wrapped in `akka.persistence.cassandra.EventWithMetaData` or snapshot is wrapped in `akka.persistence.cassandra.SnapshotWithMetaData`. It is optional to alter the table and add the columns. It's only required to add the columns if such meta data is used.
 
-It is also not required to add the materialized views, not even if the meta data is stored in the journal table. If the materialized view is not changed the plain events are retrieved with the `eventsByTag` query and they are not wrapped in `EventWithMetaData`. Note that Cassandra [does not support](http://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlAlterMaterializedView.html) adding columns to an existing materialized view.
+It is also not required to add the materialized views, not even if the meta data is stored in the journal table. If the materialized view is not changed the plain events are retrieved with the `eventsByTag` query and they are not wrapped in `EventWithMetaData`. Note that Cassandra [does not support](https://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlAlterMaterializedView.html) adding columns to an existing materialized view.
 
 If you don't alter existing messages table and still use `tables-autocreate=on` you have to set config:
 

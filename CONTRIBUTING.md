@@ -12,7 +12,7 @@ You may also check out these [other resources](https://akka.io/get-involved/).
 
 ## Infrastructure
 
-* [Lightbend Contributor License Agreement](http://www.lightbend.com/contribute/cla)
+* [Lightbend Contributor License Agreement](https://www.lightbend.com/contribute/cla)
 * [Issue Tracker](https://github.com/akka/akka-persistence-cassandra/issues)
 * [CI](https://travis-ci.org/akka/akka-persistence-cassandra)
 
@@ -36,8 +36,8 @@ This is the process for committing code into master. There are of course excepti
 
 1. To avoid duplicated effort, it might be good to check the [issue tracker](https://github.com/akka/akka/issues) and [existing pull requests](https://github.com/akka/akka/pulls) for existing work.
    - If there is no ticket yet, feel free to [create one](https://github.com/akka/akka/issues/new) to discuss the problem and the approach you want to take to solve it.
-1. Make sure you have signed the Lightbend CLA, if not, [sign it online](http://www.lightbend.com/contribute/cla).
-3. You should always perform your work in a Git feature branch. The branch should be given a descriptive name that explains its intent. Some teams also like adding the ticket number and/or the [GitHub](http://github.com) user ID to the branch name, these details is up to each of the individual teams.
+1. Make sure you have signed the Lightbend CLA, if not, [sign it online](https://www.lightbend.com/contribute/cla).
+3. You should always perform your work in a Git feature branch. The branch should be given a descriptive name that explains its intent. Some teams also like adding the ticket number and/or the [GitHub](https://github.com) user ID to the branch name, these details is up to each of the individual teams.
 
     akka-persistence-cassandra prefers the committer name as part of the branch name, the ticket number is optional.
 
@@ -62,15 +62,15 @@ This is the process for committing code into master. There are of course excepti
 For a Pull Request to be considered at all it has to meet these requirements:
 
 1. Live up to the current code standard:
-   - Not violate [DRY](http://programmer.97things.oreilly.com/wiki/index.php/Don%27t_Repeat_Yourself).
-   - [Boy Scout Rule](http://programmer.97things.oreilly.com/wiki/index.php/The_Boy_Scout_Rule) needs to have been applied.
+   - Not violate [DRY](https://www.oreilly.com/library/view/97-things-every/9780596809515/ch30.html).
+   - [Boy Scout Rule](https://www.oreilly.com/library/view/97-things-every/9780596809515/ch08.html) needs to have been applied.
 2. Regardless if the code introduces new features or fixes bugs or regressions, it must have comprehensive tests.
 3. The code must be well documented in the Lightbend's standard documentation format (see the 'Documentation' section below).
 4. The commit messages must properly describe the changes, see further below.
 5. All Lightbend projects must include Lightbend copyright notices.  Each project can choose between one of two approaches:
 
     1. All source files in the project must have a Lightbend copyright notice in the file header.
-    2. The Notices file for the project includes the Lightbend copyright notice and no other files contain copyright notices.  See http://www.apache.org/legal/src-headers.html for instructions for managing this approach for copyrights.
+    2. The Notices file for the project includes the Lightbend copyright notice and no other files contain copyright notices.  See https://www.apache.org/legal/src-headers.html for instructions for managing this approach for copyrights.
 
     akka-persistence-cassandra uses the first choice, having copyright notices in every file header.
 
@@ -97,7 +97,7 @@ See the [alpakka](https://github.com/akka/alpakka) project for an example.
 
 ## External Dependencies
 
-All the external runtime dependencies for the project, including transitive dependencies, must have an open source license that is equal to, or compatible with, [Apache 2](http://www.apache.org/licenses/LICENSE-2.0).
+All the external runtime dependencies for the project, including transitive dependencies, must have an open source license that is equal to, or compatible with, [Apache 2](https://www.apache.org/licenses/LICENSE-2.0).
 
 This must be ensured by manually verifying the license for all the dependencies for the project:
 
@@ -105,9 +105,9 @@ This must be ensured by manually verifying the license for all the dependencies 
 2. Whenever a committer to the project adds a new dependency.
 3. Whenever a new release is cut (public or private for a customer).
 
-Which licenses are compatible with Apache 2 are defined in [this doc](http://www.apache.org/legal/3party.html#category-a), where you can see that the licenses that are listed under ``Category A`` automatically compatible with Apache 2, while the ones listed under ``Category B`` needs additional action:
+Which licenses are compatible with Apache 2 are defined in [this doc](https://www.apache.org/legal/resolved.html), where you can see that the licenses that are listed under ``Category A`` automatically compatible with Apache 2, while the ones listed under ``Category B`` needs additional action:
 
-> Each license in this category requires some degree of [reciprocity](http://www.apache.org/legal/3party.html#define-reciprocal); therefore, additional action must be taken in order to minimize the chance that a user of an Apache product will create a derivative work of a reciprocally-licensed portion of an Apache product without being aware of the applicable requirements.
+> Each license in this category requires some degree of reciprocity. This may mean that additional action is warranted in order to minimize the chance that a user of an Apache product will create a derivative work of a differently-licensed portion of an Apache product without being aware of the applicable requirements.
 
 Each project must also create and maintain a list of all dependencies and their licenses, including all their transitive dependencies. This can be done in either in the documentation or in the build file next to each dependency.
 
@@ -121,9 +121,9 @@ Also, to facilitate both well-formed commits and working together, the ``wip`` a
 
 Follow these guidelines when creating public commits and writing commit messages.
 
-1. If your work spans multiple local commits (for example; if you do safe point commits while working in a feature branch or work in a branch for long time doing merges/rebases etc.) then please do not commit it all but rewrite the history by squashing the commits into a single big commit which you write a good commit message for (like discussed in the following sections). For more info read this article: [Git Workflow](http://sandofsky.com/blog/git-workflow.html). Every commit should be able to be used in isolation, cherry picked etc.
+1. If your work spans multiple local commits (for example; if you do safe point commits while working in a feature branch or work in a branch for long time doing merges/rebases etc.) then please do not commit it all but rewrite the history by squashing the commits into a single big commit which you write a good commit message for (like discussed in the following sections). For more info read this article: [Git Workflow](https://sandofsky.com/blog/git-workflow.html). Every commit should be able to be used in isolation, cherry picked etc.
 
-2. First line should be a descriptive sentence what the commit is doing, including the ticket number. It should be possible to fully understand what the commit does—but not necessarily how it does it—by just reading this single line. We follow the “imperative present tense” style for commit messages ([more info here](http://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html)).
+2. First line should be a descriptive sentence what the commit is doing, including the ticket number. It should be possible to fully understand what the commit does—but not necessarily how it does it—by just reading this single line. We follow the “imperative present tense” style for commit messages ([more info here](https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html)).
 
    It is **not ok** to only list the ticket number, type "minor fix" or similar.
    If the commit is a small fix, then you are done. If not, go to 3.
