@@ -5,22 +5,22 @@
 package akka.persistence.cassandra
 
 import java.nio.ByteBuffer
-import java.time.{LocalDateTime, ZoneOffset}
-import java.lang.{Long => JLong}
+import java.time.{ LocalDateTime, ZoneOffset }
+import java.lang.{ Long => JLong }
 
-import akka.actor.{ActorSystem, PoisonPill}
+import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.Ack
-import akka.persistence.cassandra.journal.{CassandraJournalConfig, CassandraStatements, Hour, TimeBucket}
+import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
 import akka.persistence.cassandra.query.DirectWriting
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{EventEnvelope, NoOffset, PersistenceQuery}
-import akka.persistence.{PersistentRepr, RecoveryCompleted}
+import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
+import akka.persistence.{ PersistentRepr, RecoveryCompleted }
 import akka.serialization.SerializationExtension
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
-import akka.{Done, NotUsed}
+import akka.{ Done, NotUsed }
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
 
@@ -115,9 +115,10 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       writeOldTestEventWithTags(PersistentRepr("e-4", 4L, pidOne), Set("blue", "green"))
       writeOldTestEventWithTags(PersistentRepr("f-1", 1L, pidTwo), Set("green"))
       writeOldTestEventWithTags(PersistentRepr("f-2", 2L, pidTwo), Set("blue"))
-      writeOldTestEventWithTags(PersistentRepr("g-1", 1L, pidWithMeta),
-                                Set("blue"),
-                                Some("This is the best event ever"))
+      writeOldTestEventWithTags(
+        PersistentRepr("g-1", 1L, pidWithMeta),
+        Set("blue"),
+        Some("This is the best event ever"))
 
       // These events have been snapshotted
       writeOldTestEventWithTags(PersistentRepr("h-1", 10L, pidWithSnapshot), Set("red"))
@@ -139,9 +140,10 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       // add some more events to be picked up
       writeOldTestEventWithTags(PersistentRepr("f-1", 1L, pidTwo), Set("green"))
       writeOldTestEventWithTags(PersistentRepr("f-2", 2L, pidTwo), Set("blue"))
-      writeOldTestEventWithTags(PersistentRepr("g-1", 1L, pidWithMeta),
-                                Set("blue"),
-                                Some("This is the best event ever"))
+      writeOldTestEventWithTags(
+        PersistentRepr("g-1", 1L, pidWithMeta),
+        Set("blue"),
+        Some("This is the best event ever"))
     }
 
     "allow a second migration to resume from where the last one got to" in {
@@ -265,7 +267,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       blueProbe.expectNextPF {
         case EventEnvelope(_, `pidWithMeta`, 1, EventWithMetaData("g-1", "This is the best event ever")) =>
       }
-      blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 4, "f-4") => }
+      blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 4, "f-4")         => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 5, "new-event-1") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 6, "new-event-2") => }
       blueProbe.expectNoMessage(waitTime)
@@ -291,7 +293,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       val orangeSrc: Source[EventEnvelope, NotUsed] = queriesThree.eventsByTag("orange", NoOffset)
       val orangeProbe = orangeSrc.runWith(TestSink.probe[Any])(materialiserThree)
       orangeProbe.request(3)
-      orangeProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1") => }
+      orangeProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1")         => }
       orangeProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 5, "new-event-1") => }
       orangeProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 6, "new-event-2") => }
       orangeProbe.expectNoMessage(waitTime)
@@ -432,7 +434,7 @@ abstract class AbstractEventsByTagMigrationSpec
     bound.setString("timebucket", TimeBucket(now, Hour).key.toString)
     val bytes: Array[Byte] = serialization.serialize(pr).get
     bound.setBytes("message", ByteBuffer.wrap(bytes))
-    tags.zipWithIndex foreach {
+    tags.zipWithIndex.foreach {
       case (tag, index) =>
         bound.setString(s"tag${index + 1}", tag)
     }
@@ -442,9 +444,10 @@ abstract class AbstractEventsByTagMigrationSpec
   def writeToDeletedTo(persistenceId: String, deletedTo: Long): Unit =
     session.execute(preapredWriteDeletedTo.bind(persistenceId, deletedTo: JLong))
 
-  def writeOldTestEventWithTags(persistent: PersistentRepr,
-                                tags: Set[String],
-                                metadata: Option[String] = None): Unit = {
+  def writeOldTestEventWithTags(
+      persistent: PersistentRepr,
+      tags: Set[String],
+      metadata: Option[String] = None): Unit = {
     require(tags.size <= 3)
     val event = persistent.payload.asInstanceOf[AnyRef]
     val serializer = serialization.findSerializerFor(event)

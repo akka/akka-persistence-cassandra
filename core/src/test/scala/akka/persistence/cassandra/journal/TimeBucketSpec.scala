@@ -4,7 +4,7 @@
 
 package akka.persistence.cassandra.journal
 
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.{ Matchers, WordSpec }
 
 class TimeBucketSpec extends WordSpec with Matchers {
   "TimeBucket sizes" must {

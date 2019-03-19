@@ -4,12 +4,12 @@
 
 package akka.persistence.cassandra
 
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.{ LocalDateTime, ZoneOffset }
 
 import akka.persistence.cassandra.query.TestActor
 import akka.persistence.cassandra.query._
 import akka.persistence.journal.Tagged
-import akka.persistence.query.{EventEnvelope, NoOffset}
+import akka.persistence.query.{ EventEnvelope, NoOffset }
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 
@@ -38,11 +38,11 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
   "EventsByTag" must {
 
     "work under load" in {
-      val pas = (0 until writers) map { i =>
+      val pas = (0 until writers).map { i =>
         system.actorOf(TestActor.props(s"pid$i"))
       }
 
-      val eventsByTagQueries: immutable.Seq[(Int, TestSubscriber.Probe[(String, Int)])] = (0 until readers) map { i =>
+      val eventsByTagQueries: immutable.Seq[(Int, TestSubscriber.Probe[(String, Int)])] = (0 until readers).map { i =>
         val probe = queryJournal
           .eventsByTag("all", NoOffset)
           .map(i => {
@@ -56,7 +56,7 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
 
       Future {
         system.log.info("Sending messages")
-        (0 until messages) foreach { i =>
+        (0 until messages).foreach { i =>
           pas.foreach(_ ! Tagged(i, Set("all")))
         }
         system.log.info("Sent messages")
@@ -64,8 +64,8 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
 
       system.log.info("Reading messages")
       var latestValues: Map[(Int, String), Int] = Map.empty.withDefault(_ => -1)
-      (0 until messages) foreach { i =>
-        (0 until writers) foreach { writer =>
+      (0 until messages).foreach { i =>
+        (0 until writers).foreach { writer =>
           eventsByTagQueries.foreach {
             case (probeNr, probe) =>
               // should be in order per persistence id per probe

@@ -5,11 +5,11 @@
 package akka.persistence.cassandra
 
 import java.time.format.DateTimeFormatter
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.persistence.cassandra.TestTaggingActor.{Ack, Stop}
+import akka.persistence.cassandra.TestTaggingActor.{ Ack, Stop }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{EventEnvelope, NoOffset, PersistenceQuery}
+import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
@@ -74,7 +74,7 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
         val p1 = system.actorOf(TestTaggingActor.props("p1", Set("blue")))
         val probe = TestProbe()
         probe.watch(p1)
-        (1 to messagesPerRestart) foreach { i =>
+        (1 to messagesPerRestart).foreach { i =>
           p1 ! s"r$restart-e$i"
           expectMsg(Ack)
         }

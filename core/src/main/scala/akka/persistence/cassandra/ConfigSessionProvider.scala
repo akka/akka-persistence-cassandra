@@ -25,20 +25,19 @@ import com.datastax.driver.core.policies.SpeculativeExecutionPolicy
 import com.datastax.driver.core.policies.ConstantSpeculativeExecutionPolicy
 
 /**
-  * Default implementation of the `SessionProvider` that is used for creating the
-  * Cassandra Session. This class is building the Cluster from configuration
-  * properties.
-  *
-  * You may create a subclass of this that performs lookup the contact points
-  * of the Cassandra cluster asynchronously instead of reading them in the
-  * configuration. Such a subclass should override the [[lookupContactPoints]]
-  * method.
-  *
-  * The implementation is defined in configuration `session-provider` property.
-  * The config parameter is the config section of the plugin.
-  */
-class ConfigSessionProvider(system: ActorSystem, config: Config)
-    extends SessionProvider {
+ * Default implementation of the `SessionProvider` that is used for creating the
+ * Cassandra Session. This class is building the Cluster from configuration
+ * properties.
+ *
+ * You may create a subclass of this that performs lookup the contact points
+ * of the Cassandra cluster asynchronously instead of reading them in the
+ * configuration. Such a subclass should override the [[lookupContactPoints]]
+ * method.
+ *
+ * The implementation is defined in configuration `session-provider` property.
+ * The config parameter is the config section of the plugin.
+ */
+class ConfigSessionProvider(system: ActorSystem, config: Config) extends SessionProvider {
 
   def connect()(implicit ec: ExecutionContext): Future[Session] = {
     val clusterId = config.getString("cluster-id")
@@ -69,18 +68,10 @@ class ConfigSessionProvider(system: ActorSystem, config: Config)
   private[this] val connectionPoolConfig = config.getConfig("connection-pool")
 
   val poolingOptions = new PoolingOptions()
-    .setNewConnectionThreshold(
-      HostDistance.LOCAL,
-      connectionPoolConfig.getInt("new-connection-threshold-local"))
-    .setNewConnectionThreshold(
-      HostDistance.REMOTE,
-      connectionPoolConfig.getInt("new-connection-threshold-remote"))
-    .setMaxRequestsPerConnection(
-      HostDistance.LOCAL,
-      connectionPoolConfig.getInt("max-requests-per-connection-local"))
-    .setMaxRequestsPerConnection(
-      HostDistance.REMOTE,
-      connectionPoolConfig.getInt("max-requests-per-connection-remote"))
+    .setNewConnectionThreshold(HostDistance.LOCAL, connectionPoolConfig.getInt("new-connection-threshold-local"))
+    .setNewConnectionThreshold(HostDistance.REMOTE, connectionPoolConfig.getInt("new-connection-threshold-remote"))
+    .setMaxRequestsPerConnection(HostDistance.LOCAL, connectionPoolConfig.getInt("max-requests-per-connection-local"))
+    .setMaxRequestsPerConnection(HostDistance.REMOTE, connectionPoolConfig.getInt("max-requests-per-connection-remote"))
     .setConnectionsPerHost(
       HostDistance.LOCAL,
       connectionPoolConfig.getInt("connections-per-host-core-local"),
@@ -107,16 +98,13 @@ class ConfigSessionProvider(system: ActorSystem, config: Config)
   val metricsEnabled: Boolean = config.getBoolean("metrics-enabled")
   val jmxReportingEnabled: Boolean = config.getBoolean("jmx-reporting-enabled")
 
-  def clusterBuilder(clusterId: String)(
-      implicit ec: ExecutionContext): Future[Cluster.Builder] = {
+  def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
       val b = Cluster.builder
-        .withClusterName(
-          s"${system.name}-${ConfigSessionProvider.clusterIdentifier.getAndIncrement()}")
+        .withClusterName(s"${system.name}-${ConfigSessionProvider.clusterIdentifier.getAndIncrement()}")
         .addContactPointsWithPorts(cp.asJava)
         .withPoolingOptions(poolingOptions)
-        .withReconnectionPolicy(
-          new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
+        .withReconnectionPolicy(new ExponentialReconnectionPolicy(1000, reconnectMaxDelay.toMillis))
         .withQueryOptions(new QueryOptions().setFetchSize(fetchSize))
         .withPort(port)
 
@@ -149,15 +137,13 @@ class ConfigSessionProvider(system: ActorSystem, config: Config)
       val truststorePath = config.getString("ssl.truststore.path")
       if (truststorePath != "") {
         val trustStore =
-          StorePathPasswordConfig(truststorePath,
-                                  config.getString("ssl.truststore.password"))
+          StorePathPasswordConfig(truststorePath, config.getString("ssl.truststore.password"))
 
         val keystorePath = config.getString("ssl.keystore.path")
         val keyStore: Option[StorePathPasswordConfig] =
           if (keystorePath != "") {
             val keyStore =
-              StorePathPasswordConfig(keystorePath,
-                                      config.getString("ssl.keystore.password"))
+              StorePathPasswordConfig(keystorePath, config.getString("ssl.keystore.password"))
             Some(keyStore)
           } else None
 
@@ -168,10 +154,8 @@ class ConfigSessionProvider(system: ActorSystem, config: Config)
 
       val socketConfig = config.getConfig("socket")
       val socketOptions = new SocketOptions()
-      socketOptions.setConnectTimeoutMillis(
-        socketConfig.getInt("connection-timeout-millis"))
-      socketOptions.setReadTimeoutMillis(
-        socketConfig.getInt("read-timeout-millis"))
+      socketOptions.setConnectTimeoutMillis(socketConfig.getInt("connection-timeout-millis"))
+      socketOptions.setReadTimeoutMillis(socketConfig.getInt("read-timeout-millis"))
 
       val sendBufferSize = socketConfig.getInt("send-buffer-size")
       val receiveBufferSize = socketConfig.getInt("receive-buffer-size")
@@ -191,30 +175,29 @@ class ConfigSessionProvider(system: ActorSystem, config: Config)
   }
 
   /**
-    * Subclass may override this method to perform lookup the contact points
-    * of the Cassandra cluster asynchronously instead of reading them from the
-    * configuration.
-    *
-    * @param clusterId the configured `cluster-id` to lookup
-    */
-  def lookupContactPoints(clusterId: String)(implicit ec: ExecutionContext)
-    : Future[immutable.Seq[InetSocketAddress]] = {
+   * Subclass may override this method to perform lookup the contact points
+   * of the Cassandra cluster asynchronously instead of reading them from the
+   * configuration.
+   *
+   * @param clusterId the configured `cluster-id` to lookup
+   */
+  def lookupContactPoints(clusterId: String)(
+      implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
     val contactPoints = getListFromConfig(config, "contact-points")
     Future.successful(buildContactPoints(contactPoints, port))
   }
 
   /**
-    * Builds list of InetSocketAddress out of host:port pairs or host entries + given port parameter.
-    */
+   * Builds list of InetSocketAddress out of host:port pairs or host entries + given port parameter.
+   */
   protected def buildContactPoints(
       contactPoints: immutable.Seq[String],
       port: Int): immutable.Seq[InetSocketAddress] = {
     contactPoints match {
       case null | Nil =>
-        throw new IllegalArgumentException(
-          "A contact point list cannot be empty.")
+        throw new IllegalArgumentException("A contact point list cannot be empty.")
       case hosts =>
-        hosts map { ipWithPort =>
+        hosts.map { ipWithPort =>
           ipWithPort.split(":") match {
             case Array(host, port) => new InetSocketAddress(host, port.toInt)
             case Array(host)       => new InetSocketAddress(host, port)

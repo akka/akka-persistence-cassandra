@@ -6,17 +6,14 @@ package akka.persistence.cassandra.journal
 
 import akka.Done
 import akka.event.LoggingAdapter
-import akka.persistence.cassandra.journal.CassandraJournal.{
-  Serialized,
-  TagPidSequenceNr
-}
+import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import com.datastax.driver.core.{PreparedStatement, Row, Statement}
+import com.datastax.driver.core.{ PreparedStatement, Row, Statement }
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 
-import java.lang.{Long => JLong}
+import java.lang.{ Long => JLong }
 
 private[akka] trait CassandraEventUpdate extends CassandraStatements {
 
@@ -35,10 +32,10 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
     session.prepare(selectMessages).map(_.setIdempotent(true))
 
   /**
-    * Update the given event in the messages table and the tag_views table.
-    *
-    * Does not support changing tags in anyway. The tags field is ignored.
-    */
+   * Update the given event in the messages table and the tag_views table.
+   *
+   * Does not support changing tags in anyway. The tags field is ignored.
+   */
   def updateEvent(event: Serialized): Future[Done] =
     for {
       (partitionNr, existingTags) <- findEvent(event)
@@ -55,40 +52,29 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
     for {
       ps <- psSelectMessages
       row <- findEvent(ps, s.persistenceId, s.sequenceNr, firstPartition)
-    } yield
-      (row.getLong("partition_nr"),
-       row.getSet[String]("tags", classOf[String]).asScala.toSet)
+    } yield (row.getLong("partition_nr"), row.getSet[String]("tags", classOf[String]).asScala.toSet)
   }
 
   /**
-    * Events are nearly always in a deterministic partition. However they can be in the
-    * N + 1 partition if a large atomic write was done.
-    */
-  private def findEvent(ps: PreparedStatement,
-                        pid: String,
-                        sequenceNr: Long,
-                        partitionNr: Long): Future[Row] =
+   * Events are nearly always in a deterministic partition. However they can be in the
+   * N + 1 partition if a large atomic write was done.
+   */
+  private def findEvent(ps: PreparedStatement, pid: String, sequenceNr: Long, partitionNr: Long): Future[Row] =
     session
-      .selectOne(
-        ps.bind(pid, partitionNr: JLong, sequenceNr: JLong, sequenceNr: JLong))
+      .selectOne(ps.bind(pid, partitionNr: JLong, sequenceNr: JLong, sequenceNr: JLong))
       .flatMap {
         case Some(row) => Future.successful(Some(row))
         case None =>
-          session.selectOne(pid,
-                            partitionNr + 1: JLong,
-                            sequenceNr: JLong,
-                            sequenceNr: JLong)
+          session.selectOne(pid, partitionNr + 1: JLong, sequenceNr: JLong, sequenceNr: JLong)
       }
       .map {
         case Some(row) => row
         case None =>
           throw new RuntimeException(
-            s"Unable to find event: Pid: [$pid] SequenceNr: [$sequenceNr] partitionNr: [$partitionNr]"
-          )
+            s"Unable to find event: Pid: [$pid] SequenceNr: [$sequenceNr] partitionNr: [$partitionNr]")
       }
 
-  private def updateEventInTagViews(event: Serialized,
-                                    tag: String): Future[Done] =
+  private def updateEventInTagViews(event: Serialized, tag: String): Future[Done] =
     psSelectTagPidSequenceNr
       .flatMap { ps =>
         val bind = ps.bind()
@@ -102,17 +88,13 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
         case Some(r) => r.getLong("tag_pid_sequence_nr")
         case None =>
           throw new RuntimeException(
-            s"no tag pid sequence nr. Pid ${event.persistenceId}. Tag: $tag. SequenceNr: ${event.sequenceNr}"
-          )
+            s"no tag pid sequence nr. Pid ${event.persistenceId}. Tag: $tag. SequenceNr: ${event.sequenceNr}")
       }
       .flatMap { tagPidSequenceNr =>
         updateEventInTagViews(event, tag, tagPidSequenceNr)
       }
 
-  private def updateEventInTagViews(
-      event: Serialized,
-      tag: String,
-      tagPidSequenceNr: TagPidSequenceNr): Future[Done] =
+  private def updateEventInTagViews(event: Serialized, tag: String, tagPidSequenceNr: TagPidSequenceNr): Future[Done] =
     psUpdateTagView.flatMap { ps =>
       // primary key
       val bind = ps.bind()
@@ -131,9 +113,7 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
       session.executeWrite(bind)
     }
 
-  private def prepareUpdate(ps: PreparedStatement,
-                            s: Serialized,
-                            partitionNr: Long): Statement = {
+  private def prepareUpdate(ps: PreparedStatement, s: Serialized, partitionNr: Long): Statement = {
     val bs = ps.bind()
 
     // primary key

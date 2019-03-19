@@ -57,8 +57,8 @@ object CassandraPluginConfig {
     """^("[a-zA-Z]{1}[\w]{0,47}"|[a-zA-Z]{1}[\w]{0,47})$"""
 
   /**
-    * Builds replication strategy command to create a keyspace.
-    */
+   * Builds replication strategy command to create a keyspace.
+   */
   def getReplicationStrategy(
       strategy: String,
       replicationFactor: Int,
@@ -89,18 +89,17 @@ object CassandraPluginConfig {
       case "networktopologystrategy" =>
         s"'NetworkTopologyStrategy',${getDataCenterReplicationFactorList(dataCenterReplicationFactors)}"
       case unknownStrategy =>
-        throw new IllegalArgumentException(
-          s"$unknownStrategy as replication strategy is unknown and not supported.")
+        throw new IllegalArgumentException(s"$unknownStrategy as replication strategy is unknown and not supported.")
     }
   }
 
   /**
-    * Validates that the supplied keyspace name is valid based on docs found here:
-    * http://docs.datastax.com/en/cql/3.0/cql/cql_reference/create_keyspace_r.html
-    *
-    * @param keyspaceName - the keyspace name to validate.
-    * @return - String if the keyspace name is valid, throws IllegalArgumentException otherwise.
-    */
+   * Validates that the supplied keyspace name is valid based on docs found here:
+   * http://docs.datastax.com/en/cql/3.0/cql/cql_reference/create_keyspace_r.html
+   *
+   * @param keyspaceName - the keyspace name to validate.
+   * @return - String if the keyspace name is valid, throws IllegalArgumentException otherwise.
+   */
   def validateKeyspaceName(keyspaceName: String): String =
     if (keyspaceName.matches(keyspaceNameRegex)) {
       keyspaceName
@@ -110,12 +109,12 @@ object CassandraPluginConfig {
     }
 
   /**
-    * Validates that the supplied table name meets Cassandra's table name requirements.
-    * According to docs here: https://cassandra.apache.org/doc/cql3/CQL.html#createTableStmt :
-    *
-    * @param tableName - the table name to validate
-    * @return - String if the tableName is valid, throws an IllegalArgumentException otherwise.
-    */
+   * Validates that the supplied table name meets Cassandra's table name requirements.
+   * According to docs here: https://cassandra.apache.org/doc/cql3/CQL.html#createTableStmt :
+   *
+   * @param tableName - the table name to validate
+   * @return - String if the tableName is valid, throws an IllegalArgumentException otherwise.
+   */
   def validateTableName(tableName: String): String =
     if (tableName.matches(keyspaceNameRegex)) {
       tableName

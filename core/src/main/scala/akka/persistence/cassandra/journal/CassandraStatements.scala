@@ -7,7 +7,7 @@ package akka.persistence.cassandra.journal
 import akka.Done
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.Session
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 
 import akka.persistence.cassandra.FutureDone
 import akka.persistence.cassandra.indent
@@ -70,8 +70,7 @@ trait CassandraStatements {
       |  meta blob,
       |  PRIMARY KEY ((tag_name, timebucket), timestamp, persistence_id, tag_pid_sequence_nr))
       |  WITH gc_grace_seconds =${config.tagTable.gcGraceSeconds}
-      |  AND compaction = ${indent(config.tagTable.compactionStrategy.asCQL,
-                                   "    ")}
+      |  AND compaction = ${indent(config.tagTable.compactionStrategy.asCQL, "    ")}
       |  ${if (config.tagTable.ttl.isDefined)
          "AND default_time_to_live = " + config.tagTable.ttl.get.toSeconds
        else ""}
@@ -292,17 +291,14 @@ trait CassandraStatements {
   private def metadataTableName = s"${config.keyspace}.${config.metadataTable}"
 
   /**
-    * Execute creation of keyspace and tables is limited to one thread at a time
-    * reduce the risk of (annoying) "Column family ID mismatch" exception
-    * when write and read-side plugins are started at the same time.
-    * Those statements are retried, because that could happen across different
-    * nodes also but serializing those statements gives a better "experience".
-    */
-  private[akka] def executeCreateKeyspaceAndTables(
-      session: Session,
-      config: CassandraJournalConfig)(
-      implicit ec: ExecutionContext
-  ): Future[Done] = {
+   * Execute creation of keyspace and tables is limited to one thread at a time
+   * reduce the risk of (annoying) "Column family ID mismatch" exception
+   * when write and read-side plugins are started at the same time.
+   * Those statements are retried, because that could happen across different
+   * nodes also but serializing those statements gives a better "experience".
+   */
+  private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(
+      implicit ec: ExecutionContext): Future[Done] = {
     import akka.persistence.cassandra.listenableFutureToFuture
 
     def create(): Future[Done] = {

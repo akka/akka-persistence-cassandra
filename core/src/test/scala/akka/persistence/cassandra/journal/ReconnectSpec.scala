@@ -6,7 +6,7 @@ package akka.persistence.cassandra.journal
 
 import akka.actor._
 import akka.persistence.cassandra.CassandraLifecycle.AwaitPersistenceInit
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._

@@ -8,22 +8,22 @@ import java.nio.ByteBuffer
 import java.util.UUID
 
 import akka.Done
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ ActorRef, ActorSystem }
 import akka.event.Logging.Warning
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters.TagWrite
-import akka.persistence.cassandra.journal.TagWriterSpec.{EventWrite, ProgressWrite, TestEx}
+import akka.persistence.cassandra.journal.TagWriterSpec.{ EventWrite, ProgressWrite, TestEx }
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
-import akka.testkit.{ImplicitSender, TestKit, TestProbe}
+import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import com.datastax.driver.core.utils.UUIDs
-import com.datastax.driver.core.{PreparedStatement, Statement}
+import com.datastax.driver.core.{ PreparedStatement, Statement }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, WordSpecLike}
+import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, WordSpecLike }
 
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.control.NoStackTrace
 
 object TagWriterSpec {
@@ -64,10 +64,11 @@ class TagWriterSpec
 
   val fakePs: Future[PreparedStatement] = Future.successful(null)
   val successfulWrite: Statement => Future[Done] = _ => Future.successful(Done)
-  val defaultSettings = TagWriterSettings(maxBatchSize = 10,
-                                          flushInterval = 10.seconds,
-                                          scanningFlushInterval = 20.seconds,
-                                          pubsubNotification = false)
+  val defaultSettings = TagWriterSettings(
+    maxBatchSize = 10,
+    flushInterval = 10.seconds,
+    scanningFlushInterval = 20.seconds,
+    pubsubNotification = false)
   val waitDuration = 100.millis
   val shortDuration = 50.millis
   val tagName = "tag-1"
@@ -100,8 +101,9 @@ class TagWriterSpec
     "flush on demand when query in progress" in {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
-        setup(writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-              settings = defaultSettings.copy(maxBatchSize = 2))
+        setup(
+          writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
+          settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
       val e1 = event("p1", 1L, "e-1", bucket)
       val e2 = event("p1", 2L, "e-2", bucket)
@@ -216,8 +218,9 @@ class TagWriterSpec
     "not execute query N+1 while query N is outstanding" in {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
-        setup(writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-              settings = defaultSettings.copy(maxBatchSize = 2))
+        setup(
+          writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
+          settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -237,8 +240,9 @@ class TagWriterSpec
     "flush time buckets one by one if arrive in same msg" in {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
-        setup(writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-              settings = defaultSettings.copy(maxBatchSize = 2))
+        setup(
+          writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
+          settings = defaultSettings.copy(maxBatchSize = 2))
       val now = UUIDs.timeBased()
       val bucketOne = TimeBucket(now, bucketSize)
       val bucketTwo = bucketOne.next()
@@ -281,8 +285,9 @@ class TagWriterSpec
     "not flush if write in progress" in {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
-        setup(writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-              settings = defaultSettings.copy(maxBatchSize = 2))
+        setup(
+          writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
+          settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -304,8 +309,7 @@ class TagWriterSpec
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-        settings = defaultSettings.copy(maxBatchSize = 3, flushInterval = 0.millis)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 3, flushInterval = 0.millis))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -327,8 +331,7 @@ class TagWriterSpec
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
-        settings = defaultSettings.copy(maxBatchSize = 2, flushInterval = 500.millis)
-      )
+        settings = defaultSettings.copy(maxBatchSize = 2, flushInterval = 500.millis))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -370,7 +373,7 @@ class TagWriterSpec
 
     "handle timeuuids coming out of order" in {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 4))
-      val currentBucket = (0 to 2) map { _ =>
+      val currentBucket = (0 to 2).map { _ =>
         val uuid = UUIDs.timeBased()
         (uuid, TimeBucket(uuid, bucketSize))
       }
@@ -385,9 +388,10 @@ class TagWriterSpec
       system.log.debug("Persisting event in bucket: {} uuid: {}", p2e1.timeBucket, formatOffset(p2e1.timeUuid))
       ref ! TagWrite(tagName, Vector(p2e1))
       probe.expectNoMessage(waitDuration)
-      system.log.debug("Persisting events in bucket: {} and: {}",
-                       (p1e1.timeBucket, formatOffset(p1e1.timeUuid)),
-                       (p1e2.timeBucket, p1e2.timeUuid))
+      system.log.debug(
+        "Persisting events in bucket: {} and: {}",
+        (p1e1.timeBucket, formatOffset(p1e1.timeUuid)),
+        (p1e2.timeBucket, p1e2.timeUuid))
       ref ! TagWrite(tagName, Vector(p1e1, p1e2))
       probe.expectMsg(Vector(toEw(p1e1, 1), toEw(p1e2, 2)))
       probe.expectMsg(ProgressWrite("p1", 2, 2, p1e2.timeUuid))
@@ -424,8 +428,9 @@ class TagWriterSpec
       val resetProgress = TagProgress(pid, 5, 5)
       val writeInProgressPromise = Promise[Done]()
       val (probe, ref) =
-        setup(settings = defaultSettings.copy(maxBatchSize = 1),
-              writeResponse = Stream(writeInProgressPromise.future) ++ Stream.continually(Future.successful(Done)))
+        setup(
+          settings = defaultSettings.copy(maxBatchSize = 1),
+          writeResponse = Stream(writeInProgressPromise.future) ++ Stream.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       ref ! ResetPersistenceId(tagName, initialProgress)
@@ -492,8 +497,9 @@ class TagWriterSpec
       val pid = "p-1"
       val writeInProgressPromise = Promise[Done]()
       val (probe, underTest) =
-        setup(settings = defaultSettings.copy(maxBatchSize = 1),
-              writeResponse = Stream(writeInProgressPromise.future) ++ Stream.continually(Future.successful(Done)))
+        setup(
+          settings = defaultSettings.copy(maxBatchSize = 1),
+          writeResponse = Stream(writeInProgressPromise.future) ++ Stream.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       val e1 = event(pid, 1L, "e-1", bucket)
@@ -517,8 +523,9 @@ class TagWriterSpec
 
     "handle tag writes view failing" in {
       val t = TestEx("Tag write failed")
-      val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 2),
-                               writeResponse = Stream(Future.failed(t)) ++ Stream.continually(Future.successful(Done)))
+      val (probe, ref) = setup(
+        settings = defaultSettings.copy(maxBatchSize = 2),
+        writeResponse = Stream(Future.failed(t)) ++ Stream.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -548,8 +555,9 @@ class TagWriterSpec
     "handle tag progress write failing" in {
       val t = TestEx("Tag progress write has failed")
       val (probe, ref) =
-        setup(settings = defaultSettings.copy(maxBatchSize = 2),
-              progressWriteResponse = Stream(Future.failed(t)) ++ Stream.continually(Future.successful(Done)))
+        setup(
+          settings = defaultSettings.copy(maxBatchSize = 2),
+          progressWriteResponse = Stream(Future.failed(t)) ++ Stream.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -581,13 +589,12 @@ class TagWriterSpec
       tag: String = "tag-1",
       settings: TagWriterSettings,
       writeResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done)),
-      progressWriteResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done))
-  ): (TestProbe, ActorRef) = {
+      progressWriteResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done)))
+      : (TestProbe, ActorRef) = {
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
-    val session = new TagWritersSession(() => fakePs, () => fakePs, successfulWrite, null,
-      () => fakePs, () => fakePs) {
+    val session = new TagWritersSession(() => fakePs, () => fakePs, successfulWrite, null, () => fakePs, () => fakePs) {
 
       override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
         probe.ref ! events.map {
@@ -598,11 +605,12 @@ class TagWriterSpec
         result
       }
 
-      override def writeProgress(tag: Tag,
-                                 pid: PersistenceId,
-                                 seqNr: SequenceNr,
-                                 tagPidSequenceNr: TagPidSequenceNr,
-                                 offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
+      override def writeProgress(
+          tag: Tag,
+          pid: PersistenceId,
+          seqNr: SequenceNr,
+          tagPidSequenceNr: TagPidSequenceNr,
+          offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
         val (head, tail) = (progressWriteResponseStream.head, progressWriteResponseStream.tail)
         probe.ref ! ProgressWrite(pid, seqNr, tagPidSequenceNr, offset)
         progressWriteResponseStream = tail
@@ -614,12 +622,13 @@ class TagWriterSpec
     (probe, ref)
   }
 
-  private def event(pId: String,
-                    seqNr: Long,
-                    payload: String,
-                    bucket: TimeBucket,
-                    tags: Set[String] = Set(),
-                    uuid: UUID = UUIDs.timeBased()): Serialized =
+  private def event(
+      pId: String,
+      seqNr: Long,
+      payload: String,
+      bucket: TimeBucket,
+      tags: Set[String] = Set(),
+      uuid: UUID = UUIDs.timeBased()): Serialized =
     Serialized(pId, seqNr, ByteBuffer.wrap(payload.getBytes()), tags, "", "", 1, "", None, uuid, bucket)
 
 }

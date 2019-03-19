@@ -7,16 +7,16 @@ package akka.persistence.cassandra
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ ActorSystem, Props }
 import akka.persistence.PersistentActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.testkit.{TestKitBase, TestProbe}
+import akka.testkit.{ TestKitBase, TestProbe }
 import com.datastax.driver.core.Cluster
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 object CassandraLifecycle {
   sealed trait CassandraMode
@@ -29,7 +29,7 @@ object CassandraLifecycle {
   //  val mode: CassandraMode = Embedded
   val mode: CassandraMode = Option(System.getenv("CASSANDRA_MODE")).map(_.toLowerCase) match {
     case Some("external") => External
-    case _ => Embedded
+    case _                => Embedded
   }
 
   def isExternal: Boolean = mode == External
@@ -70,9 +70,10 @@ object CassandraLifecycle {
           .actorOf(Props(classOf[AwaitPersistenceInit], journalPluginId, snapshotPluginId), "persistenceInit" + n)
           .tell("hello", probe.ref)
         probe.expectMsg(5.seconds, "hello")
-        system.log.debug("awaitPersistenceInit took {} ms {}",
-                         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0),
-                         system.name)
+        system.log.debug(
+          "awaitPersistenceInit took {} ms {}",
+          TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0),
+          system.name)
       }
     }
   }
@@ -128,11 +129,12 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
     mode match {
       case Embedded =>
         val cassandraDirectory = new File("target/" + systemName)
-        CassandraLauncher.start(cassandraDirectory,
-                                configResource = cassandraConfigResource,
-                                clean = true,
-                                port = port,
-                                CassandraLauncher.classpathForResources("logback-test.xml"))
+        CassandraLauncher.start(
+          cassandraDirectory,
+          configResource = cassandraConfigResource,
+          clean = true,
+          port = port,
+          CassandraLauncher.classpathForResources("logback-test.xml"))
       case External =>
     }
 

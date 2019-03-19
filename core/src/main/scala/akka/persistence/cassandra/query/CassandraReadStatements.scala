@@ -7,8 +7,8 @@ package akka.persistence.cassandra.query
 import akka.annotation.InternalApi
 
 /**
-  * INTERNAL API
-  */
+ * INTERNAL API
+ */
 @InternalApi private[akka] trait CassandraReadStatements {
 
   def config: CassandraReadJournalConfig

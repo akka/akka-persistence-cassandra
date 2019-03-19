@@ -23,15 +23,13 @@ import scala.util.Try
 object TagViewSequenceNumberScannerSpec {
   val bucketSize = Hour
   val name = "EventsByTagSequenceNumberScanningSpec"
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
       |akka.loglevel = INFO
       |cassandra-journal.events-by-tag.bucket-size = ${bucketSize.toString}
     """.stripMargin).withFallback(CassandraLifecycle.config)
 }
 
-class TagViewSequenceNumberScannerSpec extends CassandraSpec(config)
-  with TestTagWriter {
+class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTagWriter {
 
   import TagViewSequenceNumberScannerSpec._
 
@@ -66,10 +64,10 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config)
       writeTaggedEvent(PersistentRepr("p2e1", persistenceId = "p2"), Set("blue"), 5, bucketSize)
       writeTaggedEvent(PersistentRepr("p2e2", persistenceId = "p2"), Set("blue"), 6, bucketSize)
       writeTaggedEvent(PersistentRepr("p2e3", persistenceId = "p2"), Set("blue"), 7, bucketSize)
-      val pidSequenceNrs = queries.scanTagSequenceNrs("blue", now).futureValue.map { case (persistenceId, (tagSeqNr, _)) => (persistenceId, tagSeqNr) }
-      pidSequenceNrs should equal(Map(
-        "p1" -> 0,
-        "p2" -> 4))
+      val pidSequenceNrs = queries.scanTagSequenceNrs("blue", now).futureValue.map {
+        case (persistenceId, (tagSeqNr, _)) => (persistenceId, tagSeqNr)
+      }
+      pidSequenceNrs should equal(Map("p1" -> 0, "p2" -> 4))
     }
   }
 }

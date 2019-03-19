@@ -8,7 +8,7 @@ import java.util.UUID
 
 import akka.NotUsed
 import akka.actor.ActorRef
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraPluginConfig, CassandraSpec}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import com.datastax.driver.core.Session
@@ -79,22 +79,14 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       setup("c", 1)
 
       val src = current()
-      src
-        .runWith(TestSink.probe[Any])
-        .request(4)
-        .expectNextUnordered("a", "b", "c")
-        .expectComplete()
+      src.runWith(TestSink.probe[Any]).request(4).expectNextUnordered("a", "b", "c").expectComplete()
     }
 
     "deliver persistenceId only once if there are multiple events spanning partitions" in {
       setup("d", 100)
 
       val src = current()
-      src
-        .runWith(TestSink.probe[Any])
-        .request(10)
-        .expectNext("d")
-        .expectComplete()
+      src.runWith(TestSink.probe[Any]).request(10).expectNext("d").expectComplete()
     }
 
     "find existing persistence ids in batches if there is more of them than max-result-size-query" in {
@@ -120,10 +112,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       setup("f", 1)
 
       val src = all()
-      val probe = src
-        .runWith(TestSink.probe[Any])
-        .request(5)
-        .expectNextUnordered("e", "f")
+      val probe = src.runWith(TestSink.probe[Any]).request(5).expectNextUnordered("e", "f")
 
       setup("g", 1)
 
@@ -173,17 +162,11 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       val src = all()
       val probe = src.runWith(TestSink.probe[Any])
 
-      probe
-        .request(10)
-        .expectNext("p")
-        .expectNoMessage(1000.millis)
+      probe.request(10).expectNext("p").expectNoMessage(1000.millis)
 
       setup("q", 1000)
 
-      probe
-        .request(10)
-        .expectNext("q")
-        .expectNoMessage(1000.millis)
+      probe.request(10).expectNext("q").expectNoMessage(1000.millis)
     }
   }
 }

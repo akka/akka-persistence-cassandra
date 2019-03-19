@@ -4,8 +4,8 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.actor.{ActorRef, PoisonPill, Props}
-import akka.persistence.{DeleteMessagesFailure, DeleteMessagesSuccess, PersistentActor, RecoveryCompleted}
+import akka.actor.{ ActorRef, PoisonPill, Props }
+import akka.persistence.{ DeleteMessagesFailure, DeleteMessagesSuccess, PersistentActor, RecoveryCompleted }
 import akka.persistence.cassandra.CassandraSpec
 import akka.testkit.TestProbe
 
@@ -22,10 +22,11 @@ object CassandraJournalDeletionSpec {
 
   case class Deleted(sequenceNr: Long)
 
-  class PAThatDeletes(val persistenceId: String,
-                      deleteSuccessProbe: ActorRef,
-                      deleteFailProbe: ActorRef,
-                      override val journalPluginId: String = "cassandra-journal")
+  class PAThatDeletes(
+      val persistenceId: String,
+      deleteSuccessProbe: ActorRef,
+      deleteFailProbe: ActorRef,
+      override val journalPluginId: String = "cassandra-journal")
       extends PersistentActor {
 
     var recoveredEvents: List[Any] = List.empty
@@ -119,8 +120,7 @@ class CassandraJournalDeletionSpec
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
       val p1 = system.actorOf(
-        Props(new PAThatDeletes("p2", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-low-concurrent-deletes"))
-      )
+        Props(new PAThatDeletes("p2", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-low-concurrent-deletes")))
 
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)

@@ -4,7 +4,7 @@
 
 package akka.persistence.cassandra.snapshot
 
-import java.lang.{Long => JLong}
+import java.lang.{ Long => JLong }
 
 import akka.Done
 import akka.persistence.SnapshotMetadata
@@ -12,7 +12,7 @@ import akka.persistence.cassandra.journal.FixedRetryPolicy
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.policies.LoggingRetryPolicy
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 
 trait CassandraSnapshotCleanup extends CassandraStatements {
 
@@ -20,28 +20,20 @@ trait CassandraSnapshotCleanup extends CassandraStatements {
   def session: CassandraSession
   private[akka] implicit val ec: ExecutionContext
 
-  private lazy val deleteRetryPolicy = new LoggingRetryPolicy(
-    new FixedRetryPolicy(snapshotConfig.deleteRetries))
+  private lazy val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.deleteRetries))
 
   def preparedDeleteSnapshot =
     session
       .prepare(deleteSnapshot)
-      .map(
-        _.setConsistencyLevel(snapshotConfig.writeConsistency)
-          .setIdempotent(true)
-          .setRetryPolicy(deleteRetryPolicy))
+      .map(_.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy))
 
   def preparedDeleteAllSnapshotsForPid =
     session
       .prepare(deleteAllSnapshotForPersistenceId)
-      .map(
-        _.setConsistencyLevel(snapshotConfig.writeConsistency)
-          .setIdempotent(true)
-          .setRetryPolicy(deleteRetryPolicy))
+      .map(_.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy))
 
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
-    val boundDeleteSnapshot = preparedDeleteSnapshot.map(
-      _.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
+    val boundDeleteSnapshot = preparedDeleteSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
     boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
   }
 

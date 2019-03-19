@@ -5,16 +5,13 @@
 package akka.persistence
 
 import java.nio.ByteBuffer
-import java.time.{Instant, LocalDateTime, ZoneOffset}
+import java.time.{ Instant, LocalDateTime, ZoneOffset }
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import java.util.concurrent.Executor
 
-import akka.persistence.cassandra.journal.{BucketSize, TimeBucket}
-import akka.persistence.cassandra.journal.CassandraJournal.{
-  Serialized,
-  SerializedMeta
-}
+import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
+import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, SerializedMeta }
 import akka.serialization.Serialization
 import com.datastax.driver.core.utils.UUIDs
 import com.google.common.util.concurrent.ListenableFuture
@@ -23,7 +20,7 @@ import scala.language.implicitConversions
 import scala.util.Try
 import scala.util.control.NonFatal
 import scala.collection.JavaConverters._
-import com.typesafe.config.{Config, ConfigValueType}
+import com.typesafe.config.{ Config, ConfigValueType }
 
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
@@ -37,9 +34,8 @@ package object cassandra {
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
 
   // TODO we should use the more explicit ListenableFutureConverter asScala instead
-  implicit def listenableFutureToFuture[A](
-      lf: ListenableFuture[A]
-  )(implicit executionContext: ExecutionContext): Future[A] = {
+  implicit def listenableFutureToFuture[A](lf: ListenableFuture[A])(
+      implicit executionContext: ExecutionContext): Future[A] = {
     val promise = Promise[A]
     lf.addListener(new Runnable {
       def run() = promise.complete(Try(lf.get()))
@@ -47,8 +43,7 @@ package object cassandra {
     promise.future
   }
 
-  implicit class ListenableFutureConverter[A](val lf: ListenableFuture[A])
-      extends AnyVal {
+  implicit class ListenableFutureConverter[A](val lf: ListenableFuture[A]) extends AnyVal {
     def asScala(implicit ec: ExecutionContext): Future[A] = {
       val promise = Promise[A]
       lf.addListener(new Runnable {
@@ -59,9 +54,7 @@ package object cassandra {
   }
 
   def formatOffset(uuid: UUID): String = {
-    val time = LocalDateTime.ofInstant(
-      Instant.ofEpochMilli(UUIDs.unixTimestamp(uuid)),
-      ZoneOffset.UTC)
+    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(UUIDs.unixTimestamp(uuid)), ZoneOffset.UTC)
     s"$uuid (${timestampFormatter.format(time)})"
   }
 
@@ -73,13 +66,13 @@ package object cassandra {
 
   val FutureDone: Future[Done] = Future.successful(Done)
 
-  def serializeEvent(p: PersistentRepr,
-                     tags: Set[String],
-                     uuid: UUID,
-                     bucketSize: BucketSize,
-                     serialization: Serialization,
-                     system: ActorSystem)(
-      implicit executionContext: ExecutionContext): Future[Serialized] =
+  def serializeEvent(
+      p: PersistentRepr,
+      tags: Set[String],
+      uuid: UUID,
+      bucketSize: BucketSize,
+      serialization: Serialization,
+      system: ActorSystem)(implicit executionContext: ExecutionContext): Future[Serialized] =
     try {
       // use same clock source as the UUID for the timeBucket
       val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), bucketSize)
@@ -106,8 +99,7 @@ package object cassandra {
 
       serializer match {
         case asyncSer: AsyncSerializer =>
-          Serialization.withTransportInformation(
-            system.asInstanceOf[ExtendedActorSystem]) { () =>
+          Serialization.withTransportInformation(system.asInstanceOf[ExtendedActorSystem]) { () =>
             asyncSer.toBinaryAsync(event).map { bytes =>
               val serEvent = ByteBuffer.wrap(bytes)
               Serialized(
@@ -121,8 +113,7 @@ package object cassandra {
                 p.writerUuid,
                 serializeMeta(),
                 uuid,
-                timeBucket
-              )
+                timeBucket)
             }
           }
 
@@ -141,8 +132,7 @@ package object cassandra {
               p.writerUuid,
               serializeMeta(),
               uuid,
-              timeBucket
-            )
+              timeBucket)
           }
       }
 
@@ -151,17 +141,15 @@ package object cassandra {
     }
 
   /**
-    * INTERNAL API
-    */
+   * INTERNAL API
+   */
   @InternalApi private[akka] def indent(stmt: String, prefix: String): String =
     stmt.split('\n').mkString("\n" + prefix)
 
   /**
-    * INTERNAL API
-    */
-  @InternalApi private[cassandra] def getListFromConfig(
-      config: Config,
-      key: String): List[String] = {
+   * INTERNAL API
+   */
+  @InternalApi private[cassandra] def getListFromConfig(config: Config, key: String): List[String] = {
     config.getValue(key).valueType() match {
       case ConfigValueType.LIST => config.getStringList(key).asScala.toList
       // case ConfigValueType.OBJECT is needed to handle dot notation (x.0=y x.1=z) due to Typesafe Config implementation quirk.

@@ -8,10 +8,10 @@ import java.util.Comparator
 import java.util.UUID
 
 /**
-  * Scala implementation of UUIDComparator in
-  * https://github.com/cowtowncoder/java-uuid-generator
-  * Apache License 2.0.
-  */
+ * Scala implementation of UUIDComparator in
+ * https://github.com/cowtowncoder/java-uuid-generator
+ * Apache License 2.0.
+ */
 class UUIDComparator extends Comparator[UUID] {
 
   def compare(u1: UUID, u2: UUID): Int = {
@@ -26,17 +26,14 @@ class UUIDComparator extends Comparator[UUID] {
         val diff2 = compareULongs(u1.timestamp(), u2.timestamp())
         if (diff2 == 0) {
           // or if that won't work, by other bits lexically
-          compareULongs(u1.getLeastSignificantBits(),
-                        u2.getLeastSignificantBits())
+          compareULongs(u1.getLeastSignificantBits(), u2.getLeastSignificantBits())
         } else
           diff2
       } else {
         // note: java.util.UUIDs compares with sign extension, IMO that's wrong, so:
-        val diff2 = compareULongs(u1.getMostSignificantBits(),
-                                  u2.getMostSignificantBits())
+        val diff2 = compareULongs(u1.getMostSignificantBits(), u2.getMostSignificantBits())
         if (diff2 == 0) {
-          compareULongs(u1.getLeastSignificantBits(),
-                        u2.getLeastSignificantBits())
+          compareULongs(u1.getLeastSignificantBits(), u2.getLeastSignificantBits())
         } else
           diff2
       }

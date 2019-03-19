@@ -16,8 +16,7 @@ import akka.persistence.journal.Tagged
 import com.typesafe.config.ConfigFactory
 
 object ManyActorsLoadSpec {
-  val config = ConfigFactory.parseString(
-    s"""
+  val config = ConfigFactory.parseString(s"""
       akka.loglevel = INFO
       cassandra-journal.keyspace=ManyActorsLoadSpec
       cassandra-journal.events-by-tag.enabled = on
@@ -33,9 +32,12 @@ object ManyActorsLoadSpec {
   private final case class Next(remaining: Int)
   final case class Delete(seqNr: Long)
   case object GetMetrics
-  final case class Metrics(snapshotDuration: FiniteDuration, replayDuration1: FiniteDuration,
-                           replayDuration2: FiniteDuration, replayedEvents: Int,
-                           totalDuration: FiniteDuration)
+  final case class Metrics(
+      snapshotDuration: FiniteDuration,
+      replayDuration1: FiniteDuration,
+      replayDuration2: FiniteDuration,
+      replayedEvents: Int,
+      totalDuration: FiniteDuration)
 
   def props(persistenceId: String, tagging: Long => Set[String]): Props =
     Props(new ProcessorA(persistenceId, tagging))
@@ -74,10 +76,13 @@ class ManyActorsLoadSpec extends CassandraSpec(ManyActorsLoadSpec.config) {
 
       val rounds = 1 // increase this to 10 when benchmarking
       val deadline =
-        Deadline.now + rounds * system.settings.config.getDuration(
-          "cassandra-journal.events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS).millis + 2.seconds
+        Deadline.now + rounds * system.settings.config
+          .getDuration("cassandra-journal.events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS)
+          .millis + 2.seconds
 
-      val tagging: Long => Set[String] = { _ => Set.empty }
+      val tagging: Long => Set[String] = { _ =>
+        Set.empty
+      }
       //      val tagging: Long => Set[String] = { seqNr =>
       //        if (seqNr % 10 == 0) Set("blue")
       //        else if (seqNr % 17 == 0) Set("blue", "green")

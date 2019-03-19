@@ -4,11 +4,11 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.actor.{Actor, ActorRef, ActorSystem, PoisonPill, Props}
+import akka.actor.{ Actor, ActorRef, ActorSystem, PoisonPill, Props }
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
-import akka.testkit.{ImplicitSender, TestKit, TestProbe}
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
+import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
 
@@ -21,10 +21,11 @@ class TagWritersSpec
 
   val smallWait = 10.milliseconds
 
-  private val defaultSettings = TagWriterSettings(maxBatchSize = 10,
-                                                  flushInterval = 10.seconds,
-                                                  scanningFlushInterval = 20.seconds,
-                                                  pubsubNotification = false)
+  private val defaultSettings = TagWriterSettings(
+    maxBatchSize = 10,
+    flushInterval = 10.seconds,
+    scanningFlushInterval = 20.seconds,
+    pubsubNotification = false)
 
   private def testProps(settings: TagWriterSettings, tagWriterCreator: String => ActorRef): Props =
     Props(new TagWriters(settings, tagWriterSession = null) {

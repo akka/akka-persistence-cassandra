@@ -4,25 +4,25 @@
 
 package akka.persistence.cassandra
 
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
-import akka.persistence.cassandra.CassandraLifecycle.{Embedded, External}
+import akka.persistence.cassandra.CassandraLifecycle.{ Embedded, External }
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{NoOffset, PersistenceQuery}
+import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Keep, Sink}
+import akka.stream.scaladsl.{ Keep, Sink }
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ImplicitSender, SocketUtil, TestKitBase}
-import com.typesafe.config.{Config, ConfigFactory}
+import akka.testkit.{ ImplicitSender, SocketUtil, TestKitBase }
+import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time.{Milliseconds, Seconds, Span}
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.time.{ Milliseconds, Seconds, Span }
+import org.scalatest.{ Matchers, WordSpecLike }
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -35,18 +35,15 @@ import scala.util.Try
 object CassandraSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   def getCallerName(clazz: Class[_]): String = {
-    val s = (Thread.currentThread.getStackTrace map (_.getClassName))
+    val s = Thread.currentThread.getStackTrace
+      .map(_.getClassName)
       .dropWhile(
-        _ matches "(java.lang.Thread|.*Abstract.*|akka.persistence.cassandra.CassandraSpec\\$|.*CassandraSpec)"
-      )
+        _.matches("(java.lang.Thread|.*Abstract.*|akka.persistence.cassandra.CassandraSpec\\$|.*CassandraSpec)"))
     val reduced = s.lastIndexWhere(_ == clazz.getName) match {
       case -1 ⇒ s
-      case z ⇒ s drop (z + 1)
+      case z ⇒ s.drop(z + 1)
     }
-    reduced.head
-      .replaceFirst(""".*\.""", "")
-      .replaceAll("[^a-zA-Z_0-9]", "_")
-      .take(48) // Max length of a c* keyspace
+    reduced.head.replaceFirst(""".*\.""", "").replaceAll("[^a-zA-Z_0-9]", "_").take(48) // Max length of a c* keyspace
   }
 
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
@@ -76,9 +73,10 @@ object CassandraSpec {
 /**
  * Picks a free port for Cassandra before starting the ActorSystem
  */
-abstract class CassandraSpec(config: Config,
-                             val journalName: String = getCallerName(getClass),
-                             val snapshotName: String = getCallerName(getClass))
+abstract class CassandraSpec(
+    config: Config,
+    val journalName: String = getCallerName(getClass),
+    val snapshotName: String = getCallerName(getClass))
     extends TestKitBase
     with ImplicitSender
     with WordSpecLike
@@ -122,11 +120,7 @@ abstract class CassandraSpec(config: Config,
     as
   }
 
-  final override lazy val cluster = Cluster
-    .builder()
-    .addContactPoint("localhost")
-    .withPort(port())
-    .build()
+  final override lazy val cluster = Cluster.builder().addContactPoint("localhost").withPort(port()).build()
 
   final override def systemName = system.name
 
@@ -152,30 +146,30 @@ abstract class CassandraSpec(config: Config,
 
   def events(pid: String): immutable.Seq[EventsByPersistenceIdStage.TaggedPersistentRepr] =
     queries
-      .eventsByPersistenceId(pid,
-                             0,
-                             Long.MaxValue,
-                             Long.MaxValue,
-                             100,
-                             None,
-                             "test",
-                             extractor =
-                               Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
+      .eventsByPersistenceId(
+        pid,
+        0,
+        Long.MaxValue,
+        Long.MaxValue,
+        100,
+        None,
+        "test",
+        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .toMat(Sink.seq)(Keep.right)
       .run()
       .futureValue
 
   def eventPayloadsWithTags(pid: String): immutable.Seq[(Any, Set[String])] =
     queries
-      .eventsByPersistenceId(pid,
-                             0,
-                             Long.MaxValue,
-                             Long.MaxValue,
-                             100,
-                             None,
-                             "test",
-                             extractor =
-                               Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
+      .eventsByPersistenceId(
+        pid,
+        0,
+        Long.MaxValue,
+        Long.MaxValue,
+        100,
+        None,
+        "test",
+        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .map { tpr =>
         (tpr.pr.payload, tpr.tags)
       }
@@ -184,16 +178,10 @@ abstract class CassandraSpec(config: Config,
       .futureValue
 
   def eventsByTag(tag: String): TestSubscriber.Probe[Any] =
-    queries
-      .eventsByTag(tag, NoOffset)
-      .map(_.event)
-      .runWith(TestSink.probe)
+    queries.eventsByTag(tag, NoOffset).map(_.event).runWith(TestSink.probe)
 
   def expectEventsForTag(tag: String, elements: String*): Unit = {
-    val probe = queries
-      .eventsByTag(tag, NoOffset)
-      .map(_.event)
-      .runWith(TestSink.probe)
+    val probe = queries.eventsByTag(tag, NoOffset).map(_.event).runWith(TestSink.probe)
 
     probe.request(elements.length + 1)
     elements.foreach(probe.expectNext)

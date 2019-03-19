@@ -22,9 +22,8 @@ import org.scalatest.BeforeAndAfterAll
 
 object CassandraPluginConfigSpec {
   class TestContactPointsProvider(system: ActorSystem, config: Config) extends ConfigSessionProvider(system, config) {
-    override def lookupContactPoints(
-        clusterId: String
-    )(implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] =
+    override def lookupContactPoints(clusterId: String)(
+        implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] =
       if (clusterId == "cluster1")
         Future.successful(List(new InetSocketAddress("host1", 9041)))
       else
@@ -69,8 +68,7 @@ class CassandraPluginConfigSpec
       ("\"missing_trailing_quote", false),
       ("missing_leading_quote\"", false),
       ('"' + maxKey + '"', true),
-      (maxKey + "_", false)
-    )
+      (maxKey + "_", false))
   }
 
   override protected def afterAll(): Unit = {
@@ -101,8 +99,7 @@ class CassandraPluginConfigSpec
       val config = new CassandraPluginConfig(system, configWithHostPortPair)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(new InetSocketAddress("127.0.0.1", 19142), new InetSocketAddress("127.0.0.1", 29142))
-      )
+        List(new InetSocketAddress("127.0.0.1", 19142), new InetSocketAddress("127.0.0.1", 29142)))
     }
 
     "ignore the port configuration with host:port values as contact points" in {
@@ -114,10 +111,10 @@ class CassandraPluginConfigSpec
       val config = new CassandraPluginConfig(system, configWithHostPortPairAndPort)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(new InetSocketAddress("127.0.0.1", 19142),
-             new InetSocketAddress("127.0.0.1", 29142),
-             new InetSocketAddress("127.0.0.1", 39142))
-      )
+        List(
+          new InetSocketAddress("127.0.0.1", 19142),
+          new InetSocketAddress("127.0.0.1", 29142),
+          new InetSocketAddress("127.0.0.1", 39142)))
     }
 
     "parse config with a list of contact points without port" in {
@@ -126,32 +123,27 @@ class CassandraPluginConfigSpec
       val config = new CassandraPluginConfig(system, configWithHosts)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(new InetSocketAddress("127.0.0.1", 9042), new InetSocketAddress("127.0.0.2", 9042))
-      )
+        List(new InetSocketAddress("127.0.0.1", 9042), new InetSocketAddress("127.0.0.2", 9042)))
     }
 
     "parse config with a list of contact points using dot syntax" in {
-      lazy val configWithHosts = ConfigFactory.parseString(
-        """
+      lazy val configWithHosts = ConfigFactory.parseString("""
           |contact-points.0 = "127.0.0.1"
           |contact-points.1 = "127.0.0.2"
         """.stripMargin).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHosts)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(
-          new InetSocketAddress("127.0.0.1", 9042),
-          new InetSocketAddress("127.0.0.2", 9042)))
+        List(new InetSocketAddress("127.0.0.1", 9042), new InetSocketAddress("127.0.0.2", 9042)))
     }
 
     "parse config with comma-separated contact-points" in {
-      lazy val configWithHosts = ConfigFactory.parseString("""contact-points = "127.0.0.1,127.0.0.2"""").withFallback(defaultConfig)
+      lazy val configWithHosts =
+        ConfigFactory.parseString("""contact-points = "127.0.0.1,127.0.0.2"""").withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHosts)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(
-          new InetSocketAddress("127.0.0.1", 9042),
-          new InetSocketAddress("127.0.0.2", 9042)))
+        List(new InetSocketAddress("127.0.0.1", 9042), new InetSocketAddress("127.0.0.2", 9042)))
     }
 
     "use the port configuration with a list of contact points without port" in {
@@ -162,8 +154,7 @@ class CassandraPluginConfigSpec
       val config = new CassandraPluginConfig(system, configWithHostsAndPort)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints(""), 3.seconds) must be(
-        List(new InetSocketAddress("127.0.0.1", 19042), new InetSocketAddress("127.0.0.2", 19042))
-      )
+        List(new InetSocketAddress("127.0.0.1", 19042), new InetSocketAddress("127.0.0.2", 19042)))
     }
 
     "set the port configuration on the cluster builder" in {
@@ -185,8 +176,7 @@ class CassandraPluginConfigSpec
       val config = new CassandraPluginConfig(system, configWithContactPointsProvider)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints("cluster1"), 3.seconds) must be(
-        List(new InetSocketAddress("host1", 9041))
-      )
+        List(new InetSocketAddress("host1", 9041)))
     }
 
     "use custom ConfigSessionProvider for cluster2" in {
@@ -197,8 +187,7 @@ class CassandraPluginConfigSpec
       val config = new CassandraPluginConfig(system, configWithContactPointsProvider)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
       Await.result(sessionProvider.lookupContactPoints("cluster2"), 3.seconds) must be(
-        List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042))
-      )
+        List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042)))
     }
 
     "throw an exception when contact point list is empty" in {
@@ -225,8 +214,7 @@ class CassandraPluginConfigSpec
     }
 
     "parse config with a list of datacenters configured for NetworkTopologyStrategy using dot syntax" in {
-      lazy val configWithNetworkStrategy = ConfigFactory.parseString(
-        """
+      lazy val configWithNetworkStrategy = ConfigFactory.parseString("""
           |replication-strategy = "NetworkTopologyStrategy"
           |data-center-replication-factors.0 = "dc1:3"
           |data-center-replication-factors.1 = "dc2:2"
@@ -236,8 +224,7 @@ class CassandraPluginConfigSpec
     }
 
     "parse config with comma-separated data-center-replication-factors" in {
-      lazy val configWithNetworkStrategy = ConfigFactory.parseString(
-        """
+      lazy val configWithNetworkStrategy = ConfigFactory.parseString("""
           |replication-strategy = "NetworkTopologyStrategy"
           |data-center-replication-factors = "dc1:3,dc2:2"
         """.stripMargin).withFallback(defaultConfig)

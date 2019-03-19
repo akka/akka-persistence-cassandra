@@ -4,10 +4,10 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.actor.{ExtendedActorSystem, Props}
+import akka.actor.{ ExtendedActorSystem, Props }
 import akka.persistence.RecoveryCompleted
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec, EventWithMetaData, Persister}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, EventWithMetaData, Persister }
 import akka.serialization.BaseSerializer
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory

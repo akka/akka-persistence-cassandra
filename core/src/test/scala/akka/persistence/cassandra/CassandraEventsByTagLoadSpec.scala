@@ -4,16 +4,16 @@
 
 package akka.persistence.cassandra
 
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.{ LocalDateTime, ZoneOffset }
 
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{NoOffset, PersistenceQuery}
+import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
-import org.scalatest.time.{Seconds, Span}
+import org.scalatest.time.{ Seconds, Span }
 
 import scala.concurrent.duration._
 
@@ -55,7 +55,7 @@ class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoa
         system.actorOf(TestTaggingActor.props(s"p-$i", eventTags))
       })
 
-      1L to messagesPerPersistenceId foreach { i =>
+      (1L to messagesPerPersistenceId).foreach { i =>
         refs.foreach { ref =>
           ref ! s"e-$i"
           expectMsg(Ack)
@@ -88,7 +88,7 @@ class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoa
     var allReceived: Map[String, List[Long]] = Map.empty.withDefaultValue(List.empty)
     probe.request(messagesPerPersistenceId * nrPersistenceIds)
 
-    (1L to (messagesPerPersistenceId * nrPersistenceIds)) foreach { i: Long =>
+    (1L to (messagesPerPersistenceId * nrPersistenceIds)).foreach { i: Long =>
       val event = try {
         probe.expectNext(veryLongWait)
       } catch {
@@ -105,8 +105,7 @@ class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoa
           if (event.sequenceNr != currentSeqNr + 1) {
             fail = true
             system.log.error(
-              s"Out of order sequence nrs for pid ${event.persistenceId}. This was event nr [$i]. Expected ${currentSeqNr + 1}, got: ${event.sequenceNr}"
-            )
+              s"Out of order sequence nrs for pid ${event.persistenceId}. This was event nr [$i]. Expected ${currentSeqNr + 1}, got: ${event.sequenceNr}")
           }
           sequenceNrsPerPid += (event.persistenceId -> event.sequenceNr)
         case None =>

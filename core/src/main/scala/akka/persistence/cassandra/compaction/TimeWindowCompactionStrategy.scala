@@ -9,9 +9,10 @@ import java.util.concurrent.TimeUnit
 import com.typesafe.config.Config
 
 class TimeWindowCompactionStrategy(config: Config)
-    extends BaseCompactionStrategy(config,
-                                   TimeWindowCompactionStrategy.ClassName,
-                                   TimeWindowCompactionStrategy.propertyKeys) {
+    extends BaseCompactionStrategy(
+      config,
+      TimeWindowCompactionStrategy.ClassName,
+      TimeWindowCompactionStrategy.propertyKeys) {
   import TimeWindowCompactionStrategy._
 
   val compactionWindowUnit: TimeUnit =
@@ -37,14 +38,11 @@ class TimeWindowCompactionStrategy(config: Config)
      """.stripMargin.trim
 }
 
-object TimeWindowCompactionStrategy
-    extends CassandraCompactionStrategyConfig[TimeWindowCompactionStrategy] {
+object TimeWindowCompactionStrategy extends CassandraCompactionStrategyConfig[TimeWindowCompactionStrategy] {
   override val ClassName: String = "TimeWindowCompactionStrategy"
 
   override def propertyKeys: List[String] =
-    (BaseCompactionStrategy.propertyKeys union List(
-      "compaction_window_size",
-      "compaction_window_unit")).sorted
+    BaseCompactionStrategy.propertyKeys.union(List("compaction_window_size", "compaction_window_unit")).sorted
 
   override def fromConfig(config: Config): TimeWindowCompactionStrategy =
     new TimeWindowCompactionStrategy(config)

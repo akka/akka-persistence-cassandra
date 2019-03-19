@@ -4,7 +4,7 @@
 
 package akka.persistence.cassandra.query
 
-import java.lang.{Long => JLong}
+import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
@@ -13,37 +13,30 @@ import akka.Done
 import akka.annotation.InternalApi
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.ListenableFutureConverter
-import akka.persistence.cassandra.journal.CassandraJournal.{
-  EventDeserializer,
-  Serialized
-}
+import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, Serialized }
 import akka.serialization.Serialization
-import akka.stream.{Attributes, Outlet, SourceShape}
+import akka.stream.{ Attributes, Outlet, SourceShape }
 import akka.stream.stage._
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RetryPolicy
 import com.datastax.driver.core.utils.Bytes
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future, Promise}
-import scala.concurrent.duration.{FiniteDuration, _}
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.{ ExecutionContext, Future, Promise }
+import scala.concurrent.duration.{ FiniteDuration, _ }
+import scala.util.{ Failure, Success, Try }
 import akka.util.OptionVal
 
 /**
-  * INTERNAL API
-  */
+ * INTERNAL API
+ */
 @InternalApi private[akka] object EventsByPersistenceIdStage {
 
-  private[akka] case class TaggedPersistentRepr(pr: PersistentRepr,
-                                                tags: Set[String],
-                                                offset: UUID) {
+  private[akka] case class TaggedPersistentRepr(pr: PersistentRepr, tags: Set[String], offset: UUID) {
     def sequenceNr: Long = pr.sequenceNr
   }
 
-  private[akka] case class OptionalTagged(
-      sequenceNr: Long,
-      tagged: OptionVal[TaggedPersistentRepr])
+  private[akka] case class OptionalTagged(sequenceNr: Long, tagged: OptionVal[TaggedPersistentRepr])
 
   private[akka] case class RawEvent(sequenceNr: Long, serialized: Serialized)
 
@@ -51,22 +44,22 @@ import akka.util.OptionVal
   trait Control {
 
     /**
-      * Trigger a request to fetch more eventEvens.
-      */
+     * Trigger a request to fetch more eventEvens.
+     */
     def poll(knownSeqNr: Long): Unit
 
     /**
-      * The events before `nextSeqNr` was delivered via another
-      * channel and don't have to be retrieved from Cassandra.
-      * It is best effort. There might still be events in flight with
-      * lower sequence number that will be emitted downstream, so
-      * the consumer have to handle de-duplication.
-      */
+     * The events before `nextSeqNr` was delivered via another
+     * channel and don't have to be retrieved from Cassandra.
+     * It is best effort. There might still be events in flight with
+     * lower sequence number that will be emitted downstream, so
+     * the consumer have to handle de-duplication.
+     */
     def fastForward(nextSeqNr: Long): Unit
 
     /**
-      * Completed when the stage is stopped.
-      */
+     * Completed when the stage is stopped.
+     */
     def done: Future[Done]
   }
 
@@ -84,21 +77,16 @@ import akka.util.OptionVal
         toSeqNr: Long,
         fetchSize: Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
       val boundStatement =
-        selectEventsByPersistenceIdQuery.bind(persistenceId,
-                                              partitionNr: JLong,
-                                              progress: JLong,
-                                              toSeqNr: JLong)
+        selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
       executeStatement(boundStatement)
     }
 
-    def highestDeletedSequenceNumber(persistenceId: String)(
-        implicit ec: ExecutionContext): Future[Long] =
-      executeStatement(selectDeletedToQuery.bind(persistenceId))
-        .map(r => Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
+    def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContext): Future[Long] =
+      executeStatement(selectDeletedToQuery.bind(persistenceId)).map(r =>
+        Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
 
-    private def executeStatement(statement: Statement)(
-        implicit ec: ExecutionContext): Future[ResultSet] =
+    private def executeStatement(statement: Statement)(implicit ec: ExecutionContext): Future[ResultSet] =
       session.executeAsync(withCustom(statement)).asScala
 
     private def withCustom(statement: Statement): Statement = {
@@ -115,23 +103,17 @@ import akka.util.OptionVal
 
   private sealed trait QueryState
   private case object QueryIdle extends QueryState
-  private final case class QueryInProgress(switchPartition: Boolean,
-                                           fetchMore: Boolean,
-                                           startTime: Long)
+  private final case class QueryInProgress(switchPartition: Boolean, fetchMore: Boolean, startTime: Long)
       extends QueryState
-  private final case class QueryResult(resultSet: ResultSet,
-                                       empty: Boolean,
-                                       switchPartition: Boolean)
+  private final case class QueryResult(resultSet: ResultSet, empty: Boolean, switchPartition: Boolean)
       extends QueryState {
     override def toString: String = s"QueryResult($switchPartition)"
   }
 
   object Extractors {
 
-    abstract class Extractor[T](val eventDeserializer: EventDeserializer,
-                                val serialization: Serialization) {
-      def extract(row: Row, async: Boolean)(
-          implicit ec: ExecutionContext): Future[T]
+    abstract class Extractor[T](val eventDeserializer: EventDeserializer, val serialization: Serialization) {
+      def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[T]
     }
 
     final case class SeqNrValue(sequenceNr: Long)
@@ -140,33 +122,24 @@ import akka.util.OptionVal
       def sequenceNr: Long = persistentRepr.sequenceNr
     }
 
-    def persistentRepr(ed: EventDeserializer,
-                       s: Serialization): Extractor[PersistentReprValue] =
+    def persistentRepr(ed: EventDeserializer, s: Serialization): Extractor[PersistentReprValue] =
       new Extractor[PersistentReprValue](ed, s) {
-        override def extract(row: Row, async: Boolean)(
-            implicit ec: ExecutionContext): Future[PersistentReprValue] =
-          extractPersistentRepr(row, ed, s, async).map(
-            PersistentReprValue.apply)
+        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[PersistentReprValue] =
+          extractPersistentRepr(row, ed, s, async).map(PersistentReprValue.apply)
       }
 
-    def taggedPersistentRepr(
-        ed: EventDeserializer,
-        s: Serialization): Extractor[TaggedPersistentRepr] =
+    def taggedPersistentRepr(ed: EventDeserializer, s: Serialization): Extractor[TaggedPersistentRepr] =
       new Extractor[TaggedPersistentRepr](ed, s) {
-        override def extract(row: Row, async: Boolean)(
-            implicit ec: ExecutionContext): Future[TaggedPersistentRepr] =
+        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[TaggedPersistentRepr] =
           extractPersistentRepr(row, ed, s, async).map { persistentRepr =>
             val tags = extractTags(row, ed)
             TaggedPersistentRepr(persistentRepr, tags, row.getUUID("timestamp"))
           }
       }
 
-    def optionalTaggedPersistentRepr(
-        ed: EventDeserializer,
-        s: Serialization): Extractor[OptionalTagged] =
+    def optionalTaggedPersistentRepr(ed: EventDeserializer, s: Serialization): Extractor[OptionalTagged] =
       new Extractor[OptionalTagged](ed, s) {
-        override def extract(row: Row, async: Boolean)(
-            implicit ec: ExecutionContext): Future[OptionalTagged] = {
+        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[OptionalTagged] = {
           val seqNr = row.getLong("sequence_nr")
           val tags = extractTags(row, ed)
           if (tags.isEmpty) {
@@ -174,9 +147,7 @@ import akka.util.OptionVal
             Future.successful(OptionalTagged(seqNr, OptionVal.None))
           } else {
             extractPersistentRepr(row, ed, s, async).map { persistentRepr =>
-              val tagged = TaggedPersistentRepr(persistentRepr,
-                                                tags,
-                                                row.getUUID("timestamp"))
+              val tagged = TaggedPersistentRepr(persistentRepr, tags, row.getUUID("timestamp"))
               OptionalTagged(seqNr, OptionVal.Some(tagged))
             }
           }
@@ -184,20 +155,14 @@ import akka.util.OptionVal
       }
 
     // TODO performance improvement could be to use another query that is not "select *"
-    def sequenceNumber(ed: EventDeserializer,
-                       s: Serialization): Extractor[SeqNrValue] =
+    def sequenceNumber(ed: EventDeserializer, s: Serialization): Extractor[SeqNrValue] =
       new Extractor[SeqNrValue](ed, s) {
-        override def extract(row: Row, async: Boolean)(
-            implicit ec: ExecutionContext): Future[SeqNrValue] =
+        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[SeqNrValue] =
           Future.successful(SeqNrValue(row.getLong("sequence_nr")))
       }
 
-    private def extractPersistentRepr(row: Row,
-                                      ed: EventDeserializer,
-                                      s: Serialization,
-                                      async: Boolean)(
-        implicit ec: ExecutionContext
-    ): Future[PersistentRepr] =
+    private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization, async: Boolean)(
+        implicit ec: ExecutionContext): Future[PersistentRepr] =
       row.getBytes("message") match {
         case null =>
           ed.deserializeEvent(row, async).map { payload =>
@@ -208,8 +173,7 @@ import akka.util.OptionVal
               manifest = row.getString("event_manifest"), // manifest for event adapters
               deleted = false,
               sender = null,
-              writerUuid = row.getString("writer_uuid")
-            )
+              writerUuid = row.getString("writer_uuid"))
           }
         case b =>
           // for backwards compatibility
@@ -236,16 +200,15 @@ import akka.util.OptionVal
       oldTags.union(newTags)
     }
 
-    def persistentFromByteBuffer(serialization: Serialization,
-                                 b: ByteBuffer): PersistentRepr =
+    def persistentFromByteBuffer(serialization: Serialization, b: ByteBuffer): PersistentRepr =
       // we know that such old rows can't have meta data because that feature was added later
       serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
   }
 }
 
 /**
-  * INTERNAL API
-  */
+ * INTERNAL API
+ */
 @InternalApi private[akka] class EventsByPersistenceIdStage(
     persistenceId: String,
     fromSeqNr: Long,
@@ -255,20 +218,16 @@ import akka.util.OptionVal
     refreshInterval: Option[FiniteDuration],
     session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
     config: CassandraReadJournalConfig,
-    fastForwardEnabled: Boolean = false
-) extends GraphStageWithMaterializedValue[
-      SourceShape[Row],
-      EventsByPersistenceIdStage.Control] {
+    fastForwardEnabled: Boolean = false)
+    extends GraphStageWithMaterializedValue[SourceShape[Row], EventsByPersistenceIdStage.Control] {
 
   import EventsByPersistenceIdStage._
 
   val out: Outlet[Row] = Outlet("EventsByPersistenceId.out")
   override val shape: SourceShape[Row] = SourceShape(out)
 
-  override def createLogicAndMaterializedValue(
-      inheritedAttributes: Attributes): (GraphStageLogic, Control) = {
-    val logic = new TimerGraphStageLogic(shape) with OutHandler
-    with StageLogging with Control {
+  override def createLogicAndMaterializedValue(inheritedAttributes: Attributes): (GraphStageLogic, Control) = {
+    val logic = new TimerGraphStageLogic(shape) with OutHandler with StageLogging with Control {
 
       override protected def logSource: Class[_] =
         classOf[EventsByPersistenceIdStage]
@@ -293,15 +252,15 @@ import akka.util.OptionVal
           val q = queryState match {
             case q: QueryInProgress => q
             case _ =>
-              throw new IllegalStateException(
-                s"New ResultSet when in unexpected state $queryState")
+              throw new IllegalStateException(s"New ResultSet when in unexpected state $queryState")
           }
           val empty = rs.isExhausted() && !q.fetchMore
           if (log.isDebugEnabled)
-            log.debug("EventsByPersistenceId [{}] Query took [{}] ms {}",
-                      persistenceId,
-                      (System.nanoTime() - q.startTime).nanos.toMillis,
-                      if (empty) "(empty)" else "")
+            log.debug(
+              "EventsByPersistenceId [{}] Query took [{}] ms {}",
+              persistenceId,
+              (System.nanoTime() - q.startTime).nanos.toMillis,
+              if (empty) "(empty)" else "")
           queryState = QueryResult(rs, empty, q.switchPartition)
           tryPushOne()
         case Failure(e) => onFailure(e)
@@ -309,14 +268,10 @@ import akka.util.OptionVal
 
       val pollCb = getAsyncCallback[Long] { knownSeqNr =>
         if (refreshInterval.isEmpty)
-          throw new IllegalStateException(
-            "External poll only possible for live queries")
+          throw new IllegalStateException("External poll only possible for live queries")
 
         if (knownSeqNr >= expectedNextSeqNr) {
-          log.debug(
-            "EventsByPersistenceId [{}] External poll, known seqNr [{}]",
-            persistenceId,
-            knownSeqNr)
+          log.debug("EventsByPersistenceId [{}] External poll, known seqNr [{}]", persistenceId, knownSeqNr)
           queryState match {
             case QueryIdle => query(switchPartition = false)
             case _: QueryResult | _: QueryInProgress =>
@@ -327,8 +282,7 @@ import akka.util.OptionVal
 
       val fastForwardCb = getAsyncCallback[Long] { nextSeqNr =>
         if (refreshInterval.isEmpty)
-          throw new IllegalStateException(
-            "Fast forward only possible for live queries")
+          throw new IllegalStateException("Fast forward only possible for live queries")
         if (!fastForwardEnabled)
           throw new IllegalStateException("Fast forward has been disabled")
 
@@ -362,9 +316,7 @@ import akka.util.OptionVal
         (sequenceNr - 1L) / config.targetPartitionSize
 
       override def preStart(): Unit = {
-        queryState = QueryInProgress(switchPartition = false,
-                                     fetchMore = false,
-                                     System.nanoTime())
+        queryState = QueryInProgress(switchPartition = false, fetchMore = false, System.nanoTime())
         session.highestDeletedSequenceNumber(persistenceId).onComplete {
           getAsyncCallback[Try[Long]] {
             case Success(delSeqNr) =>
@@ -384,10 +336,7 @@ import akka.util.OptionVal
           case Some(interval) =>
             val initial =
               if (interval >= 2.seconds)
-                (interval / 2) + ThreadLocalRandom
-                  .current()
-                  .nextLong(interval.toMillis / 2)
-                  .millis
+                (interval / 2) + ThreadLocalRandom.current().nextLong(interval.toMillis / 2).millis
               else interval
             schedulePeriodicallyWithInitialDelay(Continue, initial, interval)
           case None =>
@@ -427,10 +376,8 @@ import akka.util.OptionVal
             onFailure(
               new IllegalStateException(
                 s"Sequence number [$expectedNextSeqNr] still missing after " +
-                  s"[${config.eventsByPersistenceIdEventTimeout.pretty}], " +
-                  s"saw unexpected seqNr [${m.sawSeqNr}] for persistenceId [$persistenceId]."
-              )
-            )
+                s"[${config.eventsByPersistenceIdEventTimeout.pretty}], " +
+                s"saw unexpected seqNr [${m.sawSeqNr}] for persistenceId [$persistenceId]."))
           case Some(_) =>
             queryState = QueryIdle
             query(false)
@@ -445,12 +392,10 @@ import akka.util.OptionVal
             throw new IllegalStateException("Query already in progress")
           case QueryResult(rs, _, _) =>
             if (!rs.isExhausted)
-              throw new IllegalStateException(
-                "Previous query was not exhausted")
+              throw new IllegalStateException("Previous query was not exhausted")
         }
         val pnr = if (switchPartition) partition + 1 else partition
-        queryState =
-          QueryInProgress(switchPartition, fetchMore = false, System.nanoTime())
+        queryState = QueryInProgress(switchPartition, fetchMore = false, System.nanoTime())
 
         val endNr = lookingForMissingSeqNr match {
           case Some(_) =>
@@ -469,11 +414,7 @@ import akka.util.OptionVal
             toSeqNr
         }
         session
-          .selectEventsByPersistenceId(persistenceId,
-                                       pnr,
-                                       expectedNextSeqNr,
-                                       endNr,
-                                       fetchSize)
+          .selectEventsByPersistenceId(persistenceId, pnr, expectedNextSeqNr, endNr, fetchSize)
           .onComplete(newResultSetCb.invoke)
       }
 
@@ -514,8 +455,7 @@ import akka.util.OptionVal
               completeStage()
             else if (rs.isExhausted) {
               (lookingForMissingSeqNr, pendingFastForward) match {
-                case (Some(MissingSeqNr(_, sawSeqNr)), Some(fastForwardTo))
-                    if fastForwardTo >= sawSeqNr =>
+                case (Some(MissingSeqNr(_, sawSeqNr)), Some(fastForwardTo)) if fastForwardTo >= sawSeqNr =>
                   log.debug(
                     "Aborting missing sequence search: {} nr due to fast forward to next sequence nr: {}",
                     lookingForMissingSeqNr,
@@ -531,12 +471,8 @@ import akka.util.OptionVal
                   afterExhausted()
               }
             } else if (rs.getAvailableWithoutFetching == 0) {
-              log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]",
-                        persistenceId,
-                        expectedNextSeqNr)
-              queryState = QueryInProgress(switchPartition,
-                                           fetchMore = true,
-                                           System.nanoTime())
+              log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]", persistenceId, expectedNextSeqNr)
+              queryState = QueryInProgress(switchPartition, fetchMore = true, System.nanoTime())
               val rsFut = rs.fetchMoreResults().asScala
               rsFut.onComplete(newResultSetCb.invoke)
             } else {
@@ -550,20 +486,15 @@ import akka.util.OptionVal
                 lookingForMissingSeqNr match {
                   case Some(_) =>
                     throw new IllegalStateException(
-                      s"Should not be able to get here when already looking for missing seqNr [$expectedNextSeqNr] for entity [$persistenceId]"
-                    )
+                      s"Should not be able to get here when already looking for missing seqNr [$expectedNextSeqNr] for entity [$persistenceId]")
                   case None =>
                     log.debug(
                       "EventsByPersistenceId [{}] Missing seqNr [{}], found [{}], looking for event eventually appear",
                       persistenceId,
                       expectedNextSeqNr,
-                      sequenceNr
-                    )
+                      sequenceNr)
                     lookingForMissingSeqNr = Some(
-                      MissingSeqNr(
-                        Deadline.now + config.eventsByPersistenceIdEventTimeout,
-                        sequenceNr)
-                    )
+                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, sequenceNr))
                     // Forget about any other rows in this result set until we find
                     // the missing sequence nrs
                     queryState = QueryIdle
@@ -579,10 +510,7 @@ import akka.util.OptionVal
                   completeStage()
                 else if (lookingForMissingSeqNr.isDefined) {
                   // we found that missing seqNr
-                  log.debug(
-                    "EventsByPersistenceId [{}] Found missing seqNr [{}]",
-                    persistenceId,
-                    sequenceNr)
+                  log.debug("EventsByPersistenceId [{}] Found missing seqNr [{}]", persistenceId, sequenceNr)
                   lookingForMissingSeqNr = None
                   queryState = QueryIdle
                   if (refreshInterval.isEmpty) query(false)

@@ -4,12 +4,12 @@
 
 package akka.persistence.cassandra
 
-import akka.actor.{ActorSystem, PoisonPill}
+import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import com.datastax.driver.core.Session
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{ Config, ConfigFactory }
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 
 object TestSessionProvider {}
 
