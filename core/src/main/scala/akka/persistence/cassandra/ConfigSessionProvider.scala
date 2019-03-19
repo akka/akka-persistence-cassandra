@@ -139,12 +139,14 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
 
       val truststorePath = config.getString("ssl.truststore.path")
       if (truststorePath != "") {
-        val trustStore = StorePathPasswordConfig(truststorePath, config.getString("ssl.truststore.password"))
+        val trustStore =
+          StorePathPasswordConfig(truststorePath, config.getString("ssl.truststore.password"))
 
         val keystorePath = config.getString("ssl.keystore.path")
         val keyStore: Option[StorePathPasswordConfig] =
           if (keystorePath != "") {
-            val keyStore = StorePathPasswordConfig(keystorePath, config.getString("ssl.keystore.password"))
+            val keyStore =
+              StorePathPasswordConfig(keystorePath, config.getString("ssl.keystore.password"))
             Some(keyStore)
           } else None
 

@@ -95,10 +95,12 @@ trait CassandraStatements {
 
     def create(): Future[Done] = {
       val keyspace: Future[Done] =
-        if (config.keyspaceAutoCreate) session.executeAsync(createKeyspace).asScala.map(_ => Done)
+        if (config.keyspaceAutoCreate)
+          session.executeAsync(createKeyspace).asScala.map(_ => Done)
         else FutureDone
 
-      if (config.tablesAutoCreate) keyspace.flatMap(_ => session.executeAsync(createTable).asScala).map(_ => Done)
+      if (config.tablesAutoCreate)
+        keyspace.flatMap(_ => session.executeAsync(createTable).asScala).map(_ => Done)
       else keyspace
     }
 

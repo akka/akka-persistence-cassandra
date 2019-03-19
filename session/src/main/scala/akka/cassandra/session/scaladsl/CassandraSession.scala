@@ -67,18 +67,20 @@ final class CassandraSession(
   private lazy implicit val materializer = ActorMaterializer()(system)
 
   // cache of PreparedStatement (PreparedStatement should only be prepared once)
-  private val preparedStatements = new ConcurrentHashMap[String, Future[PreparedStatement]]
-  private val computePreparedStatement = new JFunction[String, Future[PreparedStatement]] {
-    override def apply(key: String): Future[PreparedStatement] =
-      underlying().flatMap { s =>
-        val prepared = s.prepareAsync(key).asScala
-        prepared.failed.foreach(
-          _ =>
-            // this is async, i.e. we are not updating the map from the compute function
-            preparedStatements.remove(key))
-        prepared
-      }
-  }
+  private val preparedStatements =
+    new ConcurrentHashMap[String, Future[PreparedStatement]]
+  private val computePreparedStatement =
+    new JFunction[String, Future[PreparedStatement]] {
+      override def apply(key: String): Future[PreparedStatement] =
+        underlying().flatMap { s =>
+          val prepared = s.prepareAsync(key).asScala
+          prepared.failed.foreach(
+            _ =>
+              // this is async, i.e. we are not updating the map from the compute function
+              preparedStatements.remove(key))
+          prepared
+        }
+    }
 
   private val _underlyingSession = new AtomicReference[Future[Session]]()
 

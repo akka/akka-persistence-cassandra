@@ -48,7 +48,7 @@ package object cassandra {
       uuid: UUID,
       bucketSize: BucketSize,
       serialization: Serialization,
-      system: ActorSystem)(implicit executionContext: ExecutionContext): Future[Serialized] = {
+      system: ActorSystem)(implicit executionContext: ExecutionContext): Future[Serialized] =
     try {
       // use same clock source as the UUID for the timeBucket
       val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), bucketSize)
@@ -115,7 +115,6 @@ package object cassandra {
     } catch {
       case NonFatal(e) => Future.failed(e)
     }
-  }
 
   /**
    * INTERNAL API
