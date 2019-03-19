@@ -152,11 +152,8 @@ import com.github.ghik.silencer.silent
     val availableWithoutFetching = resultSet.getAvailableWithoutFetching
     val isFullyFetched = resultSet.isFullyFetched
 
-    if (shouldFetchMore(
-      availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue)) {
-      resultSet.fetchMoreResults().asScala
-        .map(FetchedResultSet)
-        .pipeTo(self)
+    if (shouldFetchMore(availableWithoutFetching, isFullyFetched, totalDemand, state, finished, continue)) {
+      resultSet.fetchMoreResults().asScala.map(FetchedResultSet).pipeTo(self)
       awaiting(resultSet, state, finished)
     } else if (shouldIdle(availableWithoutFetching, state)) {
       idle(resultSet, state, finished)

@@ -23,12 +23,12 @@ import org.scalatest.BeforeAndAfterAll
 object CassandraPluginConfigSpec {
   class TestContactPointsProvider(system: ActorSystem, config: Config) extends ConfigSessionProvider(system, config) {
     override def lookupContactPoints(clusterId: String)(
-        implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] =
+        implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
       if (clusterId == "cluster1")
         Future.successful(List(new InetSocketAddress("host1", 9041)))
       else
         Future.successful(List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042)))
-
+    }
   }
 }
 
@@ -37,8 +37,10 @@ class CassandraPluginConfigSpec
     with WordSpecLike
     with MustMatchers
     with BeforeAndAfterAll {
+
   import CassandraPluginConfigSpec._
   import system.dispatcher
+
   lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-journal")
 
   lazy val keyspaceNames = {
@@ -206,9 +208,9 @@ class CassandraPluginConfigSpec
     "parse config with a list of datacenters configured for NetworkTopologyStrategy" in {
       lazy val configWithNetworkStrategy =
         ConfigFactory.parseString("""
-          |replication-strategy = "NetworkTopologyStrategy"
-          |data-center-replication-factors = ["dc1:3", "dc2:2"]
-        """.stripMargin).withFallback(defaultConfig)
+            |replication-strategy = "NetworkTopologyStrategy"
+            |data-center-replication-factors = ["dc1:3", "dc2:2"]
+          """.stripMargin).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }

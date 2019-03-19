@@ -90,7 +90,8 @@ trait CassandraStatements {
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
    */
-  def executeCreateKeyspaceAndTables(session: Session, config: CassandraSnapshotStoreConfig)(implicit ec: ExecutionContext): Future[Done] = {
+  def executeCreateKeyspaceAndTables(session: Session, config: CassandraSnapshotStoreConfig)(
+      implicit ec: ExecutionContext): Future[Done] = {
 
     def create(): Future[Done] = {
       val keyspace: Future[Done] =

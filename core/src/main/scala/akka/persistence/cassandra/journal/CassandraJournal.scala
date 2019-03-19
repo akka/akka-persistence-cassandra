@@ -99,8 +99,7 @@ class CassandraJournal(cfg: Config)
     context.dispatcher,
     log,
     metricsCategory = s"${self.path.name}",
-    init = (session: Session) =>
-      executeCreateKeyspaceAndTables(session, config))
+    init = (session: Session) => executeCreateKeyspaceAndTables(session, config))
 
   private val tagWriterSession = TagWritersSession(
     () => preparedWriteToTagViewWithoutMeta,
@@ -524,12 +523,11 @@ class CassandraJournal(cfg: Config)
         deleteResult.map(_ => Done)
 
       } else {
-        val deleteResult =
-          Future.sequence((lowestPartition to highestPartition).map { partitionNr =>
-            val boundDeleteMessages =
-              preparedDeleteMessages.map(_.bind(persistenceId, partitionNr: JLong, toSeqNr: JLong))
-            boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
-          })
+        val deleteResult = Future.sequence((lowestPartition to highestPartition).map { partitionNr =>
+          val boundDeleteMessages =
+            preparedDeleteMessages.map(_.bind(persistenceId, partitionNr: JLong, toSeqNr: JLong))
+          boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
+        })
         deleteResult.failed.foreach { e =>
           log.warning(
             "Unable to complete deletes for persistence id {}, toSequenceNr {}. " +

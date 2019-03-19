@@ -51,7 +51,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
       metricsCategory: String,
       init: JFunction[Session, CompletionStage[Done]]) =
     this(
-      new akka.persistence.cassandra.session.scaladsl.CassandraSession(
+      new akka.cassandra.session.scaladsl.CassandraSession(
         system,
         sessionProvider,
         settings,

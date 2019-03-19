@@ -322,6 +322,7 @@ import com.datastax.driver.core.utils.UUIDs
               s"lookingForMissingCalled for tag ${session.tag} when there " +
               s"is no missing. Raise a bug with debug logging.")
         }
+
         if (missing.deadline.isOverdue()) {
           if (missing.failIfNotFound) {
             fail(
