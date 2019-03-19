@@ -118,7 +118,7 @@ object CassandraLauncher {
         }
       }
       .distinct
-      .to[immutable.Seq]
+      .toList
       .filterNot(_.endsWith("assembly.jar")) // TODO required?
   }
 
