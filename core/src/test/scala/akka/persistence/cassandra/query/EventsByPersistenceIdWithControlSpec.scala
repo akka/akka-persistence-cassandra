@@ -5,7 +5,7 @@
 package akka.persistence.cassandra.query
 
 import akka.actor.ActorRef
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.TestSubscriber.Probe
 import akka.stream.testkit.scaladsl.TestSink
@@ -58,9 +58,7 @@ class EventsByPersistenceIdWithControlSpec extends CassandraSpec(EventsByPersist
       val control = futureControl.futureValue
       control.poll(3)
 
-      probe
-        .request(5)
-        .expectNext("a-1", "a-2", "a-3")
+      probe.request(5).expectNext("a-1", "a-2", "a-3")
 
       ref ! "a-4"
       expectMsg("a-4-done")
@@ -79,10 +77,7 @@ class EventsByPersistenceIdWithControlSpec extends CassandraSpec(EventsByPersist
       val control = futureControl.futureValue
       control.poll(8)
 
-      probe
-        .request(2)
-        .expectNext("b-1", "b-2")
-        .expectNoMessage(noMsgTimeout)
+      probe.request(2).expectNext("b-1", "b-2").expectNoMessage(noMsgTimeout)
 
       ref ! "b-9"
       expectMsg("b-9-done")
@@ -103,10 +98,7 @@ class EventsByPersistenceIdWithControlSpec extends CassandraSpec(EventsByPersist
       val control = futureControl.futureValue
       control.poll(2)
 
-      probe
-        .request(10)
-        .expectNext("c-1", "c-2")
-        .expectNoMessage(noMsgTimeout)
+      probe.request(10).expectNext("c-1", "c-2").expectNoMessage(noMsgTimeout)
 
       control.fastForward(5)
       probe.expectNoMessage(noMsgTimeout)
@@ -134,10 +126,7 @@ class EventsByPersistenceIdWithControlSpec extends CassandraSpec(EventsByPersist
       val control = futureControl.futureValue
       control.poll(12)
 
-      probe
-        .request(2)
-        .expectNext("d-1", "d-2")
-        .expectNoMessage(noMsgTimeout)
+      probe.request(2).expectNext("d-1", "d-2").expectNoMessage(noMsgTimeout)
 
       ref ! "d-13"
       expectMsg("d-13-done")

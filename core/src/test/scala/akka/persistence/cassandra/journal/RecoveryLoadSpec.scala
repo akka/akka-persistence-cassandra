@@ -5,8 +5,8 @@
 package akka.persistence.cassandra.journal
 
 import akka.actor._
-import akka.persistence.{PersistentActor, RecoveryCompleted, SnapshotOffer}
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
+import akka.persistence.{ PersistentActor, RecoveryCompleted, SnapshotOffer }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.persistence.journal.Tagged
 import com.typesafe.config.ConfigFactory
 
@@ -29,11 +29,12 @@ object RecoveryLoadSpec {
   private final case class Next(remaining: Int)
   final case class Delete(seqNr: Long)
   case object GetMetrics
-  final case class Metrics(snapshotDuration: FiniteDuration,
-                           replayDuration1: FiniteDuration,
-                           replayDuration2: FiniteDuration,
-                           replayedEvents: Int,
-                           totalDuration: FiniteDuration)
+  final case class Metrics(
+      snapshotDuration: FiniteDuration,
+      replayDuration1: FiniteDuration,
+      replayDuration2: FiniteDuration,
+      replayedEvents: Int,
+      totalDuration: FiniteDuration)
 
   def props(persistenceId: String, snapshotEvery: Int, tagging: Long => Set[String]): Props =
     Props(new ProcessorA(persistenceId, snapshotEvery, tagging))
@@ -71,8 +72,7 @@ object RecoveryLoadSpec {
           replayDuration1 = (replayStartTime - snapshotEndTime).nanos,
           replayDuration2 = (replayEndTime - replayStartTime).nanos,
           replayedEvents,
-          totalDuration = (replayEndTime - startTime).nanos
-        )
+          totalDuration = (replayEndTime - startTime).nanos)
     }
 
     def init(replyTo: ActorRef): Receive = {

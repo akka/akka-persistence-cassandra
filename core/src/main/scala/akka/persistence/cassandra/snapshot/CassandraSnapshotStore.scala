@@ -51,13 +51,14 @@ class CassandraSnapshotStore(cfg: Config)
 
   private val someMaxLoadAttempts = Some(snapshotConfig.maxLoadAttempts)
 
-  val session = new CassandraSession(context.system,
-                                     snapshotConfig.sessionProvider,
-                                     snapshotConfig.sessionSettings,
-                                     context.dispatcher,
-                                     log,
-                                     metricsCategory = s"${self.path.name}",
-                                     init = session => executeCreateKeyspaceAndTables(session, snapshotConfig))
+  val session = new CassandraSession(
+    context.system,
+    snapshotConfig.sessionProvider,
+    snapshotConfig.sessionSettings,
+    context.dispatcher,
+    log,
+    metricsCategory = s"${self.path.name}",
+    init = session => executeCreateKeyspaceAndTables(session, snapshotConfig))
 
   private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.writeRetries))
   private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.readRetries))
@@ -104,8 +105,9 @@ class CassandraSnapshotStore(cfg: Config)
   override def postStop(): Unit =
     session.close()
 
-  override def loadAsync(persistenceId: String,
-                         criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = {
+  override def loadAsync(
+      persistenceId: String,
+      criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = {
     // The normal case is that timestamp is not specified (Long.MaxValue) in the criteria and then we can
     // use a select stmt with LIMIT if maxLoadAttempts, otherwise the result is iterated and
     // non-matching timestamps are discarded.
@@ -135,18 +137,20 @@ class CassandraSnapshotStore(cfg: Config)
             Future.successful(None)
           case e =>
             if (mds.isEmpty) {
-              log.warning(s"Failed to load snapshot [$md] ({} of {}), last attempt. Caused by: [{}: {}]",
-                          maxLoadAttempts,
-                          maxLoadAttempts,
-                          e.getClass.getName,
-                          e.getMessage)
+              log.warning(
+                s"Failed to load snapshot [$md] ({} of {}), last attempt. Caused by: [{}: {}]",
+                maxLoadAttempts,
+                maxLoadAttempts,
+                e.getClass.getName,
+                e.getMessage)
               Future.failed(e) // all attempts failed
             } else {
-              log.warning(s"Failed to load snapshot [$md] ({} of {}), trying older one. Caused by: [{}: {}]",
-                          maxLoadAttempts - mds.size,
-                          maxLoadAttempts,
-                          e.getClass.getName,
-                          e.getMessage)
+              log.warning(
+                s"Failed to load snapshot [$md] ({} of {}), trying older one. Caused by: [{}: {}]",
+                maxLoadAttempts - mds.size,
+                maxLoadAttempts,
+                e.getClass.getName,
+                e.getMessage)
               loadNAsync(mds) // try older snapshot
             }
         }
@@ -266,10 +270,11 @@ class CassandraSnapshotStore(cfg: Config)
       case NonFatal(e) => Future.failed(e)
     }
 
-  private def metadata(snapshotMetaPs: PreparedStatement,
-                       persistenceId: String,
-                       criteria: SnapshotSelectionCriteria,
-                       limit: Option[Int]): Future[immutable.Seq[SnapshotMetadata]] = {
+  private def metadata(
+      snapshotMetaPs: PreparedStatement,
+      persistenceId: String,
+      criteria: SnapshotSelectionCriteria,
+      limit: Option[Int]): Future[immutable.Seq[SnapshotMetadata]] = {
     val boundStmt = snapshotMetaPs.bind(persistenceId, criteria.maxSequenceNr: JLong, criteria.minSequenceNr: JLong)
     val source = session
       .select(boundStmt)

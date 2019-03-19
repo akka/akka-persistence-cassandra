@@ -56,16 +56,17 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
         .fromFutureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
           log.debug("Starting recovery with tag progress: {}. From {} to {}", tp, fromSequenceNr, toSequenceNr)
           queries
-            .eventsByPersistenceId(persistenceId,
-                                   fromSequenceNr,
-                                   toSequenceNr,
-                                   max,
-                                   replayMaxResultSize,
-                                   None,
-                                   "asyncReplayMessages",
-                                   someReadConsistency,
-                                   someReadRetryPolicy,
-                                   extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
+            .eventsByPersistenceId(
+              persistenceId,
+              fromSequenceNr,
+              toSequenceNr,
+              max,
+              replayMaxResultSize,
+              None,
+              "asyncReplayMessages",
+              someReadConsistency,
+              someReadRetryPolicy,
+              extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
             .mapAsync(1)(sendMissingTagWrite(tp, tagWrites.get))
         }))
         .map(te => queries.mapEvent(te.pr))
@@ -74,41 +75,44 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
 
     } else {
       queries
-        .eventsByPersistenceId(persistenceId,
-                               fromSequenceNr,
-                               toSequenceNr,
-                               max,
-                               replayMaxResultSize,
-                               None,
-                               "asyncReplayMessages",
-                               someReadConsistency,
-                               someReadRetryPolicy,
-                               extractor = Extractors.persistentRepr(eventDeserializer, serialization))
+        .eventsByPersistenceId(
+          persistenceId,
+          fromSequenceNr,
+          toSequenceNr,
+          max,
+          replayMaxResultSize,
+          None,
+          "asyncReplayMessages",
+          someReadConsistency,
+          someReadRetryPolicy,
+          extractor = Extractors.persistentRepr(eventDeserializer, serialization))
         .map(p => queries.mapEvent(p.persistentRepr))
         .runForeach(replayCallback)
         .map(_ => ())
     }
   }
 
-  private[akka] def sendPreSnapshotTagWrites(minProgressNr: Long,
-                                             fromSequenceNr: Long,
-                                             pid: String,
-                                             max: Long,
-                                             tp: Map[Tag, TagProgress]): Future[Done] =
+  private[akka] def sendPreSnapshotTagWrites(
+      minProgressNr: Long,
+      fromSequenceNr: Long,
+      pid: String,
+      max: Long,
+      tp: Map[Tag, TagProgress]): Future[Done] =
     if (minProgressNr < fromSequenceNr) {
       val scanTo = fromSequenceNr - 1
       log.debug("Scanning events before snapshot to recover tag_views: From: {} to: {}", minProgressNr, scanTo)
       queries
-        .eventsByPersistenceId(pid,
-                               minProgressNr,
-                               scanTo,
-                               max,
-                               replayMaxResultSize,
-                               None,
-                               "asyncReplayMessagesPreSnapshot",
-                               someReadConsistency,
-                               someReadRetryPolicy,
-                               Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization))
+        .eventsByPersistenceId(
+          pid,
+          minProgressNr,
+          scanTo,
+          max,
+          replayMaxResultSize,
+          None,
+          "asyncReplayMessagesPreSnapshot",
+          someReadConsistency,
+          someReadRetryPolicy,
+          Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization))
         .mapAsync(1) { t =>
           t.tagged match {
             case OptionVal.Some(tpr) =>
@@ -118,10 +122,11 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
         }
         .runWith(Sink.ignore)
     } else {
-      log.debug("Recovery is starting before the latest tag writes tag progress. Min progress for pid {}. " +
-                "From sequence nr of recovery: {}",
-                minProgressNr,
-                fromSequenceNr)
+      log.debug(
+        "Recovery is starting before the latest tag writes tag progress. Min progress for pid {}. " +
+        "From sequence nr of recovery: {}",
+        minProgressNr,
+        fromSequenceNr)
       FutureDone
     }
 
@@ -138,16 +143,18 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
               serializedFut.map { serialized =>
                 tagProgress.get(tag) match {
                   case None =>
-                    log.debug("Tag write not in progress. Sending to TagWriter. Tag {} Sequence Nr {}.",
-                              tag,
-                              tpr.sequenceNr)
+                    log.debug(
+                      "Tag write not in progress. Sending to TagWriter. Tag {} Sequence Nr {}.",
+                      tag,
+                      tpr.sequenceNr)
                     tagWriters ! TagWrite(tag, serialized :: Nil)
                     Done
                   case Some(progress) =>
                     if (tpr.sequenceNr > progress.sequenceNr) {
-                      log.debug("Sequence nr > than write progress. Sending to TagWriter. Tag {} Sequence Nr {}. ",
-                                tag,
-                                tpr.sequenceNr)
+                      log.debug(
+                        "Sequence nr > than write progress. Sending to TagWriter. Tag {} Sequence Nr {}. ",
+                        tag,
+                        tpr.sequenceNr)
                       tagWriters ! TagWrite(tag, serialized :: Nil)
                     }
                     Done

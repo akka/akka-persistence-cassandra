@@ -5,7 +5,7 @@
 package akka.persistence.cassandra.query
 
 import akka.actor.ExtendedActorSystem
-import akka.persistence.journal.{EventAdapter, EventSeq, Tagged}
+import akka.persistence.journal.{ EventAdapter, EventSeq, Tagged }
 
 sealed trait TestEvent[T] {
   def value: T
@@ -27,10 +27,10 @@ class TestEventAdapter(system: ExtendedActorSystem) extends EventAdapter {
   override def fromJournal(event: Any, manifest: String): EventSeq = event match {
     case e: String if e.contains(":") =>
       e.split(":").toList match {
-        case "dropped" :: _ :: Nil => EventSeq.empty
-        case "duplicated" :: x :: Nil => EventSeq(x, x)
+        case "dropped" :: _ :: Nil            => EventSeq.empty
+        case "duplicated" :: x :: Nil         => EventSeq(x, x)
         case "prefixed" :: prefix :: x :: Nil => EventSeq.single(s"$prefix-$x")
-        case _ => throw new IllegalArgumentException(e)
+        case _                                => throw new IllegalArgumentException(e)
       }
     case _ => EventSeq.single(event)
   }

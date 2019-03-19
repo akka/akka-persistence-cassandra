@@ -34,10 +34,11 @@ trait CassandraTagRecovery {
       .flatMap(session.selectResultSet)
       .map(rs =>
         rs.all().asScala.foldLeft(Map.empty[String, TagProgress]) { (acc, row) =>
-          acc + (row.getString("tag") -> TagProgress(persistenceId,
-                                                     row.getLong("sequence_nr"),
-                                                     row.getLong("tag_pid_sequence_nr")))
-      })
+          acc + (row.getString("tag") -> TagProgress(
+            persistenceId,
+            row.getLong("sequence_nr"),
+            row.getLong("tag_pid_sequence_nr")))
+        })
 
   // Before starting the actual recovery first go from the oldest tag progress -> fromSequenceNr
   // or min tag scanning sequence number, and fix any tags. This recovers any tag writes that
@@ -58,9 +59,10 @@ trait CassandraTagRecovery {
           to ! TagWrite(tag, rawEvent.serialized :: Nil)
         case Some(progress) =>
           if (rawEvent.sequenceNr > progress.sequenceNr) {
-            log.debug("Sequence nr > than write progress. Sending to TagWriter. Tag {} Sequence Nr {}. ",
-                      tag,
-                      rawEvent.sequenceNr)
+            log.debug(
+              "Sequence nr > than write progress. Sending to TagWriter. Tag {} Sequence Nr {}. ",
+              tag,
+              rawEvent.sequenceNr)
             to ! TagWrite(tag, rawEvent.serialized :: Nil)
           }
       }
@@ -72,10 +74,11 @@ trait CassandraTagRecovery {
    * Before starting to process tagged messages then a [PersistentActorStarting] is sent to the
    * [TagWriters] to initialise the sequence numbers for each tag.
    */
-  private[akka] def persistenceIdStarting(pid: String,
-                                          tagProgress: Map[Tag, TagProgress],
-                                          tagWriters: ActorRef,
-                                          persistentActor: ActorRef): Future[Done] = {
+  private[akka] def persistenceIdStarting(
+      pid: String,
+      tagProgress: Map[Tag, TagProgress],
+      tagWriters: ActorRef,
+      persistentActor: ActorRef): Future[Done] = {
     log.debug("Recovery of pid [{}] sending tag progress: {}", pid, tagProgress)
     (tagWriters ? PersistentActorStarting(pid, tagProgress, persistentActor))
       .mapTo[PersistentActorStartingAck.type]

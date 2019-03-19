@@ -13,9 +13,10 @@ import com.typesafe.config.Config
  */
 @deprecated("DateTieredCompaction is deprecated in Cassandra. Use TimeWindowCompaction.", "0.56")
 class DateTieredCompactionStrategy(config: Config)
-    extends BaseCompactionStrategy(config,
-                                   DateTieredCompactionStrategy.ClassName,
-                                   DateTieredCompactionStrategy.propertyKeys) {
+    extends BaseCompactionStrategy(
+      config,
+      DateTieredCompactionStrategy.ClassName,
+      DateTieredCompactionStrategy.propertyKeys) {
   import DateTieredCompactionStrategy._
 
   val baseTimeSeconds: Long =
@@ -39,8 +40,9 @@ class DateTieredCompactionStrategy(config: Config)
   require(maxThreshold > 0, s"max_threshold must be larger than 0, but was $maxThreshold")
   require(minThreshold > 1, s"min_threshold must be larger than 1, but was $minThreshold")
   require(maxThreshold > minThreshold, s"max_threshold must be larger than min_threshold, but was $maxThreshold")
-  require(timestampResolution == TimeUnit.MICROSECONDS || timestampResolution == TimeUnit.MILLISECONDS,
-          s"timestamp_resolution $timestampResolution is not valid")
+  require(
+    timestampResolution == TimeUnit.MICROSECONDS || timestampResolution == TimeUnit.MILLISECONDS,
+    s"timestamp_resolution $timestampResolution is not valid")
 
   override def asCQL: String =
     s"""{

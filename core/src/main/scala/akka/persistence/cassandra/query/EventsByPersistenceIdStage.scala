@@ -63,17 +63,19 @@ import akka.util.OptionVal
     def done: Future[Done]
   }
 
-  final case class EventsByPersistenceIdSession(selectEventsByPersistenceIdQuery: PreparedStatement,
-                                                selectDeletedToQuery: PreparedStatement,
-                                                session: Session,
-                                                customConsistencyLevel: Option[ConsistencyLevel],
-                                                customRetryPolicy: Option[RetryPolicy]) {
+  final case class EventsByPersistenceIdSession(
+      selectEventsByPersistenceIdQuery: PreparedStatement,
+      selectDeletedToQuery: PreparedStatement,
+      session: Session,
+      customConsistencyLevel: Option[ConsistencyLevel],
+      customRetryPolicy: Option[RetryPolicy]) {
 
-    def selectEventsByPersistenceId(persistenceId: String,
-                                    partitionNr: Long,
-                                    progress: Long,
-                                    toSeqNr: Long,
-                                    fetchSize: Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
+    def selectEventsByPersistenceId(
+        persistenceId: String,
+        partitionNr: Long,
+        progress: Long,
+        toSeqNr: Long,
+        fetchSize: Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
       val boundStatement =
         selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
@@ -164,13 +166,14 @@ import akka.util.OptionVal
       row.getBytes("message") match {
         case null =>
           ed.deserializeEvent(row, async).map { payload =>
-            PersistentRepr(payload,
-                           sequenceNr = row.getLong("sequence_nr"),
-                           persistenceId = row.getString("persistence_id"),
-                           manifest = row.getString("event_manifest"), // manifest for event adapters
-                           deleted = false,
-                           sender = null,
-                           writerUuid = row.getString("writer_uuid"))
+            PersistentRepr(
+              payload,
+              sequenceNr = row.getLong("sequence_nr"),
+              persistenceId = row.getString("persistence_id"),
+              manifest = row.getString("event_manifest"), // manifest for event adapters
+              deleted = false,
+              sender = null,
+              writerUuid = row.getString("writer_uuid"))
           }
         case b =>
           // for backwards compatibility
@@ -253,10 +256,11 @@ import akka.util.OptionVal
           }
           val empty = rs.isExhausted() && !q.fetchMore
           if (log.isDebugEnabled)
-            log.debug("EventsByPersistenceId [{}] Query took [{}] ms {}",
-                      persistenceId,
-                      (System.nanoTime() - q.startTime).nanos.toMillis,
-                      if (empty) "(empty)" else "")
+            log.debug(
+              "EventsByPersistenceId [{}] Query took [{}] ms {}",
+              persistenceId,
+              (System.nanoTime() - q.startTime).nanos.toMillis,
+              if (empty) "(empty)" else "")
           queryState = QueryResult(rs, empty, q.switchPartition)
           tryPushOne()
         case Failure(e) => onFailure(e)
@@ -282,9 +286,10 @@ import akka.util.OptionVal
         if (!fastForwardEnabled)
           throw new IllegalStateException("Fast forward has been disabled")
 
-        log.debug("Fast forward request being processed: Next Sequence Nr: {} Current Sequence Nr: {}",
-                  nextSeqNr,
-                  expectedNextSeqNr)
+        log.debug(
+          "Fast forward request being processed: Next Sequence Nr: {} Current Sequence Nr: {}",
+          nextSeqNr,
+          expectedNextSeqNr)
         if (nextSeqNr > expectedNextSeqNr) {
           queryState match {
             case QueryIdle => internalFastForward(nextSeqNr)
@@ -296,10 +301,11 @@ import akka.util.OptionVal
       }
 
       private def internalFastForward(nextSeqNr: Long): Unit = {
-        log.debug("EventsByPersistenceId [{}] External fast-forward to seqNr [{}] from current [{}]",
-                  persistenceId,
-                  nextSeqNr,
-                  expectedNextSeqNr)
+        log.debug(
+          "EventsByPersistenceId [{}] External fast-forward to seqNr [{}] from current [{}]",
+          persistenceId,
+          nextSeqNr,
+          expectedNextSeqNr)
         expectedNextSeqNr = nextSeqNr
         val nextPartition = partitionNr(nextSeqNr)
         if (nextPartition > partition)
@@ -393,16 +399,18 @@ import akka.util.OptionVal
 
         val endNr = lookingForMissingSeqNr match {
           case Some(_) =>
-            log.debug("EventsByPersistenceId [{}] Query for missing seqNr [{}] in partition [{}]",
-                      persistenceId,
-                      expectedNextSeqNr,
-                      pnr)
+            log.debug(
+              "EventsByPersistenceId [{}] Query for missing seqNr [{}] in partition [{}]",
+              persistenceId,
+              expectedNextSeqNr,
+              pnr)
             expectedNextSeqNr
           case _ =>
-            log.debug("EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
-                      persistenceId,
-                      expectedNextSeqNr,
-                      pnr)
+            log.debug(
+              "EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
+              persistenceId,
+              expectedNextSeqNr,
+              pnr)
             toSeqNr
         }
         session
@@ -448,9 +456,10 @@ import akka.util.OptionVal
             else if (rs.isExhausted) {
               (lookingForMissingSeqNr, pendingFastForward) match {
                 case (Some(MissingSeqNr(_, sawSeqNr)), Some(fastForwardTo)) if fastForwardTo >= sawSeqNr =>
-                  log.debug("Aborting missing sequence search: {} nr due to fast forward to next sequence nr: {}",
-                            lookingForMissingSeqNr,
-                            fastForwardTo)
+                  log.debug(
+                    "Aborting missing sequence search: {} nr due to fast forward to next sequence nr: {}",
+                    lookingForMissingSeqNr,
+                    fastForwardTo)
                   internalFastForward(fastForwardTo)
                   pendingFastForward = None
                   lookingForMissingSeqNr = None

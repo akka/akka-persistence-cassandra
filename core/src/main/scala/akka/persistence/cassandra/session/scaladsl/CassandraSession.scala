@@ -56,13 +56,14 @@ import akka.persistence.cassandra.FutureDone
  *
  * All methods are non-blocking.
  */
-final class CassandraSession(system: ActorSystem,
-                             sessionProvider: SessionProvider,
-                             settings: CassandraSessionSettings,
-                             executionContext: ExecutionContext,
-                             log: LoggingAdapter,
-                             metricsCategory: String,
-                             init: Session => Future[Done])
+final class CassandraSession(
+    system: ActorSystem,
+    sessionProvider: SessionProvider,
+    settings: CassandraSessionSettings,
+    executionContext: ExecutionContext,
+    log: LoggingAdapter,
+    metricsCategory: String,
+    init: Session => Future[Done])
     extends NoSerializationVerificationNeeded {
   import settings._
 
@@ -135,8 +136,9 @@ final class CassandraSession(system: ActorSystem,
     if (existing == null) {
       val result = retry(() => setup())
       result.failed.foreach { e =>
-        log.warning("Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
-                    e.getMessage)
+        log.warning(
+          "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
+          e.getMessage)
       }
       result
     } else

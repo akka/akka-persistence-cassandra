@@ -10,9 +10,10 @@ import com.typesafe.config.Config
  * Based upon https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/SizeTieredCompactionStrategy.java
  */
 class SizeTieredCompactionStrategy(config: Config)
-    extends BaseCompactionStrategy(config,
-                                   SizeTieredCompactionStrategy.ClassName,
-                                   SizeTieredCompactionStrategy.propertyKeys) {
+    extends BaseCompactionStrategy(
+      config,
+      SizeTieredCompactionStrategy.ClassName,
+      SizeTieredCompactionStrategy.propertyKeys) {
 
   val bucketHigh: Double =
     if (config.hasPath("bucket_high")) config.getDouble("bucket_high") else 1.5

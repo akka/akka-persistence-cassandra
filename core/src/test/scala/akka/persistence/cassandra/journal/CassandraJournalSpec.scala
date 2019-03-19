@@ -5,12 +5,12 @@
 package akka.persistence.cassandra.journal
 
 import akka.actor.Actor
-import akka.persistence.{AtomicWrite, PersistentRepr}
-import akka.persistence.JournalProtocol.{ReplayMessages, WriteMessageFailure, WriteMessages, WriteMessagesFailed}
+import akka.persistence.{ AtomicWrite, PersistentRepr }
+import akka.persistence.JournalProtocol.{ ReplayMessages, WriteMessageFailure, WriteMessages, WriteMessagesFailed }
 
 import scala.concurrent.duration._
 import akka.persistence.journal._
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraMetricsRegistry}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry }
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 
@@ -57,11 +57,12 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
       val notSerializableEvent = new Object {
         override def toString = "not serializable"
       }
-      val msg = PersistentRepr(payload = notSerializableEvent,
-                               sequenceNr = 6,
-                               persistenceId = pid,
-                               sender = Actor.noSender,
-                               writerUuid = writerUuid)
+      val msg = PersistentRepr(
+        payload = notSerializableEvent,
+        sequenceNr = 6,
+        persistenceId = pid,
+        sender = Actor.noSender,
+        writerUuid = writerUuid)
 
       val probe = TestProbe()
 

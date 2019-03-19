@@ -155,11 +155,12 @@ object CassandraLauncher {
    * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
    *   is `true` and removal of the directory fails
    */
-  def start(cassandraDirectory: File,
-            configResource: String,
-            clean: Boolean,
-            port: Int,
-            classpath: immutable.Seq[String]): Unit =
+  def start(
+      cassandraDirectory: File,
+      configResource: String,
+      clean: Boolean,
+      port: Int,
+      classpath: immutable.Seq[String]): Unit =
     start(cassandraDirectory, configResource, clean, port, classpath, None)
 
   /**
@@ -179,12 +180,13 @@ object CassandraLauncher {
    * @throws akka.persistence.cassandra.testkit.CassandraLauncher.CleanFailedException if `clean`
    *   is `true` and removal of the directory fails
    */
-  def start(cassandraDirectory: File,
-            configResource: String,
-            clean: Boolean,
-            port: Int,
-            classpath: immutable.Seq[String],
-            host: Option[String]): Unit = this.synchronized {
+  def start(
+      cassandraDirectory: File,
+      configResource: String,
+      clean: Boolean,
+      port: Int,
+      classpath: immutable.Seq[String],
+      host: Option[String]): Unit = this.synchronized {
     if (cassandraDaemon.isEmpty) {
 
       prepareCassandraDirectory(cassandraDirectory, clean)
@@ -239,23 +241,25 @@ object CassandraLauncher {
       require(cassandraDirectory.mkdirs(), s"Couldn't create Cassandra directory [$cassandraDirectory]")
   }
 
-  private def startForked(configFile: File,
-                          cassandraBundle: File,
-                          classpath: immutable.Seq[String],
-                          host: String,
-                          port: Int): Unit = {
+  private def startForked(
+      configFile: File,
+      cassandraBundle: File,
+      classpath: immutable.Seq[String],
+      host: String,
+      port: Int): Unit = {
     // Calculate classpath
     val / = File.separator
     val javaBin = s"${System.getProperty("java.home")}${/}bin${/}java"
     val className = "org.apache.cassandra.service.CassandraDaemon"
     val classpathArgument = (classpath :+ cassandraBundle.getAbsolutePath).mkString(File.pathSeparator)
 
-    val builder = new ProcessBuilder(javaBin,
-                                     "-cp",
-                                     classpathArgument,
-                                     "-Dcassandra.config=file:" + configFile.getAbsoluteFile,
-                                     "-Dcassandra-foreground=true",
-                                     className).inheritIO()
+    val builder = new ProcessBuilder(
+      javaBin,
+      "-cp",
+      classpathArgument,
+      "-Dcassandra.config=file:" + configFile.getAbsoluteFile,
+      "-Dcassandra-foreground=true",
+      className).inheritIO()
 
     val process = builder.start()
 

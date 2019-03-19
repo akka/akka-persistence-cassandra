@@ -123,11 +123,12 @@ import java.util.concurrent.ThreadLocalRandom
 
   override def receive: Receive = starting
 
-  private[this] def exhaustFetchAndBecome(resultSet: ResultSet,
-                                          state: State,
-                                          finished: Boolean,
-                                          continue: Boolean,
-                                          behaviour: Option[(ResultSet, State, Boolean) => Receive] = None): Receive =
+  private[this] def exhaustFetchAndBecome(
+      resultSet: ResultSet,
+      state: State,
+      finished: Boolean,
+      continue: Boolean,
+      behaviour: Option[(ResultSet, State, Boolean) => Receive] = None): Receive =
     try {
       val (newRs, newState) =
         exhaustFetch(resultSet, state, resultSet.getAvailableWithoutFetching, 0, totalDemand)
@@ -172,30 +173,33 @@ import java.util.concurrent.ThreadLocalRandom
   private[this] def shouldIdle(availableWithoutFetching: Int, state: State) =
     availableWithoutFetching > 0 && !completionCondition(state)
 
-  private[this] def shouldFetchMore(availableWithoutFetching: Int,
-                                    isFullyFetched: Boolean,
-                                    demand: Long,
-                                    state: State,
-                                    finished: Boolean,
-                                    continue: Boolean) =
+  private[this] def shouldFetchMore(
+      availableWithoutFetching: Int,
+      isFullyFetched: Boolean,
+      demand: Long,
+      state: State,
+      finished: Boolean,
+      continue: Boolean) =
     !isFullyFetched &&
     (availableWithoutFetching + config.fetchSize <= config.maxBufferSize
     || availableWithoutFetching == 0) &&
     !completionCondition(state)
 
-  private[this] def shouldRequestMore(isExhausted: Boolean,
-                                      demand: Long,
-                                      state: State,
-                                      finished: Boolean,
-                                      continue: Boolean) =
+  private[this] def shouldRequestMore(
+      isExhausted: Boolean,
+      demand: Long,
+      state: State,
+      finished: Boolean,
+      continue: Boolean) =
     (!completionCondition(state) || refreshInterval.isDefined) &&
     !(finished && !continue) &&
     isExhausted
 
-  private[this] def shouldComplete(isExhausted: Boolean,
-                                   refreshInterval: Option[FiniteDuration],
-                                   state: State,
-                                   finished: Boolean) =
+  private[this] def shouldComplete(
+      isExhausted: Boolean,
+      refreshInterval: Option[FiniteDuration],
+      state: State,
+      finished: Boolean) =
     (finished && refreshInterval.isEmpty && isExhausted) || completionCondition(state)
 
   // ResultSet methods isExhausted(), one() etc. cause blocking database fetch if there aren't
@@ -205,11 +209,12 @@ import java.util.concurrent.ThreadLocalRandom
     resultSet.isExhausted
 
   @tailrec
-  final protected def exhaustFetch(resultSet: ResultSet,
-                                   state: State,
-                                   available: Int,
-                                   count: Long,
-                                   max: Long): (ResultSet, State) =
+  final protected def exhaustFetch(
+      resultSet: ResultSet,
+      state: State,
+      available: Int,
+      count: Long,
+      max: Long): (ResultSet, State) =
     if (available == 0 || count == max || completionCondition(state)) {
       (resultSet, state)
     } else {

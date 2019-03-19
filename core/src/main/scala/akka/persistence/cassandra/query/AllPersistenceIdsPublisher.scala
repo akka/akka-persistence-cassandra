@@ -23,18 +23,20 @@ import akka.annotation.InternalApi
   final case class ReplayDone(resultSet: Option[ResultSet]) extends NoSerializationVerificationNeeded
   final case class AllPersistenceIdsState(knownPersistenceIds: Set[String])
 
-  def props(refreshInterval: Option[FiniteDuration],
-            session: AllPersistenceIdsSession,
-            config: CassandraReadJournalConfig): Props =
+  def props(
+      refreshInterval: Option[FiniteDuration],
+      session: AllPersistenceIdsSession,
+      config: CassandraReadJournalConfig): Props =
     Props(new AllPersistenceIdsPublisher(refreshInterval, session, config))
 }
 
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class AllPersistenceIdsPublisher(refreshInterval: Option[FiniteDuration],
-                                                            session: AllPersistenceIdsSession,
-                                                            config: CassandraReadJournalConfig)
+@InternalApi private[akka] class AllPersistenceIdsPublisher(
+    refreshInterval: Option[FiniteDuration],
+    session: AllPersistenceIdsSession,
+    config: CassandraReadJournalConfig)
     extends QueryActorPublisher[String, AllPersistenceIdsState](refreshInterval, config) {
 
   import context.dispatcher
@@ -47,8 +49,9 @@ import akka.annotation.InternalApi
 
   override protected def completionCondition(state: AllPersistenceIdsState): Boolean = false
 
-  override protected def updateState(state: AllPersistenceIdsState,
-                                     row: Row): (Option[String], AllPersistenceIdsState) = {
+  override protected def updateState(
+      state: AllPersistenceIdsState,
+      row: Row): (Option[String], AllPersistenceIdsState) = {
 
     val event = row.getString("persistence_id")
 

@@ -5,13 +5,13 @@
 package akka.persistence.cassandra.snapshot
 
 import scala.concurrent.duration._
-import java.lang.{Long => JLong}
-import java.lang.{Integer => JInteger}
+import java.lang.{ Long => JLong }
+import java.lang.{ Integer => JInteger }
 import java.nio.ByteBuffer
 
 import akka.persistence._
 import akka.persistence.SnapshotProtocol._
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraMetricsRegistry}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
 import com.datastax.driver.core._
@@ -86,20 +86,22 @@ class CassandraSnapshotStoreSpec
       val expected = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
 
       // write two more snapshots that cannot be de-serialized.
-      session.execute(writeSnapshot(withMeta = false),
-                      pid,
-                      17L: JLong,
-                      123L: JLong,
-                      serId,
-                      "",
-                      ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
-      session.execute(writeSnapshot(withMeta = false),
-                      pid,
-                      18L: JLong,
-                      124L: JLong,
-                      serId,
-                      "",
-                      ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
+      session.execute(
+        writeSnapshot(withMeta = false),
+        pid,
+        17L: JLong,
+        123L: JLong,
+        serId,
+        "",
+        ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
+      session.execute(
+        writeSnapshot(withMeta = false),
+        pid,
+        18L: JLong,
+        124L: JLong,
+        serId,
+        "",
+        ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
 
       // load most recent snapshot, first two attempts will fail ...
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
@@ -117,27 +119,30 @@ class CassandraSnapshotStoreSpec
       probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
 
       // write three more snapshots that cannot be de-serialized.
-      session.execute(writeSnapshot(withMeta = false),
-                      pid,
-                      17L: JLong,
-                      123L: JLong,
-                      serId,
-                      "",
-                      ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
-      session.execute(writeSnapshot(withMeta = false),
-                      pid,
-                      18L: JLong,
-                      124L: JLong,
-                      serId,
-                      "",
-                      ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
-      session.execute(writeSnapshot(withMeta = false),
-                      pid,
-                      19L: JLong,
-                      125L: JLong,
-                      serId,
-                      "",
-                      ByteBuffer.wrap("fail-3".getBytes("UTF-8")))
+      session.execute(
+        writeSnapshot(withMeta = false),
+        pid,
+        17L: JLong,
+        123L: JLong,
+        serId,
+        "",
+        ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
+      session.execute(
+        writeSnapshot(withMeta = false),
+        pid,
+        18L: JLong,
+        124L: JLong,
+        serId,
+        "",
+        ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
+      session.execute(
+        writeSnapshot(withMeta = false),
+        pid,
+        19L: JLong,
+        125L: JLong,
+        serId,
+        "",
+        ByteBuffer.wrap("fail-3".getBytes("UTF-8")))
 
       // load most recent snapshot, first three attempts will fail ...
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)

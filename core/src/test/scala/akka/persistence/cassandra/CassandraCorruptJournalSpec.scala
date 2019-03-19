@@ -17,7 +17,9 @@ object CassandraCorruptJournalSpec {
 
   case object Pong
 
-  class FullEventLog(val persistenceId: String, override val journalPluginId: String) extends PersistentActor with ActorLogging {
+  class FullEventLog(val persistenceId: String, override val journalPluginId: String)
+      extends PersistentActor
+      with ActorLogging {
 
     var events: Vector[String] = Vector.empty
 
@@ -53,8 +55,7 @@ object CassandraCorruptJournalSpec {
 
 }
 
-class CassandraCorruptJournalSpec extends CassandraSpec(
-  """
+class CassandraCorruptJournalSpec extends CassandraSpec("""
     akka {
       loglevel = debug
       loggers = ["akka.testkit.TestEventListener"]
@@ -136,7 +137,7 @@ class CassandraCorruptJournalSpec extends CassandraSpec(
 
       val pid = runConcurrentPersistentActors("cassandra-journal-fail")
 
-      EventFilter[IllegalStateException](pattern = "Invalid replayed event", occurrences = 1) intercept {
+      EventFilter[IllegalStateException](pattern = "Invalid replayed event", occurrences = 1).intercept {
         setup(pid, journalId = "cassandra-journal-fail")
       }
     }
@@ -144,7 +145,7 @@ class CassandraCorruptJournalSpec extends CassandraSpec(
     "work with replay-filter = warn" in {
 
       val pid = runConcurrentPersistentActors("cassandra-journal-warn")
-      EventFilter.warning(pattern = "Invalid replayed event", occurrences = 2) intercept {
+      EventFilter.warning(pattern = "Invalid replayed event", occurrences = 2).intercept {
         val p1c = setup(pid, journalId = "cassandra-journal-warn")
         p1c ! "p1c-1"
         expectMsg("p1c-1-done")

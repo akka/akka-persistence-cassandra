@@ -29,8 +29,9 @@ import scala.concurrent.duration._
 
   // TODO use for the events by tag query too
   val fetchMoreThreshold: Double = config.getDouble("fetch-more-threshold")
-  require(0.0 <= fetchMoreThreshold && fetchMoreThreshold <= 1.0,
-          s"fetch-more-threshold must be between 0.0 and 1.0, was $fetchMoreThreshold")
+  require(
+    0.0 <= fetchMoreThreshold && fetchMoreThreshold <= 1.0,
+    s"fetch-more-threshold must be between 0.0 and 1.0, was $fetchMoreThreshold")
   val readConsistency: ConsistencyLevel =
     ConsistencyLevel.valueOf(config.getString("read-consistency"))
   val readRetries: Int = config.getInt("read-retries")

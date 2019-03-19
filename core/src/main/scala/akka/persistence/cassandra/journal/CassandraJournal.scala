@@ -72,20 +72,22 @@ class CassandraJournal(cfg: Config)
   // so fine to use an immutable list as the value
   private val pendingDeletes: JMap[String, List[PendingDelete]] = new JHMap
 
-  val session = new CassandraSession(context.system,
-                                     config.sessionProvider,
-                                     config.sessionSettings,
-                                     context.dispatcher,
-                                     log,
-                                     metricsCategory = s"${self.path.name}",
-                                     init = session => executeCreateKeyspaceAndTables(session, config))
+  val session = new CassandraSession(
+    context.system,
+    config.sessionProvider,
+    config.sessionSettings,
+    context.dispatcher,
+    log,
+    metricsCategory = s"${self.path.name}",
+    init = session => executeCreateKeyspaceAndTables(session, config))
 
-  private val tagWriterSession = TagWritersSession(() => preparedWriteToTagViewWithoutMeta,
-                                                   () => preparedWriteToTagViewWithMeta,
-                                                   session.executeWrite,
-                                                   session.selectResultSet,
-                                                   () => preparedWriteToTagProgress,
-                                                   () => preparedWriteTagScanning)
+  private val tagWriterSession = TagWritersSession(
+    () => preparedWriteToTagViewWithoutMeta,
+    () => preparedWriteToTagViewWithMeta,
+    session.executeWrite,
+    session.selectResultSet,
+    () => preparedWriteToTagProgress,
+    () => preparedWriteTagScanning)
 
   protected val tagWrites: Option[ActorRef] =
     if (config.eventsByTagEnabled)
@@ -139,11 +141,13 @@ class CassandraJournal(cfg: Config)
       log.debug("Delete finished for persistence id [{}] to [{}] result [{}]", persistenceId, toSequenceNr, result)
       pendingDeletes.get(persistenceId) match {
         case null =>
-          log.error("Delete finished but not in pending. Please raise a bug with logs. PersistenceId: [{}]",
-                    persistenceId)
+          log.error(
+            "Delete finished but not in pending. Please raise a bug with logs. PersistenceId: [{}]",
+            persistenceId)
         case Nil =>
-          log.error("Delete finished but not in pending (empty). Please raise a bug with logs. PersistenceId: [{}]",
-                    persistenceId)
+          log.error(
+            "Delete finished but not in pending (empty). Please raise a bug with logs. PersistenceId: [{}]",
+            persistenceId)
         case current :: tail =>
           current.p.complete(result)
           tail match {
@@ -311,8 +315,9 @@ class CassandraJournal(cfg: Config)
 
     // reading assumes sequence numbers are in the right partition or partition + 1
     // even if we did allow this it would perform terribly as large C* batches are not good
-    require(maxPnr - minPnr <= 1,
-            "Do not support AtomicWrites that span 3 partitions. Keep AtomicWrites <= max partition size.")
+    require(
+      maxPnr - minPnr <= 1,
+      "Do not support AtomicWrites that span 3 partitions. Keep AtomicWrites <= max partition size.")
 
     val writes: Seq[Future[BoundStatement]] = all.map { m: Serialized =>
       // using two separate statements with or without the meta data columns because
@@ -411,9 +416,10 @@ class CassandraJournal(cfg: Config)
       case otherDeletes =>
         // Users really should not be firing deletes this quickly
         if (otherDeletes.length > config.maxConcurrentDeletes) {
-          log.error("Over [{}] outstanding deletes for persistenceId [{}]. Failing delete",
-                    config.maxConcurrentDeletes,
-                    persistenceId)
+          log.error(
+            "Over [{}] outstanding deletes for persistenceId [{}]. Failing delete",
+            config.maxConcurrentDeletes,
+            persistenceId)
           Future.failed(
             new RuntimeException(
               s"Over ${config.maxConcurrentDeletes} outstanding deletes for persistenceId $persistenceId"))
@@ -445,22 +451,21 @@ class CassandraJournal(cfg: Config)
         val deleteResult =
           Future.sequence(partitionInfos.map(future =>
             future.flatMap(pi => {
-              Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map {
-                group =>
-                  {
-                    val groupDeleteResult = asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
-                    groupDeleteResult.failed.foreach { e =>
-                      log.warning(
-                        s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                        "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                        "Caused by: [{}: {}]",
-                        persistenceId,
-                        toSequenceNr,
-                        e.getClass.getName,
-                        e.getMessage)
-                    }
-                    groupDeleteResult
+              Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>
+                {
+                  val groupDeleteResult = asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
+                  groupDeleteResult.failed.foreach { e =>
+                    log.warning(
+                      s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                      "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                      "Caused by: [{}: {}]",
+                      persistenceId,
+                      toSequenceNr,
+                      e.getClass.getName,
+                      e.getMessage)
                   }
+                  groupDeleteResult
+                }
               })
             })))
         deleteResult.map(_ => Done)
@@ -547,22 +552,24 @@ class CassandraJournal(cfg: Config)
       .map(rowOption => rowOption.map(_.getLong("deleted_to")).getOrElse(0))
   }
 
-  private[akka] def asyncReadLowestSequenceNr(persistenceId: String,
-                                              fromSequenceNr: Long,
-                                              highestDeletedSequenceNumber: Long,
-                                              readConsistency: Option[ConsistencyLevel],
-                                              retryPolicy: Option[RetryPolicy]): Future[Long] = {
+  private[akka] def asyncReadLowestSequenceNr(
+      persistenceId: String,
+      fromSequenceNr: Long,
+      highestDeletedSequenceNumber: Long,
+      readConsistency: Option[ConsistencyLevel],
+      retryPolicy: Option[RetryPolicy]): Future[Long] = {
     queries
-      .eventsByPersistenceId(persistenceId,
-                             fromSequenceNr,
-                             highestDeletedSequenceNumber,
-                             1,
-                             1,
-                             None,
-                             "asyncReadLowestSequenceNr",
-                             readConsistency,
-                             retryPolicy,
-                             extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
+      .eventsByPersistenceId(
+        persistenceId,
+        fromSequenceNr,
+        highestDeletedSequenceNumber,
+        1,
+        1,
+        None,
+        "asyncReadLowestSequenceNr",
+        readConsistency,
+        retryPolicy,
+        extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
       .map(_.sequenceNr)
       .runWith(Sink.headOption)
       .map {
@@ -571,9 +578,10 @@ class CassandraJournal(cfg: Config)
       }
   }
 
-  private[akka] def asyncFindHighestSequenceNr(persistenceId: String,
-                                               fromSequenceNr: Long,
-                                               partitionSize: Long): Future[Long] = {
+  private[akka] def asyncFindHighestSequenceNr(
+      persistenceId: String,
+      fromSequenceNr: Long,
+      partitionSize: Long): Future[Long] = {
     def find(currentPnr: Long, currentSnr: Long): Future[Long] = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
       val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, currentPnr: JLong))
@@ -640,17 +648,18 @@ class CassandraJournal(cfg: Config)
 
   private case class SerializedAtomicWrite(persistenceId: String, payload: Seq[Serialized])
 
-  private[akka] case class Serialized(persistenceId: String,
-                                      sequenceNr: Long,
-                                      serialized: ByteBuffer,
-                                      tags: Set[String],
-                                      eventAdapterManifest: String,
-                                      serManifest: String,
-                                      serId: Int,
-                                      writerUuid: String,
-                                      meta: Option[SerializedMeta],
-                                      timeUuid: UUID,
-                                      timeBucket: TimeBucket)
+  private[akka] case class Serialized(
+      persistenceId: String,
+      sequenceNr: Long,
+      serialized: ByteBuffer,
+      tags: Set[String],
+      eventAdapterManifest: String,
+      serManifest: String,
+      serId: Int,
+      writerUuid: String,
+      meta: Option[SerializedMeta],
+      timeUuid: UUID,
+      timeBucket: TimeBucket)
 
   private[akka] case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
 
@@ -755,11 +764,12 @@ class CassandraJournal(cfg: Config)
  * See http://docs.datastax.com/en/developer/java-driver/3.1/manual/retries/
  */
 class FixedRetryPolicy(number: Int) extends RetryPolicy {
-  override def onUnavailable(statement: Statement,
-                             cl: ConsistencyLevel,
-                             requiredReplica: Int,
-                             aliveReplica: Int,
-                             nbRetry: Int): RetryDecision = {
+  override def onUnavailable(
+      statement: Statement,
+      cl: ConsistencyLevel,
+      requiredReplica: Int,
+      aliveReplica: Int,
+      nbRetry: Int): RetryDecision = {
     // Same implementation as in DefaultRetryPolicy
     // If this is the first retry it triggers a retry on the next host.
     // The rationale is that the first coordinator might have been network-isolated from all other nodes (thinking
@@ -771,27 +781,30 @@ class FixedRetryPolicy(number: Int) extends RetryPolicy {
       retry(cl, nbRetry)
   }
 
-  override def onWriteTimeout(statement: Statement,
-                              cl: ConsistencyLevel,
-                              writeType: WriteType,
-                              requiredAcks: Int,
-                              receivedAcks: Int,
-                              nbRetry: Int): RetryDecision = {
+  override def onWriteTimeout(
+      statement: Statement,
+      cl: ConsistencyLevel,
+      writeType: WriteType,
+      requiredAcks: Int,
+      receivedAcks: Int,
+      nbRetry: Int): RetryDecision = {
     retry(cl, nbRetry)
   }
 
-  override def onReadTimeout(statement: Statement,
-                             cl: ConsistencyLevel,
-                             requiredResponses: Int,
-                             receivedResponses: Int,
-                             dataRetrieved: Boolean,
-                             nbRetry: Int): RetryDecision = {
+  override def onReadTimeout(
+      statement: Statement,
+      cl: ConsistencyLevel,
+      requiredResponses: Int,
+      receivedResponses: Int,
+      dataRetrieved: Boolean,
+      nbRetry: Int): RetryDecision = {
     retry(cl, nbRetry)
   }
-  override def onRequestError(statement: Statement,
-                              cl: ConsistencyLevel,
-                              cause: DriverException,
-                              nbRetry: Int): RetryDecision = {
+  override def onRequestError(
+      statement: Statement,
+      cl: ConsistencyLevel,
+      cause: DriverException,
+      nbRetry: Int): RetryDecision = {
     tryNextHost(cl, nbRetry)
   }
 

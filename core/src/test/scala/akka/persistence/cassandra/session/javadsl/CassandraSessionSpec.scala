@@ -11,9 +11,9 @@ import akka.Done
 import akka.actor.ExtendedActorSystem
 import akka.event.Logging
 import akka.persistence.cassandra.session.CassandraSessionSettings
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec, ListenableFutureConverter, SessionProvider}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, ListenableFutureConverter, SessionProvider }
 import akka.stream.testkit.scaladsl.TestSink
-import com.datastax.driver.core.{BatchStatement, Session, SimpleStatement}
+import com.datastax.driver.core.{ BatchStatement, Session, SimpleStatement }
 import com.typesafe.config.ConfigFactory
 
 import scala.collection.JavaConverters._
@@ -53,8 +53,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
       new java.util.function.Function[Session, CompletionStage[Done]] {
         override def apply(s: Session): CompletionStage[Done] =
           s.executeAsync(s"USE ${cfg.getString("keyspace")};").asScala.map(_ => Done.getInstance).toJava
-      }
-    )
+      })
   }
 
   override def beforeAll: Unit = {
@@ -72,8 +71,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
         count bigint,
         PRIMARY KEY (partition, key))
         """).toScala,
-      15.seconds
-    )
+      15.seconds)
 
   def insertTestData(): Unit = {
     val batch = new BatchStatement
@@ -94,10 +92,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
       val rows = session.select(bound).asScala
       val probe = rows.map(_.getLong("count")).runWith(TestSink.probe[Long])
       probe.within(10.seconds) {
-        probe
-          .request(10)
-          .expectNextUnordered(1L, 2L, 3L, 4L)
-          .expectComplete()
+        probe.request(10).expectNextUnordered(1L, 2L, 3L, 4L).expectComplete()
       }
     }
 
@@ -105,10 +100,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
       val rows = session.select("SELECT count FROM testcounts WHERE partition = ?", "B").asScala
       val probe = rows.map(_.getLong("count")).runWith(TestSink.probe[Long])
       probe.within(10.seconds) {
-        probe
-          .request(10)
-          .expectNextUnordered(5L, 6L)
-          .expectComplete()
+        probe.request(10).expectNextUnordered(5L, 6L).expectComplete()
       }
     }
 
@@ -127,16 +119,14 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
     "selectOne and bind" in {
       val row = Await.result(
         session.selectOne("SELECT count FROM testcounts WHERE partition = ? and key = ?", "A", "b").toScala,
-        5.seconds
-      )
+        5.seconds)
       row.get.getLong("count") should ===(2L)
     }
 
     "selectOne empty" in {
       val row = Await.result(
         session.selectOne("SELECT count FROM testcounts WHERE partition = ? and key = ?", "A", "x").toScala,
-        5.seconds
-      )
+        5.seconds)
       row should be(Optional.empty())
     }
 

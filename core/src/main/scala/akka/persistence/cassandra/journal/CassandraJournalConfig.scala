@@ -41,10 +41,11 @@ private[akka] object BucketSize {
       .getOrElse(throw new IllegalArgumentException("Invalid value for bucket size: " + value))
 }
 
-case class TableSettings(name: String,
-                         compactionStrategy: CassandraCompactionStrategy,
-                         gcGraceSeconds: Long,
-                         ttl: Option[Duration])
+case class TableSettings(
+    name: String,
+    compactionStrategy: CassandraCompactionStrategy,
+    gcGraceSeconds: Long,
+    ttl: Option[Duration])
 
 class CassandraJournalConfig(system: ActorSystem, config: Config)
     extends CassandraPluginConfig(system, config)
@@ -72,22 +73,19 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     system.log.warning("Do not use Second bucket size in production. It is meant for testing purposes only.")
   }
 
-  val tagTable = TableSettings(config.getString("events-by-tag.table"),
-                               CassandraCompactionStrategy(config.getConfig("events-by-tag.compaction-strategy")),
-                               config.getLong("events-by-tag.gc-grace-seconds"),
-                               if (config.hasPath("events-by-tag.time-to-live"))
-                                 Some(config.getDuration("events-by-tag.time-to-live", TimeUnit.MILLISECONDS).millis)
-                               else None)
+  val tagTable = TableSettings(
+    config.getString("events-by-tag.table"),
+    CassandraCompactionStrategy(config.getConfig("events-by-tag.compaction-strategy")),
+    config.getLong("events-by-tag.gc-grace-seconds"),
+    if (config.hasPath("events-by-tag.time-to-live"))
+      Some(config.getDuration("events-by-tag.time-to-live", TimeUnit.MILLISECONDS).millis)
+    else None)
 
-  val tagWriterSettings = TagWriterSettings(config.getInt("events-by-tag.max-message-batch-size"),
-                                            config
-                                              .getDuration("events-by-tag.flush-interval", TimeUnit.MILLISECONDS)
-                                              .millis,
-                                            config
-                                              .getDuration("events-by-tag.scanning-flush-interval",
-                                                           TimeUnit.MILLISECONDS)
-                                              .millis,
-                                            config.getBoolean("pubsub-notification"))
+  val tagWriterSettings = TagWriterSettings(
+    config.getInt("events-by-tag.max-message-batch-size"),
+    config.getDuration("events-by-tag.flush-interval", TimeUnit.MILLISECONDS).millis,
+    config.getDuration("events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
+    config.getBoolean("pubsub-notification"))
 
   /**
    * The Cassandra statement that can be used to create the configured keyspace.

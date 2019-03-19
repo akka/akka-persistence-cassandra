@@ -9,7 +9,7 @@ import java.io.File
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.datastax.driver.core.Cluster
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.{ Matchers, WordSpecLike }
 import scala.concurrent.duration._
 import org.scalatest.BeforeAndAfterAll
 
@@ -49,8 +49,7 @@ class CassandraLauncherSpec
         configResource = CassandraLauncher.DefaultTestConfigResource,
         clean = true,
         port = 0,
-        CassandraLauncher.classpathForResources("logback-test.xml")
-      )
+        CassandraLauncher.classpathForResources("logback-test.xml"))
 
       awaitAssert({
         testCassandra()

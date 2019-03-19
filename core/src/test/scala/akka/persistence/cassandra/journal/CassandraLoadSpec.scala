@@ -6,7 +6,7 @@ package akka.persistence.cassandra.journal
 
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
@@ -98,12 +98,12 @@ class CassandraLoadSpec extends CassandraSpec(config) with ImplicitSender with W
       val loadCycles = 1000L
 
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1a"))
-      1L to warmCycles foreach { i =>
+      (1L to warmCycles).foreach { i =>
         processor1 ! "a"
       }
       processor1 ! "start"
       expectMsg("started")
-      1L to loadCycles foreach { i =>
+      (1L to loadCycles).foreach { i =>
         processor1 ! "a"
       }
       processor1 ! "stop"
@@ -116,15 +116,15 @@ class CassandraLoadSpec extends CassandraSpec(config) with ImplicitSender with W
       val cycles = 1000L
 
       val processor1 = system.actorOf(Props(classOf[ProcessorB], "p1b", None, self))
-      1L to cycles foreach { i =>
+      (1L to cycles).foreach { i =>
         processor1 ! "a"
       }
-      1L to cycles foreach { i =>
+      (1L to cycles).foreach { i =>
         expectMsg(s"a-${i}")
       }
 
       val processor2 = system.actorOf(Props(classOf[ProcessorB], "p1b", None, self))
-      1L to cycles foreach { i =>
+      (1L to cycles).foreach { i =>
         expectMsg(s"a-${i}")
       }
 

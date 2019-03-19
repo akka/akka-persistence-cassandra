@@ -6,7 +6,7 @@ package akka.persistence.cassandra.compaction
 
 import java.util.concurrent.TimeUnit
 
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraPluginConfig, CassandraSpec}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
@@ -36,8 +36,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
     super.beforeAll()
     session = Await.result(cassandraPluginConfig.sessionProvider.connect(), 5.seconds)
     session.execute(
-      "CREATE KEYSPACE IF NOT EXISTS testKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }"
-    )
+      "CREATE KEYSPACE IF NOT EXISTS testKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
   }
 
   override protected def afterAll(): Unit = {
@@ -74,7 +73,8 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
         """.stripMargin)
 
       val cqlExpression =
-        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable1 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(twConfig.getConfig("table-compaction-strategy")).asCQL}"
+        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable1 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(
+          twConfig.getConfig("table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
         session.execute(cqlExpression)
@@ -140,7 +140,8 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
         """.stripMargin)
 
       val cqlExpression =
-        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable1 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
+        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable1 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(
+          uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
         session.execute(cqlExpression)
@@ -180,7 +181,8 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
         """.stripMargin)
 
       val cqlExpression =
-        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable2 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
+        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable2 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(
+          uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
         session.execute(cqlExpression)
@@ -232,7 +234,8 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
         """.stripMargin)
 
       val cqlExpression =
-        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable3 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
+        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable3 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(
+          uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
         session.execute(cqlExpression)

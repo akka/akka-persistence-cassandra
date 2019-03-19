@@ -66,12 +66,13 @@ package object cassandra {
 
   val FutureDone: Future[Done] = Future.successful(Done)
 
-  def serializeEvent(p: PersistentRepr,
-                     tags: Set[String],
-                     uuid: UUID,
-                     bucketSize: BucketSize,
-                     serialization: Serialization,
-                     system: ActorSystem)(implicit executionContext: ExecutionContext): Future[Serialized] =
+  def serializeEvent(
+      p: PersistentRepr,
+      tags: Set[String],
+      uuid: UUID,
+      bucketSize: BucketSize,
+      serialization: Serialization,
+      system: ActorSystem)(implicit executionContext: ExecutionContext): Future[Serialized] =
     try {
       // use same clock source as the UUID for the timeBucket
       val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), bucketSize)
@@ -101,17 +102,18 @@ package object cassandra {
           Serialization.withTransportInformation(system.asInstanceOf[ExtendedActorSystem]) { () =>
             asyncSer.toBinaryAsync(event).map { bytes =>
               val serEvent = ByteBuffer.wrap(bytes)
-              Serialized(p.persistenceId,
-                         p.sequenceNr,
-                         serEvent,
-                         tags,
-                         eventAdapterManifest = p.manifest,
-                         serManifest = serManifest,
-                         serId = serializer.identifier,
-                         p.writerUuid,
-                         serializeMeta(),
-                         uuid,
-                         timeBucket)
+              Serialized(
+                p.persistenceId,
+                p.sequenceNr,
+                serEvent,
+                tags,
+                eventAdapterManifest = p.manifest,
+                serManifest = serManifest,
+                serId = serializer.identifier,
+                p.writerUuid,
+                serializeMeta(),
+                uuid,
+                timeBucket)
             }
           }
 
@@ -119,17 +121,18 @@ package object cassandra {
           Future {
             // Serialization.serialize adds transport info
             val serEvent = ByteBuffer.wrap(serialization.serialize(event).get)
-            Serialized(p.persistenceId,
-                       p.sequenceNr,
-                       serEvent,
-                       tags,
-                       eventAdapterManifest = p.manifest,
-                       serManifest = serManifest,
-                       serId = serializer.identifier,
-                       p.writerUuid,
-                       serializeMeta(),
-                       uuid,
-                       timeBucket)
+            Serialized(
+              p.persistenceId,
+              p.sequenceNr,
+              serEvent,
+              tags,
+              eventAdapterManifest = p.manifest,
+              serManifest = serManifest,
+              serId = serializer.identifier,
+              p.writerUuid,
+              serializeMeta(),
+              uuid,
+              timeBucket)
           }
       }
 

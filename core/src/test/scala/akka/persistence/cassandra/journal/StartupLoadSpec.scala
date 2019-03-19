@@ -6,7 +6,7 @@ package akka.persistence.cassandra.journal
 
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
 

@@ -4,8 +4,8 @@
 
 package akka.persistence.cassandra
 
-import akka.actor.{ActorLogging, ActorRef, Props}
-import akka.persistence.{PersistentActor, RecoveryCompleted, SaveSnapshotSuccess}
+import akka.actor.{ ActorLogging, ActorRef, Props }
+import akka.persistence.{ PersistentActor, RecoveryCompleted, SaveSnapshotSuccess }
 import akka.persistence.journal.Tagged
 
 object TestTaggingActor {

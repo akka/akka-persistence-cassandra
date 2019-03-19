@@ -7,8 +7,8 @@ package akka.persistence.cassandra.journal
 import akka.actor.Props
 import akka.persistence.cassandra.journal.MultiPluginSpec._
 import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraPluginConfig, CassandraSpec}
-import akka.persistence.{PersistentActor, SaveSnapshotSuccess}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
+import akka.persistence.{ PersistentActor, SaveSnapshotSuccess }
 import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
 
@@ -55,7 +55,7 @@ object MultiPluginSpec {
 
     override def receiveCommand: Receive = {
       case _: SaveSnapshotSuccess =>
-      case "snapshot" => saveSnapshot("snapshot")
+      case "snapshot"             => saveSnapshot("snapshot")
       case payload =>
         persist(payload) { payload =>
           sender() ! s"$payload-$lastSequenceNr"
@@ -80,9 +80,10 @@ object MultiPluginSpec {
 }
 
 class MultiPluginSpec
-    extends CassandraSpec(config.withFallback(ConfigFactory.load("reference.conf")),
-                          MultiPluginSpec.journalKeyspace,
-                          MultiPluginSpec.snapshotKeyspace) {
+    extends CassandraSpec(
+      config.withFallback(ConfigFactory.load("reference.conf")),
+      MultiPluginSpec.journalKeyspace,
+      MultiPluginSpec.snapshotKeyspace) {
 
   lazy val cassandraPluginConfig =
     new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-journal"))
@@ -99,11 +100,9 @@ class MultiPluginSpec
     session = Await.result(cassandraPluginConfig.sessionProvider.connect(), 25.seconds)
 
     session.execute(
-      s"CREATE KEYSPACE IF NOT EXISTS $journalKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }"
-    )
+      s"CREATE KEYSPACE IF NOT EXISTS $journalKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
     session.execute(
-      s"CREATE KEYSPACE IF NOT EXISTS $snapshotKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }"
-    )
+      s"CREATE KEYSPACE IF NOT EXISTS $snapshotKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
 
     CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-a")
     CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-b")

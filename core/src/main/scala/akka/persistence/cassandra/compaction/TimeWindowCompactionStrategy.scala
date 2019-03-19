@@ -9,9 +9,10 @@ import java.util.concurrent.TimeUnit
 import com.typesafe.config.Config
 
 class TimeWindowCompactionStrategy(config: Config)
-    extends BaseCompactionStrategy(config,
-                                   TimeWindowCompactionStrategy.ClassName,
-                                   TimeWindowCompactionStrategy.propertyKeys) {
+    extends BaseCompactionStrategy(
+      config,
+      TimeWindowCompactionStrategy.ClassName,
+      TimeWindowCompactionStrategy.propertyKeys) {
   import TimeWindowCompactionStrategy._
 
   val compactionWindowUnit: TimeUnit =
@@ -23,8 +24,9 @@ class TimeWindowCompactionStrategy(config: Config)
       config.getInt("compaction_window_size")
     else 1
 
-  require(compactionWindowSize >= 1,
-          s"compaction_window_size must be larger than or equal to 1, but was $compactionWindowSize")
+  require(
+    compactionWindowSize >= 1,
+    s"compaction_window_size must be larger than or equal to 1, but was $compactionWindowSize")
 
   override def asCQL: String =
     s"""{

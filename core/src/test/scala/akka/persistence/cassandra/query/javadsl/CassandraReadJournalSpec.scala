@@ -4,10 +4,10 @@
 
 package akka.persistence.cassandra.query.javadsl
 
-import akka.persistence.cassandra.query.{javadsl, scaladsl, TestActor}
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
-import akka.persistence.journal.{Tagged, WriteEventAdapter}
-import akka.persistence.query.{Offset, PersistenceQuery}
+import akka.persistence.cassandra.query.{ javadsl, scaladsl, TestActor }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.journal.{ Tagged, WriteEventAdapter }
+import akka.persistence.query.{ Offset, PersistenceQuery }
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
 
@@ -32,7 +32,7 @@ class TestTagger extends WriteEventAdapter {
   override def manifest(event: Any): String = ""
   override def toJournal(event: Any): Any = event match {
     case s: String if s.startsWith("a") => Tagged(event, Set("a"))
-    case _ => event
+    case _                              => event
   }
 }
 
@@ -48,12 +48,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("a-1-done")
 
       val src = javaQueries.eventsByPersistenceId("a", 0L, Long.MaxValue)
-      src.asScala
-        .map(_.persistenceId)
-        .runWith(TestSink.probe[Any])
-        .request(10)
-        .expectNext("a")
-        .cancel()
+      src.asScala.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("a").cancel()
     }
 
     "start current eventsByPersistenceId query" in {
@@ -62,12 +57,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("b-1-done")
 
       val src = javaQueries.currentEventsByPersistenceId("b", 0L, Long.MaxValue)
-      src.asScala
-        .map(_.persistenceId)
-        .runWith(TestSink.probe[Any])
-        .request(10)
-        .expectNext("b")
-        .expectComplete()
+      src.asScala.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("b").expectComplete()
     }
 
     "start eventsByTag query" in {
@@ -83,12 +73,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
 
     "start current eventsByTag query" in {
       val src = javaQueries.currentEventsByTag("a", Offset.noOffset)
-      src.asScala
-        .map(_.persistenceId)
-        .runWith(TestSink.probe[Any])
-        .request(10)
-        .expectNext("a")
-        .expectComplete()
+      src.asScala.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("a").expectComplete()
     }
   }
 }

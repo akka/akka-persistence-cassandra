@@ -35,9 +35,10 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val keyspaceAutoCreate: Boolean = config.getBoolean("keyspace-autocreate")
   val tablesAutoCreate: Boolean = config.getBoolean("tables-autocreate")
 
-  val replicationStrategy: String = getReplicationStrategy(config.getString("replication-strategy"),
-                                                           config.getInt("replication-factor"),
-                                                           getListFromConfig(config, "data-center-replication-factors"))
+  val replicationStrategy: String = getReplicationStrategy(
+    config.getString("replication-strategy"),
+    config.getInt("replication-factor"),
+    getListFromConfig(config, "data-center-replication-factors"))
 
   val readConsistency: ConsistencyLevel = sessionSettings.readConsistency
   val writeConsistency: ConsistencyLevel = sessionSettings.writeConsistency
@@ -58,9 +59,10 @@ object CassandraPluginConfig {
   /**
    * Builds replication strategy command to create a keyspace.
    */
-  def getReplicationStrategy(strategy: String,
-                             replicationFactor: Int,
-                             dataCenterReplicationFactors: Seq[String]): String = {
+  def getReplicationStrategy(
+      strategy: String,
+      replicationFactor: Int,
+      dataCenterReplicationFactors: Seq[String]): String = {
 
     def getDataCenterReplicationFactorList(dcrfList: Seq[String]): String = {
       val result: Seq[String] = dcrfList match {

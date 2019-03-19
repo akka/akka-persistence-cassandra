@@ -7,7 +7,7 @@ package akka.persistence.cassandra.journal
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra.journal.CassandraSslSpec._
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
 import javax.crypto.Cipher
@@ -97,7 +97,7 @@ class CassandraSslSpecWithClientAuth
     "write messages over SSL" in {
       skipIfNoJCESupport()
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
-      1L to 16L foreach { i =>
+      (1L to 16L).foreach { i =>
         processor1 ! s"a-${i}"
         expectMsgAllOf(s"a-${i}", i, false)
       }
@@ -124,7 +124,7 @@ class CassandraSslSpecWithoutClientAuth extends CassandraSpec(config(false)) wit
     "write messages over SSL" in {
       skipIfNoJCESupport()
       val processor1 = system.actorOf(Props(classOf[ProcessorA], "p1"))
-      1L to 16L foreach { i =>
+      (1L to 16L).foreach { i =>
         processor1 ! s"a-${i}"
         expectMsgAllOf(s"a-${i}", i, false)
       }

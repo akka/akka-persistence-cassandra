@@ -6,8 +6,8 @@ package akka.persistence.cassandra.query.scaladsl
 
 import akka.actor.Props
 import akka.persistence.cassandra.query.TestActor
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraMetricsRegistry, CassandraSpec}
-import akka.persistence.journal.{Tagged, WriteEventAdapter}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry, CassandraSpec }
+import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.NoOffset
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
@@ -49,12 +49,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("a-1-done")
 
       val src = queries.eventsByPersistenceId("a", 0L, Long.MaxValue)
-      src
-        .map(_.persistenceId)
-        .runWith(TestSink.probe[Any])
-        .request(10)
-        .expectNext("a")
-        .cancel()
+      src.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("a").cancel()
     }
 
     "start current eventsByPersistenceId query" in {
@@ -63,12 +58,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("b-1-done")
 
       val src = queries.currentEventsByPersistenceId("b", 0L, Long.MaxValue)
-      src
-        .map(_.persistenceId)
-        .runWith(TestSink.probe[Any])
-        .request(10)
-        .expectNext("b")
-        .expectComplete()
+      src.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("b").expectComplete()
     }
 
     // these tests rely on events written in previous tests
@@ -85,12 +75,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
 
     "start current eventsByTag query" in {
       val src = queries.currentEventsByTag("a", NoOffset)
-      src
-        .map(_.persistenceId)
-        .runWith(TestSink.probe[Any])
-        .request(10)
-        .expectNext("a")
-        .expectComplete()
+      src.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("a").expectComplete()
     }
 
     "insert Cassandra metrics to Cassandra Metrics Registry" in {

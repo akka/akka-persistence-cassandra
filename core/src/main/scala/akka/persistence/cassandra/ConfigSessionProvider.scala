@@ -72,12 +72,14 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
     .setNewConnectionThreshold(HostDistance.REMOTE, connectionPoolConfig.getInt("new-connection-threshold-remote"))
     .setMaxRequestsPerConnection(HostDistance.LOCAL, connectionPoolConfig.getInt("max-requests-per-connection-local"))
     .setMaxRequestsPerConnection(HostDistance.REMOTE, connectionPoolConfig.getInt("max-requests-per-connection-remote"))
-    .setConnectionsPerHost(HostDistance.LOCAL,
-                           connectionPoolConfig.getInt("connections-per-host-core-local"),
-                           connectionPoolConfig.getInt("connections-per-host-max-local"))
-    .setConnectionsPerHost(HostDistance.REMOTE,
-                           connectionPoolConfig.getInt("connections-per-host-core-remote"),
-                           connectionPoolConfig.getInt("connections-per-host-max-remote"))
+    .setConnectionsPerHost(
+      HostDistance.LOCAL,
+      connectionPoolConfig.getInt("connections-per-host-core-local"),
+      connectionPoolConfig.getInt("connections-per-host-max-local"))
+    .setConnectionsPerHost(
+      HostDistance.REMOTE,
+      connectionPoolConfig.getInt("connections-per-host-core-remote"),
+      connectionPoolConfig.getInt("connections-per-host-max-remote"))
     .setPoolTimeoutMillis(connectionPoolConfig.getInt("pool-timeout-millis"))
     .setMaxQueueSize(connectionPoolConfig.getInt("max-queue-size"))
 
@@ -188,8 +190,9 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   /**
    * Builds list of InetSocketAddress out of host:port pairs or host entries + given port parameter.
    */
-  protected def buildContactPoints(contactPoints: immutable.Seq[String],
-                                   port: Int): immutable.Seq[InetSocketAddress] = {
+  protected def buildContactPoints(
+      contactPoints: immutable.Seq[String],
+      port: Int): immutable.Seq[InetSocketAddress] = {
     contactPoints match {
       case null | Nil =>
         throw new IllegalArgumentException("A contact point list cannot be empty.")

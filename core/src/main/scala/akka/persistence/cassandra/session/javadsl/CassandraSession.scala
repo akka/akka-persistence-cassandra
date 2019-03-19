@@ -43,21 +43,23 @@ final class CassandraSession(delegate: akka.persistence.cassandra.session.scalad
   /**
    * Use this constructor if you want to create a stand-alone `CassandraSession`.
    */
-  def this(system: ActorSystem,
-           sessionProvider: SessionProvider,
-           settings: CassandraSessionSettings,
-           executionContext: ExecutionContext,
-           log: LoggingAdapter,
-           metricsCategory: String,
-           init: JFunction[Session, CompletionStage[Done]]) =
+  def this(
+      system: ActorSystem,
+      sessionProvider: SessionProvider,
+      settings: CassandraSessionSettings,
+      executionContext: ExecutionContext,
+      log: LoggingAdapter,
+      metricsCategory: String,
+      init: JFunction[Session, CompletionStage[Done]]) =
     this(
-      new akka.persistence.cassandra.session.scaladsl.CassandraSession(system,
-                                                                       sessionProvider,
-                                                                       settings,
-                                                                       executionContext,
-                                                                       log,
-                                                                       metricsCategory,
-                                                                       (session => init.apply(session).toScala)))
+      new akka.persistence.cassandra.session.scaladsl.CassandraSession(
+        system,
+        sessionProvider,
+        settings,
+        executionContext,
+        log,
+        metricsCategory,
+        (session => init.apply(session).toScala)))
 
   implicit private val ec = delegate.ec
 

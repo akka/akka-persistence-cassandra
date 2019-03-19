@@ -13,10 +13,10 @@ import akka.event.Logging
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal.Serialized
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.cassandra.{CassandraLifecycle, CassandraSpec, TestTaggingActor, _}
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, TestTaggingActor, _ }
 import akka.serialization.SerializationExtension
 import com.typesafe.config.ConfigFactory
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 
 object CassandraEventUpdateSpec {
   val config = ConfigFactory.parseString("""
@@ -35,13 +35,14 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
     override private[akka] def config: CassandraJournalConfig =
       new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
     override private[akka] implicit val ec: ExecutionContext = system.dispatcher
-    override private[akka] val session: CassandraSession = new CassandraSession(system,
-                                                                                config.sessionProvider,
-                                                                                config.sessionSettings,
-                                                                                ec,
-                                                                                log,
-                                                                                systemName,
-                                                                                init = _ => Future.successful(Done))
+    override private[akka] val session: CassandraSession = new CassandraSession(
+      system,
+      config.sessionProvider,
+      config.sessionSettings,
+      ec,
+      log,
+      systemName,
+      init = _ => Future.successful(Done))
   }
 
   "CassandraEventUpdate" must {
