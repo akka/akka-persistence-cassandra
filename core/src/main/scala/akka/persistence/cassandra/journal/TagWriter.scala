@@ -128,10 +128,10 @@ import scala.concurrent.duration._
     case Flush =>
       if (buffer.nonEmpty) {
         // FIXME, this should br broken into batches https://github.com/akka/akka-persistence-cassandra/issues/405
-        log.debug("External flush request. Flushing.")
+        log.debug("External flush request from [{}]. Flushing.", sender())
         write(buffer, Vector.empty[(Serialized, TagPidSequenceNr)], tagPidSequenceNrs, Some(sender()))
       } else {
-        log.debug("External flush request, buffer empty.")
+        log.debug("External flush request from [{}], buffer empty.", sender())
         sender() ! FlushComplete
       }
     case TagWrite(_, payload) =>
@@ -200,17 +200,18 @@ import scala.concurrent.duration._
           }
       }
       log.debug(s"Tag write complete. {}", summary)
-      if (awaitingFlush.isDefined) {
-        log.debug("External flush request")
-        if (sortedBuffer.nonEmpty) {
-          // FIXME, break into batches
-          write(sortedBuffer, Vector.empty[(Serialized, TagPidSequenceNr)], tagPidSequenceNrs, awaitingFlush)
-        } else {
-          sender() ! FlushComplete
-          context.become(idle(sortedBuffer, tagPidSequenceNrs))
-        }
-      } else {
-        flushIfRequired(sortedBuffer, tagPidSequenceNrs)
+      awaitingFlush match {
+        case Some(replyTo) =>
+          log.debug("External flush request")
+          if (sortedBuffer.nonEmpty) {
+            // FIXME, break into batches
+            write(sortedBuffer, Vector.empty[(Serialized, TagPidSequenceNr)], tagPidSequenceNrs, awaitingFlush)
+          } else {
+            replyTo ! FlushComplete
+            context.become(idle(sortedBuffer, tagPidSequenceNrs))
+          }
+        case None =>
+          flushIfRequired(sortedBuffer, tagPidSequenceNrs)
       }
       pubsub.foreach {
         _.mediator ! DistributedPubSubMediator.Publish("akka.persistence.cassandra.journal.tag", tag)
