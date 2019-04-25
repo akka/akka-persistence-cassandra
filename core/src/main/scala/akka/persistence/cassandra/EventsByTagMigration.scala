@@ -201,7 +201,7 @@ class EventsByTagMigration(
           val startingSeqFut = tagScanningStartingSequenceNr(pid)
           for {
             tp <- lookupTagProgress(pid)
-            _ <- persistenceIdStarting(pid, tp, tagWriters, system.deadLetters)
+            _ <- setTagProgress(pid, tp, tagWriters)
             startingSeq <- startingSeqFut
           } yield (tp, startingSeq)
         }

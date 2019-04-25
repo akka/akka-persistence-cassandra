@@ -18,47 +18,40 @@ val akkaPersistenceCassandraDependencies = Seq(
   "com.typesafe.akka" %% "akka-persistence-tck" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-multi-node-testkit" % AkkaVersion % Test,
+  "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion % Test,
   "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
   "org.scalatest" %% "scalatest" % "3.0.5" % Test,
   "org.pegdown" % "pegdown" % "1.6.0" % Test,
-  "org.osgi" % "org.osgi.core" % "5.0.0" % Provided
-)
+  "org.osgi" % "org.osgi.core" % "5.0.0" % Provided)
 
 def common: Seq[Setting[_]] = Seq(
   organization := "com.typesafe.akka",
   organizationName := "Lightbend Inc.",
   startYear := Some(2016),
-  licenses := Seq(
-    ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
+  licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
   crossScalaVersions := Seq("2.11.12", "2.13.0-M5", "2.12.8"),
   scalaVersion := crossScalaVersions.value.last,
   crossVersion := CrossVersion.binary,
   scalacOptions ++= Seq(
-    "-encoding",
-    "UTF-8",
-    "-feature",
-    "-unchecked",
-    "-deprecation",
-    "-Xlint",
-    "-Ywarn-dead-code",
-    "-Xfuture"
-  ),
-  headerLicense := Some(
-    HeaderLicense.Custom(
-      """Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>"""
-    )),
+      "-encoding",
+      "UTF-8",
+      "-feature",
+      "-unchecked",
+      "-deprecation",
+      "-Xlint",
+      "-Ywarn-dead-code",
+      "-Xfuture"),
+  headerLicense := Some(HeaderLicense.Custom("""Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>""")),
   scalafmtOnCompile := true,
   releaseCrossBuild := true,
-  logBuffered in Test := System
-    .getProperty("akka.logBufferedTests", "false")
-    .toBoolean,
+  logBuffered in Test := System.getProperty("akka.logBufferedTests", "false").toBoolean,
   // show full stack traces and test case durations
   testOptions in Test += Tests.Argument("-oDF"),
   // -v Log "test run started" / "test started" / "test run finished" events on log level "info" instead of "debug".
   // -a Show stack traces and exception class name for AssertionErrors.
   testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a"),
   // disable parallel tests
-  parallelExecution in Test := false,
+  parallelExecution in Test := false
 )
 
 lazy val root = (project in file("."))
@@ -67,11 +60,9 @@ lazy val root = (project in file("."))
   .settings(
     name := "akka-persistence-cassandra-root",
     publishArtifact := false,
-    publishTo := Some(
-      Resolver.file("Unused transient repository", file("target/unusedrepo"))),
+    publishTo := Some(Resolver.file("Unused transient repository", file("target/unusedrepo"))),
     publish := {},
-    PgpKeys.publishSigned := {}
-  )
+    PgpKeys.publishSigned := {})
 
 lazy val core = (project in file("core"))
   .enablePlugins(AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
@@ -82,14 +73,11 @@ lazy val core = (project in file("core"))
     name := "akka-persistence-cassandra",
     libraryDependencies ++= akkaPersistenceCassandraDependencies,
     OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*"),
-    OsgiKeys.importPackage := Seq(akkaImport(),
-                                  optionalImport("org.apache.cassandra.*"),
-                                  "*"),
+    OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
     OsgiKeys.privatePackage := Nil,
     testOptions in Test ++= Seq(
-      Tests.Argument(TestFrameworks.ScalaTest, "-o"),
-      Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports"))
-  )
+        Tests.Argument(TestFrameworks.ScalaTest, "-o"),
+        Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports")))
   .configs(MultiJvm)
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
@@ -97,8 +85,7 @@ lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .settings(
     name := "akka-persistence-cassandra-launcher",
     managedResourceDirectories in Compile += (target in cassandraBundle).value / "bundle",
-    managedResources in Compile += (assembly in cassandraBundle).value
-  )
+    managedResources in Compile += (assembly in cassandraBundle).value)
 
 // This project doesn't get published directly, rather the assembled artifact is included as part of cassandraLaunchers
 // resources
@@ -109,10 +96,10 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     name := "akka-persistence-cassandra-bundle",
     crossPaths := false,
     autoScalaLibrary := false,
-    libraryDependencies += "org.apache.cassandra" % "cassandra-all" % "3.11.3" exclude ("commons-logging", "commons-logging"),
+    libraryDependencies += ("org.apache.cassandra" % "cassandra-all" % "3.11.3")
+        .exclude("commons-logging", "commons-logging"),
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
-    assemblyJarName in assembly := "cassandra-bundle.jar"
-  )
+    assemblyJarName in assembly := "cassandra-bundle.jar")
 
 def akkaImport(packageName: String = "akka.*") =
   versionedImport(packageName, "2.4", "2.5")

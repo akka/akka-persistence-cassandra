@@ -10,9 +10,16 @@ import akka.pattern.ask
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ SequenceNr, Tag }
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
-import akka.persistence.cassandra.journal.TagWriters.{ PersistentActorStarting, PersistentActorStartingAck, TagWrite }
+import akka.persistence.cassandra.journal.TagWriters.{
+  PersistentActorStarting,
+  PersistentActorStartingAck,
+  SetTagProgress,
+  TagProcessAck,
+  TagWrite
+}
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.util.Timeout
+
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
@@ -71,18 +78,23 @@ trait CassandraTagRecovery {
   }
 
   /**
-   * Before starting to process tagged messages then a [PersistentActorStarting] is sent to the
+   * Before starting to process tagged messages then a [SetTagProgress] is sent to the
    * [TagWriters] to initialise the sequence numbers for each tag.
    */
-  private[akka] def persistenceIdStarting(
+  private[akka] def setTagProgress(
       pid: String,
       tagProgress: Map[Tag, TagProgress],
-      tagWriters: ActorRef,
-      persistentActor: ActorRef): Future[Done] = {
-    log.debug("Recovery of pid [{}] sending tag progress: {}", pid, tagProgress)
-    (tagWriters ? PersistentActorStarting(pid, tagProgress, persistentActor))
-      .mapTo[PersistentActorStartingAck.type]
-      .map(_ => Done)
+      tagWriters: ActorRef): Future[Done] = {
+    log.debug("Recovery of pid [{}] sending tag progress: [{}]", pid, tagProgress)
+    (tagWriters ? SetTagProgress(pid, tagProgress)).mapTo[TagProcessAck.type].map(_ => Done)
+  }
+
+  private[akka] def sendPersistentActorStarting(
+      pid: String,
+      persistentActor: ActorRef,
+      tagWriters: ActorRef): Future[Done] = {
+    log.debug("Persistent actor starting [{}] [{}]", pid, persistentActor)
+    (tagWriters ? PersistentActorStarting(pid, persistentActor)).mapTo[PersistentActorStartingAck.type].map(_ => Done)
   }
 
 }
