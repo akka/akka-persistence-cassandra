@@ -84,14 +84,14 @@ class TagWritersSpec
       tagWriters ! redTagWrite
       redProbe.expectMsg(redTagWrite)
 
-      tagWriters ! PersistentActorStarting("p1", Map("red" -> TagProgress("p1", 2, 1)), system.deadLetters)
+      tagWriters ! SetTagProgress("p1", Map("red" -> TagProgress("p1", 2, 1)))
       redProbe.expectMsg(ResetPersistenceId("red", TagProgress("p1", 2, 1)))
       blueProbe.expectMsg(ResetPersistenceId("blue", TagProgress("p1", 0, 0)))
       expectNoMessage(smallWait)
       redProbe.reply(ResetPersistenceIdComplete)
       expectNoMessage(smallWait)
       blueProbe.reply(ResetPersistenceIdComplete)
-      expectMsg(PersistentActorStartingAck)
+      expectMsg(TagProcessAck)
     }
 
     "informs tag writers when persistent actor terminates" in {
@@ -103,7 +103,7 @@ class TagWritersSpec
       val persistentActor = system.actorOf(Props(new Actor {
         override def receive: Receive = { case _ => }
       }))
-      tagWriters ! PersistentActorStarting("pid1", Map.empty, persistentActor)
+      tagWriters ! PersistentActorStarting("pid1", persistentActor)
       expectMsg(PersistentActorStartingAck)
 
       val blueTagWrite = TagWrite("blue", Vector.empty)

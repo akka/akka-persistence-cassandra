@@ -27,7 +27,6 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
     new CassandraJournal.EventDeserializer(context.system)
 
   private[akka] def asyncReadHighestSequenceNrInternal(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
-    log.debug("asyncReadHighestSequenceNr {} {}", persistenceId, fromSequenceNr)
     asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
       asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h), targetPartitionSize)
     }
@@ -39,14 +38,12 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
       replayCallback: PersistentRepr => Unit): Future[Unit] = {
     log.debug("asyncReplayMessages pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
 
-    val persistentActor = sender()
-
     if (config.eventsByTagEnabled) {
       val recoveryPrep: Future[Map[String, TagProgress]] = {
         val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
         for {
           tp <- lookupTagProgress(persistenceId)
-          _ <- persistenceIdStarting(persistenceId, tp, tagWrites.get, persistentActor)
+          _ <- setTagProgress(persistenceId, tp, tagWrites.get)
           scanningSeqNr <- scanningSeqNrFut
           _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, max, tp)
         } yield tp
