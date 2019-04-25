@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import com.datastax.driver.core.Session
+import com.github.ghik.silencer.silent
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
 
@@ -110,6 +111,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
           |}
         """.stripMargin)
 
+      @silent
       val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy"))
         .asInstanceOf[DateTieredCompactionStrategy]
 

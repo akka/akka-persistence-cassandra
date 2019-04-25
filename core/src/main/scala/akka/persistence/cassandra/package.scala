@@ -156,6 +156,7 @@ package object cassandra {
       // https://github.com/lightbend/config/blob/master/config/src/main/java/com/typesafe/config/impl/DefaultTransformer.java#L83
       case ConfigValueType.OBJECT => config.getStringList(key).asScala.toList
       case ConfigValueType.STRING => config.getString(key).split(",").toList
+      case _                      => throw new IllegalArgumentException(s"$key should be a List, Object or String")
     }
   }
 
