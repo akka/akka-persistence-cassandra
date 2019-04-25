@@ -170,12 +170,15 @@ import akka.util.ByteString
       writeTagScanning()
 
     case PersistentActorStarting(pid, persistentActor) =>
-      currentPersistentActors.get(pid).foreach { ref =>
-        log.debug("Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]", pid, ref)
+      // migration and journal specs can use dead letters as sender
+      if (persistentActor != context.system.deadLetters) {
+        currentPersistentActors.get(pid).foreach { ref =>
+          log.debug("Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]", pid, ref)
+        }
+        currentPersistentActors += (pid -> persistentActor)
+        log.debug("Watching pid [{}] actor [{}]", pid, persistentActor)
+        context.watchWith(persistentActor, PersistentActorTerminated(pid, persistentActor))
       }
-      currentPersistentActors += (pid -> persistentActor)
-      log.debug("Watching pid [{}] actor [{}]", pid, persistentActor)
-      context.watchWith(persistentActor, PersistentActorTerminated(pid, persistentActor))
       sender() ! PersistentActorStartingAck
 
     case SetTagProgress(pid, tagProgresses: Map[Tag, TagProgress]) =>
