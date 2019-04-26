@@ -158,7 +158,7 @@ import scala.concurrent.duration._
       log.debug("Dropping state for pid: [{}]", pid)
       become(writeInProgress(buffer, tagPidSequenceNrs - pid, awaitingFlush))
     case InternalFlush =>
-      // Ignore, we will check when the write is done
+    // Ignore, we will check when the write is done
     case Flush =>
       log.debug("External flush while write in progress. Will flush after write complete")
       become(writeInProgress(buffer, tagPidSequenceNrs, Some(sender())))
@@ -229,7 +229,11 @@ import scala.concurrent.duration._
 
     case ResetPersistenceId(_, tp @ TagProgress(pid, _, _)) =>
       log.debug("Resetting persistence id {}. TagProgress {}", pid, tp)
-      become(writeInProgress(buffer.filterNot(_._1.persistenceId == pid), tagPidSequenceNrs + (pid -> tp.pidTagSequenceNr), awaitingFlush))
+      become(
+        writeInProgress(
+          buffer.filterNot(_._1.persistenceId == pid),
+          tagPidSequenceNrs + (pid -> tp.pidTagSequenceNr),
+          awaitingFlush))
       sender() ! ResetPersistenceIdComplete
   }
 
