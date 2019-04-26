@@ -8,7 +8,7 @@ import akka.actor.{ ActorLogging, ActorRef, Props, ReceiveTimeout }
 import akka.cluster.{ Cluster, MemberStatus }
 import akka.cluster.sharding.{ ClusterSharding, ClusterShardingSettings, ShardRegion }
 import akka.persistence.PersistentActor
-import akka.persistence.cassandra.{ CassandraSpec, TestTaggingActor }
+import akka.persistence.cassandra.CassandraSpec
 import akka.testkit.TestProbe
 
 import scala.concurrent.duration._

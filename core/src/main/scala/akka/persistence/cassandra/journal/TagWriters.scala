@@ -105,7 +105,7 @@ import akka.util.ByteString
     Props(new TagWriters(settings, tagWriterSession))
 
   final case class TagFlush(tag: String)
-  case object FlushAllTagWriters
+  final case class FlushAllTagWriters(timeout: Timeout)
   case object AllFlushed
 
   final case class SetTagProgress(pid: String, tagProgresses: Map[Tag, TagProgress])
@@ -145,13 +145,19 @@ import akka.util.ByteString
   timers.startPeriodicTimer(WriteTagScanningTick, WriteTagScanningTick, settings.scanningFlushInterval)
 
   def receive: Receive = {
-    case FlushAllTagWriters =>
-      log.debug("Flushing all tag writers")
-      // will include a C* write so be patient
-      implicit val timeout = Timeout(10.seconds)
+    case FlushAllTagWriters(t) =>
+      implicit val timeout: Timeout = t
+      if (log.isDebugEnabled)
+        log.debug("Flushing all tag writers [{}]", tagActors.keySet.mkString(", "))
       val replyTo = sender()
       val flushes = tagActors.map {
-        case (_, ref) => (ref ? Flush).mapTo[FlushComplete.type]
+        case (tag, ref) =>
+          (ref ? Flush)
+            .mapTo[FlushComplete.type]
+            .map(fc => {
+              log.debug("Flush complete for tag {}", tag)
+              fc
+            })
       }
       Future.sequence(flushes).map(_ => AllFlushed).pipeTo(replyTo)
     case TagFlush(tag) =>

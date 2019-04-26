@@ -8,12 +8,19 @@ import akka.actor.{ Actor, ActorRef, ActorSystem, PoisonPill, Props }
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.util.Timeout
+import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
 
 class TagWritersSpec
-    extends TestKit(ActorSystem("TagWriterSpec"))
+    extends TestKit(
+      ActorSystem(
+        "TagWriterSpec",
+        ConfigFactory.parseString("""
+        akka.loglevel = INFO
+      """)))
     with WordSpecLike
     with BeforeAndAfterAll
     with ImplicitSender
@@ -60,7 +67,7 @@ class TagWritersSpec
       tagWriters ! redTagWrite
       redProbe.expectMsg(redTagWrite)
 
-      tagWriters ! FlushAllTagWriters
+      tagWriters ! FlushAllTagWriters(Timeout(1.second))
       blueProbe.expectMsg(Flush)
       blueProbe.reply(FlushComplete)
       redProbe.expectMsg(Flush)

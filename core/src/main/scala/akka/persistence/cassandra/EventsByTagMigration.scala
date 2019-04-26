@@ -160,8 +160,8 @@ class EventsByTagMigration(
    * @param pids PersistenceIds to migrate
    * @return A Future that completes when the migration is complete
    */
-  def migratePidsToTagViews(pids: Seq[PersistenceId], periodicFlush: Int = 1000): Future[Done] = {
-    migrateToTagViewsInternal(Source.fromIterator(() => pids.iterator), periodicFlush)
+  def migratePidsToTagViews(pids: Seq[PersistenceId], periodicFlush: Int = 1000, flushTimeout: Timeout = Timeout(30.seconds)): Future[Done] = {
+    migrateToTagViewsInternal(Source.fromIterator(() => pids.iterator), periodicFlush, flushTimeout)
   }
 
   /**
@@ -176,11 +176,11 @@ class EventsByTagMigration(
    *
    * @return A Future that completes when the migration is complete.
    */
-  def migrateToTagViews(periodicFlush: Int = 1000, filter: String => Boolean = _ => true): Future[Done] = {
-    migrateToTagViewsInternal(queries.currentPersistenceIds().filter(filter), periodicFlush)
+  def migrateToTagViews(periodicFlush: Int = 1000, filter: String => Boolean = _ => true, flushTimeout: Timeout = Timeout(30.seconds)): Future[Done] = {
+    migrateToTagViewsInternal(queries.currentPersistenceIds().filter(filter), periodicFlush, flushTimeout)
   }
 
-  private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed], periodicFlush: Int): Future[Done] = {
+  private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed], periodicFlush: Int, flushTimeout: Timeout): Future[Done] = {
     log.info("Beginning migration of data to tag_views table in keyspace {}", config.keyspace)
     val tagWriterSession = TagWritersSession(
       () => preparedWriteToTagViewWithoutMeta,
@@ -194,8 +194,8 @@ class EventsByTagMigration(
     val eventDeserializer: CassandraJournal.EventDeserializer =
       new CassandraJournal.EventDeserializer(system)
 
-    // A bit arbitrary, but we could be waiting on many Cassandra writes during the flush
-    implicit val timeout = Timeout(30.seconds)
+    implicit val timeout: Timeout  = flushTimeout
+
     val allPids = src
       .map { pids =>
         log.info("Migrating the following persistence ids {}", pids)
@@ -234,7 +234,7 @@ class EventsByTagMigration(
                     EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system))
                 .map(sendMissingTagWriteRaw(tp, tagWriters))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
-                .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters).mapTo[AllFlushed.type])
+                .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])
             }
           }
         }
@@ -242,7 +242,7 @@ class EventsByTagMigration(
 
     for {
       _ <- allPids.runWith(Sink.ignore)
-      _ <- (tagWriters ? FlushAllTagWriters).mapTo[AllFlushed.type]
+      _ <- (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type]
     } yield Done
   }
 

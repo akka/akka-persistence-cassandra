@@ -32,13 +32,14 @@ import com.datastax.driver.core._
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
+
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
-
 import akka.serialization.SerializationExtension
+import com.github.ghik.silencer.silent
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -612,6 +613,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
     }
 
+  @silent
   private[this] def internalUuidToOffset(uuid: UUID): Offset =
     if (uuid == firstOffset) NoOffset
     else TimeBasedUUID(uuid)
@@ -662,6 +664,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   override def currentPersistenceIds(): Source[String, NotUsed] =
     persistenceIds(None, "currentPersistenceIds")
 
+  @silent // FIXME re-write as a GraphStage
   private[this] def persistenceIds(refreshInterval: Option[FiniteDuration], name: String): Source[String, NotUsed] =
     createSource[String, PreparedStatement](
       preparedSelectDistinctPersistenceIds,

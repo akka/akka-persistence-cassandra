@@ -21,6 +21,8 @@ import scala.util.control.NonFatal
 import akka.annotation.InternalApi
 import java.util.concurrent.ThreadLocalRandom
 
+import com.github.ghik.silencer.silent
+
 /**
  * INTERNAL API
  */
@@ -50,6 +52,7 @@ import java.util.concurrent.ThreadLocalRandom
  * @tparam MessageType Type of message.
  * @tparam State Type of state.
  */
+@silent // FIXME re-write as a GraphStage
 @InternalApi private[akka] abstract class QueryActorPublisher[MessageType, State: ClassTag](
     refreshInterval: Option[FiniteDuration],
     config: CassandraReadJournalConfig)

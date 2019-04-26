@@ -60,40 +60,39 @@ object CassandraJournalDeletionSpec {
   }
 }
 
-class CassandraJournalDeletionSpec
-    extends CassandraSpec("""
+class CassandraJournalDeletionSpec extends CassandraSpec(s"""
     akka.loglevel = INFO
     akka.loggers = ["akka.testkit.TestEventListener"]
     akka.log-dead-letters = off
     cassandra-journal.max-concurrent-deletes = 100
 
-    cassandra-journal-low-concurrent-deletes = ${cassandra-journal}
+    cassandra-journal-low-concurrent-deletes = $${cassandra-journal}
     cassandra-journal-low-concurrent-deletes {
       max-concurrent-deletes = 5
       query-plugin = cassandra-query-journal-low-concurrent-deletes
     }
-    cassandra-query-journal-low-concurrent-deletes = ${cassandra-query-journal}
+    cassandra-query-journal-low-concurrent-deletes = $${cassandra-query-journal}
     cassandra-query-journal-low-concurrent-deletes {
       write-plugin = cassandra-journal-low-concurrent-deletes
     }
 
-    cassandra-journal-small-partition-size = ${cassandra-journal}
+    cassandra-journal-small-partition-size = $${cassandra-journal}
     cassandra-journal-small-partition-size {
       target-partition-size = 3
       keyspace = "DeletionSpecMany"
       query-plugin = cassandra-query-journal-small-partition-size
     }
-    cassandra-query-journal-small-partition-size = ${cassandra-query-journal}
+    cassandra-query-journal-small-partition-size = $${cassandra-query-journal}
     cassandra-query-journal-small-partition-size {
       write-plugin = cassandra-journal-small-partition-size
     }
     
-    cassandra-journal-no-delete = ${cassandra-journal}
+    cassandra-journal-no-delete = $${cassandra-journal}
     cassandra-journal-no-delete {
       support-deletes = off
       query-plugin = cassandra-query-journal-no-delete
     }
-    cassandra-query-journal-no-delete = ${cassandra-query-journal}
+    cassandra-query-journal-no-delete = $${cassandra-query-journal}
     cassandra-query-journal-no-delete {
       write-plugin = cassandra-journal-no-delete
     }

@@ -3,6 +3,8 @@ package akka.cluster.persistence.cassandra
 import akka.remote.testkit.{MultiNodeSpec, MultiNodeSpecCallbacks}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
+import scala.language.implicitConversions
+
 /**
  * Hooks up MultiNodeSpec with ScalaTest
  */

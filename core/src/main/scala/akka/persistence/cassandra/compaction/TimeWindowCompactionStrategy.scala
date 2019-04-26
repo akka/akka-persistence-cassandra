@@ -42,7 +42,7 @@ object TimeWindowCompactionStrategy extends CassandraCompactionStrategyConfig[Ti
   override val ClassName: String = "TimeWindowCompactionStrategy"
 
   override def propertyKeys: List[String] =
-    BaseCompactionStrategy.propertyKeys.union(List("compaction_window_size", "compaction_window_unit")).sorted
+    (BaseCompactionStrategy.propertyKeys ++ List("compaction_window_size", "compaction_window_unit")).sorted
 
   override def fromConfig(config: Config): TimeWindowCompactionStrategy =
     new TimeWindowCompactionStrategy(config)
