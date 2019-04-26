@@ -43,17 +43,14 @@ object EventsByTagMigration {
         // Get the tags from the old location i.e. tag1, tag2, tag3
         val tags: Set[String] =
           if (ed.hasOldTagsColumns(row)) {
-            println("has tags")
             (1 to 3).foldLeft(Set.empty[String]) {
               case (acc, i) =>
                 val tag = row.getString(s"tag$i")
                 if (tag != null) {
-                  println("tag: " + tag)
                   acc + tag
                 } else acc
             }
           } else {
-            println("Does not have tags column: ")
             Set.empty
           }
 
@@ -118,7 +115,6 @@ class EventsByTagMigration(
   override def config: CassandraJournalConfig =
     new CassandraJournalConfig(system, system.settings.config.getConfig(journalNamespace))
   val session: CassandraSession = {
-    println("Creating session")
     new CassandraSession(
       system,
       config.sessionProvider,
@@ -130,18 +126,8 @@ class EventsByTagMigration(
   }
 
   def createTables(): Future[Done] = {
-    import scala.collection.JavaConverters._
     log.info("Creating keyspace {} and new tag tables", config.keyspace)
     for {
-      underlying <- session.underlying()
-      cats = {
-        underlying.getCluster.getMetadata
-          .getKeyspace(config.keyspace)
-          .getTable("messages")
-          .getColumns
-          .asScala
-          .foreach(println)
-      }
       _ <- session.executeWrite(createKeyspace)
       _ <- session.executeWrite(createTagsTable)
       _ <- session.executeWrite(createTagsProgressTable)

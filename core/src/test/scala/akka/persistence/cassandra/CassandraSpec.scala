@@ -101,8 +101,7 @@ abstract class CassandraSpec(
 
   override protected def externalCassandraCleanup(): Unit =
     Try {
-      println("Cleaning up: " + keyspaces())
-      system.log.info("Dropping keysapces: {}", keyspaces())
+      system.log.info("Dropping keyspaces: {}", keyspaces())
       keyspaces().foreach { keyspace =>
         cluster.connect().execute(s"drop keyspace if exists $keyspace")
       }

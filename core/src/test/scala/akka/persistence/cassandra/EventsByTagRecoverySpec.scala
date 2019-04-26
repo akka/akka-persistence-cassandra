@@ -21,26 +21,26 @@ object EventsByTagRecoverySpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   val keyspaceName = "EventsByTagRecoverySpec"
   val config = ConfigFactory.parseString(s"""
-       |akka {
-       |  loglevel = DEBUG
-       |  actor.debug.unhandled = on
-       |}
-       |cassandra-journal {
-       |  keyspace = $keyspaceName
-       |  log-queries = off
-       |  events-by-tag {
-       |     max-message-batch-size = 2
-       |     bucket-size = "Day"
-       |  }
-       |}
-       |cassandra-snapshot-store.keyspace=$keyspaceName
-       |
-       |cassandra-query-journal = {
-       |   first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
-       |}
-       |
-       |akka.actor.serialize-messages=off
-    """.stripMargin).withFallback(CassandraLifecycle.config)
+       akka {
+         loglevel = INFO
+         actor.debug.unhandled = on
+       }
+       cassandra-journal {
+         keyspace = $keyspaceName
+         log-queries = off
+         events-by-tag {
+            max-message-batch-size = 2
+            bucket-size = "Day"
+         }
+       }
+       cassandra-snapshot-store.keyspace=$keyspaceName
+       
+       cassandra-query-journal = {
+          first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
+       }
+       
+       akka.actor.serialize-messages=off
+    """).withFallback(CassandraLifecycle.config)
 }
 
 class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.config) {

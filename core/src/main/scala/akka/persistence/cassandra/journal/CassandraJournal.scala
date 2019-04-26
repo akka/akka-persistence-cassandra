@@ -701,7 +701,6 @@ class CassandraJournal(cfg: Config)
 
     // caching to avoid repeated check via ColumnDefinitions
     private def hasColumn(column: String, row: Row, cached: Option[Boolean], updateCache: Boolean => Unit): Boolean = {
-      println("has column: " + column + " columns: " + row.getColumnDefinitions.asList().asScala.map(_.getName))
       cached match {
         case Some(b) => b
         case None =>

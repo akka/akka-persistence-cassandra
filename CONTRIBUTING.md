@@ -57,6 +57,11 @@ This is the process for committing code into master. There are of course excepti
 
 9. Once everything is said and done, associate the ticket with the “earliest” release milestone (i.e. if back-ported so that it will be in release x.y.z, find the relevant milestone for that release) and close it.
 
+## Running the tests
+
+The tests rely on a Cassandra instance running locally on port 9042. A docker-compose file is
+provided in the root of the project to start this with `docker-compose up -d`
+
 ## Pull Request Requirements
 
 For a Pull Request to be considered at all it has to meet these requirements:

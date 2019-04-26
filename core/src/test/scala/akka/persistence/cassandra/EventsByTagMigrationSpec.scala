@@ -38,7 +38,7 @@ object EventsByTagMigrationSpec {
   val config = ConfigFactory.parseString(s"""
        akka {
         actor.serialize-messages=off
-        loglevel = DEBUG
+        loglevel = INFO 
         actor.debug.unhandled = on
        }
        cassandra-journal {
