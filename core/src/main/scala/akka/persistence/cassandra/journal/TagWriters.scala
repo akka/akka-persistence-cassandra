@@ -107,8 +107,13 @@ import akka.util.ByteString
   final case class TagFlush(tag: String)
   case object FlushAllTagWriters
   case object AllFlushed
-  final case class PersistentActorStarting(pid: String, tagProgresses: Map[Tag, TagProgress], persistentActor: ActorRef)
+
+  final case class SetTagProgress(pid: String, tagProgresses: Map[Tag, TagProgress])
+  case object TagProcessAck
+
+  final case class PersistentActorStarting(pid: String, persistentActor: ActorRef)
   case object PersistentActorStartingAck
+
   final case class TagWriteFailed(reason: Throwable)
   private case object WriteTagScanningTick
 
@@ -160,23 +165,29 @@ import akka.util.ByteString
         tagActor(tw.tag).forward(tw)
       }
       updatePendingScanning(withoutTags)
+
     case WriteTagScanningTick =>
       writeTagScanning()
 
-    case PersistentActorStarting(pid, tagProgresses: Map[Tag, TagProgress], persistentActor) =>
+    case PersistentActorStarting(pid, persistentActor) =>
+      // migration and journal specs can use dead letters as sender
+      if (persistentActor != context.system.deadLetters) {
+        currentPersistentActors.get(pid).foreach { ref =>
+          log.debug("Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]", pid, ref)
+        }
+        currentPersistentActors += (pid -> persistentActor)
+        log.debug("Watching pid [{}] actor [{}]", pid, persistentActor)
+        context.watchWith(persistentActor, PersistentActorTerminated(pid, persistentActor))
+      }
+      sender() ! PersistentActorStartingAck
+
+    case SetTagProgress(pid, tagProgresses: Map[Tag, TagProgress]) =>
       val missingProgress = tagActors.keySet -- tagProgresses.keySet
       log.debug(
-        "Persistent actor [{}] with pid [{}] starting with progress [{}]. Tags to reset as not in progress: [{}]",
-        persistentActor,
+        "Pid [{}] set tag progress [{}]. Tags to reset as not in progress: [{}]",
         pid,
         tagProgresses,
         missingProgress)
-
-      // EventsByTagMigration uses dead letters are there are no real actors
-      if (persistentActor != context.system.deadLetters) {
-        currentPersistentActors += (pid -> persistentActor)
-        context.watchWith(persistentActor, PersistentActorTerminated(pid, persistentActor))
-      }
 
       val replyTo = sender()
       pendingScanning -= pid
@@ -199,7 +210,7 @@ import akka.util.ByteString
 
       // if this fails (all local actor asks) the recovery will timeout
       recoveryNotificationComplete.foreach { _ =>
-        replyTo ! PersistentActorStartingAck
+        replyTo ! TagProcessAck
       }
 
     case TagWriteFailed(_) =>

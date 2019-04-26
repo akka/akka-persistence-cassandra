@@ -98,7 +98,7 @@ class TagWriterSpec
       expectMsg(FlushComplete)
     }
 
-    "flush on demand when query in progress" in {
+    "flush on demand when query in progress and messages in buffer" in {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
@@ -113,15 +113,41 @@ class TagWriterSpec
       probe.expectMsg(Vector(toEw(e1, 1), toEw(e2, 2)))
       probe.expectNoMessage(waitDuration)
 
+      val flushSender = TestProbe("flushSender")
       ref ! TagWrite(tagName, Vector(e3))
-      ref ! Flush
+      ref.tell(Flush, flushSender.ref)
       probe.expectNoMessage(waitDuration)
+      val notTheRightSender = TestProbe()
+      ref.tell("cats", notTheRightSender.ref)
       promiseForWrite.success(Done)
       probe.expectMsg(ProgressWrite("p1", 2, 2, e2.timeUuid))
       // only happened due to the flush
       probe.expectMsg(Vector(toEw(e3, 3)))
       probe.expectMsg(ProgressWrite("p1", 3, 3, e3.timeUuid))
-      expectMsg(FlushComplete)
+      flushSender.expectMsg(FlushComplete)
+    }
+
+    "flush on demand when query in progress and no messages in buffer" in {
+      val promiseForWrite = Promise[Done]()
+      val (probe, ref) =
+        setup(
+          writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
+          settings = defaultSettings.copy(maxBatchSize = 2))
+      val bucket = nowBucket()
+      val e1 = event("p1", 1L, "e-1", bucket)
+      val e2 = event("p1", 2L, "e-2", bucket)
+      val e3 = event("p1", 3L, "e-3", bucket)
+
+      ref ! TagWrite(tagName, Vector(e1, e2))
+      probe.expectMsg(Vector(toEw(e1, 1), toEw(e2, 2)))
+      probe.expectNoMessage(waitDuration)
+
+      val flushSender = TestProbe("flushSender")
+      ref.tell(Flush, flushSender.ref)
+      probe.expectNoMessage(waitDuration)
+      promiseForWrite.success(Done)
+      probe.expectMsg(ProgressWrite("p1", 2, 2, e2.timeUuid))
+      flushSender.expectMsg(FlushComplete)
     }
 
     "not write until batch has reached capacity" in {

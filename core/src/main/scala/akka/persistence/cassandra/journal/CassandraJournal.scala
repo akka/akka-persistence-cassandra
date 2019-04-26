@@ -366,6 +366,7 @@ class CassandraJournal(cfg: Config)
    * in here rather than during replay messages.
    */
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
+    log.debug("asyncReadHighestSequenceNr {} {} {}", persistenceId, fromSequenceNr, sender())
     val highestSequenceNr = writeInProgress.get(persistenceId) match {
       case null =>
         asyncReadHighestSequenceNrInternal(persistenceId, fromSequenceNr)
@@ -374,25 +375,30 @@ class CassandraJournal(cfg: Config)
     }
 
     if (config.eventsByTagEnabled) {
-      // map to send tag write progress so actor doesn't finish recovery until it is done
+
+      // This relies on asyncReadHighestSequenceNr having the correct sender()
+      // No other calls into the async journal have this as they are called from Future callbacks
       val persistentActor = sender()
-      highestSequenceNr.flatMap { seqNr =>
-        if (seqNr == fromSequenceNr && seqNr != 0) {
-          log.debug("Snapshot is current so replay won't be required. Calculating tag progress now.")
+
+      for {
+        seqNr <- highestSequenceNr
+        _ <- sendPersistentActorStarting(persistenceId, persistentActor, tagWrites.get)
+        _ <- if (seqNr == fromSequenceNr && seqNr != 0) {
+          log.debug("Snapshot is current so replay won't be required. Calculating tag progress now")
           val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
           for {
             tp <- lookupTagProgress(persistenceId)
-            _ <- persistenceIdStarting(persistenceId, tp, tagWrites.get, persistentActor)
+            _ <- setTagProgress(persistenceId, tp, tagWrites.get)
             scanningSeqNr <- scanningSeqNrFut
             _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
           } yield seqNr
         } else if (seqNr == 0) {
-          log.debug("New persistenceId [{}]. Sending blank tag progress.", persistenceId)
-          persistenceIdStarting(persistenceId, Map.empty, tagWrites.get, persistentActor).map(_ => seqNr)
+          log.debug("New persistenceId [{}]. Sending blank tag progress. {}", persistenceId, persistentActor)
+          setTagProgress(persistenceId, Map.empty, tagWrites.get)
         } else {
-          highestSequenceNr
+          Future.successful(())
         }
-      }
+      } yield seqNr
     } else {
       highestSequenceNr
     }
