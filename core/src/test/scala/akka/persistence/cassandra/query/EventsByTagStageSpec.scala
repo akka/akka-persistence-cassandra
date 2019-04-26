@@ -568,7 +568,7 @@ class EventsByTagStageSpec
 
   private def send(ref: ActorRef, a: Tagged): Unit = {
     ref ! a
-    expectMsg(waitTime, a.payload + "-done")
+    expectMsg(waitTime, s"${a.payload}-done")
   }
 
   private def setup(persistenceId: String): ActorRef =
