@@ -147,7 +147,8 @@ import akka.util.ByteString
   def receive: Receive = {
     case FlushAllTagWriters(t) =>
       implicit val timeout: Timeout = t
-      log.debug("Flushing all tag writers {}", tagActors.keySet)
+      if (log.isDebugEnabled)
+        log.debug("Flushing all tag writers [{}]", tagActors.keySet.mkString(", "))
       val replyTo = sender()
       val flushes = tagActors.map {
         case (tag, ref) =>
