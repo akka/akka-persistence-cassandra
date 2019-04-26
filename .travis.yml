@@ -6,6 +6,8 @@ scala:
   - "2.13.0-M5"
   - "2.12.8"
 
+services:
+  - docker
 
 before_install:
   # make comparing to origin/master work
@@ -24,7 +26,7 @@ before_script:
 jobs:
   include:
     - stage: test
-      script: jabba use $JDK  && java -version && sbt ++$TRAVIS_SCALA_VERSION test
+      script: docker-compose up -d cassandra  && jabba use $JDK  && java -version && sbt ++$TRAVIS_SCALA_VERSION test
     - stage: whitesource
       name: "White Source"
       script:
@@ -36,6 +38,9 @@ stages:
     if: NOT tag =~ ^v
   - name: whitesource
     if: repo = akka/akka-cassandra AND ( ( branch = master AND type = push ) OR tag =~ ^v )
+
+after_failure:
+  - docker-compose logs
 
 cache:
   directories:
