@@ -35,11 +35,11 @@ class TestActor(override val persistenceId: String, override val journalPluginId
       }
     case cmd: EventWithMetaData =>
       persist(cmd) { evt =>
-        sender() ! evt + "-done"
+        sender() ! s"$evt-done"
       }
     case cmd: Tagged =>
       persist(cmd) { evt =>
-        val msg = evt.payload + "-done"
+        val msg = s"${evt.payload}-done"
         sender() ! msg
       }
 

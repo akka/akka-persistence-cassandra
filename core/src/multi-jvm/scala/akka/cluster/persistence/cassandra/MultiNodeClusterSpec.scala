@@ -3,10 +3,8 @@ package akka.cluster.persistence.cassandra
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-import akka.cluster._
-import akka.actor.{Actor, ActorRef, ActorSystem, Address, Deploy, PoisonPill, Props, RootActorPath}
-import akka.cluster.ClusterEvent.{MemberEvent, MemberRemoved}
-import akka.cluster.{Cluster, ClusterReadView, MemberStatus}
+import akka.actor.{Actor, ActorRef, ActorSystem, Address, RootActorPath}
+import akka.cluster.{Cluster, ClusterReadView, MemberStatus, _}
 import akka.event.Logging.ErrorLevel
 import akka.remote.testconductor.RoleName
 import akka.remote.testkit.{FlightRecordingSupport, MultiNodeSpec}
@@ -17,7 +15,6 @@ import org.scalatest.exceptions.TestCanceledException
 import org.scalatest.{Canceled, Outcome, Suite}
 
 import scala.collection.immutable
-import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.language.implicitConversions
 

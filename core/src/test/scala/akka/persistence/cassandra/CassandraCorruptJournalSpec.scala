@@ -55,7 +55,7 @@ object CassandraCorruptJournalSpec {
 
 }
 
-class CassandraCorruptJournalSpec extends CassandraSpec("""
+class CassandraCorruptJournalSpec extends CassandraSpec(s"""
     akka {
       loglevel = debug
       loggers = ["akka.testkit.TestEventListener"]
@@ -73,12 +73,12 @@ class CassandraCorruptJournalSpec extends CassandraSpec("""
       debug = yes
     }
 
-    cassandra-journal-fail = ${cassandra-journal}
+    cassandra-journal-fail = $${cassandra-journal}
     cassandra-journal-fail {
       replay-filter.mode = fail
     }
 
-    cassandra-journal-warn = ${cassandra-journal}
+    cassandra-journal-warn = $${cassandra-journal}
     cassandra-journal-warn {
       replay-filter.mode = warn
     }
