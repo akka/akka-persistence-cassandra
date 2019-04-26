@@ -97,11 +97,15 @@ abstract class CassandraSpec(
     case Embedded => randomPort
   }
 
+  def keyspaces(): Set[String] = Set(journalName, snapshotName)
+
   override protected def externalCassandraCleanup(): Unit =
     Try {
-      system.log.info(s"Dropping keysapces: $journalName $snapshotName")
-      cluster.connect().execute(s"drop keyspace if exists $journalName")
-      cluster.connect().execute(s"drop keyspace if exists $snapshotName")
+      println("Cleaning up: " + keyspaces())
+      system.log.info("Dropping keysapces: {}", keyspaces())
+      keyspaces().foreach { keyspace =>
+        cluster.connect().execute(s"drop keyspace if exists $keyspace")
+      }
       cluster.close()
     }
 

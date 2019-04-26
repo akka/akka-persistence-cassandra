@@ -43,13 +43,19 @@ object EventsByTagMigration {
         // Get the tags from the old location i.e. tag1, tag2, tag3
         val tags: Set[String] =
           if (ed.hasOldTagsColumns(row)) {
+            println("has tags")
             (1 to 3).foldLeft(Set.empty[String]) {
               case (acc, i) =>
                 val tag = row.getString(s"tag$i")
-                if (tag != null) acc + tag
-                else acc
+                if (tag != null) {
+                  println("tag: " + tag)
+                  acc + tag
+                } else acc
             }
-          } else Set.empty
+          } else {
+            println("Does not have tags column: ")
+            Set.empty
+          }
 
         val timeUuid = row.getUUID("timestamp")
         val sequenceNr = row.getLong("sequence_nr")
@@ -105,24 +111,37 @@ class EventsByTagMigration(
     with CassandraTagRecovery {
 
   private[akka] val log = Logging.getLogger(system, getClass)
-  private val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](readJournalNamespace)
+  private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](readJournalNamespace)
   private implicit val materialiser = ActorMaterializer()(system)
 
   implicit val ec = system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.plugin-dispatcher"))
   override def config: CassandraJournalConfig =
     new CassandraJournalConfig(system, system.settings.config.getConfig(journalNamespace))
-  val session: CassandraSession = new CassandraSession(
-    system,
-    config.sessionProvider,
-    config.sessionSettings,
-    ec,
-    log,
-    "EventsByTagMigration",
-    init = _ => Future.successful(Done))
+  val session: CassandraSession = {
+    println("Creating session")
+    new CassandraSession(
+      system,
+      config.sessionProvider,
+      config.sessionSettings,
+      ec,
+      log,
+      "EventsByTagMigration",
+      init = _ => Future.successful(Done))
+  }
 
   def createTables(): Future[Done] = {
-    log.info("Creating keyspace {} and tables", config.keyspace)
+    import scala.collection.JavaConverters._
+    log.info("Creating keyspace {} and new tag tables", config.keyspace)
     for {
+      underlying <- session.underlying()
+      cats = {
+        underlying.getCluster.getMetadata
+          .getKeyspace(config.keyspace)
+          .getTable("messages")
+          .getColumns
+          .asScala
+          .foreach(println)
+      }
       _ <- session.executeWrite(createKeyspace)
       _ <- session.executeWrite(createTagsTable)
       _ <- session.executeWrite(createTagsProgressTable)

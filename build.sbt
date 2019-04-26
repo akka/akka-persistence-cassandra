@@ -4,7 +4,7 @@ import sbtassembly.AssemblyPlugin.autoImport._
 val AkkaVersion = "2.5.19"
 
 val akkaPersistenceCassandraDependencies = Seq(
-  "com.datastax.cassandra" % "cassandra-driver-core" % "3.6.0",
+  "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
   // Specifying guava dependency because older transitive dependency has security vulnerability
   "com.google.guava" % "guava" % "27.0.1-jre",
   // Specifying jnr-posix version for licensing reasons: cassandra-driver-core
@@ -54,8 +54,7 @@ def common: Seq[Setting[_]] = Seq(
   // -a Show stack traces and exception class name for AssertionErrors.
   testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a"),
   // disable parallel tests
-  parallelExecution in Test := false
-)
+  parallelExecution in Test := false)
 
 lazy val root = (project in file("."))
   .aggregate(core, cassandraLauncher)

@@ -46,7 +46,7 @@ object EventsByTagMigrationSpec {
         tables-autocreate = true
        }
        cassandra-query-journal {
-         first-time-bucket = "${today.minusHours(5).format(query.firstBucketFormatter)}"
+         first-time-bucket = "${today.minusHours(3).format(query.firstBucketFormatter)}"
          events-by-persistence-id-gap-timeout = 1s
        }
     """).withFallback(CassandraLifecycle.config).withFallback(ConfigFactory.load())
@@ -96,9 +96,6 @@ class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigra
 class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
 
   "Events by tag migration with no metadata" must {
-
-    if (CassandraLifecycle.isExternal)
-      pending
 
     val pidOne = "p-1"
     val pidTwo = "p-2"
@@ -361,8 +358,12 @@ abstract class AbstractEventsByTagMigrationSpec
   lazy val session = cluster.connect()
   implicit val materialiser = ActorMaterializer()(system)
   val waitTime = 100.millis
-  lazy val migrator = EventsByTagMigration(system)
-  queries.initialize()
+
+  // if this uses the main actor system the PersistentQuery can see the
+  // new table before it is dropped and re-created as the old table and get
+  // very confused
+  lazy val migrationSystem = ActorSystem("Migrator", system.settings.config)
+  lazy val migrator = EventsByTagMigration(migrationSystem)
 
   // Lazy so they don't get created until the schema changes have happened
   lazy val systemTwo = ActorSystem("EventsByTagMigration-2", system.settings.config)
@@ -378,9 +379,9 @@ abstract class AbstractEventsByTagMigrationSpec
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    system.log.debug("Creating old tables")
+    system.log.debug("Creating old tables, first dropping {}", messagesTableName)
     // Drop the messages table as we want to start with the old one
-    session.execute(s"drop table ${messagesTableName}")
+    session.execute(s"drop table $messagesTableName")
     session.execute(oldMessagesTable)
     session.execute(oldMateterializedView)
     system.log.debug("Old tables created")
@@ -390,6 +391,7 @@ abstract class AbstractEventsByTagMigrationSpec
 
   override protected def afterAll(): Unit = {
     Try {
+      externalCassandraCleanup()
       session.close()
       session.getCluster.close()
     }

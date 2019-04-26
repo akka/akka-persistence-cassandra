@@ -101,6 +101,8 @@ class CassandraJournalDeletionSpec
 
   import CassandraJournalDeletionSpec._
 
+  override def keyspaces(): Set[String] = super.keyspaces().union(Set("DeletionSpecMany"))
+
   "Cassandra deletion" must {
     "allow concurrent deletes" in {
       val deleteSuccess = TestProbe()
@@ -230,8 +232,4 @@ class CassandraJournalDeletionSpec
 
   }
 
-  override protected def externalCassandraCleanup(): Unit = {
-    super.externalCassandraCleanup()
-    cluster.connect().execute(s"drop keyspace if exists DeletionSpecMany")
-  }
 }

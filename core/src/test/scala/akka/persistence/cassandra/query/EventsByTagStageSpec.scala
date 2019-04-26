@@ -49,7 +49,7 @@ object EventsByTagStageSpec {
           refresh-interval = 200ms
           events-by-tag {
             # Speeds up tests
-            eventual-consistency-delay = 100ms
+            eventual-consistency-delay = 200ms
             gap-timeout = 3s
             new-persistence-id-scan-timeout = 500s
           }
@@ -80,7 +80,7 @@ class EventsByTagStageSpec
     super.afterAll()
   }
 
-  private val waitTime = 150.milliseconds // bigger than the eventual consistency delay
+  private val waitTime = 300.milliseconds // bigger than the eventual consistency delay
   private val longWaitTime = waitTime * 3
   private val bucketSize = Minute
 
