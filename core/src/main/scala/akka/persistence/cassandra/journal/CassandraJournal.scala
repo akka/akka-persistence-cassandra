@@ -99,18 +99,35 @@ class CassandraJournal(cfg: Config)
 
   def preparedWriteMessage =
     session.prepare(writeMessage(withMeta = false)).map(_.setIdempotent(true))
-  def preparedSelectDeletedTo =
-    session
-      .prepare(selectDeletedTo)
-      .map(_.setConsistencyLevel(config.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+  def preparedSelectDeletedTo: Option[Future[PreparedStatement]] = {
+    if (config.supportDeletes)
+      Some(
+        session
+          .prepare(selectDeletedTo)
+          .map(_.setConsistencyLevel(config.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)))
+    else
+      None
+  }
   def preparedSelectHighestSequenceNr =
     session
       .prepare(selectHighestSequenceNr)
       .map(_.setConsistencyLevel(config.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
-  def preparedInsertDeletedTo =
-    session.prepare(insertDeletedTo).map(_.setConsistencyLevel(config.writeConsistency).setIdempotent(true))
-  def preparedDeleteMessages =
-    session.prepare(deleteMessages).map(_.setIdempotent(true))
+
+  private def deletesNotSupportedException: Future[PreparedStatement] =
+    Future.failed(new IllegalArgumentException(s"Deletes not supported because config support-deletes=off"))
+
+  def preparedInsertDeletedTo: Future[PreparedStatement] = {
+    if (config.supportDeletes)
+      session.prepare(insertDeletedTo).map(_.setConsistencyLevel(config.writeConsistency).setIdempotent(true))
+    else
+      deletesNotSupportedException
+  }
+  def preparedDeleteMessages: Future[PreparedStatement] = {
+    if (config.supportDeletes)
+      session.prepare(deleteMessages).map(_.setIdempotent(true))
+    else
+      deletesNotSupportedException
+  }
 
   def preparedWriteMessageWithMeta =
     session.prepare(writeMessage(withMeta = true)).map(_.setIdempotent(true))
@@ -163,12 +180,14 @@ class CassandraJournal(cfg: Config)
       // try initialize early, to be prepared for first real request
       preparedWriteMessage
       preparedWriteMessageWithMeta
-      preparedDeleteMessages
       preparedSelectMessages
       preparedWriteInUse
       preparedSelectHighestSequenceNr
-      preparedSelectDeletedTo
-      preparedInsertDeletedTo
+      if (config.supportDeletes) {
+        preparedDeleteMessages
+        preparedSelectDeletedTo
+        preparedInsertDeletedTo
+      }
       queries.initialize()
 
       if (config.eventsByTagEnabled) {
@@ -551,11 +570,15 @@ class CassandraJournal(cfg: Config)
   }
 
   private[akka] def asyncHighestDeletedSequenceNumber(persistenceId: String): Future[Long] = {
-    val boundSelectDeletedTo =
-      preparedSelectDeletedTo.map(_.bind(persistenceId))
-    boundSelectDeletedTo
-      .flatMap(session.selectOne)
-      .map(rowOption => rowOption.map(_.getLong("deleted_to")).getOrElse(0))
+    preparedSelectDeletedTo match {
+      case Some(pstmt) =>
+        val boundSelectDeletedTo = pstmt.map(_.bind(persistenceId))
+        boundSelectDeletedTo
+          .flatMap(session.selectOne)
+          .map(rowOption => rowOption.map(_.getLong("deleted_to")).getOrElse(0))
+      case None =>
+        Future.successful(0L)
+    }
   }
 
   private[akka] def asyncReadLowestSequenceNr(
