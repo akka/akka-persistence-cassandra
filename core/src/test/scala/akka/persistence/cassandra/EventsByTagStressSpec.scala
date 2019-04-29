@@ -55,13 +55,18 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
 
       system.log.info("Started events by tag queries")
 
-      Future {
+
+      val writes: Future[Unit] = Future {
         system.log.info("Sending messages")
         (0 until messages).foreach { i =>
-          pas.foreach(_ ! Tagged(i, Set("all")))
+          pas.foreach(ref => {
+           ref ! Tagged(i, Set("all"))
+           expectMsg(s"$i-done")
+          })
         }
         system.log.info("Sent messages")
       }
+      writes.onComplete(result => system.log.info("{}", result))
 
       system.log.info("Reading messages")
       var latestValues: Map[(Int, String), Int] = Map.empty.withDefault(_ => -1)
@@ -76,7 +81,6 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
           }
         }
       }
-
       system.log.info("Received all messages {}", latestValues)
     }
 
