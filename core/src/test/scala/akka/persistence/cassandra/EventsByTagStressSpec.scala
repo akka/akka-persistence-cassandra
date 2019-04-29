@@ -22,6 +22,7 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
     }
     cassandra-journal {
       events-by-tag {
+        max-message-batch-size = 25
       }
     }
     cassandra-query-journal {
@@ -64,8 +65,8 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
 
       system.log.info("Reading messages")
       var latestValues: Map[(Int, String), Int] = Map.empty.withDefault(_ => -1)
-      (0 until messages).foreach { i =>
-        (0 until writers).foreach { writer =>
+      (0 until messages).foreach { _ =>
+        (0 until writers).foreach { _ =>
           eventsByTagQueries.foreach {
             case (probeNr, probe) =>
               // should be in order per persistence id per probe
