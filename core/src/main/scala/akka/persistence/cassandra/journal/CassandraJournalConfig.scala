@@ -54,17 +54,19 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     config.getLong(CassandraJournalConfig.TargetPartitionProperty)
   val maxResultSize: Int = config.getInt("max-result-size")
   val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
-  val maxMessageBatchSize = config.getInt("max-message-batch-size")
+  val maxMessageBatchSize: Int = config.getInt("max-message-batch-size")
 
   // TODO this is now only used when deciding how to delete, remove this config and just
   // query what version of cassandra we're connected to and do the right thing
   val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
 
-  val maxConcurrentDeletes = config.getInt("max-concurrent-deletes")
+  val maxConcurrentDeletes: Int = config.getInt("max-concurrent-deletes")
 
-  val queryPlugin = config.getString("query-plugin")
+  val supportDeletes: Boolean = config.getBoolean("support-deletes")
 
-  val eventsByTagEnabled = config.getBoolean("events-by-tag.enabled")
+  val queryPlugin: String = config.getString("query-plugin")
+
+  val eventsByTagEnabled: Boolean = config.getBoolean("events-by-tag.enabled")
 
   val bucketSize: BucketSize =
     BucketSize.fromString(config.getString("events-by-tag.bucket-size"))

@@ -15,6 +15,9 @@ val akkaPersistenceCassandraDependencies = Seq(
   "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
   "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion % Test,
+  "com.typesafe.akka" %% "akka-cluster-typed" % AkkaVersion % Test,
+  "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-persistence-tck" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-multi-node-testkit" % AkkaVersion % Test,
@@ -33,15 +36,22 @@ def common: Seq[Setting[_]] = Seq(
   scalaVersion := crossScalaVersions.value.last,
   crossVersion := CrossVersion.binary,
   scalacOptions ++= Seq(
-      "-encoding",
-      "UTF-8",
-      "-feature",
-      "-unchecked",
-      "-deprecation",
-      "-Xlint",
-      "-Ywarn-dead-code",
-      "-Xfuture"),
-  headerLicense := Some(HeaderLicense.Custom("""Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>""")),
+    "-encoding",
+    "UTF-8",
+    "-feature",
+    "-unchecked",
+    "-deprecation",
+    "-Xlint",
+    "-Ywarn-dead-code",
+    "-Xfuture",
+    "-Xfatal-warnings"
+  ),
+  Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
+  Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
+  headerLicense := Some(
+    HeaderLicense.Custom(
+      """Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>"""
+    )),
   scalafmtOnCompile := true,
   releaseCrossBuild := true,
   logBuffered in Test := System.getProperty("akka.logBufferedTests", "false").toBoolean,
@@ -53,6 +63,8 @@ def common: Seq[Setting[_]] = Seq(
   // disable parallel tests
   parallelExecution in Test := false
 )
+
+
 
 lazy val root = (project in file("."))
   .aggregate(core, cassandraLauncher)
@@ -69,6 +81,16 @@ lazy val core = (project in file("core"))
   .dependsOn(cassandraLauncher % Test)
   .settings(common: _*)
   .settings(osgiSettings: _*)
+  .settings({
+    val silencerVersion = "1.3.1"
+    Seq(
+      libraryDependencies ++= Seq(
+        compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
+        "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided),
+      // Hack because 'provided' dependencies by default are not picked up by the multi-jvm plugin:
+      managedClasspath in MultiJvm ++= (managedClasspath in Compile).value.filter(_.data.name.contains("silencer-lib"))
+      )
+  })
   .settings(
     name := "akka-persistence-cassandra",
     libraryDependencies ++= akkaPersistenceCassandraDependencies,

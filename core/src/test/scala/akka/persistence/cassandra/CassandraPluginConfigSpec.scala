@@ -67,7 +67,7 @@ class CassandraPluginConfigSpec
       ("\"valid_with_quotes\"", true),
       ("\"missing_trailing_quote", false),
       ("missing_leading_quote\"", false),
-      ('"' + maxKey + '"', true),
+      ('"'.toString + maxKey + '"'.toString, true), // using interpolation here breaks scalafmt :-/
       (maxKey + "_", false))
   }
 

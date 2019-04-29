@@ -8,9 +8,10 @@ import akka.actor.{ ActorRef, PoisonPill, Props }
 import akka.persistence.{ DeleteMessagesFailure, DeleteMessagesSuccess, PersistentActor, RecoveryCompleted }
 import akka.persistence.cassandra.CassandraSpec
 import akka.testkit.TestProbe
-
 import scala.collection.immutable
 import scala.concurrent.duration._
+
+import akka.testkit.EventFilter
 
 object CassandraJournalDeletionSpec {
   case class PersistMe(msg: Long)
@@ -59,30 +60,41 @@ object CassandraJournalDeletionSpec {
   }
 }
 
-class CassandraJournalDeletionSpec
-    extends CassandraSpec("""
-    akka.loglevel = DEBUG
+class CassandraJournalDeletionSpec extends CassandraSpec(s"""
+    akka.loglevel = INFO
+    akka.loggers = ["akka.testkit.TestEventListener"]
+    akka.log-dead-letters = off
     cassandra-journal.max-concurrent-deletes = 100
 
-    cassandra-journal-low-concurrent-deletes = ${cassandra-journal}
+    cassandra-journal-low-concurrent-deletes = $${cassandra-journal}
     cassandra-journal-low-concurrent-deletes {
       max-concurrent-deletes = 5
       query-plugin = cassandra-query-journal-low-concurrent-deletes
     }
-    cassandra-query-journal-low-concurrent-deletes = ${cassandra-query-journal}
+    cassandra-query-journal-low-concurrent-deletes = $${cassandra-query-journal}
     cassandra-query-journal-low-concurrent-deletes {
       write-plugin = cassandra-journal-low-concurrent-deletes
     }
 
-    cassandra-journal-small-partition-size = ${cassandra-journal}
+    cassandra-journal-small-partition-size = $${cassandra-journal}
     cassandra-journal-small-partition-size {
       target-partition-size = 3
       keyspace = "DeletionSpecMany"
       query-plugin = cassandra-query-journal-small-partition-size
     }
-    cassandra-query-journal-small-partition-size = ${cassandra-query-journal}
+    cassandra-query-journal-small-partition-size = $${cassandra-query-journal}
     cassandra-query-journal-small-partition-size {
       write-plugin = cassandra-journal-small-partition-size
+    }
+    
+    cassandra-journal-no-delete = $${cassandra-journal}
+    cassandra-journal-no-delete {
+      support-deletes = off
+      query-plugin = cassandra-query-journal-no-delete
+    }
+    cassandra-query-journal-no-delete = $${cassandra-query-journal}
+    cassandra-query-journal-no-delete {
+      write-plugin = cassandra-journal-no-delete
     }
   """) {
 
@@ -177,6 +189,42 @@ class CassandraJournalDeletionSpec
       val p1TakeThree = system.actorOf(props)
       p1TakeThree ! GetRecoveredEvents
       expectMsg(RecoveredEvents(List(RecoveryCompleted)))
+    }
+
+    "recover with support-deletes=off" in {
+      val deleteSuccess = TestProbe()
+      val deleteFail = TestProbe()
+      val p1 =
+        system.actorOf(Props(new PAThatDeletes("p3", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-no-delete")))
+
+      (1 to 3).foreach { i =>
+        p1 ! PersistMe(i)
+        expectMsg(Ack)
+      }
+
+      p1 ! PoisonPill
+
+      val p1TakeTwo = system.actorOf(Props(new PAThatDeletes("p3", deleteSuccess.ref, deleteFail.ref)))
+      p1TakeTwo ! GetRecoveredEvents
+      expectMsg(RecoveredEvents(List(PersistMe(1), PersistMe(2), PersistMe(3), RecoveryCompleted)))
+    }
+
+    "fail if attempt to delete with support-deletes=off" in {
+      val deleteSuccess = TestProbe()
+      val deleteFail = TestProbe()
+      val p1 =
+        system.actorOf(Props(new PAThatDeletes("p4", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-no-delete")))
+
+      (1 to 3).foreach { i =>
+        p1 ! PersistMe(i)
+        expectMsg(Ack)
+      }
+
+      EventFilter.error(start = "Failed to delete to 2", occurrences = 1).intercept {
+        p1 ! DeleteTo(2)
+      }
+
+      deleteFail.expectMsgType[IllegalArgumentException]
     }
 
   }

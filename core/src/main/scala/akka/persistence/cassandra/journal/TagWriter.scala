@@ -153,12 +153,12 @@ import scala.concurrent.duration._
   private def writeInProgress(
       buffer: Vector[(Serialized, TagPidSequenceNr)],
       tagPidSequenceNrs: Map[PersistenceId, TagPidSequenceNr],
-      awaitingFlush: Option[ActorRef] = None): Receive = {
+      awaitingFlush: Option[ActorRef]): Receive = {
     case DropState(pid) =>
       log.debug("Dropping state for pid: [{}]", pid)
       become(writeInProgress(buffer, tagPidSequenceNrs - pid, awaitingFlush))
     case InternalFlush =>
-    // Ignore, we will check when the write is done
+      // Ignore, we will check when the write is done
     case Flush =>
       log.debug("External flush while write in progress. Will flush after write complete")
       become(writeInProgress(buffer, tagPidSequenceNrs, Some(sender())))
@@ -175,8 +175,8 @@ import scala.concurrent.duration._
           formatOffset(buffer.head._1.timeUuid))
       }
       // buffer until current query is finished
-      // Don't sort until the write has finishe
-      become(writeInProgress(buffer ++ events, updatedTagPidSequenceNrs))
+      // Don't sort until the write has finished
+      become(writeInProgress(buffer ++ events, updatedTagPidSequenceNrs, awaitingFlush))
     case TagWriteDone(summary, doneNotify) =>
       val sortedBuffer = buffer.sortBy(_._1.timeUuid)(timeUuidOrdering)
       log.debug("Tag write done: {}", summary)
@@ -229,8 +229,7 @@ import scala.concurrent.duration._
 
     case ResetPersistenceId(_, tp @ TagProgress(pid, _, _)) =>
       log.debug("Resetting persistence id {}. TagProgress {}", pid, tp)
-      become(
-        writeInProgress(buffer.filterNot(_._1.persistenceId == pid), tagPidSequenceNrs + (pid -> tp.pidTagSequenceNr)))
+      become(writeInProgress(buffer.filterNot(_._1.persistenceId == pid), tagPidSequenceNrs + (pid -> tp.pidTagSequenceNr), awaitingFlush))
       sender() ! ResetPersistenceIdComplete
   }
 
@@ -249,17 +248,17 @@ import scala.concurrent.duration._
       }
 
       if (currentBucket.size > settings.maxBatchSize) {
-        write(buffer.take(settings.maxBatchSize), buffer.drop(settings.maxBatchSize), tagSequenceNrs)
+        write(buffer.take(settings.maxBatchSize), buffer.drop(settings.maxBatchSize), tagSequenceNrs, None)
       } else {
-        write(currentBucket, rest, tagSequenceNrs)
+        write(currentBucket, rest, tagSequenceNrs, None)
       }
     } else if (buffer.size >= settings.maxBatchSize) {
       log.debug("Batch size reached. Writing to Cassandra.")
-      write(buffer.take(settings.maxBatchSize), buffer.drop(settings.maxBatchSize), tagSequenceNrs)
+      write(buffer.take(settings.maxBatchSize), buffer.drop(settings.maxBatchSize), tagSequenceNrs, None)
     } else if (settings.flushInterval == Duration.Zero) {
       log.debug("Flushing right away as interval is zero")
       // Should always be a buffer of 1
-      write(buffer, Vector.empty[(Serialized, TagPidSequenceNr)], tagSequenceNrs)
+      write(buffer, Vector.empty[(Serialized, TagPidSequenceNr)], tagSequenceNrs, None)
     } else {
       timers.startSingleTimer(FlushKey, InternalFlush, settings.flushInterval)
       context.become(idle(buffer, tagSequenceNrs))
@@ -288,7 +287,7 @@ import scala.concurrent.duration._
       events: Vector[(Serialized, TagPidSequenceNr)],
       remainingBuffer: Vector[(Serialized, TagPidSequenceNr)],
       tagPidSequenceNrs: Map[String, TagPidSequenceNr],
-      notifyWhenDone: Option[ActorRef] = None): Unit = {
+      notifyWhenDone: Option[ActorRef]): Unit = {
     val writeSummary = createTagWriteSummary(events)
     log.debug("Starting tag write of {} events. Summary: {}", events.size, writeSummary)
     val withFailure = session.writeBatch(tag, events).map(_ => TagWriteDone(writeSummary, notifyWhenDone)).recover {
@@ -299,7 +298,8 @@ import scala.concurrent.duration._
     import context.dispatcher
     withFailure.pipeTo(self)
 
-    context.become(writeInProgress(remainingBuffer, tagPidSequenceNrs))
+    // notifyWhenDone is cleared out as it is now in the TagWriteDone
+    context.become(writeInProgress(remainingBuffer, tagPidSequenceNrs, None))
   }
 
   private def createTagWriteSummary(writes: Seq[(Serialized, TagPidSequenceNr)]): Map[PersistenceId, PidProgress] =
