@@ -492,7 +492,11 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 class EventsByTagZeroEventualConsistencyDelaySpec
     extends AbstractEventsByTagSpec(
       ConfigFactory
-        .parseString("cassandra-query-journal.eventual-consistency-delay = 0s")
+        .parseString(
+          """
+            cassandra-query-journal.eventual-consistency-delay = 0s
+            akka.loglevel = DEBUG
+          """)
         .withFallback(EventsByTagSpec.strictConfig)) {
 
   "Cassandra query currentEventsByTag with zero eventual-consistency-delay" must {
