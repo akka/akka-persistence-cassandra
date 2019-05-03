@@ -77,10 +77,9 @@ final class CassandraSession(
     override def apply(key: String): Future[PreparedStatement] =
       underlying().flatMap { s =>
         val prepared = s.prepareAsync(key).asScala
-        prepared.onFailure {
-          case _ =>
-            // this is async, i.e. we are not updating the map from the compute function
-            preparedStatements.remove(key)
+        prepared.failed.foreach { _ =>
+          // this is async, i.e. we are not updating the map from the compute function
+          preparedStatements.remove(key)
         }
         prepared
       }
@@ -99,7 +98,7 @@ final class CassandraSession(
     def initialize(session: Future[Session]): Future[Session] = {
       session.flatMap { s =>
         val result = init(s)
-        result.onFailure { case _ => close(s) }
+        result.failed.foreach(_ => close(s))
         result.map(_ => s)
       }
     }
@@ -118,10 +117,7 @@ final class CassandraSession(
             }
 
           }
-          s.onFailure {
-            case e =>
-              _underlyingSession.compareAndSet(s, null)
-          }
+          s.failed.foreach(_ => _underlyingSession.compareAndSet(s, null))
           system.registerOnTermination {
             s.foreach(close)
           }
@@ -138,8 +134,8 @@ final class CassandraSession(
     val existing = _underlyingSession.get
     if (existing == null) {
       val result = retry(() => setup())
-      result.onFailure {
-        case e => log.warning(
+      result.failed.foreach { e =>
+        log.warning(
           "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
           e.getMessage
         )
@@ -419,10 +415,10 @@ final class CassandraSession(
           asyncFailure = getAsyncCallback { e =>
             fail(out, e)
           }
-          stmt.onFailure { case e => asyncFailure.invoke(e) }
+          stmt.failed.foreach(e => asyncFailure.invoke(e))
           stmt.foreach { s =>
             val rsFut = underlying().flatMap(_.executeAsync(s).asScala)
-            rsFut.onFailure { case e => asyncFailure.invoke(e) }
+            rsFut.failed.foreach(e => asyncFailure.invoke(e))
             rsFut.foreach(asyncResult.invoke)
           }
         }
@@ -442,7 +438,7 @@ final class CassandraSession(
               else {
                 resultSet = None
                 val rsFut = rs.fetchMoreResults().asScala
-                rsFut.onFailure { case e => asyncFailure.invoke(e) }
+                rsFut.failed.foreach(e => asyncFailure.invoke(e))
                 rsFut.foreach(asyncResult.invoke)
               }
 

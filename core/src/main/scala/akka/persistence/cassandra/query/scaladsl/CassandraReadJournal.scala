@@ -513,10 +513,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
     }
 
-  private[this] def internalUuidToOffset(uuid: UUID): Offset =
-    if (uuid == firstOffset) NoOffset
-    else TimeBasedUUID(uuid)
-
   private[this] def offsetToInternalOffset(offset: Offset): UUID =
     offset match {
       case TimeBasedUUID(uuid) => uuid

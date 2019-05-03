@@ -43,7 +43,7 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val replicationStrategy: String = getReplicationStrategy(
     config.getString("replication-strategy"),
     config.getInt("replication-factor"),
-    config.getStringList("data-center-replication-factors").asScala
+    config.getStringList("data-center-replication-factors").asScala.toSeq
   )
 
   val readConsistency: ConsistencyLevel = sessionSettings.readConsistency

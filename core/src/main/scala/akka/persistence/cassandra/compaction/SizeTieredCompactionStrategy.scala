@@ -5,12 +5,10 @@ package akka.persistence.cassandra.compaction
 
 import com.typesafe.config.Config
 
-import SizeTieredCompactionStrategy._
-
 /*
  * Based upon https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/SizeTieredCompactionStrategy.java
  */
-class SizeTieredCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, ClassName, propertyKeys) {
+class SizeTieredCompactionStrategy(config: Config) extends BaseCompactionStrategy(config, SizeTieredCompactionStrategy.ClassName, SizeTieredCompactionStrategy.propertyKeys) {
 
   val bucketHigh: Double = if (config.hasPath("bucket_high")) config.getDouble("bucket_high") else 1.5
   val bucketLow: Double = if (config.hasPath("bucket_low")) config.getDouble("bucket_low") else 0.5
