@@ -316,11 +316,10 @@ import com.datastax.driver.core.utils.UUIDs
 
         if (missing.deadline.isOverdue()) {
           log.info(
-            "[{}] {}: Failed to find missing sequence nr: {}. PersistenceId: {}",
+            "[{}] [{}]: Failed to find missing sequence nrs. Missing info: [{}]",
             stageUuid,
             session.tag,
-            stageState.missingLookup,
-            missing.persistenceId)
+            missing)
           if (missing.failIfNotFound) {
             fail(
               out,
@@ -333,8 +332,8 @@ import com.datastax.driver.core.utils.UUIDs
           }
         } else {
           updateQueryState(QueryInProgress())
-          if (log.isInfoEnabled) {
-            log.info(
+          if (log.isDebugEnabled) {
+            log.debug(
               s"[${stageUuid}] " + "{}: Executing query to look for missing. Timebucket: {}. From: {}. To: {}",
               session.tag,
               missing.bucket,
@@ -355,7 +354,7 @@ import com.datastax.driver.core.utils.UUIDs
         if (rowPersistenceId == m.persistenceId && m.missing.contains(rowTagPidSequenceNr)) {
           val uuidRow = extractUuidRow(row)
           val remainingEvents = m.missing - uuidRow.tagPidSequenceNr
-          log.info(
+          log.debug(
             "[{}] {}: Found a missing event, sequence nr {}. Remaining missing: {}",
             stageUuid,
             session.tag,
@@ -364,7 +363,7 @@ import com.datastax.driver.core.utils.UUIDs
           if (remainingEvents.isEmpty) {
             stopLookingForMissing(m, uuidRow :: m.buffered)
           } else {
-            log.info("[{}] {}: There are more missing events. {}", stageUuid, session.tag, remainingEvents)
+            log.debug("[{}] [{}]: There are more missing events. [{}]", stageUuid, session.tag, remainingEvents)
             stageState = stageState.copy(missingLookup = stageState.missingLookup.map(m =>
               m.copy(missing = remainingEvents, buffered = uuidRow :: m.buffered)))
           }
@@ -405,8 +404,8 @@ import com.datastax.driver.core.utils.UUIDs
           push(out, repr)
           false
         } else {
-          log.info(
-            s"[${stageUuid}] " + " {}: Missing event for new persistence id: {}. Expected tag pid sequence nr: {}, actual: {}.",
+          log.debug(
+            s"[${stageUuid}] " + " [{}]: Missing event for new persistence id: [{}]. Expected tag pid sequence nr: [{}], actual: [{}].",
             session.tag,
             repr.persistenceId,
             expectedSequenceNr,
@@ -453,7 +452,7 @@ import com.datastax.driver.core.utils.UUIDs
           false
         } else if (repr.tagPidSequenceNr > expectedSequenceNr) {
           log.info(
-            s"[${stageUuid}] " + "{}: Missing event for persistence id: {}. Expected sequence nr: {}, actual: {}.",
+            s"[${stageUuid}] [{}]: Missing event for persistence id: [{}]. Expected sequence nr: [{}], actual: [{}].",
             session.tag,
             pid,
             expectedSequenceNr,
@@ -477,7 +476,7 @@ import com.datastax.driver.core.utils.UUIDs
           // this is per row so put behind a flag. Per query logging is on at debug without this flag
           if (verboseDebug)
             log.debug(
-              s"[${stageUuid}] " + " Updating offset to {} from pId {} seqNr {} tagPidSequenceNr {}",
+              s"[${stageUuid}] Updating offset to [{}] from pId [{}] seqNr [{}] tagPidSequenceNr [{}]",
               formatOffset(stageState.fromOffset),
               pid,
               repr.sequenceNr,
@@ -563,13 +562,13 @@ import com.datastax.driver.core.utils.UUIDs
         if (stageState.isLookingForMissing) {
           val missing = stageState.missingLookup.get
           if (missing.queryPrevious) {
-            log.info("[{}] {}: Missing could be in previous bucket. Querying right away.", stageUuid, session.tag)
+            log.debug("[{}] [{}]: Missing could be in previous bucket. Querying right away.", stageUuid, session.tag)
             updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m =>
               m.copy(queryPrevious = false, bucket = m.bucket.previous(1)))))
             lookForMissing()
           } else {
-            log.info(
-              "[{}] {}: Still looking for missing. {}. Waiting for next poll.",
+            log.debug(
+              "[{}] [{}]: Still looking for missing. {}. Waiting for next poll.",
               stageUuid,
               session.tag,
               stageState)
