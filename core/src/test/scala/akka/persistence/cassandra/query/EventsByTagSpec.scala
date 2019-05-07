@@ -495,7 +495,7 @@ class EventsByTagZeroEventualConsistencyDelaySpec
         .parseString(
           """
             cassandra-query-journal.eventual-consistency-delay = 0s
-            akka.loglevel = DEBUG
+            akka.loglevel = INFO
           """)
         .withFallback(EventsByTagSpec.strictConfig)) {
 

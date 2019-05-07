@@ -4,25 +4,25 @@
 
 package akka.persistence.cassandra
 
-import java.time.{ LocalDateTime, ZoneOffset }
+import java.time.{LocalDateTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
-import akka.persistence.cassandra.CassandraLifecycle.{ Embedded, External }
+import akka.persistence.cassandra.CassandraLifecycle.{Embedded, External}
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{ NoOffset, PersistenceQuery }
+import akka.persistence.query.{NoOffset, PersistenceQuery}
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{ Keep, Sink }
+import akka.stream.scaladsl.{Keep, Sink}
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, SocketUtil, TestKitBase }
-import com.typesafe.config.{ Config, ConfigFactory }
+import akka.testkit.{ImplicitSender, SocketUtil, TestKitBase}
+import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time.{ Milliseconds, Seconds, Span }
-import org.scalatest.{ Matchers, WordSpecLike }
+import org.scalatest.time.{Milliseconds, Seconds, Span}
+import org.scalatest.{Matchers, Outcome, Suite, WordSpecLike}
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -78,6 +78,7 @@ abstract class CassandraSpec(
     val journalName: String = getCallerName(getClass),
     val snapshotName: String = getCallerName(getClass))
     extends TestKitBase
+    with Suite
     with ImplicitSender
     with WordSpecLike
     with Matchers
@@ -99,13 +100,30 @@ abstract class CassandraSpec(
 
   def keyspaces(): Set[String] = Set(journalName, snapshotName)
 
+  private var failed = false
+
+  override protected def withFixture(test: NoArgTest): Outcome = {
+    val out = super.withFixture(test)
+    if (!out.isSucceeded)
+      failed = true
+
+    out
+  }
   override protected def externalCassandraCleanup(): Unit =
     Try {
+      val c = cluster.connect(journalName)
+      if (failed) {
+        println("RowDump::")
+        c.execute("select * from tag_views").forEach(row => {
+          println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(row.getUUID("timestamp"))},${row.getString("persistence_id")},${row.getLong("tag_pid_sequence_nr")},${row.getLong("sequence_nr")}""")
+
+        })
+      }
       system.log.info("Dropping keyspaces: {}", keyspaces())
       keyspaces().foreach { keyspace =>
-        cluster.connect().execute(s"drop keyspace if exists $keyspace")
+        c.execute(s"drop keyspace if exists $keyspace")
       }
-      cluster.close()
+      c.close()
     }
 
   final implicit lazy val system: ActorSystem = {
