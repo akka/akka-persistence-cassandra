@@ -29,6 +29,7 @@ import scala.concurrent.duration._
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
 import com.datastax.driver.core.Cluster
+import scala.collection.JavaConverters._
 
 import scala.util.Try
 
@@ -114,7 +115,7 @@ abstract class CassandraSpec(
       val c = cluster.connect(journalName)
       if (failed) {
         println("RowDump::")
-        c.execute("select * from tag_views").forEach(row => {
+        c.execute("select * from tag_views").asScala.foreach(row => {
           println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(row.getUUID("timestamp"))},${row.getString("persistence_id")},${row.getLong("tag_pid_sequence_nr")},${row.getLong("sequence_nr")}""")
 
         })
