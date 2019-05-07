@@ -23,7 +23,7 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   organizationName := "Typesafe Inc.",
   licenses := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
 
-  crossScalaVersions := Seq("2.11.11", "2.12.4"),
+  crossScalaVersions := Seq("2.11.12", "2.12.8"),
   scalaVersion := crossScalaVersions.value.head,
   crossVersion := CrossVersion.binary,
 
