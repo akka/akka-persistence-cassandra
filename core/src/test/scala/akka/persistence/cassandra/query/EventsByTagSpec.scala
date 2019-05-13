@@ -52,7 +52,7 @@ object EventsByTagSpec {
         time-to-live = 1d
       }
 
-      # coordinated-shutdown-on-error = true
+      # coordinated-shutdown-on-error = on
     }
 
     cassandra-query-journal {
