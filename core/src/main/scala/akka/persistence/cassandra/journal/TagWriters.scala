@@ -10,21 +10,28 @@ import java.net.URLEncoder
 import java.util.UUID
 
 import akka.Done
+import akka.actor.SupervisorStrategy.Escalate
 import akka.pattern.ask
 import akka.pattern.pipe
-import akka.actor.{ Actor, ActorLogging, ActorRef, NoSerializationVerificationNeeded, Props }
+import akka.actor.Actor
+import akka.actor.ActorLogging
+import akka.actor.ActorRef
+import akka.actor.NoSerializationVerificationNeeded
+import akka.actor.OneForOneStrategy
+import akka.actor.Props
+import akka.actor.SupervisorStrategy
+import akka.actor.Timers
 import akka.annotation.InternalApi
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
 import com.datastax.driver.core.{ BatchStatement, PreparedStatement, ResultSet, Statement }
+
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
-
-import akka.actor.Timers
 import akka.util.ByteString
 
 @InternalApi private[akka] object TagWriters {
@@ -132,6 +139,11 @@ import akka.util.ByteString
 
   // eager init and val because used from Future callbacks
   override val log = super.log
+
+  // Escalate to the journal so it can stop
+  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
+    case _: Exception => Escalate
+  }
 
   private var tagActors = Map.empty[String, ActorRef]
   // just used for local actor asks

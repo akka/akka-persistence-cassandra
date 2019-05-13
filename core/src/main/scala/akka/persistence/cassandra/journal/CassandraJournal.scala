@@ -9,7 +9,14 @@ import java.nio.ByteBuffer
 import java.util.{ UUID, HashMap => JHMap, Map => JMap }
 
 import akka.Done
-import akka.actor.{ ActorRef, ActorSystem, ExtendedActorSystem, NoSerializationVerificationNeeded }
+import akka.actor.SupervisorStrategy.Stop
+import akka.actor.ActorRef
+import akka.actor.ActorSystem
+import akka.actor.CoordinatedShutdown
+import akka.actor.ExtendedActorSystem
+import akka.actor.NoSerializationVerificationNeeded
+import akka.actor.OneForOneStrategy
+import akka.actor.SupervisorStrategy
 import akka.annotation.{ DoNotInherit, InternalApi }
 import akka.event.{ Logging, LoggingAdapter }
 import akka.persistence._
@@ -53,6 +60,18 @@ class CassandraJournal(cfg: Config)
   val config = new CassandraJournalConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
   val log: LoggingAdapter = Logging(context.system, getClass)
+
+  // For TagWriters/TagWriter children
+  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
+    case e: Exception => {
+      log.error(e, "Cassandra Journal has experienced an unexpected error and requires an ActorSystem restart.")
+      if (config.coordinatedShutdownOnError) {
+        CoordinatedShutdown(context.system).run(CassandraJournalUnexpectedError)
+      }
+      context.stop(context.self)
+      Stop
+    }
+  }
 
   private lazy val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
 

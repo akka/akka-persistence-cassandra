@@ -51,6 +51,8 @@ object EventsByTagSpec {
         bucket-size = Day
         time-to-live = 1d
       }
+
+      # coordinated-shutdown-on-error = true
     }
 
     cassandra-query-journal {
