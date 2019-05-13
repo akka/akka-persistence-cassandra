@@ -155,7 +155,10 @@ class EventsByTagMigration(
    * @param pids PersistenceIds to migrate
    * @return A Future that completes when the migration is complete
    */
-  def migratePidsToTagViews(pids: Seq[PersistenceId], periodicFlush: Int = 1000, flushTimeout: Timeout = Timeout(30.seconds)): Future[Done] = {
+  def migratePidsToTagViews(
+      pids: Seq[PersistenceId],
+      periodicFlush: Int = 1000,
+      flushTimeout: Timeout = Timeout(30.seconds)): Future[Done] = {
     migrateToTagViewsInternal(Source.fromIterator(() => pids.iterator), periodicFlush, flushTimeout)
   }
 
@@ -171,11 +174,17 @@ class EventsByTagMigration(
    *
    * @return A Future that completes when the migration is complete.
    */
-  def migrateToTagViews(periodicFlush: Int = 1000, filter: String => Boolean = _ => true, flushTimeout: Timeout = Timeout(30.seconds)): Future[Done] = {
+  def migrateToTagViews(
+      periodicFlush: Int = 1000,
+      filter: String => Boolean = _ => true,
+      flushTimeout: Timeout = Timeout(30.seconds)): Future[Done] = {
     migrateToTagViewsInternal(queries.currentPersistenceIds().filter(filter), periodicFlush, flushTimeout)
   }
 
-  private def migrateToTagViewsInternal(src: Source[PersistenceId, NotUsed], periodicFlush: Int, flushTimeout: Timeout): Future[Done] = {
+  private def migrateToTagViewsInternal(
+      src: Source[PersistenceId, NotUsed],
+      periodicFlush: Int,
+      flushTimeout: Timeout): Future[Done] = {
     log.info("Beginning migration of data to tag_views table in keyspace {}", config.keyspace)
     val tagWriterSession = TagWritersSession(
       () => preparedWriteToTagViewWithoutMeta,
@@ -189,7 +198,7 @@ class EventsByTagMigration(
     val eventDeserializer: CassandraJournal.EventDeserializer =
       new CassandraJournal.EventDeserializer(system)
 
-    implicit val timeout: Timeout  = flushTimeout
+    implicit val timeout: Timeout = flushTimeout
 
     val allPids = src
       .map { pids =>
