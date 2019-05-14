@@ -50,7 +50,6 @@ object CassandraJournalDeletionSpec {
         deleteMessages(to)
       case DeleteMessagesSuccess(to) =>
         context.system.log.debug("Deleted to: {}", to)
-        require(to > lastDeletedTo, s"Received deletes in wrong order. Last ${lastDeletedTo}. Current: ${to}")
         lastDeletedTo = to
         deleteSuccessProbe ! Deleted(to)
       case DeleteMessagesFailure(t, to) =>
@@ -117,10 +116,11 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
         p1 ! DeleteTo(i)
       }
 
-      // Should be in order, previously they could over take each other.
-      (1L to 99L).foreach { i =>
-        deleteSuccess.expectMsg(Deleted(i))
-      }
+      // The AsyncWriteJournal does not guarantee that DeleteSuccess are delivered in the order
+      // that they are completed by the journal implementation so can't assert this reliably
+      (1L to 99L).map { _ =>
+        deleteSuccess.expectMsgType[Deleted].sequenceNr
+      }.toSet shouldEqual (1L to 98L).toSet
       deleteSuccess.expectNoMessage(100.millis)
 
       p1 ! PoisonPill
