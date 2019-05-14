@@ -228,11 +228,14 @@ import com.datastax.driver.core.utils.UUIDs
 
       override def preStart(): Unit = {
         stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs, None, bucketSize)
-        log.debug(
-          "[{}]: EventsByTag query starting with EC delay {}ms: {} ",
-          stageUuid,
-          settings.eventsByTagEventualConsistency.toMillis,
-          stageState)
+        if (log.isInfoEnabled) {
+          log.info(
+            "[{}]: EventsByTag query starting with EC delay {}ms: fromOffset {} toOffset {} initial state " + stageState,
+            stageUuid,
+            settings.eventsByTagEventualConsistency.toMillis,
+            formatOffset(fromOffset),
+            toOffset.map(formatOffset))
+        }
 
         if (settings.pubsubNotification) {
           Try {
