@@ -24,7 +24,7 @@ before_script:
 jobs:
   include:
     - stage: test
-      script: jabba use $JDK  && java -version && sbt ++$TRAVIS_SCALA_VERSION test
+      script: jabba use $JDK  && java -version && sbt ++$TRAVIS_SCALA_VERSION ";scalafmtCheckAll;test"
     - stage: whitesource
       name: "White Source"
       script:
