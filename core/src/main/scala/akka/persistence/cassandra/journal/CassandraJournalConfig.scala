@@ -89,6 +89,8 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     config.getDuration("events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
     config.getBoolean("pubsub-notification"))
 
+  val coordinatedShutdownOnError: Boolean = config.getBoolean("coordinated-shutdown-on-error")
+
   /**
    * The Cassandra statement that can be used to create the configured keyspace.
    *
