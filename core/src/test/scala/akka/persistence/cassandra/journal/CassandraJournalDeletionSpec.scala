@@ -46,7 +46,8 @@ object CassandraJournalDeletionSpec {
         }
       case GetRecoveredEvents =>
         sender() ! RecoveredEvents(recoveredEvents.reverse)
-      case DeleteTo(to) => deleteMessages(to)
+      case DeleteTo(to) =>
+        deleteMessages(to)
       case DeleteMessagesSuccess(to) =>
         context.system.log.debug("Deleted to: {}", to)
         require(to > lastDeletedTo, s"Received deletes in wrong order. Last ${lastDeletedTo}. Current: ${to}")
@@ -61,7 +62,7 @@ object CassandraJournalDeletionSpec {
 }
 
 class CassandraJournalDeletionSpec extends CassandraSpec(s"""
-    akka.loglevel = INFO
+    akka.loglevel = DEBUG
     akka.loggers = ["akka.testkit.TestEventListener"]
     akka.log-dead-letters = off
     cassandra-journal.max-concurrent-deletes = 100

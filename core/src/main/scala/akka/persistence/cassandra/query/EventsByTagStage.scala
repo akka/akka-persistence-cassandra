@@ -148,6 +148,14 @@ import com.datastax.driver.core.utils.UUIDs
     def tagPidSequenceNumberUpdate(pid: PersistenceId, tagPidSequenceNr: (TagPidSequenceNr, UUID)): StageState =
       copy(tagPidSequenceNrs = tagPidSequenceNrs + (pid -> tagPidSequenceNr))
 
+    override def toString: String = s"StageState(" +
+      s"state: $state" +
+      s"fromOffset: ${formatOffset(fromOffset)}" +
+      s"toOffset: ${formatOffset(toOffset)}" +
+      s"tagPidSequenceNrs: $tagPidSequenceNrs" +
+      s"missingLookup: $missingLookup" +
+      s"bucketSize: $bucketSize" +
+      ")"
   }
 }
 

@@ -458,7 +458,6 @@ class CassandraJournal(cfg: Config)
         delete(persistenceId, toSequenceNr)
         p.future
       case otherDeletes =>
-        // Users really should not be firing deletes this quickly
         if (otherDeletes.length > config.maxConcurrentDeletes) {
           log.error(
             "Over [{}] outstanding deletes for persistenceId [{}]. Failing delete",
