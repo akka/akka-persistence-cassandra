@@ -259,11 +259,11 @@ class CassandraJournal(cfg: Config)
     val writesWithUuids: Seq[Seq[(PersistentRepr, UUID)]] =
       messages.map(aw => aw.payload.map(pr => (pr, generateUUID(pr))))
 
-    val p = Promise[Done]
+    val writeInProgressForPersistentId = Promise[Done]
     val pid = messages.head.persistenceId
-    writeInProgress.put(pid, p.future)
+    writeInProgress.put(pid, writeInProgressForPersistentId.future)
 
-    val tws = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap {
+    val bulkTagWrite: Future[BulkTagWrite] = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap {
       serialized: Seq[SerializedAtomicWrite] =>
         val result: Future[Any] =
           if (messages.size <= config.maxMessageBatchSize) {
@@ -286,15 +286,18 @@ class CassandraJournal(cfg: Config)
         result.map(_ => extractTagWrites(serialized))
     }
 
-    tws.onComplete { result =>
-      self ! WriteFinished(pid, p.future)
-      p.success(Done)
-      // notify TagWriters when write was successful
-      result.foreach(bulkTagWrite => tagWrites.foreach(_ ! bulkTagWrite))
+    bulkTagWrite.onComplete { _ =>
+      self ! WriteFinished(pid, writeInProgressForPersistentId.future)
+      writeInProgressForPersistentId.success(Done)
     }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
 
     //Nil == all good
-    tws.map(_ => Nil)(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
+    bulkTagWrite.map(bulkTagWrite => {
+      // notify TagWriters when write was successful before completing the future meaning
+      // that we can get another seq of AtomicWrites for the same persistent actor
+      tagWrites.foreach(_ ! bulkTagWrite)
+      Nil
+    })(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
   }
 
   /**
