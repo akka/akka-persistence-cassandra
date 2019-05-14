@@ -4,32 +4,31 @@
 
 package akka.persistence.cassandra
 
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
-import akka.persistence.cassandra.CassandraLifecycle.{Embedded, External}
+import akka.persistence.cassandra.CassandraLifecycle.{ Embedded, External }
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.query.{NoOffset, PersistenceQuery}
+import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Keep, Sink}
+import akka.stream.scaladsl.{ Keep, Sink }
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ImplicitSender, SocketUtil, TestKitBase}
-import com.typesafe.config.{Config, ConfigFactory}
+import akka.testkit.{ ImplicitSender, SocketUtil, TestKitBase }
+import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.time.{Milliseconds, Seconds, Span}
-import org.scalatest.{Matchers, Outcome, Suite, WordSpecLike}
+import org.scalatest.time.{ Milliseconds, Seconds, Span }
+import org.scalatest.{ Matchers, Outcome, Suite, WordSpecLike }
 
 import scala.collection.immutable
 import scala.concurrent.duration._
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
 import com.datastax.driver.core.Cluster
-import scala.collection.JavaConverters._
 
 import scala.util.Try
 
@@ -115,10 +114,15 @@ abstract class CassandraSpec(
       val c = cluster.connect(journalName)
       if (failed) {
         println("RowDump::")
-        c.execute("select * from tag_views").asScala.foreach(row => {
-          println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(row.getUUID("timestamp"))},${row.getString("persistence_id")},${row.getLong("tag_pid_sequence_nr")},${row.getLong("sequence_nr")}""")
+        import scala.collection.JavaConverters._
+        c.execute("select * from tag_views")
+          .asScala
+          .foreach(row => {
+            println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(
+              row.getUUID("timestamp"))},${row.getString("persistence_id")},${row.getLong("tag_pid_sequence_nr")},${row
+              .getLong("sequence_nr")}""")
 
-        })
+          })
       }
       system.log.info("Dropping keyspaces: {}", keyspaces())
       keyspaces().foreach { keyspace =>

@@ -55,13 +55,12 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
 
       system.log.info("Started events by tag queries")
 
-
       val writes: Future[Unit] = Future {
         system.log.info("Sending messages")
         (0 until messages).foreach { i =>
           pas.foreach(ref => {
-           ref ! Tagged(i, Set("all"))
-           expectMsg(s"$i-done")
+            ref ! Tagged(i, Set("all"))
+            expectMsg(s"$i-done")
           })
         }
         system.log.info("Sent messages")
