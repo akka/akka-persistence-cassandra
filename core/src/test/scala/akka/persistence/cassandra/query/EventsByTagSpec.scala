@@ -534,7 +534,9 @@ class EventsByTagZeroEventualConsistencyDelaySpec
 // Manually writing events for same persistence id is no longer valid
 // tho new persistence ids from a node with a slow clocks is still applicable
 // and we pick them up by noticing that there is a tagPidSequenceNr gap
-class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(EventsByTagSpec.strictConfig) {
+class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(ConfigFactory.parseString("""
+akka.loglevel = DEBUG
+""").withFallback(EventsByTagSpec.strictConfig)) {
   "Cassandra live eventsByTag delayed messages" must {
 
     // slightly lower guarantee than before, we need another event to come along for that pid/tag combination
@@ -646,9 +648,11 @@ class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(EventsByT
       val probe2 = src2.runWith(TestSink.probe[Any])
       probe2.request(10)
 
-      // delayed, timestamp is before A1, i.e. before the offset
+      // delayed, timestamp is before A1, i.e. before the offset so should not be picked up
       val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
       writeTaggedEvent(t1.plusSeconds(1), eventB1, Set("T9"), 1, bucketSize)
+
+      // delayed, timestamp is after A1 so should be picked up
       val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
       writeTaggedEvent(t1.plusSeconds(3), eventB2, Set("T9"), 2, bucketSize)
 
