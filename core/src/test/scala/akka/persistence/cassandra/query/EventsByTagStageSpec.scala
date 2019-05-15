@@ -30,7 +30,7 @@ object EventsByTagStageSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   val fetchSize = 3L
   val config = ConfigFactory.parseString(s"""
-        akka.loglevel = INFO
+        akka.loglevel = DEBUG
 
         akka.actor.serialize-messages=on
 

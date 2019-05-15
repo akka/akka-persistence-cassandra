@@ -60,7 +60,7 @@ This is the process for committing code into master. There are of course excepti
 ## Running the tests
 
 The tests rely on a Cassandra instance running locally on port 9042. A docker-compose file is
-provided in the root of the project to start this with `docker-compose up -d`
+provided in the root of the project to start this with `docker-compose up -d cassandra`
 
 ## Pull Request Requirements
 
