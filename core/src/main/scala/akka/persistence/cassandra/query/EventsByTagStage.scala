@@ -233,7 +233,7 @@ import com.datastax.driver.core.utils.UUIDs
         stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs, None, bucketSize)
         if (log.isInfoEnabled) {
           log.info(
-            "[{}]: EventsByTag query starting with EC delay {}ms: fromOffset {} toOffset {} initial state " + stageState,
+            s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset {} toOffset {} initial state " + stageState,
             stageUuid,
             settings.eventsByTagEventualConsistency.toMillis,
             formatOffset(fromOffset),
