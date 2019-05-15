@@ -51,7 +51,7 @@ object EventsByTagStageSpec {
             # Speeds up tests
             eventual-consistency-delay = 200ms
             gap-timeout = 3s
-            new-persistence-id-scan-timeout = 500ms
+            new-persistence-id-scan-timeout = 1s
           }
         }
     """).withFallback(CassandraLifecycle.config)
@@ -80,7 +80,7 @@ class EventsByTagStageSpec
     super.afterAll()
   }
 
-  private val waitTime = 300.milliseconds // bigger than the eventual consistency delay
+  private val waitTime = 300.milliseconds // bigger than the eventual consistency delay but less than the new pid timeout
   private val longWaitTime = waitTime * 3
   private val bucketSize = Minute
 
