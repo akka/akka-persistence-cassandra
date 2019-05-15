@@ -13,6 +13,7 @@ import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
 import akka.persistence.cassandra.query.EventsByTagStage._
 import akka.stream.stage.{ GraphStage, _ }
 import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
+import akka.util.PrettyDuration._
 
 import scala.annotation.tailrec
 import scala.concurrent.duration.Duration
@@ -410,12 +411,14 @@ import com.datastax.driver.core.utils.UUIDs
           push(out, repr)
           false
         } else {
-          log.debug(
-            s"[${stageUuid}] " + " [{}]: Missing event for new persistence id: [{}]. Expected tag pid sequence nr: [{}], actual: [{}].",
-            session.tag,
-            repr.persistenceId,
-            expectedSequenceNr,
-            repr.tagPidSequenceNr)
+          if (log.isDebugEnabled) {
+            log.debug(
+              s"[${stageUuid}] " + " [{}]: New persistence id: [{}] does not start at tag pid sequence nr 1. This could either be that the events are before the offset or that they are missing. Tag pid sequence nr found: [{}]. Looking for lower tag pid sequence nrs for [{}]",
+              session.tag,
+              repr.persistenceId,
+              repr.tagPidSequenceNr,
+              settings.eventsByTagNewPersistenceIdScanTimeout.pretty)
+          }
           val previousBucketStart =
             UUIDs.startOf(stageState.currentTimeBucket.previous(1).key)
           val startingOffset: UUID =

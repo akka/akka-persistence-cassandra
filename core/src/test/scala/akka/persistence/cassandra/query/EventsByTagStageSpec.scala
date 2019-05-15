@@ -51,7 +51,7 @@ object EventsByTagStageSpec {
             # Speeds up tests
             eventual-consistency-delay = 200ms
             gap-timeout = 3s
-            new-persistence-id-scan-timeout = 500s
+            new-persistence-id-scan-timeout = 500ms
           }
         }
     """).withFallback(CassandraLifecycle.config)
@@ -536,10 +536,9 @@ class EventsByTagStageSpec
       val nowTime = LocalDateTime.now(ZoneOffset.UTC)
       val tag = "CurrentOffsetMissingInInitialBucket"
 
-      val tagStream =
-        queries.eventsByTag(
-          tag,
-          queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
+      val tagStream = queries.eventsByTag(
+        tag,
+        queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
       val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(4)
