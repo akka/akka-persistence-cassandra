@@ -23,7 +23,7 @@ import java.lang.{ Long => JLong }
 
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.journal.CassandraJournal._
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.CombinedEventsByTagStmts
+import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
 import com.datastax.driver.core.{ ResultSet, Row, Session }
 import com.datastax.driver.core.utils.UUIDs
 
@@ -76,7 +76,7 @@ import com.datastax.driver.core.utils.UUIDs
   private[akka] class TagStageSession(
       val tag: String,
       session: Session,
-      statements: CombinedEventsByTagStmts,
+      statements: EventByTagStatements,
       fetchSize: Int) {
     def selectEventsForBucket(bucket: TimeBucket, from: UUID, to: UUID)(
         implicit ec: ExecutionContext): Future[ResultSet] = {
@@ -88,7 +88,7 @@ import com.datastax.driver.core.utils.UUIDs
   }
 
   private[akka] object TagStageSession {
-    def apply(tag: String, session: Session, statements: CombinedEventsByTagStmts, fetchSize: Int): TagStageSession =
+    def apply(tag: String, session: Session, statements: EventByTagStatements, fetchSize: Int): TagStageSession =
       new TagStageSession(tag, session, statements, fetchSize)
   }
 
@@ -582,7 +582,7 @@ import com.datastax.driver.core.utils.UUIDs
               val newBucket = TimeBucket(m.maxOffset, bucketSize)
               m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.previousOffset))
             })))
-            // a current query doesn't have a poll we schedule
+            // a current query doesn't have a poll schedule one
             if (!isLiveQuery())
               scheduleOnce(QueryPoll, settings.refreshInterval)
           }

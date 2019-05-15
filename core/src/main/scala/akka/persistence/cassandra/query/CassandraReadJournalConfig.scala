@@ -69,7 +69,7 @@ import scala.concurrent.duration._
     config.getBoolean("events-by-tag.verbose-debug-logging")
   val eventsByTagEventualConsistency: FiniteDuration =
     config.getDuration("events-by-tag.eventual-consistency-delay", MILLISECONDS).millis
-  val eventsByTagNewPersistenceIdScanTimeout =
+  val eventsByTagNewPersistenceIdScanTimeout: FiniteDuration =
     config.getDuration("events-by-tag.new-persistence-id-scan-timeout", MILLISECONDS).millis
   val eventsByTagOffsetScanning: FiniteDuration =
     config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis

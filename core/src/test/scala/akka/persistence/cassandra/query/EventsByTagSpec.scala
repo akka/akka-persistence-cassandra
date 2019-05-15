@@ -26,7 +26,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.Try
 
-object EventsByTagSpec {
+object EventsByTagSpec { // FIXME cancel probes when test fail
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
@@ -534,8 +534,13 @@ class EventsByTagZeroEventualConsistencyDelaySpec
 // Manually writing events for same persistence id is no longer valid
 // tho new persistence ids from a node with a slow clocks is still applicable
 // and we pick them up by noticing that there is a tagPidSequenceNr gap
-class EventsByTagFindDelayedEventsSpec extends AbstractEventsByTagSpec(ConfigFactory.parseString("""
+class EventsByTagFindDelayedEventsSpec
+    extends AbstractEventsByTagSpec(
+      ConfigFactory.parseString("""
 akka.loglevel = DEBUG
+# find delayed events from offset relies on this as it puts an event before the offset that will not
+# be found and one after that will be found for a new persistence id
+cassandra-query-journal.event-by-tag.new-persistence-id-scan-timeout = 100ms # same as default but strictConfig overrides it
 """).withFallback(EventsByTagSpec.strictConfig)) {
   "Cassandra live eventsByTag delayed messages" must {
 
