@@ -544,12 +544,18 @@ class EventsByTagZeroEventualConsistencyDelaySpec
 // and we pick them up by noticing that there is a tagPidSequenceNr gap
 class EventsByTagFindDelayedEventsSpec
     extends AbstractEventsByTagSpec(
-      ConfigFactory.parseString("""
+      ConfigFactory
+        .parseString(
+          """
 akka.loglevel = DEBUG
 # find delayed events from offset relies on this as it puts an event before the offset that will not
 # be found and one after that will be found for a new persistence id
-cassandra-query-journal.events-by-tag.new-persistence-id-scan-timeout = 100ms # same as default but strictConfig overrides it
-""").withFallback(EventsByTagSpec.strictConfig)) {
+# have it at least 2x the interval so searching for missing tries trice
+cassandra-query-journal.events-by-tag.new-persistence-id-scan-timeout = 600ms
+cassandra-query-journal.events-by-tag.refresh-internal = 100ms
+
+""")
+        .withFallback(EventsByTagSpec.strictConfig)) {
   "Cassandra live eventsByTag delayed messages" must {
 
     // slightly lower guarantee than before, we need another event to come along for that pid/tag combination
@@ -597,11 +603,12 @@ cassandra-query-journal.events-by-tag.new-persistence-id-scan-timeout = 100ms # 
         // delayed, timestamp is before A1
         val eventB1 = PersistentRepr("B1", 1L, "b", "", writerUuid = w2)
         writeTaggedEvent(t1, eventB1, Set("T7"), 1, bucketSize)
+        // second delayed is after A1 so should be found and trigger a search for B1
         val t3 = t1.plusSeconds(2)
         val eventB2 = PersistentRepr("B2", 2L, "b", "", writerUuid = w2)
         writeTaggedEvent(t3, eventB2, Set("T7"), 2, bucketSize)
 
-        probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B1") => e }
+        probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B1") => e } // failed in travis
         probe.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "B2") => e }
       })
     }
