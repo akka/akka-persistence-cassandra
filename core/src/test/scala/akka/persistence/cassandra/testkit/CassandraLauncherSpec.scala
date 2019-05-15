@@ -41,7 +41,7 @@ class CassandraLauncherSpec
     }
   }
 
-  "The CassandraLauncher" should {
+  "The CassandraLauncher" must {
     "support forking" in {
       val cassandraDirectory = new File("target/" + system.name)
       CassandraLauncher.start(

@@ -116,7 +116,7 @@ class MultiPluginSpec
     super.afterAll()
   }
 
-  "A Cassandra journal" should {
+  "A Cassandra journal" must {
     "be usable multiple times with different configurations for two actors having the same persistence id" in {
       val processorA = system.actorOf(Props(classOf[OverrideJournalPluginProcessor], "cassandra-journal-a"))
       processorA ! s"msg"
@@ -136,7 +136,7 @@ class MultiPluginSpec
     }
   }
 
-  "A Cassandra snapshot store" should {
+  "A Cassandra snapshot store" must {
     "be usable multiple times with different configurations for two actors having the same persistence id" in {
       val processorC =
         system.actorOf(Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-c", "cassandra-snapshot-c"))

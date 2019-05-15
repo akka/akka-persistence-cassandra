@@ -540,7 +540,7 @@ class EventsByTagFindDelayedEventsSpec
 akka.loglevel = DEBUG
 # find delayed events from offset relies on this as it puts an event before the offset that will not
 # be found and one after that will be found for a new persistence id
-cassandra-query-journal.event-by-tag.new-persistence-id-scan-timeout = 100ms # same as default but strictConfig overrides it
+cassandra-query-journal.events-by-tag.new-persistence-id-scan-timeout = 100ms # same as default but strictConfig overrides it
 """).withFallback(EventsByTagSpec.strictConfig)) {
   "Cassandra live eventsByTag delayed messages" must {
 

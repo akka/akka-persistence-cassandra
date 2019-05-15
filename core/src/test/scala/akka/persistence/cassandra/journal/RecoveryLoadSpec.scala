@@ -109,7 +109,7 @@ class RecoveryLoadSpec extends CassandraSpec(RecoveryLoadSpec.config) {
     println(s"  total recovery took ${metrics.totalDuration.toMillis} ms")
   }
 
-  "Recovery" should {
+  "Recovery" must {
 
     "have some reasonable performance" in {
       val pid = "a1"

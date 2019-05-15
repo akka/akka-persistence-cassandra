@@ -76,7 +76,7 @@ class CassandraPluginConfigSpec
     super.afterAll()
   }
 
-  "A CassandraPluginConfig" should {
+  "A CassandraPluginConfig" must {
     "use ConfigSessionProvider by default" in {
       val config = new CassandraPluginConfig(system, defaultConfig)
       config.sessionProvider.getClass must be(classOf[ConfigSessionProvider])

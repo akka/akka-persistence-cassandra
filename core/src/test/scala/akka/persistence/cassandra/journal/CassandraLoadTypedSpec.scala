@@ -173,7 +173,7 @@ class CassandraLoadTypedSpec extends CassandraSpec(CassandraLoadTypedSpec.config
   // increase for serious testing
   private val iterations = 3
 
-  "Typed EventSourcedBehavior with Cassandra journal" should {
+  "Typed EventSourcedBehavior with Cassandra journal" must {
     "have some reasonable write throughput" in {
       val probe = testKit.createTestProbe[String]
       val processor =
