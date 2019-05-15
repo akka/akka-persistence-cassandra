@@ -120,7 +120,7 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       // that they are completed by the journal implementation so can't assert this reliably
       (1L to 99L).map { _ =>
         deleteSuccess.expectMsgType[Deleted].sequenceNr
-      }.toSet shouldEqual (1L to 98L).toSet
+      }.toSet shouldEqual (1L to 99L).toSet
       deleteSuccess.expectNoMessage(100.millis)
 
       p1 ! PoisonPill
