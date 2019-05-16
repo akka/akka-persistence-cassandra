@@ -286,16 +286,13 @@ class CassandraJournal(cfg: Config)
         result.map(_ => extractTagWrites(serialized))
     }
 
-    bulkTagWrite.onComplete { _ =>
+    bulkTagWrite.map(btw => {
+      // notify TagWriters when write was successful before completing the future otherwise
+      // we can get another seq of AtomicWrites for the same persistent actor before this is sent
+      tagWrites.foreach(_ ! btw)
       self ! WriteFinished(pid, writeInProgressForPersistentId.future)
       writeInProgressForPersistentId.success(Done)
-    }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
-
-    //Nil == all good
-    bulkTagWrite.map(bulkTagWrite => {
-      // notify TagWriters when write was successful before completing the future meaning
-      // that we can get another seq of AtomicWrites for the same persistent actor
-      tagWrites.foreach(_ ! bulkTagWrite)
+      //Nil == all good
       Nil
     })(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
   }
