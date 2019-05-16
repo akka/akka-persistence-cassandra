@@ -103,12 +103,11 @@ abstract class EventsByTagMultiJvmSpec
 
       runOn(node2, node3) {
         readers = (0 until readersPerNode).map { i =>
-          (
-            i,
-            queryJournal
-              .eventsByTag("all", NoOffset)
-              .map(e => (e.persistenceId, e.event.asInstanceOf[Int]))
-              .runWith(TestSink.probe))
+          i ->
+          queryJournal
+            .eventsByTag("all", NoOffset)
+            .map(e => (e.persistenceId, e.event.asInstanceOf[Int]))
+            .runWith(TestSink.probe)
         }
       }
       enterBarrier("query-started")

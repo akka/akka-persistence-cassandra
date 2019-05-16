@@ -547,7 +547,7 @@ class EventsByTagFindDelayedEventsSpec
       ConfigFactory
         .parseString(
           """
-akka.loglevel = DEBUG
+akka.loglevel = INFO 
 # find delayed events from offset relies on this as it puts an event before the offset that will not
 # be found and one after that will be found for a new persistence id
 # have it at least 2x the interval so searching for missing tries trice
