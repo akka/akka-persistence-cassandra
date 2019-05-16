@@ -100,9 +100,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     new CassandraReadJournalConfig(cfg, writePluginConfig)
 
   if (queryPluginConfig.eventsByTagEventualConsistency < 2.seconds) {
-    log.info("EventsByTag eventual consistency set below 2 seconds. This can result in missed events. See reference.conf for details.")
-  } else  if (queryPluginConfig.eventsByTagEventualConsistency < 1.seconds) {
-    log.warning("EventsByTag eventual consistency set below 1 second. This is likely to result in missed events. See reference.conf for details.")
+    log.info(
+      "EventsByTag eventual consistency set below 2 seconds. This can result in missed events. See reference.conf for details.")
+  } else if (queryPluginConfig.eventsByTagEventualConsistency < 1.seconds) {
+    log.warning(
+      "EventsByTag eventual consistency set below 1 second. This is likely to result in missed events. See reference.conf for details.")
   }
   private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
 
