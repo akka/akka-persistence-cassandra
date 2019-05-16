@@ -104,7 +104,7 @@ for events from all nodes to settle to their final order.
 Setting this to a small value can lead to:
 * Receiving events out of TimeUUID (offset) order for different persistenceIds, meaning if the offset is saved for restart/resume then delayed events can be missed on restart 
 * Increased likelihood of receiving events for the same persistenceId out of order. This is detected but the stream is temporarily paused to search for the missing events which is less efficient then reading them initially in order.
-* Missing events the first events for new persistenceIds. Unless the events are two timebuckets ago (very delayed) they will be found during a missing search but it is very inefficient to look for them.
+* Missing events for persistence ids the query instance sees for the first time (unless it is tag pid sequence number 1) due to the query not knowing which tag pid sequence nr to expect.
 
 ## Implementation
 
