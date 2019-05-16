@@ -29,6 +29,10 @@ import scala.concurrent.duration._
 object EventsByTagStageSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   val fetchSize = 3L
+  val eventualConsistencyDelay: FiniteDuration = 400.millis
+  val waitTime: FiniteDuration = (eventualConsistencyDelay * 1.5).asInstanceOf[FiniteDuration] // bigger than the eventual consistency delay but less than the new pid timeout
+  val longWaitTime: FiniteDuration = waitTime * 2
+  val newPersistenceIdTimeout = 3 * longWaitTime // Give time for 2-3 long waits before a new persitenceId search gives up
   val config = ConfigFactory.parseString(s"""
         akka.loglevel = DEBUG
 
@@ -49,9 +53,9 @@ object EventsByTagStageSpec {
           refresh-interval = 200ms
           events-by-tag {
             # Speeds up tests
-            eventual-consistency-delay = 200ms
-            gap-timeout = 3s
-            new-persistence-id-scan-timeout = 1s
+            eventual-consistency-delay = ${eventualConsistencyDelay.toMillis}ms
+            gap-timeout = 5s
+            new-persistence-id-scan-timeout = ${newPersistenceIdTimeout.toMillis}ms
           }
         }
     """).withFallback(CassandraLifecycle.config)
@@ -80,8 +84,6 @@ class EventsByTagStageSpec
     super.afterAll()
   }
 
-  private val waitTime = 300.milliseconds // bigger than the eventual consistency delay but less than the new pid timeout
-  private val longWaitTime = waitTime * 3
   private val bucketSize = Minute
 
   val noMsgTimeout = 100.millis
