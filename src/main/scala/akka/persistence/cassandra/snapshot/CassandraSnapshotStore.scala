@@ -58,6 +58,9 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   private def preparedDeleteSnapshot = session.prepare(deleteSnapshot).map(
     _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy)
   )
+  private def preparedDeleteSnapshots = session.prepare(deleteSnapshots).map(
+    _.setConsistencyLevel(writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy)
+  )
   private def preparedSelectSnapshot = session.prepare(selectSnapshot).map(
     _.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)
   )
@@ -82,6 +85,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
       // try initialize early, to be prepared for first real request
       preparedWriteSnapshot
       preparedDeleteSnapshot
+      preparedDeleteSnapshots
       preparedSelectSnapshot
       preparedSelectSnapshotMetadata
       preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
@@ -181,13 +185,18 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   }
 
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
-    preparedSelectSnapshotMetadata.flatMap { prepStmt =>
-      metadata(prepStmt, persistenceId, criteria, limit = None).flatMap { mds =>
-        val boundStatements = mds.map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
-        Future.sequence(boundStatements).flatMap { stmts =>
-          executeBatch(batch => stmts.foreach(batch.add))
+    if (config.cassandra2xCompat) {
+      preparedSelectSnapshotMetadata.flatMap { prepStmt =>
+        metadata(prepStmt, persistenceId, criteria, limit = None).flatMap { mds =>
+          val boundStatements = mds.map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
+          Future.sequence(boundStatements).flatMap { stmts =>
+            executeBatch(batch => stmts.foreach(batch.add))
+          }
         }
       }
+    } else {
+      val boundDeleteSnapshot = preparedDeleteSnapshots.map(_.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong))
+      boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
     }
   }
 
