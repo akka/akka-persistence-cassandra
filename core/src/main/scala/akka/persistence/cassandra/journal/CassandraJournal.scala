@@ -290,21 +290,22 @@ class CassandraJournal(cfg: Config)
       // notify TagWriters when write was successful before completing the future otherwise
       // we can get another seq of AtomicWrites for the same persistent actor before this is sent
       tagWrites.foreach(_ ! btw)
-      self ! WriteFinished(pid, writeInProgressForPersistentId.future)
-      writeInProgressForPersistentId.success(Done)
+      sendWriteFinished(pid, writeInProgressForPersistentId)
       //Nil == all good
       Nil
     })(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
 
     // if the write fails still need to remove state from the map
-    toReturn.onComplete {
-      case Success(_) =>
-      case Failure(_) =>
-        self ! WriteFinished(pid, writeInProgressForPersistentId.future)
-        writeInProgressForPersistentId.success(Done)
+    toReturn.failed.foreach { _ =>
+      sendWriteFinished(pid, writeInProgressForPersistentId)
     }
 
     toReturn
+  }
+
+  def sendWriteFinished(pid: String, writeInProgressForPid: Promise[Done]): Unit = {
+    self ! WriteFinished(pid, writeInProgressForPid.future)
+    writeInProgressForPid.success(Done)
   }
 
   /**
