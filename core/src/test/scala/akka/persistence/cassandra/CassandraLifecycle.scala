@@ -29,7 +29,8 @@ object CassandraLifecycle {
   //  val mode: CassandraMode = Embedded
   val mode: CassandraMode = Option(System.getenv("CASSANDRA_MODE")).map(_.toLowerCase) match {
     case Some("external") => External
-    case _                => Embedded
+    case Some("embedded") => Embedded
+    case _                => External
   }
 
   def isExternal: Boolean = mode == External

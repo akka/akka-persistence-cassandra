@@ -1,20 +1,20 @@
 package akka.cluster.persistence.cassandra
 
 import java.io.File
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.{ LocalDateTime, ZoneOffset }
 
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.cassandra.query.{TestActor, _}
+import akka.persistence.cassandra.query.{ TestActor, _ }
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.journal.Tagged
-import akka.persistence.query.{NoOffset, PersistenceQuery}
-import akka.remote.testkit.{MultiNodeConfig, MultiNodeSpec}
+import akka.persistence.query.{ NoOffset, PersistenceQuery }
+import akka.remote.testkit.{ MultiNodeConfig, MultiNodeSpec }
 import akka.stream.ActorMaterializer
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatest.{ Matchers, WordSpecLike }
 
 object EventsByTagMultiJvmSpec extends MultiNodeConfig {
   // No way to start and distribute the port so hard coding
@@ -26,10 +26,9 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
 
   val name = "EventsByTagMuliJvmSpec"
 
-  commonConfig(ConfigFactory.parseString(
-    s"""
+  commonConfig(ConfigFactory.parseString(s"""
       akka {
-        loglevel = DEBUG
+        loglevel = INFO 
         actor.provider = cluster
         testconductor.barrier-timeout = 60 s
       }
@@ -53,15 +52,17 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
       }
     """).withFallback(CassandraLifecycle.config))
 
-
 }
 
 class EventsByTagSpecMultiJvmNode1 extends EventsByTagMultiJvmSpec
 class EventsByTagSpecMultiJvmNode2 extends EventsByTagMultiJvmSpec
 class EventsByTagSpecMultiJvmNode3 extends EventsByTagMultiJvmSpec
 
-abstract class EventsByTagMultiJvmSpec extends MultiNodeSpec(EventsByTagMultiJvmSpec) with MultiNodeClusterSpec
-  with WordSpecLike with Matchers {
+abstract class EventsByTagMultiJvmSpec
+    extends MultiNodeSpec(EventsByTagMultiJvmSpec)
+    with MultiNodeClusterSpec
+    with WordSpecLike
+    with Matchers {
 
   import EventsByTagMultiJvmSpec._
 
@@ -101,23 +102,25 @@ abstract class EventsByTagMultiJvmSpec extends MultiNodeSpec(EventsByTagMultiJvm
       var readers: Seq[(Int, TestSubscriber.Probe[(String, Int)])] = Nil
 
       runOn(node2, node3) {
-        readers = (0 until readersPerNode) map { i =>
-          (i, queryJournal.eventsByTag("all", NoOffset)
+        readers = (0 until readersPerNode).map { i =>
+          i ->
+          queryJournal
+            .eventsByTag("all", NoOffset)
             .map(e => (e.persistenceId, e.event.asInstanceOf[Int]))
-            .runWith(TestSink.probe))
+            .runWith(TestSink.probe)
         }
       }
       enterBarrier("query-started")
 
       runOn(node1) {
         val ta = system.actorOf(TestActor.props("node1Pid"))
-        (0 until nrMessages) foreach { i =>
+        (0 until nrMessages).foreach { i =>
           ta ! Tagged(i, Set("all"))
         }
       }
       runOn(node2) {
         val ta = system.actorOf(TestActor.props("node2Pid"))
-        (0 until nrMessages) foreach { i =>
+        (0 until nrMessages).foreach { i =>
           ta ! Tagged(i, Set("all"))
         }
       }
@@ -127,7 +130,7 @@ abstract class EventsByTagMultiJvmSpec extends MultiNodeSpec(EventsByTagMultiJvm
         // pid to last msg
         var latestValues = Map.empty[(Int, String), Int].withDefault(_ => -1)
 
-        (0 until (nrMessages * nrWriterNodes)) foreach { i =>
+        (0 until (nrMessages * nrWriterNodes)).foreach { i =>
           readers.foreach { each =>
             val (readerNr, probe) = each
             val (pid, msg) = probe.requestNext()
@@ -145,9 +148,11 @@ abstract class EventsByTagMultiJvmSpec extends MultiNodeSpec(EventsByTagMultiJvm
     }
   }
 
-  def startCassandra(host: String, port: Int,
-                     systemName: String,
-                     cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource): Unit = {
+  def startCassandra(
+      host: String,
+      port: Int,
+      systemName: String,
+      cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource): Unit = {
     val cassandraDirectory = new File(s"target/$systemName-$port")
     CassandraLauncher.start(
       cassandraDirectory,

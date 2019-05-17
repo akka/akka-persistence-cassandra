@@ -29,8 +29,12 @@ import scala.concurrent.duration._
 object EventsByTagStageSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   val fetchSize = 3L
+  val eventualConsistencyDelay: FiniteDuration = 400.millis
+  val waitTime: FiniteDuration = (eventualConsistencyDelay * 1.5).asInstanceOf[FiniteDuration] // bigger than the eventual consistency delay but less than the new pid timeout
+  val longWaitTime: FiniteDuration = waitTime * 2
+  val newPersistenceIdTimeout = 3 * longWaitTime // Give time for 2-3 long waits before a new persitenceId search gives up
   val config = ConfigFactory.parseString(s"""
-        akka.loglevel = INFO
+        akka.loglevel = DEBUG
 
         akka.actor.serialize-messages=on
 
@@ -49,9 +53,9 @@ object EventsByTagStageSpec {
           refresh-interval = 200ms
           events-by-tag {
             # Speeds up tests
-            eventual-consistency-delay = 100ms
-            gap-timeout = 3s
-            new-persistence-id-scan-timeout = 500s
+            eventual-consistency-delay = ${eventualConsistencyDelay.toMillis}ms
+            gap-timeout = 5s
+            new-persistence-id-scan-timeout = ${newPersistenceIdTimeout.toMillis}ms
           }
         }
     """).withFallback(CassandraLifecycle.config)
@@ -80,8 +84,6 @@ class EventsByTagStageSpec
     super.afterAll()
   }
 
-  private val waitTime = 150.milliseconds // bigger than the eventual consistency delay
-  private val longWaitTime = waitTime * 3
   private val bucketSize = Minute
 
   val noMsgTimeout = 100.millis
@@ -536,10 +538,9 @@ class EventsByTagStageSpec
       val nowTime = LocalDateTime.now(ZoneOffset.UTC)
       val tag = "CurrentOffsetMissingInInitialBucket"
 
-      val tagStream =
-        queries.eventsByTag(
-          tag,
-          queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
+      val tagStream = queries.eventsByTag(
+        tag,
+        queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
       val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
 
       sub.request(4)

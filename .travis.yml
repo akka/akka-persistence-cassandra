@@ -6,6 +6,8 @@ scala:
   - "2.13.0-M5"
   - "2.12.8"
 
+services:
+  - docker
 
 before_install:
   # make comparing to origin/master work
@@ -17,6 +19,7 @@ before_install:
   - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.1/install.sh | bash && . ~/.jabba/jabba.sh
   - jabba install adopt@~1.8.202-08
   - jabba install adopt@~1.11.0-1
+  - docker-compose up -d cassandra
 
 before_script:
   - unset _JAVA_OPTIONS
@@ -36,6 +39,9 @@ stages:
     if: NOT tag =~ ^v
   - name: whitesource
     if: repo = akka/akka-cassandra AND ( ( branch = master AND type = push ) OR tag =~ ^v )
+
+after_failure:
+  - docker-compose logs
 
 cache:
   directories:

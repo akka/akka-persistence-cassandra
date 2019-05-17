@@ -45,7 +45,7 @@ class CassandraSerializationSpec extends CassandraSpec(CassandraSerializationSpe
 
   import akka.persistence.cassandra.Persister._
 
-  "A Cassandra journal" should {
+  "A Cassandra journal" must {
 
     "Fail recovery when deserialization fails" in {
       val probe = TestProbe()

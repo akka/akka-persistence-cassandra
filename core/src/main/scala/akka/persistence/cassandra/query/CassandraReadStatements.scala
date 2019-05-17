@@ -21,15 +21,6 @@ import akka.annotation.InternalApi
       SELECT DISTINCT persistence_id, partition_nr FROM $tableName
      """
 
-  def selectEventsFromTagView =
-    s"""
-      SELECT * FROM $tagViewTableName WHERE
-        tag_name = ?  AND
-        timebucket = ? AND
-        timestamp > ?
-        ORDER BY timestamp ASC
-     """.stripMargin
-
   def selectEventsFromTagViewWithUpperBound =
     s"""
       SELECT * FROM $tagViewTableName WHERE
@@ -37,6 +28,7 @@ import akka.annotation.InternalApi
         timebucket = ? AND
         timestamp > ? AND
         timestamp < ?
+        ORDER BY timestamp ASC
      """.stripMargin
 
   def selectTagSequenceNrs =

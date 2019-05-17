@@ -22,6 +22,7 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
     }
     cassandra-journal {
       events-by-tag {
+        max-message-batch-size = 25
       }
     }
     cassandra-query-journal {
@@ -54,18 +55,22 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
 
       system.log.info("Started events by tag queries")
 
-      Future {
+      val writes: Future[Unit] = Future {
         system.log.info("Sending messages")
         (0 until messages).foreach { i =>
-          pas.foreach(_ ! Tagged(i, Set("all")))
+          pas.foreach(ref => {
+            ref ! Tagged(i, Set("all"))
+            expectMsg(s"$i-done")
+          })
         }
         system.log.info("Sent messages")
       }
+      writes.onComplete(result => system.log.info("{}", result))
 
       system.log.info("Reading messages")
       var latestValues: Map[(Int, String), Int] = Map.empty.withDefault(_ => -1)
-      (0 until messages).foreach { i =>
-        (0 until writers).foreach { writer =>
+      (0 until messages).foreach { _ =>
+        (0 until writers).foreach { _ =>
           eventsByTagQueries.foreach {
             case (probeNr, probe) =>
               // should be in order per persistence id per probe
@@ -75,7 +80,6 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
           }
         }
       }
-
       system.log.info("Received all messages {}", latestValues)
     }
 

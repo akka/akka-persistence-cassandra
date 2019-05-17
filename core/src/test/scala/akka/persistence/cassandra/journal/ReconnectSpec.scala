@@ -21,7 +21,7 @@ class ReconnectSpec extends CassandraSpec(ReconnectSpec.config) {
   // important, since we are testing the initialization and starting Cassandra later
   override protected def beforeAll(): Unit = ()
 
-  "Journal" should {
+  "Journal" must {
 
     // This test can't run with an external Cassandra as
     // it requires to start with a stopped Cassandra

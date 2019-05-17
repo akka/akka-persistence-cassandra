@@ -98,6 +98,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   val metricsEnabled: Boolean = config.getBoolean("metrics-enabled")
   val jmxReportingEnabled: Boolean = config.getBoolean("jmx-reporting-enabled")
 
+  @silent // deprecated options for driver, remove when moving to 4.0
   def clusterBuilder(clusterId: String)(implicit ec: ExecutionContext): Future[Cluster.Builder] = {
     lookupContactPoints(clusterId).map { cp =>
       val b = Cluster.builder

@@ -16,7 +16,6 @@ import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
-import scala.util.Try
 
 object EventsByTagRestartSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
@@ -45,18 +44,6 @@ object EventsByTagRestartSpec {
 }
 
 class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config) {
-
-  lazy val session = {
-    cluster.connect(journalName)
-  }
-
-  override protected def afterAll(): Unit = {
-    Try {
-      session.close()
-      cluster.close()
-    }
-    super.afterAll()
-  }
 
   implicit val materialiser = ActorMaterializer()(system)
 
