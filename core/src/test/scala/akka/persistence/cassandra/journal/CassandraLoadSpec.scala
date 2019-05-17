@@ -162,7 +162,7 @@ class CassandraLoadSpec
   // increase for serious testing
   private val iterations = 3
 
-  "Untyped PersistentActor with Cassandra journal" should {
+  "Untyped PersistentActor with Cassandra journal" must {
     "have some reasonable write throughput for persist" in {
       val processor = system.actorOf(Processor.props("p1", None))
       (1 to iterations).foreach { _ =>

@@ -45,7 +45,7 @@ class StartupLoadSpec extends CassandraSpec(StartupLoadSpec.config) {
   // important, since we are testing the initialization
   override def awaitPersistenceInit(): Unit = ()
 
-  "Journal initialization" should {
+  "Journal initialization" must {
 
     "handle many persistent actors starting at the same time" in {
       val N = 500

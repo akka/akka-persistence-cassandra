@@ -69,7 +69,7 @@ class ManyActorsLoadSpec extends CassandraSpec(ManyActorsLoadSpec.config) {
 
   import ManyActorsLoadSpec._
 
-  "Persisting from many actors" should {
+  "Persisting from many actors" must {
 
     "not have performance drop when flushing scanning" in {
       val numberOfActors = 1000 // increase this to 10000 when benchmarking

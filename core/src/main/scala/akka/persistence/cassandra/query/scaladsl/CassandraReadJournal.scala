@@ -19,7 +19,7 @@ import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
 import akka.persistence.cassandra.query._
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.CombinedEventsByTagStmts
+import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
@@ -62,9 +62,7 @@ object CassandraReadJournal {
       preparedSelectEventsByPersistenceId: PreparedStatement,
       preparedSelectDeletedTo: PreparedStatement)
 
-  @InternalApi private[akka] case class CombinedEventsByTagStmts(
-      byTag: PreparedStatement,
-      byTagWithUpperLimit: PreparedStatement)
+  @InternalApi private[akka] case class EventByTagStatements(byTagWithUpperLimit: PreparedStatement)
 }
 
 /**
@@ -184,11 +182,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       .prepare(queryStatements.selectDistinctPersistenceIds)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
 
-  private def prepareSelectFromTagView: Future[PreparedStatement] =
-    session
-      .prepare(queryStatements.selectEventsFromTagView)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
-
   private def preparedSelectFromTagViewWithUpperBound: Future[PreparedStatement] =
     session
       .prepare(queryStatements.selectEventsFromTagViewWithUpperBound)
@@ -208,11 +201,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       ps2 <- preparedSelectDeletedTo
     } yield CombinedEventsByPersistenceIdStmts(ps1, ps2)
 
-  @InternalApi private[akka] def combinedEventsByTagStmts: Future[CombinedEventsByTagStmts] =
+  @InternalApi private[akka] def combinedEventsByTagStmts: Future[EventByTagStatements] =
     for {
-      byTag <- prepareSelectFromTagView
       byTagWithUpper <- preparedSelectFromTagViewWithUpperBound
-    } yield CombinedEventsByTagStmts(byTag, byTagWithUpper)
+    } yield EventByTagStatements(byTagWithUpper)
 
   system.registerOnTermination {
     session.close()
@@ -355,7 +347,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private def eventsByTagPrereqs(
       tag: String,
       usingOffset: Boolean,
-      fromOffset: UUID): Future[(CombinedEventsByTagStmts, Map[Tag, (TagPidSequenceNr, UUID)])] = {
+      fromOffset: UUID): Future[(EventByTagStatements, Map[Tag, (TagPidSequenceNr, UUID)])] = {
     val currentBucket =
       TimeBucket(System.currentTimeMillis(), writePluginConfig.bucketSize)
     val initialTagPidSequenceNrs =

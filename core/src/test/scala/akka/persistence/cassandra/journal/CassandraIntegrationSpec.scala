@@ -137,7 +137,7 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
     }
   }
 
-  "A Cassandra journal" should {
+  "A Cassandra journal" must {
     "write and replay messages" in {
       val persistenceId = UUID.randomUUID().toString
       val processor1 = system.actorOf(Props(classOf[ProcessorA], persistenceId, self), "p1")
@@ -233,7 +233,7 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
     }
   }
 
-  "A processor" should {
+  "A processor" must {
     "recover from a snapshot with follow-up messages" in {
       val persistenceId = UUID.randomUUID().toString
       val processor1 = system.actorOf(Props(classOf[ProcessorC], persistenceId, testActor))

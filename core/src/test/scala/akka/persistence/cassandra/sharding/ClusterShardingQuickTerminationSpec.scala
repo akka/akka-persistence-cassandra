@@ -66,15 +66,14 @@ object ClusterShardingQuickTerminationSpec {
 
 }
 
-class ClusterShardingQuickTerminationSpec
-    extends CassandraSpec("""
-    akka.loglevel = DEBUG                                                 
+class ClusterShardingQuickTerminationSpec extends CassandraSpec("""
+    akka.loglevel = INFO 
     akka.actor.provider = cluster
   """.stripMargin) {
 
   import ClusterShardingQuickTerminationSpec._
 
-  "Cassandra Plugin with Cluster Sharding" should {
+  "Cassandra Plugin with Cluster Sharding" must {
     "clear state if persistent actor shuts down" in {
       Cluster(system).join(Cluster(system).selfMember.address)
       awaitAssert {

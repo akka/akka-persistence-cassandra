@@ -27,7 +27,7 @@ object CassandraEventsByTagLoadSpec {
        cassandra-journal {
          log-queries = off
          events-by-tag {
-            max-message-batch-size = 200
+            max-message-batch-size = 25
             bucket-size = "Minute"
          }
        }
