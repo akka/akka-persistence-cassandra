@@ -85,7 +85,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
       // try initialize early, to be prepared for first real request
       preparedWriteSnapshot
       preparedDeleteSnapshot
-      preparedDeleteSnapshots
+      if (!config.cassandra2xCompat) preparedDeleteSnapshots
       preparedSelectSnapshot
       preparedSelectSnapshotMetadata
       preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
@@ -185,7 +185,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
   }
 
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
-    if (config.cassandra2xCompat) {
+    if (config.cassandra2xCompat || 0L < criteria.minTimestamp || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
       preparedSelectSnapshotMetadata.flatMap { prepStmt =>
         metadata(prepStmt, persistenceId, criteria, limit = None).flatMap { mds =>
           val boundStatements = mds.map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
