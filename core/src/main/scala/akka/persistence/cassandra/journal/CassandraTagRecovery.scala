@@ -62,12 +62,17 @@ trait CassandraTagRecovery {
     rawEvent.serialized.tags.foreach(tag => {
       tp.get(tag) match {
         case None =>
-          log.debug("Tag write not in progress. Sending to TagWriter. Tag {} Sequence Nr {}.", tag, rawEvent.sequenceNr)
+          log.debug(
+            "[{}] Tag write not in progress. Sending to TagWriter. Tag [{}] seqNr [{}]",
+            rawEvent.serialized.persistenceId,
+            tag,
+            rawEvent.sequenceNr)
           to ! TagWrite(tag, rawEvent.serialized :: Nil)
         case Some(progress) =>
           if (rawEvent.sequenceNr > progress.sequenceNr) {
             log.debug(
-              "Sequence nr > than write progress. Sending to TagWriter. Tag {} Sequence Nr {}. ",
+              "[{}] seqNr > than write progress. Sending to TagWriter. Tag {} seqNr {}. ",
+              rawEvent.serialized.persistenceId,
               tag,
               rawEvent.sequenceNr)
             to ! TagWrite(tag, rawEvent.serialized :: Nil)
@@ -85,7 +90,7 @@ trait CassandraTagRecovery {
       pid: String,
       tagProgress: Map[Tag, TagProgress],
       tagWriters: ActorRef): Future[Done] = {
-    log.debug("Recovery of pid [{}] sending tag progress: [{}]", pid, tagProgress)
+    log.debug("[{}] Recovery sending tag progress: [{}]", pid, tagProgress)
     (tagWriters ? SetTagProgress(pid, tagProgress)).mapTo[TagProcessAck.type].map(_ => Done)
   }
 
@@ -93,7 +98,7 @@ trait CassandraTagRecovery {
       pid: String,
       persistentActor: ActorRef,
       tagWriters: ActorRef): Future[Done] = {
-    log.debug("Persistent actor starting [{}] [{}]", pid, persistentActor)
+    log.debug("[{}] Persistent actor starting [{}]", pid, persistentActor)
     (tagWriters ? PersistentActorStarting(pid, persistentActor)).mapTo[PersistentActorStartingAck.type].map(_ => Done)
   }
 

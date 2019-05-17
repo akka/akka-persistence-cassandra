@@ -36,7 +36,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
   // Could have an events by persistenceId stage that has the raw payload
   override def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(
       replayCallback: PersistentRepr => Unit): Future[Unit] = {
-    log.debug("asyncReplayMessages pid {} from {} to {}", persistenceId, fromSequenceNr, toSequenceNr)
+    log.debug("[{}] asyncReplayMessages from [{}] to [{}]", persistenceId, fromSequenceNr, toSequenceNr)
 
     if (config.eventsByTagEnabled) {
       val recoveryPrep: Future[Map[String, TagProgress]] = {
@@ -51,7 +51,12 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
 
       Source
         .fromFutureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
-          log.debug("Starting recovery with tag progress: {}. From {} to {}", tp, fromSequenceNr, toSequenceNr)
+          log.debug(
+            "[{}] starting recovery with tag progress: [{}]. From [{}] to [{}]",
+            persistenceId,
+            tp,
+            fromSequenceNr,
+            toSequenceNr)
           queries
             .eventsByPersistenceId(
               persistenceId,
@@ -94,10 +99,14 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
       fromSequenceNr: Long,
       pid: String,
       max: Long,
-      tp: Map[Tag, TagProgress]): Future[Done] =
+      tp: Map[Tag, TagProgress]): Future[Done] = {
     if (minProgressNr < fromSequenceNr) {
       val scanTo = fromSequenceNr - 1
-      log.debug("Scanning events before snapshot to recover tag_views: From: {} to: {}", minProgressNr, scanTo)
+      log.debug(
+        "[{}], Scanning events before snapshot to recover tag_views: From: [{}] to: [{}]",
+        pid,
+        minProgressNr,
+        scanTo)
       queries
         .eventsByPersistenceId(
           pid,
@@ -120,12 +129,13 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
         .runWith(Sink.ignore)
     } else {
       log.debug(
-        "Recovery is starting before the latest tag writes tag progress. Min progress for pid {}. " +
-        "From sequence nr of recovery: {}",
+        "[{}] Recovery is starting before the latest tag writes tag progress. Min progress [{}]. From sequence nr of recovery: [{}]",
+        pid,
         minProgressNr,
         fromSequenceNr)
       FutureDone
     }
+  }
 
   // TODO migrate this to using raw, maybe after offering a way to migrate old events in message?
   private def sendMissingTagWrite(tagProgress: Map[Tag, TagProgress], tagWriters: ActorRef)(
@@ -141,7 +151,8 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
                 tagProgress.get(tag) match {
                   case None =>
                     log.debug(
-                      "Tag write not in progress. Sending to TagWriter. Tag {} Sequence Nr {}.",
+                      "[{}] Tag write not in progress. Sending to TagWriter. Tag [{}] Sequence Nr [{}]",
+                      tpr.pr.persistenceId,
                       tag,
                       tpr.sequenceNr)
                     tagWriters ! TagWrite(tag, serialized :: Nil)
@@ -149,7 +160,8 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
                   case Some(progress) =>
                     if (tpr.sequenceNr > progress.sequenceNr) {
                       log.debug(
-                        "Sequence nr > than write progress. Sending to TagWriter. Tag {} Sequence Nr {}. ",
+                        "[{}] Sequence nr > than write progress. Sending to TagWriter. Tag [{}] Sequence Nr [{}]",
+                        tpr.pr.persistenceId,
                         tag,
                         tpr.sequenceNr)
                       tagWriters ! TagWrite(tag, serialized :: Nil)
