@@ -3,13 +3,11 @@
  */
 package akka.persistence.cassandra.snapshot
 
-import java.lang.{ Long => JLong }
+import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 
 import scala.collection.immutable
-import scala.concurrent.Await
 import scala.concurrent.Future
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
@@ -184,14 +182,25 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
   }
 
+  /** Plugin API: deletes all snapshots matching `criteria`. This call is protected with a circuit-breaker.
+    * @param persistenceId id of the persistent actor.
+    * @param criteria selection criteria for deleting. If no timestamp constraints are specified this routine
+    * @note Due to the limitations of Cassandra deletion requests, this routine makes an initial query in order to obtain the
+    * records matching the criteria which are then deleted in a batch deletion. Improvements in Cassandra v3.0+ mean a single
+    * range deletion on the sequence number is used instead, except if timestamp constraints are specified, which still
+    * requires the original two step routine.*/
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
     if (config.cassandra2xCompat || 0L < criteria.minTimestamp || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
       preparedSelectSnapshotMetadata.flatMap { prepStmt =>
         metadata(prepStmt, persistenceId, criteria, limit = None).flatMap { mds =>
-          val boundStatements = mds.map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
-          Future.sequence(boundStatements).flatMap { stmts =>
-            executeBatch(batch => stmts.foreach(batch.add))
-          }
+          val boundStatementBatches = mds.map(
+            md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong))
+          ).grouped(0xFFFF-1)
+          Future.sequence(
+            boundStatementBatches.map(
+              boundStatements => Future.sequence(boundStatements).flatMap(stmts => executeBatch(batch => stmts.foreach(batch.add)))
+            )
+          ).map(_ => ())
         }
       }
     } else {
