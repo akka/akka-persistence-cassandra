@@ -4,22 +4,20 @@
 
 package akka.persistence.cassandra.snapshot
 
-import scala.concurrent.duration._
-import java.lang.{ Long => JLong }
-import java.lang.{ Integer => JInteger }
+import java.lang.{ Integer => JInteger, Long => JLong }
 import java.nio.ByteBuffer
 
-import akka.persistence._
 import akka.persistence.SnapshotProtocol._
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry }
+import akka.persistence._
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry, SnapshotWithMetaData }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
 import com.datastax.driver.core._
 import com.typesafe.config.ConfigFactory
 
+import scala.collection.immutable.Seq
 import scala.concurrent.Await
-import akka.persistence.cassandra.SnapshotWithMetaData
-
+import scala.concurrent.duration._
 import scala.util.Try
 
 object CassandraSnapshotStoreConfiguration {
@@ -150,7 +148,6 @@ class CassandraSnapshotStoreSpec
       // no 4th attempt has been made
       probe.expectMsgType[LoadSnapshotFailed]
     }
-
     "store and load additional meta" in {
       val probe = TestProbe()
 
@@ -166,8 +163,29 @@ class CassandraSnapshotStoreSpec
       val loaded = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
       loaded.snapshot should equal(SnapshotWithMetaData("snap", "meta"))
     }
-  }
+    "delete all snapshots matching upper sequence number and no timestamp bounds" in {
+      val probe: TestProbe = TestProbe()
+      val subProbe: TestProbe = TestProbe()
+      val metadata: Seq[SnapshotMetadata] = writeSnapshots()
+      val md = metadata(2)
+      val criteria = SnapshotSelectionCriteria(md.sequenceNr)
+      val cmd = DeleteSnapshots(pid, criteria)
 
+      subscribe[DeleteSnapshots](subProbe.ref)
+      snapshotStore.tell(cmd, probe.ref)
+      subProbe.expectMsg(cmd)
+      probe.expectMsg(DeleteSnapshotsSuccess(criteria))
+
+      snapshotStore.tell(
+        LoadSnapshot(pid, SnapshotSelectionCriteria(md.sequenceNr, md.timestamp), Long.MaxValue),
+        probe.ref)
+      probe.expectMsg(LoadSnapshotResult(None, Long.MaxValue))
+      snapshotStore.tell(
+        LoadSnapshot(pid, SnapshotSelectionCriteria(metadata(3).sequenceNr, metadata(3).timestamp), Long.MaxValue),
+        probe.ref)
+      probe.expectMsg(LoadSnapshotResult(Some(SelectedSnapshot(metadata(3), s"s-4")), Long.MaxValue))
+    }
+  }
 }
 
 /**
@@ -177,7 +195,5 @@ class CassandraSnapshotStoreSpec
 class CassandraSnapshotStoreProtocolV3Spec
     extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.protocolV3Config)
     with CassandraLifecycle {
-
   override def systemName: String = "CassandraSnapshotStoreProtocolV3Spec"
-
 }

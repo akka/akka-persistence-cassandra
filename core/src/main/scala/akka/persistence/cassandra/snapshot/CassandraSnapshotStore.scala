@@ -97,6 +97,8 @@ class CassandraSnapshotStore(cfg: Config)
       preparedWriteSnapshot
       preparedWriteSnapshotWithMeta
       preparedDeleteSnapshot
+      preparedDeleteAllSnapshotsForPid
+      if (!snapshotConfig.cassandra2xCompat) preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
       preparedSelectSnapshot
       preparedSelectSnapshotMetadata
       preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
@@ -207,22 +209,42 @@ class CassandraSnapshotStore(cfg: Config)
       }
     }
 
-  override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] =
-    preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
-      // this meta query gets slower than slower if snapshots are deleted without a criteria.minSequenceNr as
-      // all previous tombstones are scanned in the meta data query
-      metadata(snapshotMetaPs, persistenceId, criteria, limit = None).flatMap { mds: immutable.Seq[SnapshotMetadata] =>
-        val boundStatements = mds.map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
-        if (boundStatements.nonEmpty) {
-          Future.sequence(boundStatements).flatMap { stmts =>
-            executeBatch(batch => stmts.foreach(batch.add))
-          }
-        } else {
-          Future.successful(())
+  /** Plugin API: deletes all snapshots matching `criteria`. This call is protected with a circuit-breaker.
+   *
+   * @param persistenceId id of the persistent actor.
+   * @param criteria selection criteria for deleting. If no timestamp constraints are specified this routine
+   * @note Due to the limitations of Cassandra deletion requests, this routine makes an initial query in order to obtain the
+   * records matching the criteria which are then deleted in a batch deletion. Improvements in Cassandra v3.0+ mean a single
+   * range deletion on the sequence number is used instead, except if timestamp constraints are specified, which still
+   * requires the original two step routine.*/
+  override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
+    if (snapshotConfig.cassandra2xCompat
+        || 0L < criteria.minTimestamp
+        || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
+      preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
+        // this meta query gets slower than slower if snapshots are deleted without a criteria.minSequenceNr as
+        // all previous tombstones are scanned in the meta data query
+        metadata(snapshotMetaPs, persistenceId, criteria, limit = None).flatMap {
+          mds: immutable.Seq[SnapshotMetadata] =>
+            val boundStatementBatches = mds
+              .map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
+              .grouped(0xFFFF - 1)
+            if (boundStatementBatches.nonEmpty) {
+              Future
+                .sequence(boundStatementBatches.map(boundStatements =>
+                  Future.sequence(boundStatements).flatMap(stmts => executeBatch(batch => stmts.foreach(batch.add)))))
+                .map(_ => ())
+            } else {
+              Future.successful(())
+            }
         }
-
       }
+    } else {
+      val boundDeleteSnapshot = preparedDeleteAllSnapshotsForPidAndSequenceNrBetween.map(
+        _.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong))
+      boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
     }
+  }
 
   def executeBatch(body: BatchStatement => Unit): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
