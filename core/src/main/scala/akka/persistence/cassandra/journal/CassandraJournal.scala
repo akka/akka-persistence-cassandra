@@ -415,7 +415,7 @@ class CassandraJournal(cfg: Config)
    * in here rather than during replay messages.
    */
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
-    log.debug("asyncReadHighestSequenceNr {} {} {}", persistenceId, fromSequenceNr, sender())
+    log.debug("[{}] asyncReadHighestSequenceNr [{}] [{}]", persistenceId, fromSequenceNr, sender())
     val highestSequenceNr = writeInProgress.get(persistenceId) match {
       case null =>
         asyncReadHighestSequenceNrInternal(persistenceId, fromSequenceNr)
@@ -433,7 +433,7 @@ class CassandraJournal(cfg: Config)
         seqNr <- highestSequenceNr
         _ <- sendPersistentActorStarting(persistenceId, persistentActor, tagWrites.get)
         _ <- if (seqNr == fromSequenceNr && seqNr != 0) {
-          log.debug("Snapshot is current so replay won't be required. Calculating tag progress now")
+          log.debug("[{}] snapshot is current so replay won't be required. Calculating tag progress now", persistenceId)
           val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
           for {
             tp <- lookupTagProgress(persistenceId)
@@ -442,7 +442,7 @@ class CassandraJournal(cfg: Config)
             _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
           } yield seqNr
         } else if (seqNr == 0) {
-          log.debug("New persistenceId [{}]. Sending blank tag progress. {}", persistenceId, persistentActor)
+          log.debug("[{}] New pid. Sending blank tag progress. [{}]", persistenceId, persistentActor)
           setTagProgress(persistenceId, Map.empty, tagWrites.get)
         } else {
           Future.successful(())
@@ -462,7 +462,7 @@ class CassandraJournal(cfg: Config)
     // TODO could "optimize" away deletes that overlap?
     pendingDeletes.get(persistenceId) match {
       case null =>
-        log.debug("No outstanding delete for persistence id {}. Sequence nr: {}", persistenceId, toSequenceNr)
+        log.debug("[{}] No outstanding delete. Sequence nr [{}]", persistenceId, toSequenceNr)
         // fast path, no outstanding deletes for this persistenceId
         val p = Promise[Unit]()
         pendingDeletes.put(persistenceId, List(PendingDelete(persistenceId, toSequenceNr, p)))
@@ -470,16 +470,13 @@ class CassandraJournal(cfg: Config)
         p.future
       case otherDeletes =>
         if (otherDeletes.length > config.maxConcurrentDeletes) {
-          log.error(
-            "Over [{}] outstanding deletes for persistenceId [{}]. Failing delete",
-            config.maxConcurrentDeletes,
-            persistenceId)
+          log.error("[}}] Over [{}] outstanding deletes. Failing delete", persistenceId, config.maxConcurrentDeletes)
           Future.failed(
             new RuntimeException(
               s"Over ${config.maxConcurrentDeletes} outstanding deletes for persistenceId $persistenceId"))
         } else {
           log.debug(
-            "Outstanding delete for persistenceId [{}]. Delete to [{}] will be scheduled after previous one finished.",
+            "[{}] outstanding delete. Delete to seqNr [{}] will be scheduled after previous one finished.",
             persistenceId,
             toSequenceNr)
           val p = Promise[Unit]()
