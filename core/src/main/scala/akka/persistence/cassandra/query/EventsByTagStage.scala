@@ -234,12 +234,13 @@ import com.datastax.driver.core.utils.UUIDs
         stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs, None, bucketSize)
         if (log.isInfoEnabled) {
           log.info(
-            s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset {} toOffset {} initial state " + stageState,
+            s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset [{}] toOffset [{}]",
             stageUuid,
             settings.eventsByTagEventualConsistency.toMillis,
             formatOffset(fromOffset),
             toOffset.map(formatOffset))
         }
+        log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs)
 
         if (settings.pubsubNotification) {
           Try {
@@ -320,13 +321,7 @@ import com.datastax.driver.core.utils.UUIDs
               s"lookingForMissingCalled for tag ${session.tag} when there " +
               s"is no missing. Raise a bug with debug logging.")
         }
-
         if (missing.deadline.isOverdue()) {
-          log.info(
-            "[{}] [{}]: Failed to find missing sequence nrs. Missing info: [{}]",
-            stageUuid,
-            session.tag,
-            missing)
           if (missing.failIfNotFound) {
             fail(
               out,
@@ -334,6 +329,12 @@ import com.datastax.driver.core.utils.UUIDs
                 s"Unable to find missing tagged event: PersistenceId: ${missing.persistenceId}. " +
                 s"Tag: ${session.tag}. TagPidSequenceNr: ${missing.missing}. Previous offset: ${missing.previousOffset}"))
           } else {
+            log.debug(
+              "[{}] [{}]: Finished scanning for older events for persistence id [{}]. Max pid sequence nr found [{}]",
+              stageUuid,
+              session.tag,
+              missing.persistenceId,
+              missing.maxSequenceNr)
             stopLookingForMissing(missing, missing.buffered)
             tryPushOne()
           }
@@ -617,7 +618,7 @@ import com.datastax.driver.core.utils.UUIDs
         } else {
           BufferedEvents(buffered.sortBy(_.tagPidSequenceNr))
         })
-        log.info("[{}] No more missing events. Sending buffered events. {}", stageUuid, stageState.state)
+        log.debug("[{}] No more missing events. Sending buffered events. {}", stageUuid, stageState.state)
         updateStageState(
           _.copy(fromOffset = m.maxOffset, missingLookup = None)
             .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset)))
