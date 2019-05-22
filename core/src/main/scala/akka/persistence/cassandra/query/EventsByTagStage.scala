@@ -240,9 +240,7 @@ import com.datastax.driver.core.utils.UUIDs
             formatOffset(fromOffset),
             toOffset.map(formatOffset))
         }
-        if (log.isDebugEnabled) {
-          log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs)
-        }
+        log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs)
 
         if (settings.pubsubNotification) {
           Try {
