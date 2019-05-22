@@ -59,6 +59,13 @@ trait CassandraStatements {
         persistence_id = ?
     """
 
+  def deleteAllSnapshotForPersistenceIdAndSequenceNrBetween = s"""
+    DELETE FROM ${tableName}
+    WHERE persistence_id = ?
+    AND sequence_nr >= ?
+    AND sequence_nr <= ?
+  """
+
   def selectSnapshot = s"""
       SELECT * FROM ${tableName} WHERE
         persistence_id = ? AND

@@ -32,6 +32,11 @@ trait CassandraSnapshotCleanup extends CassandraStatements {
       .prepare(deleteAllSnapshotForPersistenceId)
       .map(_.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy))
 
+  def preparedDeleteAllSnapshotsForPidAndSequenceNrBetween =
+    session
+      .prepare(deleteAllSnapshotForPersistenceIdAndSequenceNrBetween)
+      .map(_.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy))
+
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
     val boundDeleteSnapshot = preparedDeleteSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
     boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
