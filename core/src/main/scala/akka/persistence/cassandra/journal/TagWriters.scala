@@ -5,7 +5,7 @@
 package akka.persistence.cassandra.journal
 
 import scala.collection.immutable
-import java.lang.{Integer => JInt, Long => JLong}
+import java.lang.{ Integer => JInt, Long => JLong }
 import java.net.URLEncoder
 import java.util.UUID
 
@@ -26,9 +26,9 @@ import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
-import com.datastax.driver.core.{BatchStatement, BoundStatement, PreparedStatement, ResultSet, Statement}
+import com.datastax.driver.core.{ BatchStatement, BoundStatement, PreparedStatement, ResultSet, Statement }
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
@@ -154,7 +154,8 @@ import akka.util.ByteString
 
   private var currentPersistentActors: Map[PersistenceId, ActorRef] = Map.empty
 
-  timers.startSingleTimer(WriteTagScanningTick, WriteTagScanningTick, settings.scanningFlushInterval)
+  // schedule as a single timer and trigger again once the writes are complete
+  scheduleWriteTagScanningTick()
 
   def receive: Receive = {
     case FlushAllTagWriters(t) =>
@@ -296,7 +297,7 @@ import akka.util.ByteString
 
         def writeTagScanningBatch(group: Seq[(String, Long)]): Future[Done] = {
           val statements: Seq[BoundStatement] = group.map {
-            case (pid, seqNr) => ps.bind(pid, seqNr)
+            case (pid, seqNr) => ps.bind(pid, seqNr: JLong)
           }
           Future.traverse(statements)(tagWriterSession.executeStatement).map(_ => Done)
         }
@@ -313,18 +314,24 @@ import akka.util.ByteString
 
         result.onComplete {
           case Success(_) =>
-            if (log.isDebugEnabled)
-              log.debug(
-                "Update tag scanning of [{}] pids took [{}] ms",
-                updates.size,
-                (System.nanoTime() - startTime) / 1000 / 1000)
+            scheduleWriteTagScanningTick()
+            log.debug(
+              "Update tag scanning of [{}] pids took [{}] ms",
+              updates.size,
+              (System.nanoTime() - startTime) / 1000 / 1000)
           case Failure(t) =>
+            scheduleWriteTagScanningTick()
             log.warning("Writing tag scanning failed. Reason {}", t)
             self ! TagWriteFailed(t)
         }
       }
+    } else {
+      scheduleWriteTagScanningTick()
     }
+  }
 
+  private def scheduleWriteTagScanningTick(): Unit = {
+    timers.startSingleTimer(WriteTagScanningTick, WriteTagScanningTick, settings.scanningFlushInterval)
   }
 
   private def tagActor(tag: String): ActorRef =

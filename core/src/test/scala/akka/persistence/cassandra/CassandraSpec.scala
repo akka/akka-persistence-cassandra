@@ -93,6 +93,9 @@ abstract class CassandraSpec(
 
   lazy val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
+  // cluster is shutdown by cassandra lifecycle
+  lazy val journalSession = cluster.connect(journalName)
+
   override def port(): Int = CassandraLifecycle.mode match {
     case External => 9042
     case Embedded => randomPort
