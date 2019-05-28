@@ -25,6 +25,7 @@ import java.lang.{ Long => JLong }
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
+import akka.persistence.query.Offset
 import com.datastax.driver.core.{ ResultSet, Row, Session }
 import com.datastax.driver.core.utils.UUIDs
 
@@ -43,6 +44,15 @@ import com.datastax.driver.core.utils.UUIDs
  * to be the first (scanning happens before this and results are initialTagPidSequenceNrs)
  */
 @InternalApi private[akka] object EventsByTagStage {
+
+  final class MissingTaggedEventException(
+      val tag: Tag,
+      val persistenceId: PersistenceId,
+      missingTagPidSequenceNrs: Set[Long],
+      val lastKnownOffset: Offset)
+      extends RuntimeException(
+        s"Unable to find missing tagged event: PersistenceId: $persistenceId. " +
+        s"Tag: $tag. MissingTagPidSequenceNrs: $missingTagPidSequenceNrs. Previous offset: $lastKnownOffset")
 
   final case class UUIDRow(
       persistenceId: PersistenceId,
@@ -325,9 +335,11 @@ import com.datastax.driver.core.utils.UUIDs
           if (missing.failIfNotFound) {
             fail(
               out,
-              new IllegalStateException(
-                s"Unable to find missing tagged event: PersistenceId: ${missing.persistenceId}. " +
-                s"Tag: ${session.tag}. TagPidSequenceNr: ${missing.missing}. Previous offset: ${missing.previousOffset}"))
+              new MissingTaggedEventException(
+                session.tag,
+                missing.persistenceId,
+                missing.missing,
+                Offset(missing.previousOffset)))
           } else {
             log.debug(
               "[{}] [{}]: Finished scanning for older events for persistence id [{}]. Max pid sequence nr found [{}]",
