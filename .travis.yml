@@ -3,7 +3,7 @@ sudo: true
 dist: trusty
 scala:
   - "2.11.12"
-  - "2.13.0-M5"
+  - "2.13.0-RC2"
   - "2.12.8"
 
 services:
