@@ -1,7 +1,7 @@
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
-val AkkaVersion = "2.5.19"
+val AkkaVersion = "2.5.23"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
@@ -23,7 +23,7 @@ val akkaPersistenceCassandraDependencies = Seq(
   "com.typesafe.akka" %% "akka-multi-node-testkit" % AkkaVersion % Test,
   "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion % Test,
   "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
-  "org.scalatest" %% "scalatest" % "3.0.5" % Test,
+  "org.scalatest" %% "scalatest" % "3.0.8-RC2" % Test,
   "org.pegdown" % "pegdown" % "1.6.0" % Test,
   "org.osgi" % "org.osgi.core" % "5.0.0" % Provided)
 
@@ -40,12 +40,19 @@ def common: Seq[Setting[_]] = Seq(
     "UTF-8",
     "-feature",
     "-unchecked",
-    "-deprecation",
     "-Xlint",
     "-Ywarn-dead-code",
-    "-Xfuture",
     "-Xfatal-warnings"
   ),
+  scalacOptions ++= {
+    // define scalac options that are only valid or desirable for 2.11 and 2.12
+    if (scalaVersion.value.startsWith("2.13")) Seq.empty
+    else 
+    Seq(
+      "-Xfuture", // invalid in 2.13
+      "-deprecation" // temporarily allowing deprecation because of Java colletion coverters
+    )
+  },
   Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
   Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
   headerLicense := Some(
@@ -81,7 +88,7 @@ lazy val core = (project in file("core"))
   .settings(common: _*)
   .settings(osgiSettings: _*)
   .settings({
-    val silencerVersion = "1.3.1"
+    val silencerVersion = "1.4.0"
     Seq(
       libraryDependencies ++= Seq(
         compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
