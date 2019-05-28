@@ -5,7 +5,7 @@
 package akka.persistence.cassandra.journal
 
 import scala.collection.immutable
-import java.lang.{ Integer => JInt, Long => JLong }
+import java.lang.{Integer => JInt, Long => JLong}
 import java.net.URLEncoder
 import java.util.UUID
 
@@ -26,9 +26,9 @@ import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
-import com.datastax.driver.core.{ BatchStatement, PreparedStatement, ResultSet, Statement }
+import com.datastax.driver.core.{BatchStatement, BoundStatement, PreparedStatement, ResultSet, Statement}
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
@@ -154,7 +154,7 @@ import akka.util.ByteString
 
   private var currentPersistentActors: Map[PersistenceId, ActorRef] = Map.empty
 
-  timers.startPeriodicTimer(WriteTagScanningTick, WriteTagScanningTick, settings.scanningFlushInterval)
+  timers.startSingleTimer(WriteTagScanningTick, WriteTagScanningTick, settings.scanningFlushInterval)
 
   def receive: Receive = {
     case FlushAllTagWriters(t) =>
@@ -274,7 +274,7 @@ import akka.util.ByteString
 
   private def writeTagScanning(): Unit = {
 
-    val updates = toBeWrittenScanning.toVector
+    val updates: Seq[(PersistenceId, SequenceNr)] = toBeWrittenScanning.toVector
     // current pendingScanning will be written on next tick, if no write failures
     toBeWrittenScanning = pendingScanning
     // collect new until next tick
@@ -295,19 +295,15 @@ import akka.util.ByteString
         val startTime = System.nanoTime()
 
         def writeTagScanningBatch(group: Seq[(String, Long)]): Future[Done] = {
-          val batch = new BatchStatement(BatchStatement.Type.UNLOGGED)
-          group.foreach {
-            case (pid, seqNr) => batch.add(ps.bind(pid, seqNr: JLong))
+          val statements: Seq[BoundStatement] = group.map {
+            case (pid, seqNr) => ps.bind(pid, seqNr)
           }
-          tagWriterSession.executeStatement(batch)
+          Future.traverse(statements)(tagWriterSession.executeStatement).map(_ => Done)
         }
 
-        // Group the updates into 500 statements per UNLOGGED BatchStatement. These
-        // are executed sequentially to not induce too much load that might influence
-        // performance of other writes and reads. See issue #408.
-        // The size of the data is small and fixed so no need to configure the batch size.
+        // Execute 10 async statements at a time to not introduce too much load see issue #408.
         val batchIterator: Iterator[Future[Done]] =
-          updates.grouped(500).map(writeTagScanningBatch)
+          updates.grouped(10).map(writeTagScanningBatch)
 
         def next(): Future[Done] =
           if (batchIterator.hasNext) batchIterator.next().flatMap(_ => next())
