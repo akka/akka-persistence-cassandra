@@ -21,9 +21,6 @@ object Publish extends AutoPlugin {
     pomExtra := akkaPomExtra,
     publishTo := akkaPublishTo.value,
     credentials ++= akkaCredentials,
-    organizationName := "Lightbend Inc.",
-    organizationHomepage := Some(url("https://www.lightbend.com")),
-    homepage := Some(url("https://github.com/akka/akka-persistence-cassandra")),
     publishMavenStyle := true,
     pomIncludeRepository := { x =>
       false

@@ -1,3 +1,5 @@
+# THIS IS WORK IN PROGRESS for version 1.0 of
+
 Cassandra Plugins for Akka Persistence
 ======================================
 
