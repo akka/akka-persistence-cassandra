@@ -175,9 +175,9 @@ abstract class AbstractEventsByTagSpec(override val systemName: String, config: 
     val serialized = ByteBuffer.wrap(serialization.serialize(event).get)
 
     val serManifest = serializer match {
-      case ser2: SerializerWithStringManifest ⇒
+      case ser2: SerializerWithStringManifest =>
         ser2.manifest(persistent)
-      case _ ⇒
+      case _ =>
         if (serializer.includeManifest) persistent.getClass.getName
         else PersistentRepr.Undefined
     }

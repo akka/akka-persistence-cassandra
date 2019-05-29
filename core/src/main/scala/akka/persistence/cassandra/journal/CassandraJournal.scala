@@ -455,9 +455,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
           val m2 = m.asInstanceOf[AnyRef]
           val serializer = serialization.findSerializerFor(m2)
           val serManifest = serializer match {
-            case ser2: SerializerWithStringManifest ⇒
+            case ser2: SerializerWithStringManifest =>
               ser2.manifest(m2)
-            case _ ⇒
+            case _ =>
               if (serializer.includeManifest) m2.getClass.getName
               else PersistentRepr.Undefined
           }
@@ -475,9 +475,9 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
       val serializer = serialization.findSerializerFor(event)
       val serManifest = serializer match {
-        case ser2: SerializerWithStringManifest ⇒
+        case ser2: SerializerWithStringManifest =>
           ser2.manifest(event)
-        case _ ⇒
+        case _ =>
           if (serializer.includeManifest) event.getClass.getName
           else PersistentRepr.Undefined
       }
@@ -489,8 +489,8 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
 
     // serialize actor references with full address information (defaultAddress)
     transportInformation match {
-      case Some(ti) ⇒ Serialization.currentTransportInformation.withValue(ti) { doSerializeEvent() }
-      case None     ⇒ doSerializeEvent()
+      case Some(ti) => Serialization.currentTransportInformation.withValue(ti) { doSerializeEvent() }
+      case None     => doSerializeEvent()
     }
   }
 
