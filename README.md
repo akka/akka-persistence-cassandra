@@ -243,6 +243,11 @@ The following tests don't run in external mode as they require more control over
 Migrations
 ----------
 
+### 0.99
+
+Events by tag queries that detect missing events now fail with a `MissingTaggedEventException` rather than a
+`IllegalStateException`. If the latter was relied on for retrying modify code to now expect the new exception.
+
 ### Migrations to 0.80 and later
 
 0.80 introduces a completely different way to manage tags for events. You can skip right ahead to 0.98 without going to
