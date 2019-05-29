@@ -77,6 +77,8 @@ def common: Seq[Setting[_]] = Seq(
 
 
 lazy val root = (project in file("."))
+  .enablePlugins(ScalaUnidocPlugin)
+  .disablePlugins(SitePlugin)
   .aggregate(core, cassandraLauncher)
   .settings(common: _*)
   .settings(
@@ -133,6 +135,47 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     dependencyOverrides += "com.github.jbellis" % "jamm" % "0.3.3", // See jamm comment in https://issues.apache.org/jira/browse/CASSANDRA-9608
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assemblyJarName in assembly := "cassandra-bundle.jar")
+
+lazy val docs = project
+  .enablePlugins(AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
+  .settings(
+    name := "Akka Persistence Cassandra",
+    publish / skip := true,
+    whitesourceIgnore := true,
+    makeSite := makeSite.dependsOn(LocalRootProject / ScalaUnidoc / doc).value,
+    previewPath := (Paradox / siteSubdirName).value,
+    Preprocess / siteSubdirName := s"api/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}",
+    Preprocess / sourceDirectory := (LocalRootProject / ScalaUnidoc / unidoc / target).value,
+    Preprocess / preprocessRules := Seq(
+      ("\\.java\\.scala".r, _ => ".java")
+    ),
+    Paradox / siteSubdirName := s"docs/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}",
+    paradoxProperties ++= Map(
+      "akka.version" -> AkkaVersion,
+      // Akka
+      "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${AkkaVersion}/%s",
+      "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${AkkaVersion}/",
+      "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${AkkaVersion}/",
+      // Cassandra
+      "extref.cassandra.base_url" -> s"http://cassandra.apache.org/doc/4.0/%s",
+      // Java
+      "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
+      // Scala
+      "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
+      "scaladoc.akka.stream.alpakka.base_url" -> {
+        val docsHost = sys.env
+          .get("CI")
+          .map(_ => "https://doc.akka.io")
+          .getOrElse(s"http://localhost:${(previewSite / previewFixedPort).value.getOrElse(4000)}")
+        s"$docsHost/api/alpakka/${if (isSnapshot.value) "snapshot" else version.value}/"
+      }
+    ),
+    paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
+    resolvers += Resolver.jcenterRepo,
+    publishRsyncArtifact := makeSite.value -> "www/",
+    publishRsyncHost := "akkarepo@gustav.akka.io"
+  )
+
 
 def akkaImport(packageName: String = "akka.*") =
   versionedImport(packageName, "2.4", "2.5")

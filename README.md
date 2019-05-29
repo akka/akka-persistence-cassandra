@@ -15,6 +15,7 @@ This [Apache Cassandra](https://cassandra.apache.org/) plugin to Akka Persistenc
 
 It moved to the [Akka](https://github.com/akka/) organisation in 2017 and the first release after that move was 0.80 in January 2018.
 
+<<<<<<< HEAD
 
 Dependencies
 ------------
@@ -418,3 +419,5 @@ Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of
 
 Schema and property changes mean that you can't currently upgrade from 0.3 to 0.4 SNAPSHOT and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.9/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala).
 
+=======
+>>>>>>> Create paradox and split readme
