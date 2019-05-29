@@ -1,6 +1,6 @@
 /**
-  * Copyright (C) 2009-2015 Typesafe Inc. <http://www.typesafe.com>
-  */
+ * Copyright (C) 2009-2015 Typesafe Inc. <http://www.typesafe.com>
+ */
 package akka
 
 import sbt._
@@ -29,8 +29,7 @@ object Publish extends AutoPlugin {
       false
     },
     defaultPublishTo := crossTarget.value / "repository",
-    releasePublishArtifactsAction := PgpKeys.publishSigned.value
-  )
+    releasePublishArtifactsAction := PgpKeys.publishSigned.value)
 
   def akkaPomExtra = {
     /* The scm info is automatic from the sbt-git plugin
@@ -50,24 +49,21 @@ object Publish extends AutoPlugin {
   }
 
   private def akkaPublishTo = Def.setting {
-    sonatypeRepo(version.value) orElse localRepo(defaultPublishTo.value)
+    sonatypeRepo(version.value).orElse(localRepo(defaultPublishTo.value))
   }
 
   private def sonatypeRepo(version: String): Option[Resolver] =
-    Option(sys.props("publish.maven.central")) filter (_.toLowerCase == "true") map {
-      _ =>
-        val nexus = "https://oss.sonatype.org/"
-        if (version endsWith "-SNAPSHOT")
-          "snapshots" at nexus + "content/repositories/snapshots"
-        else "releases" at nexus + "service/local/staging/deploy/maven2"
+    Option(sys.props("publish.maven.central")).filter(_.toLowerCase == "true").map { _ =>
+      val nexus = "https://oss.sonatype.org/"
+      if (version.endsWith("-SNAPSHOT"))
+        "snapshots".at(nexus + "content/repositories/snapshots")
+      else "releases".at(nexus + "service/local/staging/deploy/maven2")
     }
 
   private def localRepo(repository: File) =
     Some(Resolver.file("Default Local Repository", repository))
 
   private def akkaCredentials: Seq[Credentials] =
-    Option(System.getProperty("akka.publish.credentials", null))
-      .map(f => Credentials(new File(f)))
-      .toSeq
+    Option(System.getProperty("akka.publish.credentials", null)).map(f => Credentials(new File(f))).toSeq
 
 }
