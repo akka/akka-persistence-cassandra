@@ -8,12 +8,27 @@ jdk:
   - oraclejdk8
   - openjdk11
 sbt_args: -J-XX:ReservedCodeCacheSize=128m
-script:
+
+before_install:
   # make 'git branch' work again
   - git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH"
-  - sbt ++$TRAVIS_SCALA_VERSION test
-  # check policies, if on master also upload
-  - if [[ "$TRAVIS_BRANCH" == "master" && "$TRAVIS_EVENT_TYPE" == "push" && "$TRAVIS_JDK_VERSION" == "oraclejdk8" ]]; then sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies whitesourceUpdate; else sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies; fi
+
+jobs:
+  include:
+    - stage: test
+      script: sbt ++$TRAVIS_SCALA_VERSION test
+    - stage: whitesource
+      name: "White Source"
+      script:
+        # check policies, if on master and secure env vars are available
+        - if [[ "$TRAVIS_SECURE_ENV_VARS" == "true" ]]; then if [[ "$TRAVIS_BRANCH" == "master" && "$TRAVIS_EVENT_TYPE" == "push" ]]; then sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies whitesourceUpdate; else sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies; fi ; fi
+
+stages:
+  - name: test
+    if: NOT tag =~ ^v
+  - name: whitesource
+    if: repo = akka/akka-persistence-cassandra AND ( ( branch = master AND type = push ) OR tag =~ ^v )
+
 
 cache:
   directories:
