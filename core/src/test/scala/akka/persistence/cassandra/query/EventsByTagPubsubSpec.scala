@@ -3,40 +3,26 @@
  */
 package akka.persistence.cassandra.query
 
-import java.nio.ByteBuffer
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneId
 import java.time.ZoneOffset
-import java.time.temporal.ChronoUnit
-import java.util.UUID
+
 import scala.concurrent.duration._
 import scala.util.Try
 import akka.actor.ActorSystem
-import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.journal.CassandraJournalConfig
-import akka.persistence.cassandra.journal.CassandraStatements
-import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.persistence.journal.Tagged
-import akka.persistence.journal.WriteEventAdapter
 import akka.persistence.query.EventEnvelope
 import akka.persistence.query.PersistenceQuery
-import akka.persistence.query.scaladsl.CurrentEventsByTagQuery
-import akka.persistence.query.scaladsl.EventsByTagQuery
-import akka.serialization.SerializationExtension
 import akka.stream.ActorMaterializer
-import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
-import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
 import org.scalatest.Matchers
 import org.scalatest.WordSpecLike
 import akka.cluster.Cluster
+
 import scala.concurrent.Await
 import akka.persistence.query.NoOffset
 
@@ -45,8 +31,8 @@ object EventsByTagPubsubSpec {
 
   val config = ConfigFactory.parseString(s"""
     akka.actor.provider = "akka.cluster.ClusterActorRefProvider"
-    akka.actor.serialize-messages = on
-    akka.actor.serialize-creators = on
+    akka.actor.serialize-messages = off
+    akka.actor.serialize-creators = off
     cassandra-journal {
       pubsub-minimum-interval = 1 millisecond
     }
@@ -59,7 +45,6 @@ object EventsByTagPubsubSpec {
 
 class EventsByTagPubsubSpec extends TestKit(ActorSystem("EventsByTagPubsubSpec", EventsByTagPubsubSpec.config))
   with ImplicitSender with WordSpecLike with Matchers with CassandraLifecycle {
-  import EventsByTagSpec._
 
   override def systemName: String = "EventsByTagPubsubSpec"
   implicit val mat = ActorMaterializer()(system)
