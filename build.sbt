@@ -42,16 +42,20 @@ def common: Seq[Setting[_]] = Seq(
     "-unchecked",
     "-Xlint",
     "-Ywarn-dead-code",
-    "-Xfatal-warnings"
+    "-deprecation"
   ),
   scalacOptions ++= {
     // define scalac options that are only valid or desirable for 2.12
-    if (scalaVersion.value.startsWith("2.13")) Seq.empty
-    else 
-    Seq(
-      "-Xfuture", // invalid in 2.13
-      "-deprecation" // temporarily allowing deprecation because of Java colletion coverters
-    )
+    if (scalaVersion.value.startsWith("2.13"))
+      Seq(
+      )
+    else
+      Seq(
+        // -deprecation causes some warnings on 2.13 because of collection converters. 
+        // We only enable `fatal-warnings` on 2.12 and accept the warning on 2.13
+        "-Xfatal-warnings", 
+        "-Xfuture", // invalid in 2.13
+      )
   },
   Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
   Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
