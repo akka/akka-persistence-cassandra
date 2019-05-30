@@ -17,6 +17,15 @@ Dependencies
 To include the latest release of the Cassandra plugins for **Akka 2.5.x** into your `sbt` project, add the following lines to your `build.sbt` file:
 
     libraryDependencies += Seq(
+      "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.99",
+      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.99" % Test
+    )
+
+This version of `akka-persistence-cassandra` depends on Akka 2.5.23. It has been published for Scala 2.12 and 2.13.  The launcher artifact is a utility for starting an embedded Cassandra, useful for running tests. It can be removed if not needed.
+
+To include the latest release of the Cassandra plugins for **Akka 2.5.x** compiled for Scala 2.11 into your `sbt` project, add the following lines to your `build.sbt` file:
+
+    libraryDependencies += Seq(
       "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.98",
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.98" % Test
     )

@@ -32,7 +32,7 @@ def common: Seq[Setting[_]] = Seq(
   organizationName := "Lightbend Inc.",
   startYear := Some(2016),
   licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
-  crossScalaVersions := Seq("2.11.12", "2.13.0-RC2", "2.12.8"),
+  crossScalaVersions := Seq("2.12.8", "2.13.0-RC2"),
   scalaVersion := crossScalaVersions.value.last,
   crossVersion := CrossVersion.binary,
   scalacOptions ++= Seq(
@@ -45,7 +45,7 @@ def common: Seq[Setting[_]] = Seq(
     "-Xfatal-warnings"
   ),
   scalacOptions ++= {
-    // define scalac options that are only valid or desirable for 2.11 and 2.12
+    // define scalac options that are only valid or desirable for 2.12
     if (scalaVersion.value.startsWith("2.13")) Seq.empty
     else 
     Seq(
