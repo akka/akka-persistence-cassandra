@@ -17,8 +17,6 @@ val akkaPersistenceCassandraDependencies = Seq(
   "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % "provided"
 )
 
-val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.0.0"
-
 def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   organization := "com.typesafe.akka",
   organizationName := "Typesafe Inc.",
@@ -109,7 +107,6 @@ lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .settings(common: _*)
   .settings(
     name := "akka-persistence-cassandra-launcher",
-    libraryDependencies += collectionCompat,
     managedResourceDirectories in Compile += (target in cassandraBundle).value / "bundle",
     managedResources in Compile += (assembly in cassandraBundle).value
   )

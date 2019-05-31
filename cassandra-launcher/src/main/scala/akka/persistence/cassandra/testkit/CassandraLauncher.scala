@@ -13,7 +13,6 @@ import scala.annotation.varargs
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
-import scala.collection.compat._
 
 /**
  * Starts Cassandra in current JVM. There can only be one Cassandra instance per JVM,
@@ -108,7 +107,7 @@ object CassandraLauncher {
         case jarUrl if jarUrl.getProtocol == "jar" =>
           new File(URI.create(jarUrl.getPath.takeWhile(_ != '!'))).getCanonicalPath
       }
-    }.distinct.to(immutable.Seq)
+    }.distinct.toIndexedSeq
   }
 
   /**
