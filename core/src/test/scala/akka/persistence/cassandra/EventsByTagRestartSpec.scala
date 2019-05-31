@@ -7,10 +7,12 @@ package akka.persistence.cassandra
 import java.time.format.DateTimeFormatter
 import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.persistence.cassandra.TestTaggingActor.{ Ack, Stop }
+import akka.NotUsed
+import akka.persistence.cassandra.TestTaggingActor.{ Ack, Crash, Stop }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
@@ -51,10 +53,9 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
 
   "Events by tag recovery for same actor system" must {
 
-    val messagesPerRestart = 100
-    val restarts = 10
-
-    "continue tag sequence nrs for actor restarts" in {
+    "continue tag sequence nrs for actor stop and started with the same pid" in {
+      val messagesPerRestart = 100
+      val restarts = 10
       val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
       (0 until restarts).foreach { restart =>
@@ -66,7 +67,6 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
           expectMsg(Ack)
         }
         p1 ! Stop
-        probe.expectTerminated(p1)
       }
 
       val greenTags = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
@@ -82,6 +82,32 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       }
       tagProbe.expectNoMessage(waitTime)
       tagProbe.cancel()
+    }
+
+    "continue tag sequence nrs for actor crashing" in {
+      // crash the actor 250 times, persist 5 events each time
+      val crashEvery = 5
+      val crashNr = 250
+      val msgs = crashEvery * crashNr
+      val p2 = system.actorOf(TestTaggingActor.props("p2", Set("blue")))
+      (1 to msgs).foreach { cn =>
+        if (cn % crashEvery == 0) {
+          p2 ! Crash
+        }
+        val msg = s"msg $cn"
+        p2 ! msg
+        expectMsg(Ack)
+      }
+      val blueTags: Source[EventEnvelope, NotUsed] = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
+      val tagProbe = blueTags.runWith(TestSink.probe[EventEnvelope](system))
+      (1L to msgs).foreach { m =>
+        val expected = s"msg $m"
+        tagProbe.request(1)
+        tagProbe.expectNext().event shouldEqual expected
+      }
+      tagProbe.expectNoMessage(250.millis)
+      tagProbe.cancel()
+
     }
   }
 }
