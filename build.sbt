@@ -2,6 +2,7 @@ import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
 val AkkaVersion = "2.5.23"
+val CassandraVersionInDocs = "4.0"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
@@ -157,17 +158,17 @@ lazy val docs = project
       "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${AkkaVersion}/",
       "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${AkkaVersion}/",
       // Cassandra
-      "extref.cassandra.base_url" -> s"http://cassandra.apache.org/doc/4.0/%s",
+      "extref.cassandra.base_url" -> s"https://cassandra.apache.org/doc/${CassandraVersionInDocs}/%s",
       // Java
       "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
       // Scala
       "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
-      "scaladoc.akka.stream.alpakka.base_url" -> {
+      "scaladoc.akka.persistence.cassandra.base_url" -> {
         val docsHost = sys.env
           .get("CI")
           .map(_ => "https://doc.akka.io")
-          .getOrElse(s"http://localhost:${(previewSite / previewFixedPort).value.getOrElse(4000)}")
-        s"$docsHost/api/alpakka/${if (isSnapshot.value) "snapshot" else version.value}/"
+          .getOrElse("")
+        s"$docsHost/api/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}/"
       }
     ),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
