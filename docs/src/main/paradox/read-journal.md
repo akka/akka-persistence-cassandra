@@ -1,6 +1,6 @@
 # Query Plugin
 
-It implements the following [Persistence Queries](https://doc.akka.io/docs/akka/current/scala/persistence-query.html):
+It implements the following @extref:[Persistence Queries](akka:scala/persistence-query.html):
 
 * persistenceIds, currentPersistenceIds
 * eventsByPersistenceId, currentEventsByPersistenceId

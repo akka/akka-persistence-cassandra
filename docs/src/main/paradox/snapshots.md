@@ -2,7 +2,7 @@
 
 ### Features
 
-- Implements the Akka Persistence [snapshot store plugin API](https://doc.akka.io/docs/akka/current/scala/persistence.html#snapshot-store-plugin-api).
+- Implements the Akka Persistence @extref:[snapshot store plugin API](akka:scala/persistence.html#snapshot-store-plugin-api).
 
 ### Configuration
 

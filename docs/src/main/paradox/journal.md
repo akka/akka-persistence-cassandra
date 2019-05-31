@@ -2,11 +2,11 @@
 
 ### Features
 
-- All operations required by the Akka Persistence [journal plugin API](https://doc.akka.io/docs/akka/current/scala/persistence.html#journal-plugin-api) are fully supported.
+- All operations required by the Akka Persistence @extref:[journal plugin API](akka:scala/persistence.html#journal-plugin-api) are fully supported.
 - The plugin uses Cassandra in a pure log-oriented way i.e. data are only ever inserted but never updated (deletions are made on user request only).
-- Writes of messages are batched to optimize throughput for `persistAsync`. See [batch writes](https://doc.akka.io/docs/akka/current/scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
+- Writes of messages are batched to optimize throughput for `persistAsync`. See @extref:[batch writes](akka:scala/persistence.html#batch-writes) for details how to configure batch sizes. The plugin was tested to work properly under high load.
 - Messages written by a single persistent actor are partitioned across the cluster to achieve scalability with data volume by adding nodes.
-- [Persistence Query](https://doc.akka.io/docs/akka/current/scala/persistence-query.html) support by `CassandraReadJournal`
+- @extref:[Persistence Query](akka:scala/persistence-query.html) support by `CassandraReadJournal`
 
 ### Configuration
 
