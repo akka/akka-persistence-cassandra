@@ -25,8 +25,8 @@ class CassandraJournalConfig(system: ActorSystem, config: Config) extends Cassan
   val pubsubMinimumInterval: Duration = {
     val key = "pubsub-minimum-interval"
     config.getString(key).toLowerCase(Locale.ROOT) match {
-      case "off" ⇒ Duration.Undefined
-      case _     ⇒ config.getDuration(key, MILLISECONDS).millis requiring (_ > Duration.Zero, key + " > 0s, or off")
+      case "off" => Duration.Undefined
+      case _     => config.getDuration(key, MILLISECONDS).millis requiring (_ > Duration.Zero, key + " > 0s, or off")
     }
   }
 

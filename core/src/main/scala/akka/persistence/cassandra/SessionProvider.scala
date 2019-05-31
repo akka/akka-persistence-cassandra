@@ -45,10 +45,10 @@ object SessionProvider {
 
     val params = List((classOf[ActorSystem], system), (classOf[Config], config))
     instantiate(params)
-      .recoverWith { case x: NoSuchMethodException ⇒ instantiate(params.take(1)) }
-      .recoverWith { case x: NoSuchMethodException ⇒ instantiate(Nil) }
+      .recoverWith { case x: NoSuchMethodException => instantiate(params.take(1)) }
+      .recoverWith { case x: NoSuchMethodException => instantiate(Nil) }
       .recoverWith {
-        case ex: Exception ⇒
+        case ex: Exception =>
           Failure(new IllegalArgumentException(s"Unable to create SessionProvider instance for class [$className], " +
             "tried constructor with ActorSystem, Config, and only ActorSystem, and no parameters", ex))
       }.get

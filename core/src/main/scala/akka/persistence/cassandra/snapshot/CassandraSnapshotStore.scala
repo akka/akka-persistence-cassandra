@@ -229,9 +229,9 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
           val m2 = m.asInstanceOf[AnyRef]
           val serializer = serialization.findSerializerFor(m2)
           val serManifest = serializer match {
-            case ser2: SerializerWithStringManifest ⇒
+            case ser2: SerializerWithStringManifest =>
               ser2.manifest(m2)
-            case _ ⇒
+            case _ =>
               if (serializer.includeManifest) m2.getClass.getName
               else PersistentRepr.Undefined
           }
@@ -248,9 +248,9 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
       }).asInstanceOf[AnyRef]
       val serializer = serialization.findSerializerFor(p)
       val serManifest = serializer match {
-        case ser2: SerializerWithStringManifest ⇒
+        case ser2: SerializerWithStringManifest =>
           ser2.manifest(p)
-        case _ ⇒
+        case _ =>
           if (serializer.includeManifest) p.getClass.getName
           else PersistentRepr.Undefined
       }
@@ -260,8 +260,8 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
 
     // serialize actor references with full address information (defaultAddress)
     transportInformation match {
-      case Some(ti) ⇒ Serialization.currentTransportInformation.withValue(ti) { doSerializeSnapshot() }
-      case None     ⇒ doSerializeSnapshot()
+      case Some(ti) => Serialization.currentTransportInformation.withValue(ti) { doSerializeSnapshot() }
+      case None     => doSerializeSnapshot()
     }
   }
 

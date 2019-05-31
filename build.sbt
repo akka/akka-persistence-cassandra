@@ -4,7 +4,7 @@ import com.typesafe.sbt.SbtScalariform.ScalariformKeys
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
-val AkkaVersion = "2.5.9"
+val AkkaVersion = "2.5.23"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra"  % "cassandra-driver-core"               % "3.2.0",
@@ -17,13 +17,12 @@ val akkaPersistenceCassandraDependencies = Seq(
   "org.osgi"                % "org.osgi.core"                       % "5.0.0"         % "provided"
 )
 
-
 def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
   organization := "com.typesafe.akka",
   organizationName := "Typesafe Inc.",
   licenses := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
 
-  crossScalaVersions := Seq("2.11.12", "2.12.8"),
+  crossScalaVersions := Seq("2.11.12", "2.12.8", "2.13.0-RC2"),
   scalaVersion := crossScalaVersions.value.head,
   crossVersion := CrossVersion.binary,
 
@@ -34,11 +33,18 @@ def common: Seq[Setting[_]] = SbtScalariform.scalariformSettings ++ Seq(
     "-deprecation",
     //"-Xfatal-warnings",
     "-Xlint",
-    "-Yno-adapted-args",
     "-Ywarn-dead-code",
-    "-Ywarn-numeric-widen",
-    "-Xfuture"
+    "-Ywarn-numeric-widen"
   ),
+
+  scalacOptions ++= {
+    // define scalac options that are only valid or desirable for 2.11 and 2.12
+    if (scalaVersion.value.startsWith("2.13")) Seq.empty
+    else
+      Seq(
+        "-Xfuture"// invalid in 2.13
+      )
+  },
 
   headers := headers.value ++ Map(
     "scala" -> (

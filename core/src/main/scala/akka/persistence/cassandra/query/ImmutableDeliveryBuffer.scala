@@ -9,7 +9,7 @@ import akka.annotation.InternalApi
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] trait ImmutableDeliveryBuffer[T] { _: ActorPublisher[T] ⇒
+@InternalApi private[akka] trait ImmutableDeliveryBuffer[T] { _: ActorPublisher[T] =>
 
   def deliverBuf(buf: Vector[T]): Vector[T] =
     if (buf.nonEmpty && totalDemand > 0) {
