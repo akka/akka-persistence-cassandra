@@ -38,7 +38,7 @@ stages:
   - name: test
     if: NOT tag =~ ^v
   - name: whitesource
-    if: repo = akka/akka-cassandra AND ( ( branch = master AND type = push ) OR tag =~ ^v )
+    if: repo = akka/akka-persistence-cassandra AND ( ( branch = master AND type = push ) OR tag =~ ^v )
 
 after_failure:
   - docker-compose logs
