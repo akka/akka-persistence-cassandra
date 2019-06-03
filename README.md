@@ -15,3 +15,6 @@ This [Apache Cassandra](https://cassandra.apache.org/) plugin to Akka Persistenc
 
 It moved to the [Akka](https://github.com/akka/) organisation in 2017 and the first release after that move was 0.80 in January 2018.
 
+## Documentation for 0.x versions
+
+Please consider the documentation on the [`release-0.x` branch](https://github.com/akka/akka-persistence-cassandra/tree/release-0.x) as master is work-in-progress and will publish a proper documentation site [for snapshots on akka.io](doc.akka.io/docs/akka-persistence-cassandra/snapshot/) very soon.
