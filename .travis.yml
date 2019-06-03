@@ -25,7 +25,7 @@ jobs:
       name: "Code style check (fixed with `sbt scalafmtAll`)"
     - script: sbt scalafmtSbtCheck || { echo "[error] Unformatted sbt code found. Please run 'scalafmtSbt' and commit the reformatted code."; false; }
       name: "Build code style check (fixed with `sbt scalafmtSbt`)"
-    - script: sbt ++2.13.0-RC2 Test/compile"
+    - script: sbt ++2.13.0-RC2 Test/compile
       name: "Compile all tests (with Scala 2.13)"
     - script: sbt unidoc
       name: "Create all API docs"
