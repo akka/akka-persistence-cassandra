@@ -39,19 +39,22 @@ def common: Seq[Setting[_]] =
     organizationName := "Lightbend Inc.",
     startYear := Some(2016),
     licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
-    crossScalaVersions := Seq("2.11.12", "2.13.0-M5", "2.12.8"),
+    crossScalaVersions := Seq("2.12.8", "2.13.0-RC2"),
     scalaVersion := crossScalaVersions.value.last,
     crossVersion := CrossVersion.binary,
-    scalacOptions ++= Seq(
-        "-encoding",
-        "UTF-8",
-        "-feature",
-        "-unchecked",
-        "-deprecation",
-        "-Xlint",
-        "-Ywarn-dead-code",
-        "-Xfuture",
-        "-Xfatal-warnings"),
+    scalacOptions ++= Seq("-encoding", "UTF-8", "-feature", "-unchecked", "-Xlint", "-Ywarn-dead-code", "-deprecation"),
+    scalacOptions ++= {
+      // define scalac options that are only valid or desirable for 2.12
+      if (scalaVersion.value.startsWith("2.13"))
+        Seq()
+      else
+        Seq(
+          // -deprecation causes some warnings on 2.13 because of collection converters.
+          // We only enable `fatal-warnings` on 2.12 and accept the warning on 2.13
+          "-Xfatal-warnings",
+          "-Xfuture" // invalid in 2.13
+        )
+    },
     Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
     Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     headerLicense := Some(
@@ -141,38 +144,31 @@ lazy val docs = project
     whitesourceIgnore := true,
     makeSite := makeSite.dependsOn(LocalRootProject / ScalaUnidoc / doc).value,
     previewPath := (Paradox / siteSubdirName).value,
-    Preprocess / siteSubdirName := s"api/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}",
+    Preprocess / siteSubdirName := s"api/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot"
+      else version.value}",
     Preprocess / sourceDirectory := (LocalRootProject / ScalaUnidoc / unidoc / target).value,
-    Preprocess / preprocessRules := Seq(
-      ("\\.java\\.scala".r, _ => ".java")
-    ),
+    Preprocess / preprocessRules := Seq(("\\.java\\.scala".r, _ => ".java")),
     Paradox / siteSubdirName := s"docs/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}",
     paradoxProperties ++= Map(
-      "akka.version" -> AkkaVersion,
-      // Akka
-      "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${AkkaVersion}/%s",
-      "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${AkkaVersion}/",
-      "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${AkkaVersion}/",
-      // Cassandra
-      "extref.cassandra.base_url" -> s"https://cassandra.apache.org/doc/${CassandraVersionInDocs}/%s",
-      // Java
-      "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
-      // Scala
-      "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
-      "scaladoc.akka.persistence.cassandra.base_url" -> {
-        val docsHost = sys.env
-          .get("CI")
-          .map(_ => "https://doc.akka.io")
-          .getOrElse("")
-        s"$docsHost/api/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}/"
-      }
-    ),
+        "akka.version" -> AkkaVersion,
+        // Akka
+        "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${AkkaVersion}/%s",
+        "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${AkkaVersion}/",
+        "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${AkkaVersion}/",
+        // Cassandra
+        "extref.cassandra.base_url" -> s"https://cassandra.apache.org/doc/${CassandraVersionInDocs}/%s",
+        // Java
+        "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
+        // Scala
+        "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
+        "scaladoc.akka.persistence.cassandra.base_url" -> {
+          val docsHost = sys.env.get("CI").map(_ => "https://doc.akka.io").getOrElse("")
+          s"$docsHost/api/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}/"
+        }),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     resolvers += Resolver.jcenterRepo,
     publishRsyncArtifact := makeSite.value -> "www/",
-    publishRsyncHost := "akkarepo@gustav.akka.io"
-  )
-
+    publishRsyncHost := "akkarepo@gustav.akka.io")
 
 def akkaImport(packageName: String = "akka.*") =
   versionedImport(packageName, "2.4", "2.5")
