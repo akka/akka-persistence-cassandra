@@ -51,10 +51,9 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
 
   "Events by tag recovery for same actor system" must {
 
-    val messagesPerRestart = 100
-    val restarts = 10
-
-    "continue tag sequence nrs for actor restarts" in {
+    "continue tag sequence nrs for actor stop and started with the same pid" in {
+      val messagesPerRestart = 100
+      val restarts = 10
       val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
       (0 until restarts).foreach { restart =>
@@ -66,7 +65,6 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
           expectMsg(Ack)
         }
         p1 ! Stop
-        probe.expectTerminated(p1)
       }
 
       val greenTags = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
