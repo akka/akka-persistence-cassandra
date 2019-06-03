@@ -33,9 +33,9 @@ jobs:
       name: "Create site with Paradox"
 
     - stage: test
-      script: jabba use adopt@~1.8.202-08 && java -version && docker-compose up -d cassandra && sbt test
+      script: jabba use adopt@~1.8.202-08 && java -version && docker-compose up -d cassandra && sbt +test
       name: "Run all tests with Jdk 8"
-    - script: jabba use adopt@~1.11.0-2 && java -version && docker-compose up -d cassandra && sbt test
+    - script: jabba use adopt@~1.11.0-2 && java -version && docker-compose up -d cassandra && sbt +test
       name: "Run all tests with Jdk 11"
 
     - stage: whitesource
