@@ -8,10 +8,9 @@ import java.lang.{ Integer => JInteger, Long => JLong }
 import java.nio.ByteBuffer
 
 import akka.cassandra.session.CassandraMetricsRegistry
-import akka.persistence._
 import akka.persistence.SnapshotProtocol._
 import akka.persistence._
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry, SnapshotWithMetaData }
+import akka.persistence.cassandra.{ CassandraLifecycle, SnapshotWithMetaData }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
 import com.datastax.driver.core._
