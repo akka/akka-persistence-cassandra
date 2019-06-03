@@ -1,9 +1,6 @@
 language: scala
 sudo: true
 dist: trusty
-scala:
-  - "2.13.0-RC2"
-  - "2.12.8"
 
 services:
   - docker
@@ -13,31 +10,61 @@ before_install:
   - git remote set-branches --add origin master && git fetch
   # fetch full history for correct current and previous version detection
   - git fetch --unshallow
-  - git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH"
   # using jabba for custom jdk management
   - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.1/install.sh | bash && . ~/.jabba/jabba.sh
   - jabba install adopt@~1.8.202-08
   - jabba install adopt@~1.11.0-1
-  - docker-compose up -d cassandra
 
 before_script:
   - unset _JAVA_OPTIONS
 
 jobs:
   include:
+    - stage: check
+      script: sbt scalafmtCheckAll || { echo "[error] Unformatted code found. Please run 'scalafmtAll' and commit the reformatted code."; false; }
+      name: "Code style check (fixed with `sbt scalafmtAll`)"
+    - script: sbt scalafmtSbtCheck || { echo "[error] Unformatted sbt code found. Please run 'scalafmtSbt' and commit the reformatted code."; false; }
+      name: "Build code style check (fixed with `sbt scalafmtSbt`)"
+    - script: sbt ++2.13.0-RC2 Test/compile"
+      name: "Compile all tests (with Scala 2.13)"
+    - script: sbt unidoc
+      name: "Create all API docs"
+    - script: sbt docs/paradox
+      name: "Create site with Paradox"
+
     - stage: test
-      script: jabba use $JDK  && java -version && sbt ++$TRAVIS_SCALA_VERSION ";scalafmtCheckAll;test"
+      script: jabba use adopt@~1.8.202-08 && java -version && docker-compose up -d cassandra && sbt test
+      name: "Run all tests with Jdk 8"
+    - script: jabba use adopt@~1.11.0-2 && java -version && docker-compose up -d cassandra && sbt test
+      name: "Run all tests with Jdk 11"
+
     - stage: whitesource
       name: "White Source"
-      script:
-        # check policies, if on master and secure env vars are available
-        - if [[ "$TRAVIS_SECURE_ENV_VARS" == "true" ]]; then if [[ "$TRAVIS_BRANCH" == "master" && "$TRAVIS_EVENT_TYPE" == "push" ]]; then sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies whitesourceUpdate; else sbt 'set credentials += Credentials("whitesource", "whitesourcesoftware.com", "", System.getenv("WHITESOURCE_KEY"))' whitesourceCheckPolicies; fi ; fi
+      script: git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH" && sbt whitesourceCheckPolicies whitesourceUpdate
+
+    - stage: publish
+      script: sbt ++2.12.8 publishSigned
+      name: "Publish artifacts for Scala 2.12.8"
+    - script: sbt ++2.13.0-RC2 publishSigned
+      name: "Publish artifacts for Scala 2.13.0-RC2"
 
 stages:
+  # runs on master commits and PRs
+  - name: check
+    if: NOT tag =~ ^v
+
+  # runs on master commits and PRs
   - name: test
     if: NOT tag =~ ^v
+
+  # runs on main repo master commits or version-tagged commits
   - name: whitesource
     if: repo = akka/akka-persistence-cassandra AND ( ( branch = master AND type = push ) OR tag =~ ^v )
+
+  # runs on main repo master commits or version-tagged commits
+  - name: publish
+    if: repo = akka/akka-persistence-cassandra AND ( ( branch = master AND type = push ) OR tag =~ ^v )
+
 
 after_failure:
   - docker-compose logs
@@ -49,10 +76,10 @@ cache:
     - $HOME/.jabba/jdk
 
 env:
-  matrix:
-   - JDK="adopt@~1.8.202-08"
-   - JDK="adopt@~1.11.0-2"
-
   global:
-    # encrypt with: travis encrypt WHITESOURCE_KEY=...
-    - secure: "tQ7+MgNNH5Y8wE8w6KTlbSHe3jtgQ4yc1SVaty7KK7ImZLEjLC5yO9PvXMUst/+5E4G2DsAuZdG8LInD3L7Y5tNNPer9NFOTJnzhAZf8R1YeuvX76ofMf31oyfqR8IPJPxOBkBAmMiz/Xioa+oqmsdbXlVP6OUsic7jegMPqjamy/ZAJ8/8MCn6g9AQNqajg8z27aOPXO96wLEEMR82FXffARIDlwbrtxBpEq1g9HywTIwLP9+BgLaQ+TBz+ND1WYVByqnKWwQYYFnWDo8xTZmDVxHirml1mLevR7PUbMg55FFxAo4H9K64d4RQJF6FsZhRFpMihTwdsut1BQQJ9lTML133q5ID+XX3L5yr+1GqAgnHh9Qt/Fdt4pG1iRymBR++RBZiBxANpoE23xy5QVySQ4BYlO0s37rhw0SiFlvuSXmKyTB6j52r/71ocCFbZcUDgjKQ8Q0tokzsBvSTuDwV8yh4nw4ec3/zNp03ByeuOwzJ1S7st+vnAF65Ed7v+kcLHzWLZ+ocnXWtt4+47pZm4YdPMukpCQYxNdWrHap9ughtVxOchNbP3QchOx2TA1mVo4S1pI+gNfpjEap8uhyRLTirI0g1weEBWvndKtwHQrauYyW2awOeU/IGZCPPAY71gmvy9O+JZmBOz517zia4YH2wUctI4t/p0j2MDwo8="
+    # encrypt with: travis encrypt WHITESOURCE_PASSWORD=...
+    - secure: "n7Rn9Qn8GtMzlwJOsixSlKA5dTvtRoihJB4m5QdzWwjo9S3ZW+Q4ce3JT8/ve5Pj6/3b/hOi/YeLoyuHjTAfzZ1ghy+h0rgJA36n1JpyfBOqKW4PGhp8neJPleoa+7bGyG9OUiXt+5ahPng22+P2pGRO6QnX/n+eoHbxtjGc8un2I2yVj/JYJH1ZxfvbLuxFf3hdquEgY2Ety7JF73dUDpL5cEvKrXuUKb00hRXsBQO1v/9otRUlt7tH0ko/Ko3pqEqag0ilT2dYiNk85Zz9l2bwlMoNsfB55Q5jYSvSkDxEq5Olyg+ffk7UIZllIZ3fsXDQRVfqXcKAZN/tz1vFxzLUoVYqkgEI4sgQLmDwI7LtO+mbQPDDiHmKDy00uWI3TV4lUNUJ9isaffbMNH+OMnut4O/q4l6wBgCyveO56oTxhDiLizGUjsYct6LIr4WG2VOBkYbPdJoYjoGn/53BhB5JobnunvjYAmgQ2yqWvjEQbu6lQzz58r25lqTAMDR9s5ffwV3X5dk7VHdEue6kT7FKa7THlJnaDWYEuMGo59UuJm9hOPDZLGEzRY7X5VYNKZAxCEk+kxzh3rtAK9X0ByUvQ+yAfBgcruyKPLT6Y+d+Fbql4C+uB2SFPsGHmTkF1ThLmDyd4dQ68/I2I+4RtGb1k/5oSa7p6jT/kiEDC6s="
+    # encrypt with: travis encrypt SONATYPE_USERNAME=...
+    - secure: "iCz1dqU7apHFcgVbzwnvqY9D3DNhXUoWVzUBGvN1Ee/BhqE8kiJscICrsCw2Ec4lts6kHUHKVaNCazaSG/Um9aWZNFwNDAbM4Uvlo3fpleeO4nadjlAebqz8i0m6z6KqukMoQKjRkI1nrvrV1wPIxOSeiKYe6n+j7ZahGrJcU67WxcAlBXVYcAa+gLGBx96Yr/eqZJqAp+zhoGNrkXp4VQ6igjj9BmAJZzSegSaEt44bSN84RlpfeeYk8OWtdLysIqrCrkylj9hH+jRP99TF/1hekSQS4MAdh9nUhzaJbAp34DIOK7RCEw7+6/o76iND35Ftj+DrMd6s01EbN1slMU2xFalv/+UDYSoj8MtLiFwNpH1PrrXmODT/dZpLH8U0fO2g93wBkyvvbb+XABlQODv8rSRTWA9tNyWeSfNVHpD0AazvjIoI7rTOZUDyO64utOU+NO3od2khODtqqqfBvsUHNAOtOJ34o03fqv7UIFlPk0d3VsWEgio5wJJOZKf9DCbEDn8WUejlXWUdtbQavu575OrYe9/nfpYXZZFVbnUPhJ1vjunf1wO/EFoP3Eni3iBH3NjBKC68Eq4GgYBEpctPFhuz48cFoJkDDkkMAJhGliFsUS/xwdpdMxtM/sm/2/8v/qZ8zVEiw/151H6qO2SHGmoWQyFMxmeDGdmFd1I="
+    # encrypt with: travis encrypt SONATYPE_PASSWORD=...
+    - secure: "OEXKKiL7BvNssXWWK9x0/VPepCg+65wrB+nz3uexILM8PCVKMUnrNfkB8q5s1TXLmMtv5XPx5EBRVG252ZVjwrweXs66ne+BeDxUig7PKUQJoJwzCnkpNI9iutySXET85m4eWq4sVF/TG0LBjuZLFz7J01aUxAc1cJABqGMrdlR0IZbW8vqG8iQM3rkn0+BUeYqbYygDCac0Cyw74K0X/ncDBI76ItA1BO4NnJ7HfI2266ZhNi0lTFkI9JYy1ogFmwqJKlGTVrosofcAoiQcT4nWhvH6IWKKeLn5wuUGsntA6KfaVuPQNr65VgrS0KrP8umKHH7SucH/fnClwbrSHOxFvmq4BY6aliZ22keGMAau0RPgSS9j9UkjvQy1St7UoHVL3yuzqHOVBIzOXgKYxG6yy/gY8zu1jVOZIIse8oCtBFcQvz0AoO4f0T+tyUD8wfU9jxxxNt6i6jikuOd2o2ZR4+8yIQOum23Xb8sG2eOtH3sXPJm+gD/MnNeR1wx9Zn5zJDL6FmwUfDlSK++C6EEVy6tunWLDeqQWeZDuthqro9xXup+wcCKuEXYugNnx+OAzuDgJMCgSbOU6BkwAQtBIszAJWPnndMGRXocfoi4WhE2/FLMdXYt1uCcKiz8a+B3UvPzgDHugOkxI/dwB/8p0ecuE65MSYpbrhP+9O0o="
