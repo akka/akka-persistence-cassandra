@@ -10,7 +10,7 @@ import com.typesafe.config.Config
 
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
-import akka.persistence.cassandra.session.CassandraSessionSettings
+import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
 
 case class StorePathPasswordConfig(path: String, password: String)
 

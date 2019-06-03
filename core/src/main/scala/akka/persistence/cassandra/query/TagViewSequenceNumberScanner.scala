@@ -8,10 +8,10 @@ import java.lang.{ Long => JLong }
 import java.util.UUID
 
 import akka.annotation.InternalApi
+import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TimeBucket
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.formatOffset
 import akka.stream.ActorMaterializer
 import com.datastax.driver.core.PreparedStatement

@@ -9,9 +9,10 @@ import java.util.concurrent.CompletionStage
 
 import akka.Done
 import akka.actor.ExtendedActorSystem
+import akka.cassandra.session.javadsl.CassandraSession
+import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider, _ }
 import akka.event.Logging
-import akka.persistence.cassandra.session.CassandraSessionSettings
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, ListenableFutureConverter, SessionProvider }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.stream.testkit.scaladsl.TestSink
 import com.datastax.driver.core.{ BatchStatement, Session, SimpleStatement }
 import com.typesafe.config.ConfigFactory

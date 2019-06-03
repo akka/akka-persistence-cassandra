@@ -8,7 +8,6 @@ import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import akka.actor.Props
 import com.datastax.driver.core.{ PreparedStatement, ResultSet, Row, Session }
-import akka.persistence.cassandra._
 import akka.persistence.cassandra.query.AllPersistenceIdsPublisher._
 import akka.persistence.cassandra.query.QueryActorPublisher._
 import akka.actor.NoSerializationVerificationNeeded
@@ -69,9 +68,10 @@ import akka.annotation.InternalApi
     requestNext(state, resultSet)
 
   private[this] def query(state: AllPersistenceIdsState): Future[Action] = {
+    import akka.cassandra.session._
     val boundStatement = session.selectDistinctPersistenceIds.bind()
     boundStatement.setFetchSize(config.fetchSize)
 
-    listenableFutureToFuture(session.session.executeAsync(boundStatement)).map(Finished)
+    session.session.executeAsync(boundStatement).asScala.map(Finished)
   }
 }

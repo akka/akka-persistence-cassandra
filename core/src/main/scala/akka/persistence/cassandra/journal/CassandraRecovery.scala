@@ -15,6 +15,7 @@ import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extractors,
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.OptionVal
 import scala.concurrent._
+import akka.cassandra.session._
 
 trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatements {
   this: CassandraJournal =>

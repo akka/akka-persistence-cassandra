@@ -4,7 +4,7 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.PreparedStatement
 
 import scala.concurrent.{ ExecutionContext, Future }

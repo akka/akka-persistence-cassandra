@@ -5,11 +5,13 @@
 package akka.persistence.cassandra
 
 import akka.actor.{ ActorLogging, ActorRef, Props }
+import akka.persistence.cassandra.journal.TagWriterSpec.TestEx
 import akka.persistence.{ PersistentActor, RecoveryCompleted, SaveSnapshotSuccess }
 import akka.persistence.journal.Tagged
 
 object TestTaggingActor {
   case object Ack
+  case object Crash
   case object DoASnapshotPlease
   case object SnapShotAck
   case object Stop
@@ -38,6 +40,8 @@ class TestTaggingActor(val persistenceId: String, tags: Set[String], probe: Opti
         processEvent(e)
         sender() ! Ack
       }
+    case Crash =>
+      throw TestEx("oh dear")
     case DoASnapshotPlease =>
       saveSnapshot("i don't have any state :-/")
       context.become(waitingForSnapshot(sender()))

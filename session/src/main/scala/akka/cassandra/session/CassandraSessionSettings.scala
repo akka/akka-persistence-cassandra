@@ -2,7 +2,7 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.persistence.cassandra.session
+package akka.cassandra.session
 
 import java.util.concurrent.TimeUnit
 

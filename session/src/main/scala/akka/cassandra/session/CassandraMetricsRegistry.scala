@@ -2,12 +2,13 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.persistence.cassandra
+package akka.cassandra.session
 
 import akka.actor._
-import com.codahale.metrics.MetricRegistry
-import scala.collection.JavaConverters._
 import akka.annotation.InternalApi
+import com.codahale.metrics.MetricRegistry
+
+import scala.collection.JavaConverters._
 
 /**
  * Retrieves Cassandra metrics registry for an actor system

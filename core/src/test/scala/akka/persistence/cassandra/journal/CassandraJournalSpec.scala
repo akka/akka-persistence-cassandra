@@ -5,12 +5,13 @@
 package akka.persistence.cassandra.journal
 
 import akka.actor.Actor
+import akka.cassandra.session.CassandraMetricsRegistry
 import akka.persistence.{ AtomicWrite, PersistentRepr }
 import akka.persistence.JournalProtocol.{ ReplayMessages, WriteMessageFailure, WriteMessages, WriteMessagesFailed }
 
 import scala.concurrent.duration._
 import akka.persistence.journal._
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry }
+import akka.persistence.cassandra.CassandraLifecycle
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 

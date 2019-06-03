@@ -17,7 +17,7 @@ import akka.persistence.cassandra.journal._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query.PersistenceQuery
 import akka.serialization.SerializationExtension
 import akka.stream.{ ActorMaterializer, OverflowStrategy }
