@@ -7,9 +7,10 @@ package akka.persistence.cassandra.snapshot
 import java.lang.{ Integer => JInteger, Long => JLong }
 import java.nio.ByteBuffer
 
+import akka.cassandra.session.CassandraMetricsRegistry
 import akka.persistence.SnapshotProtocol._
 import akka.persistence._
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraMetricsRegistry, SnapshotWithMetaData }
+import akka.persistence.cassandra.{ CassandraLifecycle, SnapshotWithMetaData }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
 import com.datastax.driver.core._
@@ -148,6 +149,7 @@ class CassandraSnapshotStoreSpec
       // no 4th attempt has been made
       probe.expectMsgType[LoadSnapshotFailed]
     }
+
     "store and load additional meta" in {
       val probe = TestProbe()
 
@@ -163,6 +165,7 @@ class CassandraSnapshotStoreSpec
       val loaded = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
       loaded.snapshot should equal(SnapshotWithMetaData("snap", "meta"))
     }
+
     "delete all snapshots matching upper sequence number and no timestamp bounds" in {
       val probe: TestProbe = TestProbe()
       val subProbe: TestProbe = TestProbe()

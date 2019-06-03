@@ -20,14 +20,12 @@ object Whitesource extends AutoPlugin {
                              else "adhoc"
                            else
                              CrossVersion
-                               .partialVersion(
-                                 (version in LocalRootProject).value)
+                               .partialVersion((version in LocalRootProject).value)
                                .map {
                                  case (major, minor) => s"$major.$minor-stable"
                                }
                                .getOrElse("adhoc"))
     },
     whitesourceForceCheckAllDependencies := true,
-    whitesourceFailOnError := true
-  )
+    whitesourceFailOnError := true)
 }

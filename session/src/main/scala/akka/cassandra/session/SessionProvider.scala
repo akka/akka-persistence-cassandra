@@ -2,15 +2,14 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.persistence.cassandra
+package akka.cassandra.session
 
-import scala.collection.immutable
-import scala.concurrent.Future
+import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import com.datastax.driver.core.Session
 import com.typesafe.config.Config
-import scala.concurrent.ExecutionContext
-import akka.actor.ExtendedActorSystem
-import akka.actor.ActorSystem
+
+import scala.collection.immutable
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.Failure
 
 /**

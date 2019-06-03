@@ -119,7 +119,7 @@ object CassandraLauncher {
       }
       .distinct
       .toList
-      .filterNot(_.endsWith("assembly.jar"))
+      .filterNot(_.endsWith("assembly.jar")) // TODO required?
   }
 
   /**

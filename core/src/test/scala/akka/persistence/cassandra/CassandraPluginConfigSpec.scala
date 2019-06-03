@@ -28,7 +28,6 @@ object CassandraPluginConfigSpec {
         Future.successful(List(new InetSocketAddress("host1", 9041)))
       else
         Future.successful(List(new InetSocketAddress("host1", 9041), new InetSocketAddress("host2", 9042)))
-
   }
 }
 
@@ -37,8 +36,10 @@ class CassandraPluginConfigSpec
     with WordSpecLike
     with MustMatchers
     with BeforeAndAfterAll {
+
   import CassandraPluginConfigSpec._
   import system.dispatcher
+
   lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-journal")
 
   lazy val keyspaceNames = {

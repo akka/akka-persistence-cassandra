@@ -7,7 +7,7 @@ package akka.persistence.cassandra.journal
 import akka.Done
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.{ PreparedStatement, Row, Statement }
 
 import scala.collection.JavaConverters._

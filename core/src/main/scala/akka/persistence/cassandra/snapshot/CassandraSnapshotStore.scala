@@ -19,9 +19,10 @@ import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.FixedRetryPolicy
-import akka.persistence.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
+import akka.cassandra.session._
 import akka.serialization.AsyncSerializer
 import akka.serialization.Serialization
 import akka.serialization.SerializationExtension
@@ -249,7 +250,7 @@ class CassandraSnapshotStore(cfg: Config)
   def executeBatch(body: BatchStatement => Unit): Future[Unit] = {
     val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
     body(batch)
-    session.underlying().flatMap(_.executeAsync(batch)).map(_ => ())
+    session.underlying().flatMap(_.executeAsync(batch).asScala).map(_ => ())
   }
 
   private def serialize(payload: Any): Future[Serialized] =

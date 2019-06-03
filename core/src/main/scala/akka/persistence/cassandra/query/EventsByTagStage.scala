@@ -13,6 +13,7 @@ import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
 import akka.persistence.cassandra.query.EventsByTagStage._
 import akka.stream.stage.{ GraphStage, _ }
 import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
+import akka.cassandra.session._
 import akka.util.PrettyDuration._
 
 import scala.annotation.tailrec
@@ -321,6 +322,7 @@ import com.datastax.driver.core.utils.UUIDs
               s"lookingForMissingCalled for tag ${session.tag} when there " +
               s"is no missing. Raise a bug with debug logging.")
         }
+
         if (missing.deadline.isOverdue()) {
           if (missing.failIfNotFound) {
             fail(
@@ -462,7 +464,7 @@ import com.datastax.driver.core.utils.UUIDs
           false
         } else if (repr.tagPidSequenceNr > expectedSequenceNr) {
           log.info(
-            s"[${stageUuid}] [{}]: Missing event for persistence id: [{}]. Expected sequence nr: [{}], actual: [{}].",
+            s"[${stageUuid}] " + "{}: Missing event for persistence id: {}. Expected sequence nr: {}, actual: {}.",
             session.tag,
             pid,
             expectedSequenceNr,
@@ -486,7 +488,7 @@ import com.datastax.driver.core.utils.UUIDs
           // this is per row so put behind a flag. Per query logging is on at debug without this flag
           if (verboseDebug)
             log.debug(
-              s"[${stageUuid}] Updating offset to [{}] from pId [{}] seqNr [{}] tagPidSequenceNr [{}]",
+              s"[${stageUuid}] " + " Updating offset to {} from pId {} seqNr {} tagPidSequenceNr {}",
               formatOffset(stageState.fromOffset),
               pid,
               repr.sequenceNr,
