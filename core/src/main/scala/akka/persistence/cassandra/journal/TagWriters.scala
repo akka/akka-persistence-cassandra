@@ -303,14 +303,14 @@ import akka.util.ByteString
         }
 
         // Execute 10 async statements at a time to not introduce too much load see issue #408.
-        val batchIterator: Iterator[Future[Done]] =
-          updates.grouped(10).map(writeTagScanningBatch)
+        val batchIterator: Iterator[Seq[(PersistenceId, SequenceNr)]] = updates.grouped(10)
 
-        def next(): Future[Done] =
-          if (batchIterator.hasNext) batchIterator.next().flatMap(_ => next())
-          else Future.successful(Done)
-
-        val result: Future[Done] = next()
+        var result = Future.successful[Done](Done)
+        for (item <- batchIterator) {
+          result = result.flatMap { _ =>
+            writeTagScanningBatch(item)
+          }
+        }
 
         result.onComplete {
           case Success(_) =>
