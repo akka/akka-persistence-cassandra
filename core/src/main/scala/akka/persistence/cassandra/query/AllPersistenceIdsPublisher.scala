@@ -12,6 +12,7 @@ import akka.persistence.cassandra.query.AllPersistenceIdsPublisher._
 import akka.persistence.cassandra.query.QueryActorPublisher._
 import akka.actor.NoSerializationVerificationNeeded
 import akka.annotation.InternalApi
+import akka.persistence.cassandra.ListenableFutureConverter
 
 /**
  * INTERNAL API
@@ -68,7 +69,6 @@ import akka.annotation.InternalApi
     requestNext(state, resultSet)
 
   private[this] def query(state: AllPersistenceIdsState): Future[Action] = {
-    import akka.cassandra.session._
     val boundStatement = session.selectDistinctPersistenceIds.bind()
     boundStatement.setFetchSize(config.fetchSize)
 

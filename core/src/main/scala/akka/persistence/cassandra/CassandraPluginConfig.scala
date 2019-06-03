@@ -7,10 +7,9 @@ package akka.persistence.cassandra
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
 import com.datastax.driver.core._
 import com.typesafe.config.Config
-
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
-import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
+import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, SessionProvider }
 
 class CassandraPluginConfig(system: ActorSystem, config: Config) {
 

@@ -13,9 +13,9 @@ import akka.Done
 import akka.annotation.InternalApi
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, Serialized }
+import akka.persistence.cassandra.ListenableFutureConverter
 import akka.serialization.Serialization
 import akka.stream.{ Attributes, Outlet, SourceShape }
-import akka.cassandra.session._
 import akka.stream.stage._
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RetryPolicy

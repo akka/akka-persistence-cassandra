@@ -14,20 +14,18 @@ import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.FixedRetryPolicy
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
-import akka.cassandra.session._
 import akka.serialization.AsyncSerializer
 import akka.serialization.Serialization
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
 import akka.stream.ActorMaterializer
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
 import com.datastax.driver.core._

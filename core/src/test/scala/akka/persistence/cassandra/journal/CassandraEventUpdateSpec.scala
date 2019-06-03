@@ -7,15 +7,15 @@ package akka.persistence.cassandra.journal
 import java.util.UUID
 
 import scala.concurrent.Await
-
 import akka.Done
 import akka.event.Logging
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal.Serialized
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, TestTaggingActor, _ }
 import akka.serialization.SerializationExtension
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import com.typesafe.config.ConfigFactory
+
 import scala.concurrent.{ ExecutionContext, Future }
 
 object CassandraEventUpdateSpec {

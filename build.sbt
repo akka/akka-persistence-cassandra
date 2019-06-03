@@ -8,7 +8,6 @@ lazy val root = (project in file("."))
 
 lazy val session = project
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi)
-  .dependsOn(cassandraLauncher % Test)
   .settings(osgiSettings: _*)
   .settings(
     name := "akka-cassandra-session",

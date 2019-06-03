@@ -2,45 +2,29 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session.scaladsl
+package akka.stream.alpakka.cassandra.scaladsl
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.function.{ Function => JFunction }
 
+import akka.{ Done, NotUsed }
+import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
+import akka.annotation.InternalApi
+import akka.event.LoggingAdapter
+import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
+import akka.stream.alpakka.cassandra._
+import akka.stream.scaladsl.{ Sink, Source }
+import akka.stream.stage.{ AsyncCallback, GraphStage, GraphStageLogic, OutHandler }
+import com.datastax.driver.core._
+
 import scala.annotation.tailrec
 import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.Promise
-import scala.util.Failure
-import scala.util.Success
+import scala.concurrent.{ ExecutionContext, Future, Promise }
+import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
-import akka.Done
-import akka.NotUsed
-import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
-import akka.event.LoggingAdapter
-import akka.stream.ActorMaterializer
-import akka.stream.Attributes
-import akka.stream.Outlet
-import akka.stream.SourceShape
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
-import akka.stream.stage.AsyncCallback
-import akka.stream.stage.GraphStage
-import akka.stream.stage.GraphStageLogic
-import akka.stream.stage.OutHandler
-import com.datastax.driver.core.BatchStatement
-import com.datastax.driver.core.BoundStatement
-import com.datastax.driver.core.PreparedStatement
-import com.datastax.driver.core.ProtocolVersion
-import com.datastax.driver.core.ResultSet
-import com.datastax.driver.core.Row
-import com.datastax.driver.core.Session
-import com.datastax.driver.core.Statement
-import akka.annotation.InternalApi
-import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
-import akka.cassandra.session._
+
+import akka.stream.alpakka.cassandra.impl.Helpers._
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in

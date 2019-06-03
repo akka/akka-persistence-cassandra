@@ -5,11 +5,11 @@
 package akka.persistence.cassandra.journal
 
 import akka.Done
-import akka.cassandra.session.scaladsl.CassandraSession
+import akka.persistence.cassandra._
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import com.datastax.driver.core.Session
 
 import scala.concurrent.{ ExecutionContext, Future }
-import akka.persistence.cassandra.indent
 
 trait CassandraStatements {
   private[akka] def config: CassandraJournalConfig
@@ -298,7 +298,6 @@ trait CassandraStatements {
    */
   private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(
       implicit ec: ExecutionContext): Future[Done] = {
-    import akka.cassandra.session._
 
     def create(): Future[Done] = {
 

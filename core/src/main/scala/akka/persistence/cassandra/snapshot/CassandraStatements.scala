@@ -4,15 +4,12 @@
 
 package akka.persistence.cassandra.snapshot
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-
 import akka.Done
-import akka.cassandra.session.FutureDone
-import akka.cassandra.session._
+import akka.persistence.cassandra._
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import com.datastax.driver.core.Session
-import akka.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.cassandra.indent
+
+import scala.concurrent.{ ExecutionContext, Future }
 
 trait CassandraStatements {
   def snapshotConfig: CassandraSnapshotStoreConfig

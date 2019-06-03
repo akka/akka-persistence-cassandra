@@ -16,7 +16,7 @@ import scala.util.Random
 import org.scalatest.WordSpecLike
 import akka.testkit.TestKit
 import akka.actor.ActorSystem
-import akka.cassandra.session.ConfigSessionProvider
+import akka.stream.alpakka.cassandra.ConfigSessionProvider
 
 import scala.concurrent.Await
 import scala.concurrent.Future

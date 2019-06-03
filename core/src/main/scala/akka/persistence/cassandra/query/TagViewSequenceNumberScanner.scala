@@ -8,12 +8,12 @@ import java.lang.{ Long => JLong }
 import java.util.UUID
 
 import akka.annotation.InternalApi
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.formatOffset
 import akka.stream.ActorMaterializer
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import com.datastax.driver.core.PreparedStatement
 import com.datastax.driver.core.utils.UUIDs
 

@@ -8,21 +8,26 @@ import java.nio.ByteBuffer
 import java.time.{ Instant, LocalDateTime, ZoneOffset }
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import java.util.concurrent.Executor
 
+import akka.Done
 import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, SerializedMeta }
 import akka.serialization.Serialization
 import com.datastax.driver.core.utils.UUIDs
+
 import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.collection.JavaConverters._
 import com.typesafe.config.{ Config, ConfigValueType }
-
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
 import akka.serialization.AsyncSerializer
 import akka.serialization.Serializers
 import akka.annotation.InternalApi
+import com.google.common.util.concurrent.ListenableFuture
+
+import scala.util.Try
 
 package object cassandra {
   private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
@@ -128,6 +133,25 @@ package object cassandra {
       case ConfigValueType.OBJECT => config.getStringList(key).asScala.toList
       case ConfigValueType.STRING => config.getString(key).split(",").toList
       case _                      => throw new IllegalArgumentException(s"$key should be a List, Object or String")
+    }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[cassandra] val FutureDone: Future[Done] = Future.successful(Done)
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[cassandra] implicit class ListenableFutureConverter[A](val lf: ListenableFuture[A])
+      extends AnyVal {
+    def asScala(implicit ec: ExecutionContext): Future[A] = {
+      val promise = Promise[A]
+      lf.addListener(new Runnable {
+        def run() = promise.complete(Try(lf.get()))
+      }, ec.asInstanceOf[Executor])
+      promise.future
     }
   }
 

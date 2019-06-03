@@ -18,7 +18,6 @@ import akka.actor.NoSerializationVerificationNeeded
 import akka.actor.OneForOneStrategy
 import akka.actor.SupervisorStrategy
 import akka.annotation.{ DoNotInherit, InternalApi }
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.{ Logging, LoggingAdapter }
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
@@ -38,7 +37,7 @@ import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.{ Bytes, UUIDs }
 import com.typesafe.config.Config
-import akka.cassandra.session._
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable

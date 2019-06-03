@@ -7,13 +7,13 @@ package akka.persistence.cassandra.journal
 import akka.Done
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
-import akka.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.{ PreparedStatement, Row, Statement }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
-
 import java.lang.{ Long => JLong }
+
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 private[akka] trait CassandraEventUpdate extends CassandraStatements {
 

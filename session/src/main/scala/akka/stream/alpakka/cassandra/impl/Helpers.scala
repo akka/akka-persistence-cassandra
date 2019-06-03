@@ -2,17 +2,21 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra
+package akka.stream.alpakka.cassandra.impl
 
 import java.util.concurrent.Executor
 
 import akka.Done
+import akka.annotation.InternalApi
 import com.google.common.util.concurrent.ListenableFuture
 
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.Try
 
-package object session {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[cassandra] object Helpers {
 
   val FutureDone: Future[Done] = Future.successful(Done)
 

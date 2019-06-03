@@ -2,23 +2,25 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session
+package akka.stream.alpakka.cassandra
 
 import java.net.InetSocketAddress
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
-import akka.cassandra.session.impl.{SSLSetup, StorePathPasswordConfig}
+import akka.stream.alpakka.cassandra.impl.{ SSLSetup, StorePathPasswordConfig }
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies._
 import com.github.ghik.silencer.silent
-import com.typesafe.config.{Config, ConfigValueType}
+import com.typesafe.config.{ Config, ConfigValueType }
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
+
+import akka.stream.alpakka.cassandra.impl.Helpers._
 
 /**
  * Default implementation of the `SessionProvider` that is used for creating the

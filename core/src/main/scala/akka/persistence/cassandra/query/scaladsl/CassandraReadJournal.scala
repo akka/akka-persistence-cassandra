@@ -20,7 +20,6 @@ import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Ex
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
 import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
@@ -39,6 +38,7 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
 import akka.serialization.SerializationExtension
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import com.github.ghik.silencer.silent
 
 object CassandraReadJournal {

@@ -7,11 +7,11 @@ package akka.persistence.cassandra.snapshot
 import java.lang.{ Integer => JInteger, Long => JLong }
 import java.nio.ByteBuffer
 
-import akka.cassandra.session.CassandraMetricsRegistry
 import akka.persistence.SnapshotProtocol._
 import akka.persistence._
 import akka.persistence.cassandra.{ CassandraLifecycle, SnapshotWithMetaData }
 import akka.persistence.snapshot.SnapshotStoreSpec
+import akka.stream.alpakka.cassandra.CassandraMetricsRegistry
 import akka.testkit.TestProbe
 import com.datastax.driver.core._
 import com.typesafe.config.ConfigFactory
