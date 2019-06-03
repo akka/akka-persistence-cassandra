@@ -13,7 +13,7 @@ Replicated [Akka Persistence](https://doc.akka.io/docs/akka/current/scala/persis
 
 This [Apache Cassandra](https://cassandra.apache.org/) plugin to Akka Persistence was initiated [originally](https://github.com/krasserm/akka-persistence-cassandra) by Martin Krasser, [@krasserm](https://github.com/krasserm) in 2014.
 
-It moved to the [Akka](https://github.com/akka/) organisation in 2017 and the first release after that move was 0.80 in January 2018.
+It moved to the [Akka](https://github.com/akka/) organisation in 2016 and the first release after that move was 0.7 in January 2016.
 
 ## Documentation for 0.x versions
 
