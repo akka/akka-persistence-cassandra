@@ -1,28 +1,33 @@
+val silencerVersion = "1.4.0"
+
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
   .aggregate(core, cassandraLauncher, session)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
-lazy val session = (project in file("session"))
+lazy val session = project
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi)
   .dependsOn(cassandraLauncher % Test)
   .settings(osgiSettings: _*)
-  .settings(name := "akka-cassandra-session", libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies)
+  .settings(
+    name := "akka-cassandra-session",
+    libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies ++ Seq(
+      compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
+      "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided)
+  )
 
-lazy val core = (project in file("core"))
+lazy val core = project
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
   .dependsOn(cassandraLauncher % Test, session)
   .settings(osgiSettings: _*)
-  .settings({
-    val silencerVersion = "1.4.0"
-    Seq(
+  .settings(
       libraryDependencies ++= Seq(
           compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
           "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided),
       // Hack because 'provided' dependencies by default are not picked up by the multi-jvm plugin:
-      managedClasspath in MultiJvm ++= (managedClasspath in Compile).value.filter(_.data.name.contains("silencer-lib")))
-  })
+      managedClasspath in MultiJvm ++= (managedClasspath in Compile).value.filter(_.data.name.contains("silencer-lib"))
+  )
   .settings(
     name := "akka-persistence-cassandra",
     libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,

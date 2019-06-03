@@ -2,17 +2,18 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.persistence.cassandra
+package akka.cassandra.session.impl
 
-import java.io.{ File, FileInputStream }
-import java.security.{ KeyStore, SecureRandom }
-import javax.net.ssl.{ KeyManager, KeyManagerFactory, SSLContext, TrustManager, TrustManagerFactory }
+import java.io.{File, FileInputStream}
+import java.security.{KeyStore, SecureRandom}
+
 import akka.annotation.InternalApi
+import javax.net.ssl._
 
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] object SSLSetup {
+@InternalApi private[session] object SSLSetup {
 
   /**
    * creates a new SSLContext

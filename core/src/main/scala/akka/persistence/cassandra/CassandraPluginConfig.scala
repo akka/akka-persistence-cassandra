@@ -12,8 +12,6 @@ import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
 import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
 
-case class StorePathPasswordConfig(path: String, password: String)
-
 class CassandraPluginConfig(system: ActorSystem, config: Config) {
 
   import akka.persistence.cassandra.CassandraPluginConfig._

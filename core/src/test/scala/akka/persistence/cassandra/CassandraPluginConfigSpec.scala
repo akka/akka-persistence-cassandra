@@ -7,16 +7,21 @@ package akka.persistence.cassandra
 import scala.collection.immutable
 import scala.concurrent.duration._
 import java.net.InetSocketAddress
+
 import com.typesafe.config.ConfigFactory
 import org.scalatest.MustMatchers
 import org.scalatest.prop.TableDrivenPropertyChecks._
+
 import scala.util.Random
 import org.scalatest.WordSpecLike
 import akka.testkit.TestKit
 import akka.actor.ActorSystem
+import akka.cassandra.session.ConfigSessionProvider
+
 import scala.concurrent.Await
 import scala.concurrent.Future
 import com.typesafe.config.Config
+
 import scala.concurrent.ExecutionContext
 import org.scalatest.BeforeAndAfterAll
 

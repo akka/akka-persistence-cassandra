@@ -2,29 +2,23 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.persistence.cassandra
+package akka.cassandra.session
 
 import java.net.InetSocketAddress
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+import akka.actor.ActorSystem
+import akka.cassandra.session.impl.{SSLSetup, StorePathPasswordConfig}
+import com.datastax.driver.core._
+import com.datastax.driver.core.policies._
+import com.github.ghik.silencer.silent
+import com.typesafe.config.{Config, ConfigValueType}
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
-import scala.concurrent.duration.FiniteDuration
-import akka.actor.ActorSystem
-import akka.cassandra.session.SessionProvider
-import akka.cassandra.session._
-import com.datastax.driver.core._
-import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy
-import com.datastax.driver.core.policies.ExponentialReconnectionPolicy
-import com.datastax.driver.core.policies.TokenAwarePolicy
-import com.typesafe.config.Config
-import com.datastax.driver.core.policies.SpeculativeExecutionPolicy
-import com.datastax.driver.core.policies.ConstantSpeculativeExecutionPolicy
-import com.github.ghik.silencer.silent
 
 /**
  * Default implementation of the `SessionProvider` that is used for creating the
@@ -41,7 +35,7 @@ import com.github.ghik.silencer.silent
  */
 class ConfigSessionProvider(system: ActorSystem, config: Config) extends SessionProvider {
 
-  def connect()(implicit ec: ExecutionContext): Future[Session] = {
+  override def connect()(implicit ec: ExecutionContext): Future[Session] = {
     val clusterId = config.getString("cluster-id")
     clusterBuilder(clusterId).flatMap { b =>
       val cluster = b.build()
@@ -187,7 +181,7 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
   @silent // unused ec
   def lookupContactPoints(clusterId: String)(
       implicit ec: ExecutionContext): Future[immutable.Seq[InetSocketAddress]] = {
-    val contactPoints = getListFromConfig(config, "contact-points")
+    val contactPoints = ConfigSessionProvider.getListFromConfig(config, "contact-points")
     Future.successful(buildContactPoints(contactPoints, port))
   }
 
@@ -216,4 +210,16 @@ class ConfigSessionProvider(system: ActorSystem, config: Config) extends Session
 
 object ConfigSessionProvider {
   private val clusterIdentifier = new AtomicInteger()
+
+  private def getListFromConfig(config: Config, key: String): List[String] = {
+    config.getValue(key).valueType() match {
+      case ConfigValueType.LIST => config.getStringList(key).asScala.toList
+      // case ConfigValueType.OBJECT is needed to handle dot notation (x.0=y x.1=z) due to Typesafe Config implementation quirk.
+      // https://github.com/lightbend/config/blob/master/config/src/main/java/com/typesafe/config/impl/DefaultTransformer.java#L83
+      case ConfigValueType.OBJECT => config.getStringList(key).asScala.toList
+      case ConfigValueType.STRING => config.getString(key).split(",").toList
+      case _                      => throw new IllegalArgumentException(s"$key should be a List, Object or String")
+    }
+  }
+
 }

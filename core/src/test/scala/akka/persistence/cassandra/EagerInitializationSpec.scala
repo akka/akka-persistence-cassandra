@@ -5,6 +5,7 @@
 package akka.persistence.cassandra
 
 import akka.actor.{ ActorSystem, PoisonPill }
+import akka.cassandra.session.ConfigSessionProvider
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import com.datastax.driver.core.Session
 import com.typesafe.config.{ Config, ConfigFactory }
