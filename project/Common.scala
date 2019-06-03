@@ -23,13 +23,13 @@ object Common extends AutoPlugin {
       apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${version.value}")),
       scmInfo := Some(
           ScmInfo(
-            url("https://github.com/akka/akka-persistence-cassandra-1.x"),
-            "git@github.com:akka/akka-persistence-cassandra-1.x.git")),
+            url("https://github.com/akka/akka-persistence-cassandra"),
+            "git@github.com:akka/akka-persistence-cassandra.git")),
       developers += Developer(
           "contributors",
           "Contributors",
           "https://gitter.im/akka/dev",
-          url("https://github.com/akka/akka-persistence-cassandra-1.x/graphs/contributors")),
+          url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
       licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
       description := "A Cassandra plugin for Akka Persistence.")
 
@@ -61,7 +61,7 @@ object Common extends AutoPlugin {
         (baseDirectory in ThisBuild).value.toString,
         "-doc-source-url", {
           val branch = if (isSnapshot.value) "master" else s"v${version.value}"
-          s"https://github.com/akka/akka-persistence-cassandra-1.x/tree/${branch}€{FILE_PATH}.scala#L1"
+          s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH}.scala#L1"
         },
         "-skip-packages",
         "akka.pattern" // for some reason Scaladoc creates this
