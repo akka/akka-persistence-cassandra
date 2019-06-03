@@ -341,7 +341,7 @@ import com.datastax.driver.core.utils.UUIDs
                 session.tag,
                 missing.persistenceId,
                 missing.missing,
-                Offset(missing.previousOffset)))
+                Offset.timeBasedUUID(missing.previousOffset)))
           } else {
             log.debug(
               "[{}] [{}]: Finished scanning for older events for persistence id [{}]. Max pid sequence nr found [{}]",

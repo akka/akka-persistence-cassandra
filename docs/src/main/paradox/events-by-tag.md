@@ -76,7 +76,7 @@ delayed events in live queries.
 If a gap is detected then the event is held back and the stream goes into a searching mode for the missing
 events. The search only looks in the current bucket and the previous one. If the event is older then it won't be found in this search.
 
-If the missing event is not found then then stream is failed unless it is the first time the persistence id
+If the missing event is not found then the stream is failed unless it is the first time the persistence id
 has been encountered by the query (see below).
 
 The stream is failed with a `MissingTaggedEventException` which has a field `lastKnownOffset`. The query can be restarted
