@@ -11,7 +11,7 @@ lazy val alpakkaCassandra = project
 //  .settings(osgiSettings: _*)
   .settings(
     name := "akka-stream-alpakka-cassandra",
-    libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies ++ Seq(
+    libraryDependencies ++= Dependencies.alpakkaCassandra ++ Seq(
       compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
       "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided),
     Test / fork := true
@@ -30,7 +30,7 @@ lazy val core = project
   )
   .settings(
     name := "akka-persistence-cassandra",
-    libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,
+    libraryDependencies ++= Dependencies.akkaPersistenceCassandra,
     OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*"),
     OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
     OsgiKeys.privatePackage := Nil,

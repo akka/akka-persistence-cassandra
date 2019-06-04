@@ -54,6 +54,8 @@ final class CassandraSessionSettings private (
 
 object CassandraSessionSettings {
 
+  val ConfigPath = "alpakka.cassandra.session"
+
   /**
    * Reads from the given config.
    */
