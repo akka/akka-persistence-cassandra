@@ -68,13 +68,22 @@ Order of the events is maintained per persistence id per tag by maintaining a se
 This is in addition to the normal sequence nr kept per persistence id.
 This additional sequence number is used to detect missing events and trigger searching back. However this only works if
 a new event for the same persistenceId is encountered. If your usecase involves many persistenceIds with only a small 
-number of events per persistenceId then the `eventual-consistency-delay` can be used to mitigate the risk of missing
+number of events per persistenceId then the `eventual-consistency-delay` is essential to mitigate the risk of missing
 delayed events in live queries.
 
-### Gap detection for the same persistence id
+### Gap detection
 
 If a gap is detected then the event is held back and the stream goes into a searching mode for the missing
-events. If the missing event is not found then then stream is failed.
+events. The search only looks in the current bucket and the previous one. If the event is older then it won't be found in this search.
+
+If the missing event is not found then the stream is failed unless it is the first time the persistence id
+has been encountered by the query (see below).
+
+The stream is failed with a `MissingTaggedEventException` which has a field `lastKnownOffset`. The query can be restarted
+from this offset to search further back than one bucket for the missing event. However, previously delivered events with an offset
+greater than the `lastKnownOffset` will be re-delivered so downstream processing must be idempotent.
+
+### Gap detection when encountering a persistence id for the first time
 
 When receiving the first event for a given persistenceId in an offset query it is not known 
 if that is actually the first event. If the offset query starts in a time bucket in the past then

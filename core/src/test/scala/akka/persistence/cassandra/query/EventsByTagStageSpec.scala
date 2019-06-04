@@ -13,7 +13,7 @@ import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Minute, Time
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.persistence.journal.Tagged
 import akka.persistence.query.scaladsl.EventsByTagQuery
-import akka.persistence.query.{ EventEnvelope, NoOffset }
+import akka.persistence.query.{ EventEnvelope, NoOffset, Offset }
 import akka.serialization.{ Serialization, SerializationExtension }
 import akka.stream.scaladsl.{ Keep, Source }
 import akka.stream.testkit.scaladsl.TestSink
@@ -248,9 +248,8 @@ class EventsByTagStageSpec
       sub.expectNextPF { case EventEnvelope(_, "p-2", 1, "p2e1") => }
       sub.expectNoMessage(longWaitTime)
 
-      sub.expectError().getMessage should equal(
-        s"Unable to find missing tagged event: " +
-        s"PersistenceId: p-1. Tag: $tag. TagPidSequenceNr: Set(3). Previous offset: ${times(1)}")
+      sub.expectError().getMessage should equal(s"Unable to find missing tagged event: " +
+      s"PersistenceId: p-1. Tag: $tag. MissingTagPidSequenceNrs: Set(3). Previous offset: ${Offset.timeBasedUUID(times(1))}")
     }
 
     "find multiple missing messages that span time buckets" in {
