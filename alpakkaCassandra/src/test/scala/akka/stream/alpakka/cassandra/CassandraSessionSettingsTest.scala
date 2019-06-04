@@ -2,7 +2,7 @@ package akka.stream.alpakka.cassandra
 
 import com.datastax.driver.core.ConsistencyLevel
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.{ Matchers, WordSpec }
 
 class CassandraSessionSettingsTest extends WordSpec with Matchers {
 

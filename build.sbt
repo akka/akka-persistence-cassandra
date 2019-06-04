@@ -12,22 +12,20 @@ lazy val alpakkaCassandra = project
   .settings(
     name := "akka-stream-alpakka-cassandra",
     libraryDependencies ++= Dependencies.alpakkaCassandra ++ Seq(
-      compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
-      "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided),
-    Test / fork := true
-  )
+        compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
+        "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided),
+    Test / fork := true)
 
 lazy val core = project
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
   .dependsOn(alpakkaCassandra, cassandraLauncher % Test)
   .settings(osgiSettings: _*)
   .settings(
-      libraryDependencies ++= Seq(
-          compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
-          "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided),
-      // Hack because 'provided' dependencies by default are not picked up by the multi-jvm plugin:
-      managedClasspath in MultiJvm ++= (managedClasspath in Compile).value.filter(_.data.name.contains("silencer-lib"))
-  )
+    libraryDependencies ++= Seq(
+        compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
+        "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided),
+    // Hack because 'provided' dependencies by default are not picked up by the multi-jvm plugin:
+    managedClasspath in MultiJvm ++= (managedClasspath in Compile).value.filter(_.data.name.contains("silencer-lib")))
   .settings(
     name := "akka-persistence-cassandra",
     libraryDependencies ++= Dependencies.akkaPersistenceCassandra,
