@@ -9,12 +9,15 @@ object Dependencies {
   val AkkaVersion = "2.5.23"
   val CassandraVersionInDocs = "4.0"
 
-  val akkaCassandraSessionDependencies = Seq(
+  val alpakkaCassandra = Seq(
     "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
     "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-    "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test)
+    "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion % Test,
+    "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
+    "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
+    "org.scalatest" %% "scalatest" % "3.0.8-RC2" % Test)
 
-  val akkaPersistenceCassandraDependencies = Seq(
+  val akkaPersistenceCassandra = Seq(
     "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
     // Specifying guava dependency because older transitive dependency has security vulnerability
     "com.google.guava" % "guava" % "27.0.1-jre",

@@ -3,22 +3,23 @@ val silencerVersion = "1.4.0"
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
-  .aggregate(core, cassandraLauncher, session)
+  .aggregate(alpakkaCassandra, core, cassandraLauncher)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
-lazy val session = project
+lazy val alpakkaCassandra = project
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi)
-  .settings(osgiSettings: _*)
+//  .settings(osgiSettings: _*)
   .settings(
-    name := "akka-cassandra-session",
+    name := "akka-stream-alpakka-cassandra",
     libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies ++ Seq(
       compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
-      "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided)
+      "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided),
+    Test / fork := true
   )
 
 lazy val core = project
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
-  .dependsOn(cassandraLauncher % Test, session)
+  .dependsOn(alpakkaCassandra, cassandraLauncher % Test)
   .settings(osgiSettings: _*)
   .settings(
       libraryDependencies ++= Seq(
