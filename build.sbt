@@ -1,16 +1,8 @@
-import sbt.Keys._
-import sbtassembly.AssemblyPlugin.autoImport._
-
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
   .aggregate(core, cassandraLauncher, session)
-  .settings(
-    name := "akka-persistence-cassandra-root",
-    publishArtifact := false,
-    publishTo := Some(Resolver.file("Unused transient repository", file("target/unusedrepo"))),
-    publish := {},
-    PgpKeys.publishSigned := {})
+  .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
 lazy val session = (project in file("session"))
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi)
@@ -104,3 +96,5 @@ def configImport(packageName: String = "com.typesafe.config.*") =
 def versionedImport(packageName: String, lower: String, upper: String) =
   s"""$packageName;version="[$lower,$upper)""""
 def optionalImport(packageName: String) = s"$packageName;resolution:=optional"
+
+ThisBuild / dynverSonatypeSnapshots := true

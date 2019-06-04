@@ -1,10 +1,11 @@
 import de.heikoseeberger.sbtheader.HeaderPlugin.autoImport._
 import de.heikoseeberger.sbtheader._
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
+import xerial.sbt.Sonatype.autoImport._
+import sbtdynver.DynVerPlugin.autoImport._
 import sbt.Keys._
 import sbt._
 import sbt.plugins.JvmPlugin
-import sbtrelease.ReleasePlugin.autoImport.releaseCrossBuild
 
 object Common extends AutoPlugin {
 
@@ -12,24 +13,25 @@ object Common extends AutoPlugin {
 
   override def requires = JvmPlugin && HeaderPlugin
 
-  override def globalSettings = Seq(
-    organization := "com.lightbend.akka",
-    organizationName := "Lightbend Inc.",
-    organizationHomepage := Some(url("https://www.lightbend.com/")),
-    startYear := Some(2016),
-    homepage := Some(url("https://akka.io")),
-    apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${version.value}")),
-    scmInfo := Some(
-        ScmInfo(
-          url("https://github.com/akka/akka-persistence-cassandra-1.x"),
-          "git@github.com:akka/akka-persistence-cassandra-1.x.git")),
-    developers += Developer(
-        "contributors",
-        "Contributors",
-        "https://gitter.im/akka/dev",
-        url("https://github.com/akka/akka-persistence-cassandra-1.x/graphs/contributors")),
-    licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
-    description := "A Cassandra plugin for Akka Persistence.")
+  override def globalSettings =
+    Seq(
+      organization := "com.lightbend.akka",
+      organizationName := "Lightbend Inc.",
+      organizationHomepage := Some(url("https://www.lightbend.com/")),
+      startYear := Some(2016),
+      homepage := Some(url("https://akka.io")),
+      apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${version.value}")),
+      scmInfo := Some(
+          ScmInfo(
+            url("https://github.com/akka/akka-persistence-cassandra"),
+            "git@github.com:akka/akka-persistence-cassandra.git")),
+      developers += Developer(
+          "contributors",
+          "Contributors",
+          "https://gitter.im/akka/dev",
+          url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
+      licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
+      description := "A Cassandra plugin for Akka Persistence.")
 
   override lazy val projectSettings = Seq(
     //      projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
@@ -50,7 +52,6 @@ object Common extends AutoPlugin {
         )
     },
     Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
-    Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     Compile / doc / scalacOptions := scalacOptions.value ++ Seq(
         "-doc-title",
         "Akka Persistence Cassandra",
@@ -60,13 +61,13 @@ object Common extends AutoPlugin {
         (baseDirectory in ThisBuild).value.toString,
         "-doc-source-url", {
           val branch = if (isSnapshot.value) "master" else s"v${version.value}"
-          s"https://github.com/akka/akka-persistence-cassandra-1.x/tree/${branch}€{FILE_PATH}.scala#L1"
+          s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH}.scala#L1"
         },
         "-skip-packages",
         "akka.pattern" // for some reason Scaladoc creates this
       ),
+    Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     scalafmtOnCompile := true,
-    releaseCrossBuild := true,
     autoAPIMappings := true,
     headerLicense := Some(
         HeaderLicense.Custom("""Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>""")),
@@ -77,5 +78,7 @@ object Common extends AutoPlugin {
     // -v Log "test run started" / "test started" / "test run finished" events on log level "info" instead of "debug".
     // -q Suppress stdout for successful tests.
     Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
-    Test / parallelExecution := false)
+    Test / parallelExecution := false,
+    publishTo := sonatypePublishTo.value,
+    sonatypeProfileName := "com.lightbend")
 }
