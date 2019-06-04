@@ -15,7 +15,7 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
     "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
-    "org.scalatest" %% "scalatest" % "3.0.8-RC2" % Test)
+    "org.scalatest" %% "scalatest" % "3.0.8-RC5" % Test)
 
   val akkaPersistenceCassandra = Seq(
     "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
@@ -37,7 +37,7 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-multi-node-testkit" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion % Test,
     "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
-    "org.scalatest" %% "scalatest" % "3.0.8-RC2" % Test,
+    "org.scalatest" %% "scalatest" % "3.0.8-RC5" % Test,
     "org.pegdown" % "pegdown" % "1.6.0" % Test,
     "org.osgi" % "org.osgi.core" % "5.0.0" % Provided)
 }
