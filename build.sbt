@@ -96,6 +96,8 @@ lazy val core = (project in file("core"))
   .settings(
     name := "akka-persistence-cassandra",
     libraryDependencies ++= akkaPersistenceCassandraDependencies,
+    Compile / packageBin / packageOptions += Package.ManifestAttributes(
+        "Automatic-Module-Name" -> "akka.persistence.cassandra"),
     OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*"),
     OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
     OsgiKeys.privatePackage := Nil,
