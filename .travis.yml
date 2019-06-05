@@ -22,31 +22,33 @@ jobs:
   include:
     - stage: check
       script: sbt scalafmtCheckAll || { echo "[error] Unformatted code found. Please run 'scalafmtAll' and commit the reformatted code."; false; }
-      name: "Code style check (fixed with `sbt scalafmtAll`)"
+      name: Code style check (fixed with `sbt scalafmtAll`)
     - script: sbt scalafmtSbtCheck || { echo "[error] Unformatted sbt code found. Please run 'scalafmtSbt' and commit the reformatted code."; false; }
-      name: "Build code style check (fixed with `sbt scalafmtSbt`)"
+      name: Build code style check (fixed with `sbt scalafmtSbt`)
     - script: sbt ++2.13.0-RC2 Test/compile
-      name: "Compile all tests (with Scala 2.13)"
+      name: Compile all tests (with Scala 2.13)
     - script: sbt unidoc
-      name: "Create all API docs"
+      name: Create all API docs
     - script: sbt docs/paradox
-      name: "Create site with Paradox"
+      name: Create site with Paradox
 
     - stage: test
       script: jabba use adopt@~1.8.202-08 && java -version && docker-compose up -d cassandra && sbt +test
-      name: "Run all tests with Jdk 8"
+      name: Run all tests with Jdk 8
     - script: jabba use adopt@~1.11.0-2 && java -version && docker-compose up -d cassandra && sbt +test
-      name: "Run all tests with Jdk 11"
+      name: Run all tests with Jdk 11
 
     - stage: whitesource
-      name: "White Source"
+      name: White Source
       script: git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH" && sbt whitesourceCheckPolicies whitesourceUpdate
 
     - stage: publish
       script: openssl aes-256-cbc -K $encrypted_fb56f898a62a_key -iv $encrypted_fb56f898a62a_iv -in .travis/sign_key.enc -out sign_key -d && gpg --import sign_key && sbt ++2.12.8 publish
-      name: "Publish artifacts for Scala 2.12.8"
+      name: Publish artifacts for Scala 2.12.8
     - script: openssl aes-256-cbc -K $encrypted_fb56f898a62a_key -iv $encrypted_fb56f898a62a_iv -in .travis/sign_key.enc -out sign_key -d && gpg --import sign_key && sbt ++2.13.0-RC2 publish
-      name: "Publish artifacts for Scala 2.13.0-RC2"
+      name: Publish artifacts for Scala 2.13.0-RC2
+    - script: eval "$(ssh-agent -s)" && cp .travis/id_rsa /tmp/id_rsa && chmod 600 /tmp/id_rsa && ssh-keygen -p -P "$DEPLOY_PASSPHRASE" -N "" -f /tmp/id_rsa && ssh-add /tmp/id_rsa && sbt docs/publishRsync
+      name: Publish documentation
 
 stages:
   # runs on master commits and PRs
@@ -83,3 +85,5 @@ env:
     - secure: "iCz1dqU7apHFcgVbzwnvqY9D3DNhXUoWVzUBGvN1Ee/BhqE8kiJscICrsCw2Ec4lts6kHUHKVaNCazaSG/Um9aWZNFwNDAbM4Uvlo3fpleeO4nadjlAebqz8i0m6z6KqukMoQKjRkI1nrvrV1wPIxOSeiKYe6n+j7ZahGrJcU67WxcAlBXVYcAa+gLGBx96Yr/eqZJqAp+zhoGNrkXp4VQ6igjj9BmAJZzSegSaEt44bSN84RlpfeeYk8OWtdLysIqrCrkylj9hH+jRP99TF/1hekSQS4MAdh9nUhzaJbAp34DIOK7RCEw7+6/o76iND35Ftj+DrMd6s01EbN1slMU2xFalv/+UDYSoj8MtLiFwNpH1PrrXmODT/dZpLH8U0fO2g93wBkyvvbb+XABlQODv8rSRTWA9tNyWeSfNVHpD0AazvjIoI7rTOZUDyO64utOU+NO3od2khODtqqqfBvsUHNAOtOJ34o03fqv7UIFlPk0d3VsWEgio5wJJOZKf9DCbEDn8WUejlXWUdtbQavu575OrYe9/nfpYXZZFVbnUPhJ1vjunf1wO/EFoP3Eni3iBH3NjBKC68Eq4GgYBEpctPFhuz48cFoJkDDkkMAJhGliFsUS/xwdpdMxtM/sm/2/8v/qZ8zVEiw/151H6qO2SHGmoWQyFMxmeDGdmFd1I="
     # encrypt with: travis encrypt SONATYPE_PASSWORD=...
     - secure: "OEXKKiL7BvNssXWWK9x0/VPepCg+65wrB+nz3uexILM8PCVKMUnrNfkB8q5s1TXLmMtv5XPx5EBRVG252ZVjwrweXs66ne+BeDxUig7PKUQJoJwzCnkpNI9iutySXET85m4eWq4sVF/TG0LBjuZLFz7J01aUxAc1cJABqGMrdlR0IZbW8vqG8iQM3rkn0+BUeYqbYygDCac0Cyw74K0X/ncDBI76ItA1BO4NnJ7HfI2266ZhNi0lTFkI9JYy1ogFmwqJKlGTVrosofcAoiQcT4nWhvH6IWKKeLn5wuUGsntA6KfaVuPQNr65VgrS0KrP8umKHH7SucH/fnClwbrSHOxFvmq4BY6aliZ22keGMAau0RPgSS9j9UkjvQy1St7UoHVL3yuzqHOVBIzOXgKYxG6yy/gY8zu1jVOZIIse8oCtBFcQvz0AoO4f0T+tyUD8wfU9jxxxNt6i6jikuOd2o2ZR4+8yIQOum23Xb8sG2eOtH3sXPJm+gD/MnNeR1wx9Zn5zJDL6FmwUfDlSK++C6EEVy6tunWLDeqQWeZDuthqro9xXup+wcCKuEXYugNnx+OAzuDgJMCgSbOU6BkwAQtBIszAJWPnndMGRXocfoi4WhE2/FLMdXYt1uCcKiz8a+B3UvPzgDHugOkxI/dwB/8p0ecuE65MSYpbrhP+9O0o="
+    # encrypt with: travis encrypt DEPLOY_PASSPHRASE=...
+    - secure: "KzAhc0NqxpltrYXG0jikQ7X1jYdOqXMVfXjMAhzAg7RBQ/O9UQuIjD6Q4//6GNHg0rPnzKglWdkRgN1Ha8zRaW/PrRXu9FKVual6ypP4auqmgtHjVNbPHMftkRQn4RzFozMUsaM2nknveSeth24lFcBA2GrPf5ySMfcUJ+hqGENoOJFKK2e5PO0lBe+Kl3jYxxM8xJCp5lEWQ2utHE5cwJzFuXfE2IgbInavPGQHua/UbNthdnwTjEyh9bobNWEzcj9wzh9tsUUwNpbQIw42Bg0UsDP9fcQkqPW5MGjXwyM/uZ5VuTFtOfED2wrgkvccvJTek8wejU8jdHrpK/YfwZWagKmPeS7DXUtPfzCs0WF7I4m2GRFZf8+pUwZaU/kMcm5hpiM/ay7eumNBo5UwRknfvYzV9hC5y7bcYy5OtDdxd2mJ8Pu9GYMTKYMiYrOorkdDSPekG4bUofP7NI9xePoVJEQVOMM/MKBP0T9ryJuWRDDpBBkMCzLqBHHEwRkh9Ft5p8RFTO33MMCooNlcRP/THHJu6ajGj+yL5+JV1Tn6R6Py0kIIzMw+YzlPQ1JZqSRpJ0Znat3l4Dlxz2ULn45x2oUNKGGpPWBiE8FhbyuSUQ4m/efwwrTZ+gMFv+6LVjYEqYy6umXj4N+3XkZsu5ZXZqd49FaitJfcH5ApQ/w="
