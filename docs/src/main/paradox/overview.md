@@ -9,7 +9,7 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 ## Dependencies
 
 @@dependency [Maven,sbt,Gradle] {
-  group=com.typesafe.akka
+  group=com.lightbend.akka
   artifact=akka-persistence-cassandra_$scala.binary.version$
   version=$project.version$
 }
@@ -20,12 +20,51 @@ The table below shows Akka Persistence Cassandra’s direct dependencies and the
 
 @@dependencies{ projectId="core" }
 
+## Snapshots
+
+[sonatype-badge]: https://img.shields.io/nexus/s/https/oss.sonatype.org/com.lightbend.akka/akka-persistence-cassandra_2.12.svg?label=latest%20snapshot
+[sonatype]:       https://oss.sonatype.org/content/repositories/snapshots/com/lightbend/akka/akka-persistence-cassandra_2.12/
+
+Snapshots are published to a snapshot repository in Sonatype after every successful build on master. Add the following to your project build definition to resolve snapshots:
+
+sbt
+:   ```scala
+    resolvers += Resolver.sonatypeRepo("snapshots")
+    ```
+
+Maven
+:   ```xml
+    <project>
+    ...
+      <repositories>
+        <repository>
+          <id>sonatype-snapshots</id>
+          <name>Sonatype Snapshots</name>
+          <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </repository>
+      </repositories>
+    ...
+    </project>
+    ```
+
+Gradle
+:   ```gradle
+    repositories {
+      maven {
+        url  "https://oss.sonatype.org/content/repositories/snapshots"
+      }
+    }
+    ```
+
+Latest published snapshot version is [![sonatype-badge][]][sonatype]
+
+The [snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) is updated with every snapshot build.
+
 ## History
 
 This [Apache Cassandra](https://cassandra.apache.org/) plugin to Akka Persistence was initiated [originally](https://github.com/krasserm/akka-persistence-cassandra) by Martin Krasser, [@krasserm](https://github.com/krasserm) in 2014.
 
 It moved to the [Akka](https://github.com/akka/) organisation in 2017 and the first release after that move was 0.80 in January 2018.
-
 
 ## Contributing
 
