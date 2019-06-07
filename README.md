@@ -9,9 +9,12 @@ Replicated [Akka Persistence](https://doc.akka.io/docs/akka/current/scala/persis
 
 [![Build Status](https://travis-ci.org/akka/akka-persistence-cassandra.svg?branch=master)](https://travis-ci.org/akka/akka-persistence-cassandra)
 
+Implementation in the `master` branch is currently work-in-progress for the upcoming `1.0` release. [Snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) and [snapshot artifacts](https://oss.sonatype.org/content/repositories/snapshots/com/lightbend/akka/akka-persistence-cassandra_2.12/) are published for every successful `master` branch build.
+
+Documentation for the `0.x` versions is available on the [`release-0.x` branch](https://github.com/akka/akka-persistence-cassandra/tree/release-0.x).
+
 ## History
 
 This [Apache Cassandra](https://cassandra.apache.org/) plugin to Akka Persistence was initiated [originally](https://github.com/krasserm/akka-persistence-cassandra) by Martin Krasser, [@krasserm](https://github.com/krasserm) in 2014.
 
-It moved to the [Akka](https://github.com/akka/) organisation in 2017 and the first release after that move was 0.80 in January 2018.
-
+It moved to the [Akka](https://github.com/akka/) organisation in 2016 and the first release after that move was 0.7 in January 2016.
