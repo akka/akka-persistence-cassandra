@@ -38,14 +38,15 @@ trait DirectWriting extends BeforeAndAfterAll {
     super.afterAll()
   }
 
-  private lazy val preparedWriteMessage = {
-    val writeStatements: CassandraStatements = new CassandraStatements {
-      def config: CassandraJournalConfig = writePluginConfig
-    }
-    session.prepare(writeStatements.writeMessage(withMeta = false))
+  private lazy val writeStatements: CassandraStatements = new CassandraStatements {
+    def config: CassandraJournalConfig = writePluginConfig
   }
 
-  protected def writeTestEvent(persistent: PersistentRepr): Unit = {
+  private lazy val preparedWriteMessage = session.prepare(writeStatements.writeMessage(withMeta = false))
+
+  private lazy val preparedDeleteMessage = session.prepare(writeStatements.deleteMessage)
+
+  protected def writeTestEvent(persistent: PersistentRepr, partitionNr: Long = 1L): Unit = {
     val event = persistent.payload.asInstanceOf[AnyRef]
     val serializer = serialization.findSerializerFor(event)
     val serialized = ByteBuffer.wrap(serialization.serialize(event).get)
@@ -54,7 +55,7 @@ trait DirectWriting extends BeforeAndAfterAll {
 
     val bs = preparedWriteMessage.bind()
     bs.setString("persistence_id", persistent.persistenceId)
-    bs.setLong("partition_nr", 1L)
+    bs.setLong("partition_nr", partitionNr)
     bs.setLong("sequence_nr", persistent.sequenceNr)
     val nowUuid = UUIDs.timeBased()
     val now = UUIDs.unixTimestamp(nowUuid)
@@ -66,6 +67,16 @@ trait DirectWriting extends BeforeAndAfterAll {
     bs.setBytes("event", serialized)
     session.execute(bs)
     system.log.debug("Directly wrote payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
+  }
+
+  protected def deleteTestEvent(persistent: PersistentRepr, partitionNr: Long = 1L): Unit = {
+
+    val bs = preparedDeleteMessage.bind()
+    bs.setString("persistence_id", persistent.persistenceId)
+    bs.setLong("partition_nr", partitionNr)
+    bs.setLong("sequence_nr", persistent.sequenceNr)
+    session.execute(bs)
+    system.log.debug("Directly deleted payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
   }
 
 }
