@@ -65,6 +65,7 @@ import akka.util.OptionVal
 
   final case class EventsByPersistenceIdSession(
       selectEventsByPersistenceIdQuery: PreparedStatement,
+      selectSingleRowQuery: PreparedStatement,
       selectDeletedToQuery: PreparedStatement,
       session: Session,
       customConsistencyLevel: Option[ConsistencyLevel],
@@ -80,6 +81,11 @@ import akka.util.OptionVal
         selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
       executeStatement(boundStatement)
+    }
+
+    def selectSingleRow(persistenceId: String, pnr: Long)(implicit ec: ExecutionContext): Future[Option[Row]] = {
+      val boundStatement = selectSingleRowQuery.bind(persistenceId, pnr: JLong)
+      session.executeAsync(boundStatement).asScala.map(rs => Option(rs.one()))
     }
 
     def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContext): Future[Long] =
@@ -431,7 +437,28 @@ import akka.util.OptionVal
               // We keep track of if the query was such switching partition and if result is empty
               // we complete the stage or wait until next Continue tick.
               if (empty && switchPartition && lookingForMissingSeqNr.isEmpty) {
-                if (refreshInterval.isEmpty) {
+                if (expectedNextSeqNr < toSeqNr && !config.gapFreeSequenceNumbers) {
+                  log.warning(
+                    s"Result set is empty, checking if data in partition was deleted for $persistenceId, expected seq nr: $expectedNextSeqNr, partition nr: $partition, to seq nr: $toSeqNr")
+                  session.selectSingleRow(persistenceId, partition).onComplete {
+                    getAsyncCallback[Try[Option[Row]]] {
+                      case Success(mbRow) =>
+                        val r = mbRow.map(row => (row.getBool("used"), row.getLong("sequence_nr")))
+                        r match {
+                          case None             => completeStage()
+                          case Some((false, _)) => completeStage()
+                          case Some((true, 0)) =>
+                            query(switchPartition = true)
+                          case _ =>
+                            log.warning(
+                              s"$persistenceId gap should not be here, expected $expectedNextSeqNr, partition $partition, to $toSeqNr")
+                            query(switchPartition = false)
+                        }
+                      case Failure(exception) =>
+                        throw new IllegalStateException("Should not be able to get here")
+                    }.invoke
+                  }
+                } else if (refreshInterval.isEmpty) {
                   completeStage()
                 } else {
                   pendingFastForward.foreach { nextNr =>

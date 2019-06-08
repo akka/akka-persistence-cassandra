@@ -60,6 +60,7 @@ object CassandraReadJournal {
    */
   @InternalApi private[akka] case class CombinedEventsByPersistenceIdStmts(
       preparedSelectEventsByPersistenceId: PreparedStatement,
+      prepareSelectHighestNr:              PreparedStatement,
       preparedSelectDeletedTo: PreparedStatement)
 
   @InternalApi private[akka] case class EventByTagStatements(byTagWithUpperLimit: PreparedStatement)
@@ -192,14 +193,23 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       .prepare(queryStatements.selectTagSequenceNrs)
       .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
 
+  private def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
+    session
+      .prepare(selectHighestSequenceNr)
+      .map(
+        _.setConsistencyLevel(queryPluginConfig.readConsistency)
+          .setIdempotent(true)
+          .setRetryPolicy(readRetryPolicy))
+
   /**
    * INTERNAL API
    */
   @InternalApi private[akka] def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
     for {
       ps1 <- preparedSelectEventsByPersistenceId
-      ps2 <- preparedSelectDeletedTo
-    } yield CombinedEventsByPersistenceIdStmts(ps1, ps2)
+      ps2 <- preparedSelectHighestSequenceNr
+      ps3 <- preparedSelectDeletedTo
+    } yield CombinedEventsByPersistenceIdStmts(ps1, ps2, ps3)
 
   @InternalApi private[akka] def combinedEventsByTagStmts: Future[EventByTagStatements] =
     for {
@@ -583,6 +593,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
             refreshInterval,
             EventsByPersistenceIdStage.EventsByPersistenceIdSession(
               c.preparedSelectEventsByPersistenceId,
+              c.prepareSelectHighestNr,
               c.preparedSelectDeletedTo,
               s,
               customConsistencyLevel,
