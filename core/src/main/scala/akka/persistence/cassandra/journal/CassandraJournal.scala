@@ -40,6 +40,7 @@ import com.datastax.driver.core.utils.{ Bytes, UUIDs }
 import com.typesafe.config.Config
 import akka.cassandra.session._
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.collection.immutable.Seq
@@ -264,44 +265,52 @@ class CassandraJournal(cfg: Config)
     val pid = messages.head.persistenceId
     writeInProgress.put(pid, writeInProgressForPersistentId.future)
 
-    val bulkTagWrite: Future[BulkTagWrite] = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap {
+    val toReturn: Future[Nil.type] = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap {
       serialized: Seq[SerializedAtomicWrite] =>
         val result: Future[Any] =
-          if (messages.size <= config.maxMessageBatchSize) {
+          if (messages.map(_.payload.size).sum <= config.maxMessageBatchSize) {
             // optimize for the common case
             writeMessages(serialized)
           } else {
-            val groups: List[Seq[SerializedAtomicWrite]] =
-              serialized.grouped(config.maxMessageBatchSize).toList
+
+            //if presistAll was used, single AtomicWrite can already contain complete batch, so we need to regroup writes correctly
+            val groups: List[List[SerializedAtomicWrite]] = groupedWrites(serialized.toList.reverse, Nil, Nil)
 
             // execute the groups in sequence
-            def rec(todo: List[Seq[SerializedAtomicWrite]], acc: List[Unit]): Future[List[Unit]] =
+            def rec(todo: List[List[SerializedAtomicWrite]]): Future[Any] =
               todo match {
                 case write :: remainder =>
-                  writeMessages(write).flatMap(result => rec(remainder, result :: acc))
-                case Nil => Future.successful(acc.reverse)
+                  writeMessages(write).flatMap(_ => rec(remainder))
+                case Nil => Future.successful(())
               }
 
-            rec(groups, Nil)
+            rec(groups)
           }
-        result.map(_ => extractTagWrites(serialized))
+        result.map { _ =>
+          tagWrites.foreach(_ ! extractTagWrites(serialized))
+          Nil
+        }
+
     }
 
-    val toReturn = bulkTagWrite.map(btw => {
-      // notify TagWriters when write was successful before completing the future otherwise
-      // we can get another seq of AtomicWrites for the same persistent actor before this is sent
-      tagWrites.foreach(_ ! btw)
-      sendWriteFinished(pid, writeInProgressForPersistentId)
-      //Nil == all good
-      Nil
-    })(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
-
     // if the write fails still need to remove state from the map
-    toReturn.failed.foreach { _ =>
+    toReturn.onComplete { _ =>
       sendWriteFinished(pid, writeInProgressForPersistentId)
     }
 
     toReturn
+  }
+
+  //Regroup batches by payload size
+  @tailrec
+  private def groupedWrites(
+      reversed: List[SerializedAtomicWrite],
+      currentGroup: List[SerializedAtomicWrite],
+      grouped: List[List[SerializedAtomicWrite]]): List[List[SerializedAtomicWrite]] = reversed match {
+    case Nil => currentGroup +: grouped
+    case x :: xs if currentGroup.size + x.payload.size < config.maxMessageBatchSize =>
+      groupedWrites(xs, x +: currentGroup, grouped)
+    case x :: xs => groupedWrites(xs, List(x), currentGroup +: grouped)
   }
 
   def sendWriteFinished(pid: String, writeInProgressForPid: Promise[Done]): Unit = {
@@ -503,21 +512,22 @@ class CassandraJournal(cfg: Config)
         val deleteResult =
           Future.sequence(partitionInfos.map(future =>
             future.flatMap(pi => {
-              Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>
-                {
-                  val groupDeleteResult = asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
-                  groupDeleteResult.failed.foreach { e =>
-                    log.warning(
-                      s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                      "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                      "Caused by: [{}: {}]",
-                      persistenceId,
-                      toSequenceNr,
-                      e.getClass.getName,
-                      e.getMessage)
+              Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map {
+                group =>
+                  {
+                    val groupDeleteResult = asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
+                    groupDeleteResult.failed.foreach { e =>
+                      log.warning(
+                        s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                        "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                        "Caused by: [{}: {}]",
+                        persistenceId,
+                        toSequenceNr,
+                        e.getClass.getName,
+                        e.getMessage)
+                    }
+                    groupDeleteResult
                   }
-                  groupDeleteResult
-                }
               })
             })))
         deleteResult.map(_ => Done)
