@@ -323,19 +323,27 @@ import akka.util.OptionVal
 
       override def preStart(): Unit = {
         queryState = QueryInProgress(switchPartition = false, fetchMore = false, System.nanoTime())
-        session.highestDeletedSequenceNumber(persistenceId).onComplete {
-          getAsyncCallback[Try[Long]] {
-            case Success(delSeqNr) =>
-              // lowest possible seqNr is 1
-              expectedNextSeqNr = math.max(delSeqNr + 1, math.max(fromSeqNr, 1))
-              partition = partitionNr(expectedNextSeqNr)
-              // initial query
-              queryState = QueryIdle
-              query(switchPartition = false)
+        if (config.metaEnabled) {
+          session.highestDeletedSequenceNumber(persistenceId).onComplete {
+            getAsyncCallback[Try[Long]] {
+              case Success(delSeqNr) =>
+                // lowest possible seqNr is 1
+                expectedNextSeqNr = math.max(delSeqNr + 1, math.max(fromSeqNr, 1))
+                partition = partitionNr(expectedNextSeqNr)
+                // initial query
+                queryState = QueryIdle
+                query(switchPartition = false)
 
-            case Failure(e) => onFailure(e)
+              case Failure(e) => onFailure(e)
 
-          }.invoke
+            }.invoke
+          }
+        } else {
+          expectedNextSeqNr = math.max(fromSeqNr, 1)
+          partition = partitionNr(expectedNextSeqNr)
+          // initial query
+          queryState = QueryIdle
+          query(switchPartition = false)
         }
 
         refreshInterval match {
@@ -344,7 +352,7 @@ import akka.util.OptionVal
               if (interval >= 2.seconds)
                 (interval / 2) + ThreadLocalRandom.current().nextLong(interval.toMillis / 2).millis
               else interval
-            schedulePeriodicallyWithInitialDelay(Continue, initial, interval.toMillis.hours)
+            schedulePeriodicallyWithInitialDelay(Continue, initial, interval)
           case None =>
         }
       }
@@ -474,15 +482,6 @@ import akka.util.OptionVal
                   pendingFastForward = None
                   lookingForMissingSeqNr = None
                   afterExhausted()
-                case (Some(_), None) if !config.gapFreeSequenceNumbers =>
-                  val nextSeqNr = expectedNextSeqNr + 1
-                  log.warning(
-                    s"[$persistenceId] Missing $expectedNextSeqNr but 'Skip Gaps' is enabled, looking for next sequence nr: $nextSeqNr")
-                  internalFastForward(nextSeqNr)
-                  pendingFastForward = None
-                  lookingForMissingSeqNr = None
-                  queryState = QueryIdle
-                  query(false)
                 case (Some(_), None) =>
                   queryState = QueryIdle
                   scheduleOnce(LookForMissingSeqNr, 200.millis)
@@ -500,7 +499,7 @@ import akka.util.OptionVal
               if ((sequenceNr < expectedNextSeqNr && fastForwardEnabled) || pendingFastForward.isDefined && pendingFastForward.get > sequenceNr) {
                 // skip event due to fast forward
                 tryPushOne()
-              } else if (pendingFastForward.isEmpty && (config.gapFreeSequenceNumbers && sequenceNr > expectedNextSeqNr)) {
+              } else if (pendingFastForward.isEmpty && config.gapFreeSequenceNumbers && sequenceNr > expectedNextSeqNr) {
                 // we will probably now come in here which isn't what we want
                 lookingForMissingSeqNr match {
                   case Some(_) =>
