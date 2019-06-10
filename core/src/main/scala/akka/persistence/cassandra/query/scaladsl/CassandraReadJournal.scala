@@ -60,7 +60,7 @@ object CassandraReadJournal {
    */
   @InternalApi private[akka] case class CombinedEventsByPersistenceIdStmts(
       preparedSelectEventsByPersistenceId: PreparedStatement,
-      prepareSelectHighestNr:              PreparedStatement,
+      prepareSelectHighestNr: PreparedStatement,
       preparedSelectDeletedTo: PreparedStatement)
 
   @InternalApi private[akka] case class EventByTagStatements(byTagWithUpperLimit: PreparedStatement)
@@ -196,10 +196,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
     session
       .prepare(selectHighestSequenceNr)
-      .map(
-        _.setConsistencyLevel(queryPluginConfig.readConsistency)
-          .setIdempotent(true)
-          .setRetryPolicy(readRetryPolicy))
+      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
 
   /**
    * INTERNAL API

@@ -380,34 +380,6 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       probe.cancel()
     }
 
-    "read all events with multi-partition gaps" in {
-      val w1 = UUID.randomUUID().toString
-      val pr1 = PersistentRepr("e1", 1L, "mpg1", "", writerUuid = w1)
-      writeTestEvent(pr1, partitionNr = 0L)
-
-      val pr2 = PersistentRepr("e2", 2L, "mpg1", "", writerUuid = w1)
-      writeTestEvent(pr2, partitionNr = 1L)
-      deleteTestEvent(pr2, partitionNr = 1L)
-
-      val pr3 = PersistentRepr("e3", 3L, "mpg1", "", writerUuid = w1)
-      writeTestEvent(pr3, partitionNr = 2L)
-      deleteTestEvent(pr3, partitionNr = 2L)
-
-      val pr4 = PersistentRepr("e4", 4L, "mpg1", "", writerUuid = w1)
-      writeTestEvent(pr4, partitionNr = 3L)
-      deleteTestEvent(pr4, partitionNr = 3L)
-
-      val pr5 = PersistentRepr("e5", 5L, "mpg1", "", writerUuid = w1)
-      writeTestEvent(pr5, partitionNr = 4L)
-
-      val src = queries.currentEventsByPersistenceId("mpg1", 0L, Long.MaxValue)
-      val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10)
-
-      probe.expectNext("e1")
-      probe.expectNext("e5")
-      probe.cancel()
-    }
-
     "find all events when PersistAll spans partition boundaries" in {
       val ref = setup("q2", 10)
       // partition 0

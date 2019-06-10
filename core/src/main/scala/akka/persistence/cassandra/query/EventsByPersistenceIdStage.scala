@@ -344,7 +344,7 @@ import akka.util.OptionVal
               if (interval >= 2.seconds)
                 (interval / 2) + ThreadLocalRandom.current().nextLong(interval.toMillis / 2).millis
               else interval
-            schedulePeriodicallyWithInitialDelay(Continue, initial, interval)
+            schedulePeriodicallyWithInitialDelay(Continue, initial, interval.toMillis.hours)
           case None =>
         }
       }
@@ -400,7 +400,7 @@ import akka.util.OptionVal
             if (!rs.isExhausted)
               throw new IllegalStateException("Previous query was not exhausted")
         }
-        val pnr = if (switchPartition) partition + 1 else partition
+        partition = if (switchPartition) partition + 1 else partition
         queryState = QueryInProgress(switchPartition, fetchMore = false, System.nanoTime())
 
         val endNr = lookingForMissingSeqNr match {
@@ -409,18 +409,18 @@ import akka.util.OptionVal
               "EventsByPersistenceId [{}] Query for missing seqNr [{}] in partition [{}]",
               persistenceId,
               expectedNextSeqNr,
-              pnr)
+              partition)
             expectedNextSeqNr
           case _ =>
             log.debug(
               "EventsByPersistenceId [{}] Query from seqNr [{}] in partition [{}]",
               persistenceId,
               expectedNextSeqNr,
-              pnr)
+              partition)
             toSeqNr
         }
         session
-          .selectEventsByPersistenceId(persistenceId, pnr, expectedNextSeqNr, endNr, fetchSize)
+          .selectEventsByPersistenceId(persistenceId, partition, expectedNextSeqNr, endNr, fetchSize)
           .onComplete(newResultSetCb.invoke)
       }
 
@@ -440,24 +440,7 @@ import akka.util.OptionVal
                 if (expectedNextSeqNr < toSeqNr && !config.gapFreeSequenceNumbers) {
                   log.warning(
                     s"Result set is empty, checking if data in partition was deleted for $persistenceId, expected seq nr: $expectedNextSeqNr, partition nr: $partition, to seq nr: $toSeqNr")
-                  session.selectSingleRow(persistenceId, partition).onComplete {
-                    getAsyncCallback[Try[Option[Row]]] {
-                      case Success(mbRow) =>
-                        val r = mbRow.map(row => (row.getBool("used"), row.getLong("sequence_nr")))
-                        r match {
-                          case None             => completeStage()
-                          case Some((false, _)) => completeStage()
-                          case Some((true, 0)) =>
-                            query(switchPartition = true)
-                          case _ =>
-                            log.warning(
-                              s"$persistenceId gap should not be here, expected $expectedNextSeqNr, partition $partition, to $toSeqNr")
-                            query(switchPartition = false)
-                        }
-                      case Failure(exception) =>
-                        throw new IllegalStateException("Should not be able to get here")
-                    }.invoke
-                  }
+                  checkForGaps()
                 } else if (refreshInterval.isEmpty) {
                   completeStage()
                 } else {
@@ -491,6 +474,15 @@ import akka.util.OptionVal
                   pendingFastForward = None
                   lookingForMissingSeqNr = None
                   afterExhausted()
+                case (Some(_), None) if !config.gapFreeSequenceNumbers =>
+                  val nextSeqNr = expectedNextSeqNr + 1
+                  log.warning(
+                    s"[$persistenceId] Missing $expectedNextSeqNr but 'Skip Gaps' is enabled, looking for next sequence nr: $nextSeqNr")
+                  internalFastForward(nextSeqNr)
+                  pendingFastForward = None
+                  lookingForMissingSeqNr = None
+                  queryState = QueryIdle
+                  query(false)
                 case (Some(_), None) =>
                   queryState = QueryIdle
                   scheduleOnce(LookForMissingSeqNr, 200.millis)
@@ -553,6 +545,27 @@ import akka.util.OptionVal
 
           case QueryIdle | _: QueryInProgress | _: QueryResult => // ok
 
+        }
+      }
+
+      def checkForGaps(): Unit = {
+        session.selectSingleRow(persistenceId, partition).onComplete {
+          getAsyncCallback[Try[Option[Row]]] {
+            case Success(mbRow) =>
+              val r = mbRow.map(row => (row.getBool("used"), row.getLong("sequence_nr")))
+              r match {
+                case None             => completeStage()
+                case Some((false, _)) => completeStage()
+                case Some((true, _)) =>
+                  query(switchPartition = true)
+                case _ =>
+                  log.warning(
+                    s"$persistenceId gap should not be here, expected $expectedNextSeqNr, partition $partition, to $toSeqNr")
+                  query(switchPartition = false)
+              }
+            case Failure(exception) =>
+              throw new IllegalStateException("Should not be able to get here")
+          }.invoke
         }
       }
 
