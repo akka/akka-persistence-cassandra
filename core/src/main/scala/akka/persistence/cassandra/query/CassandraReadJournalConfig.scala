@@ -20,8 +20,6 @@ import scala.concurrent.duration._
 @InternalApi private[akka] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig)
     extends NoSerializationVerificationNeeded {
 
-  val metaEnabled = writePluginConfig.metaEnabled
-
   val refreshInterval: FiniteDuration =
     config.getDuration("refresh-interval", MILLISECONDS).millis
   val gapFreeSequenceNumbers: Boolean =
