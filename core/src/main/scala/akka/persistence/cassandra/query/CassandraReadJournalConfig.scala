@@ -29,6 +29,8 @@ import scala.concurrent.duration._
   val maxBufferSize: Int = config.getInt("max-buffer-size")
   val fetchSize: Int = config.getInt("max-result-size-query")
 
+  val metadataEnabled: Boolean = writePluginConfig.metadataEnabled
+
   // TODO use for the events by tag query too
   val fetchMoreThreshold: Double = config.getDouble("fetch-more-threshold")
   require(
