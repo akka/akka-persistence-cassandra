@@ -512,22 +512,21 @@ class CassandraJournal(cfg: Config)
         val deleteResult =
           Future.sequence(partitionInfos.map(future =>
             future.flatMap(pi => {
-              Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map {
-                group =>
-                  {
-                    val groupDeleteResult = asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
-                    groupDeleteResult.failed.foreach { e =>
-                      log.warning(
-                        s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                        "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                        "Caused by: [{}: {}]",
-                        persistenceId,
-                        toSequenceNr,
-                        e.getClass.getName,
-                        e.getMessage)
-                    }
-                    groupDeleteResult
+              Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>
+                {
+                  val groupDeleteResult = asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
+                  groupDeleteResult.failed.foreach { e =>
+                    log.warning(
+                      s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                      "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                      "Caused by: [{}: {}]",
+                      persistenceId,
+                      toSequenceNr,
+                      e.getClass.getName,
+                      e.getMessage)
                   }
+                  groupDeleteResult
+                }
               })
             })))
         deleteResult.map(_ => Done)
