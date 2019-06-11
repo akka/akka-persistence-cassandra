@@ -1,7 +1,7 @@
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
-val AkkaVersion = "2.5.19"
+val AkkaVersion = "2.5.23"
 
 val akkaPersistenceCassandraDependencies = Seq(
   "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
@@ -32,7 +32,7 @@ def common: Seq[Setting[_]] = Seq(
   organizationName := "Lightbend Inc.",
   startYear := Some(2016),
   licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
-  crossScalaVersions := Seq("2.11.12", "2.13.0-M5", "2.12.8"),
+  crossScalaVersions := Seq("2.11.12", "2.13.0", "2.12.8"),
   scalaVersion := crossScalaVersions.value.last,
   crossVersion := CrossVersion.binary,
   scalacOptions ++= Seq(
@@ -43,8 +43,6 @@ def common: Seq[Setting[_]] = Seq(
     "-deprecation",
     "-Xlint",
     "-Ywarn-dead-code",
-    "-Xfuture",
-    "-Xfatal-warnings"
   ),
   Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
   Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
@@ -81,7 +79,7 @@ lazy val core = (project in file("core"))
   .settings(common: _*)
   .settings(osgiSettings: _*)
   .settings({
-    val silencerVersion = "1.3.1"
+    val silencerVersion = "1.4.1"
     Seq(
       libraryDependencies ++= Seq(
         compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
