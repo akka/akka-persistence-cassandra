@@ -12,30 +12,15 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
   group=com.typesafe.akka
   artifact=akka-persistence-cassandra_$scala.binary.version$
   version=$project.version$
+  group2=com.typesafe.akka
+  artifact2=akka-persistence-cassandra-launcher_$scala.binary.version$
+  version2=$project.version$
+  scope2=Test
 }
 
-
-# TODO
-
-To include the latest release of the Cassandra plugins for **Akka 2.5.x** into your `sbt` project, add the following lines to your `build.sbt` file:
-
-    libraryDependencies += Seq(
-      "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.98",
-      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % "0.98" % Test
-    )
-
-This version of `akka-persistence-cassandra` depends on Akka 2.5.13. It has been published for Scala 2.11 and 2.12.  The launcher artifact is a utility for starting an embedded Cassandra, useful for running tests. It can be removed if not needed.
-
-To include the latest release of the Cassandra plugins for **Akka 2.4.x** into your `sbt` project, add the following lines to your `build.sbt` file:
-
-    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.30"
-
-This version of `akka-persistence-cassandra` depends on Akka 2.4.20. It has been published for Scala 2.11 and 2.12.
+The launcher artifact is a utility for starting an embedded Cassandra, useful for running tests. It can be removed if not needed.
 
 Those versions are compatible with Cassandra 3.0.0 or higher, and it is also compatible with Cassandra 2.1.6 or higher (versions < 2.1.6 have a static column bug) if you configure `cassandra-journal.cassandra-2x-compat=on` in your `application.conf`.
-
-
-
 
 This plugin depends on Akka 2.5.x and note that it is important that all `akka-*` dependencies are in the same version, so it is recommended to depend on them explicitly to avoid problems with transient dependencies causing an unlucky mix of versions.
 
@@ -43,10 +28,10 @@ The table below shows Akka Persistence Cassandra’s direct dependencies and the
 
 @@dependencies{ projectId="core" }
 
-## Snapshots
+## Library snapshots
 
-[sonatype-badge]: https://img.shields.io/nexus/s/https/oss.sonatype.org/com.lightbend.akka/akka-persistence-cassandra_2.12.svg?label=latest%20snapshot
-[sonatype]:       https://oss.sonatype.org/content/repositories/snapshots/com/lightbend/akka/akka-persistence-cassandra_2.12/
+[sonatype-badge]: https://img.shields.io/nexus/s/https/oss.sonatype.org/com.typesafe.akka/akka-persistence-cassandra_2.12.svg?label=latest%20snapshot
+[sonatype]:       https://oss.sonatype.org/content/repositories/snapshots/com/typesafe/akka/akka-persistence-cassandra_2.12/
 
 Snapshots are published to a snapshot repository in Sonatype after every successful build on master. Add the following to your project build definition to resolve snapshots:
 

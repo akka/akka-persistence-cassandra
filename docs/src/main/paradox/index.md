@@ -7,7 +7,6 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 @@@ index
 
 * [overview](overview.md)
-* [Getting Started](getting-started.md)
 * [Journal Plugin](journal.md)
 * [Query Plugin](read-journal.md)
 * [by tag](events-by-tag.md)
