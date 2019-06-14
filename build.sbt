@@ -27,12 +27,23 @@ lazy val core = (project in file("core"))
   })
   .settings(
     name := "akka-persistence-cassandra",
-    libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,
+    libraryDependencies ++= {
+      // Akka Typed is not available for Scala 2.11
+      if (scalaBinaryVersion.value == "2.11") Dependencies.akkaPersistenceCassandraDependencies
+      else Dependencies.akkaPersistenceCassandraDependencies ++ Dependencies.akkaTyped
+    },
 //    Compile / packageBin / packageOptions += Package.ManifestAttributes(
 //        "Automatic-Module-Name" -> "akka.persistence.cassandra"),
     OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*"),
     OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
     OsgiKeys.privatePackage := Nil,
+    Test / unmanagedSources / excludeFilter := {
+      if (scalaBinaryVersion.value == "2.11") {
+        HiddenFileFilter ||
+          // Akka Typed is not available for Scala 2.11
+          "CassandraLoadTypedSpec.scala"
+      } else (Test / unmanagedSources / excludeFilter).value
+    },
     testOptions in Test ++= Seq(
         Tests.Argument(TestFrameworks.ScalaTest, "-o"),
         Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports")))

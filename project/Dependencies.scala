@@ -25,9 +25,6 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
     "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
     "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
-    "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion % Test,
-    "com.typesafe.akka" %% "akka-cluster-typed" % AkkaVersion % Test,
-    "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-persistence-tck" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-multi-node-testkit" % AkkaVersion % Test,
@@ -36,4 +33,11 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % "3.0.8-RC2" % Test,
     "org.pegdown" % "pegdown" % "1.6.0" % Test,
     "org.osgi" % "org.osgi.core" % "5.0.0" % Provided)
+
+  val akkaTyped = Seq(
+    "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion % Test,
+    "com.typesafe.akka" %% "akka-cluster-typed" % AkkaVersion % Test,
+    "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test
+  )
+
 }
