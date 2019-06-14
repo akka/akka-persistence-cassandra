@@ -13,24 +13,25 @@ object Common extends AutoPlugin {
 
   override def requires = JvmPlugin && HeaderPlugin
 
-  override def globalSettings = Seq(
-    organization := "com.typesafe.akka",
-    organizationName := "Lightbend Inc.",
-    organizationHomepage := Some(url("https://www.lightbend.com/")),
-    startYear := Some(2016),
-    homepage := Some(url("https://akka.io")),
-    apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${version.value}")),
-    scmInfo := Some(
-        ScmInfo(
-          url("https://github.com/akka/akka-persistence-cassandra"),
-          "git@github.com:akka/akka-persistence-cassandra.git")),
-    developers += Developer(
-        "contributors",
-        "Contributors",
-        "https://gitter.im/akka/dev",
-        url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
-    licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
-    description := "A Cassandra plugin for Akka Persistence.")
+  override def globalSettings =
+    Seq(
+      organization := "com.typesafe.akka",
+      organizationName := "Lightbend Inc.",
+      organizationHomepage := Some(url("https://www.lightbend.com/")),
+      startYear := Some(2016),
+      homepage := Some(url("https://akka.io")),
+      apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${version.value}")),
+      scmInfo := Some(
+          ScmInfo(
+            url("https://github.com/akka/akka-persistence-cassandra"),
+            "git@github.com:akka/akka-persistence-cassandra.git")),
+      developers += Developer(
+          "contributors",
+          "Contributors",
+          "https://gitter.im/akka/dev",
+          url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
+      licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
+      description := "A Cassandra plugin for Akka Persistence.")
 
   override lazy val projectSettings = Seq(
     projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),

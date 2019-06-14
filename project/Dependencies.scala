@@ -37,7 +37,6 @@ object Dependencies {
   val akkaTyped = Seq(
     "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-cluster-typed" % AkkaVersion % Test,
-    "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test
-  )
+    "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test)
 
 }

@@ -19,11 +19,10 @@ lazy val core = (project in file("core"))
   .settings({
     Seq(
       libraryDependencies ++= Seq(
-        compilerPlugin("com.github.ghik" %% "silencer-plugin" % Dependencies.silencerVersion),
-        "com.github.ghik" %% "silencer-lib" % Dependencies.silencerVersion % Provided),
+          compilerPlugin("com.github.ghik" %% "silencer-plugin" % Dependencies.silencerVersion),
+          "com.github.ghik" %% "silencer-lib" % Dependencies.silencerVersion % Provided),
       // Hack because 'provided' dependencies by default are not picked up by the multi-jvm plugin:
-      managedClasspath in MultiJvm ++= (managedClasspath in Compile).value.filter(_.data.name.contains("silencer-lib"))
-      )
+      managedClasspath in MultiJvm ++= (managedClasspath in Compile).value.filter(_.data.name.contains("silencer-lib")))
   })
   .settings(
     name := "akka-persistence-cassandra",
@@ -40,8 +39,8 @@ lazy val core = (project in file("core"))
     Test / unmanagedSources / excludeFilter := {
       if (scalaBinaryVersion.value == "2.11") {
         HiddenFileFilter ||
-          // Akka Typed is not available for Scala 2.11
-          "CassandraLoadTypedSpec.scala"
+        // Akka Typed is not available for Scala 2.11
+        "CassandraLoadTypedSpec.scala"
       } else (Test / unmanagedSources / excludeFilter).value
     },
     testOptions in Test ++= Seq(
@@ -78,11 +77,10 @@ lazy val docs = project
     whitesourceIgnore := true,
     makeSite := makeSite.dependsOn(LocalRootProject / ScalaUnidoc / doc).value,
     previewPath := (Paradox / siteSubdirName).value,
-    Preprocess / siteSubdirName := s"api/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}",
+    Preprocess / siteSubdirName := s"api/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot"
+      else version.value}",
     Preprocess / sourceDirectory := (LocalRootProject / ScalaUnidoc / unidoc / target).value,
-    Preprocess / preprocessRules := Seq(
-      ("\\.java\\.scala".r, _ => ".java")
-    ),
+    Preprocess / preprocessRules := Seq(("\\.java\\.scala".r, _ => ".java")),
     Paradox / siteSubdirName := s"docs/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}",
     paradoxProperties ++= Map(
         "akka.version" -> Dependencies.AkkaVersion,
@@ -103,9 +101,7 @@ lazy val docs = project
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     resolvers += Resolver.jcenterRepo,
     publishRsyncArtifact := makeSite.value -> "www/",
-    publishRsyncHost := "akkarepo@gustav.akka.io"
-  )
-
+    publishRsyncHost := "akkarepo@gustav.akka.io")
 
 def akkaImport(packageName: String = "akka.*") =
   versionedImport(packageName, "2.4", "2.5")
