@@ -11,7 +11,15 @@ Replicated [Akka Persistence](https://doc.akka.io/docs/akka/current/scala/persis
 
 Implementation in the `master` branch is currently work-in-progress for the upcoming `1.0` release. [Snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) and [snapshot artifacts](https://oss.sonatype.org/content/repositories/snapshots/com/typesafe/akka/akka-persistence-cassandra_2.12/) are published for every successful `master` branch build.
 
-Documentation for the `0.x` versions is available on the [`release-0.x` branch](https://github.com/akka/akka-persistence-cassandra/tree/release-0.x).
+
+## Documentation
+
+Documentation for version 0.98 and above is available at https://doc.akka.io/docs/akka-persistence-cassandra/0.98/ with the latest docs on https://doc.akka.io/docs/akka-persistence-cassandra/current/.
+
+Documenation for the snapshot of the `master` branch is available at https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/.
+
+For versions earlier than 0.98, check this README.md file for the corresponding release tag.
+
 
 ## History
 
