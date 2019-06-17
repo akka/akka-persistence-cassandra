@@ -3,7 +3,7 @@ import Keys._
 
 object Dependencies {
   val Scala212 = "2.12.8"
-  val Scala213 = "2.13.0-RC2"
+  val Scala213 = "2.13.0"
   val ScalaVersions = Seq(Scala212, Scala213)
 
   val AkkaVersion = "2.5.23"
