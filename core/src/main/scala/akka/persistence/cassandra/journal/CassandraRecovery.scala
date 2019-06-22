@@ -28,12 +28,8 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
     new CassandraJournal.EventDeserializer(context.system)
 
   private[akka] def asyncReadHighestSequenceNrInternal(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
-    if (metadataEnabled) {
-      asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
-        asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h), targetPartitionSize)
-      }
-    } else {
-      asyncFindHighestSequenceNr(persistenceId, fromSequenceNr, targetPartitionSize)
+    asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
+      asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h), targetPartitionSize)
     }
   }
 

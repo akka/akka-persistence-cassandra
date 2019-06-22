@@ -26,10 +26,7 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
 
   val keyspace: String = config.getString("keyspace")
   val table: String = config.getString("table")
-
   val metadataTable: String = config.getString("metadata-table")
-  val metadataEnabled: Boolean = config.getBoolean("metadata.check-meta-on-replay")
-
   val configTable: String = validateTableName(config.getString("config-table"))
 
   val tableCompactionStrategy: CassandraCompactionStrategy =
