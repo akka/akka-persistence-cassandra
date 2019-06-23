@@ -14,7 +14,6 @@ import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
 import akka.persistence.cassandra.journal._
-import akka.persistence.cassandra.query.AllPersistenceIdsPublisher.AllPersistenceIdsSession
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
@@ -39,7 +38,6 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
 import akka.serialization.SerializationExtension
-import com.github.ghik.silencer.silent
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -621,11 +619,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
     }
 
-  @silent
-  private[this] def internalUuidToOffset(uuid: UUID): Offset =
-    if (uuid == firstOffset) NoOffset
-    else TimeBasedUUID(uuid)
-
   private[this] def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =
     offset match {
       case TimeBasedUUID(uuid) => (uuid, true)
@@ -672,14 +665,12 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   override def currentPersistenceIds(): Source[String, NotUsed] =
     persistenceIds(None, "currentPersistenceIds")
 
-  @silent // FIXME re-write as a GraphStage
   private[this] def persistenceIds(refreshInterval: Option[FiniteDuration], name: String): Source[String, NotUsed] =
     createSource[String, PreparedStatement](
       preparedSelectDistinctPersistenceIds,
       (s, ps) =>
         Source
-          .actorPublisher[String](
-            AllPersistenceIdsPublisher.props(refreshInterval, AllPersistenceIdsSession(ps, s), queryPluginConfig))
+          .fromGraph(new AllPersistenceIdsStage(refreshInterval, queryPluginConfig.fetchSize, ps, s))
           .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
           .named(name))
