@@ -90,7 +90,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
     }
 
     "find existing persistence ids in batches if there is more of them than max-result-size-query" in {
-      for (i <- 1 to 1000) {
+      for (_ <- 1 to 1000) {
         setup(UUID.randomUUID().toString, 1)
       }
 
@@ -98,7 +98,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(1000)
 
-      for (i <- 1 to 1000) {
+      for (_ <- 1 to 1000) {
         probe.expectNext()
       }
 
