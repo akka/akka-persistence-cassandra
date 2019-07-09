@@ -65,6 +65,7 @@ import akka.util.OptionVal
 
   final case class EventsByPersistenceIdSession(
       selectEventsByPersistenceIdQuery: PreparedStatement,
+      selectSingleRowQuery: PreparedStatement,
       selectDeletedToQuery: PreparedStatement,
       session: Session,
       customConsistencyLevel: Option[ConsistencyLevel],
@@ -80,6 +81,11 @@ import akka.util.OptionVal
         selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       boundStatement.setFetchSize(fetchSize)
       executeStatement(boundStatement)
+    }
+
+    def selectSingleRow(persistenceId: String, pnr: Long)(implicit ec: ExecutionContext): Future[Option[Row]] = {
+      val boundStatement = selectSingleRowQuery.bind(persistenceId, pnr: JLong)
+      session.executeAsync(boundStatement).asScala.map(rs => Option(rs.one()))
     }
 
     def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContext): Future[Long] =
@@ -431,7 +437,14 @@ import akka.util.OptionVal
               // We keep track of if the query was such switching partition and if result is empty
               // we complete the stage or wait until next Continue tick.
               if (empty && switchPartition && lookingForMissingSeqNr.isEmpty) {
-                if (refreshInterval.isEmpty) {
+                if (expectedNextSeqNr < toSeqNr && !config.gapFreeSequenceNumbers) {
+                  log.warning(
+                    s"Gap found! Checking if data in partition was deleted for {}, expected seq nr: {}, current partition nr: {}",
+                    persistenceId,
+                    expectedNextSeqNr,
+                    partition)
+                  checkForGaps()
+                } else if (refreshInterval.isEmpty) {
                   completeStage()
                 } else {
                   pendingFastForward.foreach { nextNr =>
@@ -481,7 +494,7 @@ import akka.util.OptionVal
               if ((sequenceNr < expectedNextSeqNr && fastForwardEnabled) || pendingFastForward.isDefined && pendingFastForward.get > sequenceNr) {
                 // skip event due to fast forward
                 tryPushOne()
-              } else if (pendingFastForward.isEmpty && (config.gapFreeSequenceNumbers && sequenceNr > expectedNextSeqNr)) {
+              } else if (pendingFastForward.isEmpty && config.gapFreeSequenceNumbers && sequenceNr > expectedNextSeqNr) {
                 // we will probably now come in here which isn't what we want
                 lookingForMissingSeqNr match {
                   case Some(_) =>
@@ -526,6 +539,29 @@ import akka.util.OptionVal
 
           case QueryIdle | _: QueryInProgress | _: QueryResult => // ok
 
+        }
+      }
+
+      // The strategy is simple, if full partition was cleaned up we will find null-row
+      // i.e row: <persistence_id>, <partition_nr>, null, ...
+      // If such row exists, we have to switch partition and continue to fetching
+      def checkForGaps(): Unit = {
+        session.selectSingleRow(persistenceId, partition).onComplete {
+          getAsyncCallback[Try[Option[Row]]] {
+            case Success(mbRow) =>
+              val r = mbRow.map(row => (row.getBool("used"), row.getLong("sequence_nr")))
+              r match {
+                case Some((true, _)) =>
+                  //We increment partition nr manually, otherwise we will break `lookingForMissingSeqNr` logic
+                  partition = partition + 1
+                  query(switchPartition = false)
+                case _ =>
+                  //No data found, but at least we tried
+                  completeStage()
+              }
+            case Failure(exception) =>
+              throw new IllegalStateException("Should not be able to get here")
+          }.invoke
         }
       }
 
