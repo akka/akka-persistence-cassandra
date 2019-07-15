@@ -13,7 +13,7 @@ object Dependencies {
   val silencerVersion = "1.4.1"
 
   val akkaPersistenceCassandraDependencies = Seq(
-    "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
+    "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.2",
     // Specifying guava dependency because older transitive dependency has security vulnerability
     "com.google.guava" % "guava" % "27.0.1-jre",
     // Specifying jnr-posix version for licensing reasons: cassandra-driver-core
