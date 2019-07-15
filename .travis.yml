@@ -44,14 +44,6 @@ jobs:
       name: White Source
       script: git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH" && sbt whitesourceCheckPolicies whitesourceUpdate
 
-    - stage: publish
-      script: openssl aes-256-cbc -K $encrypted_fb56f898a62a_key -iv $encrypted_fb56f898a62a_iv -in .travis/sign_key.enc -out sign_key -d && gpg --import sign_key && sbt ++2.11.12 publish
-      name: Publish artifacts for Scala 2.11.12
-    - stage: publish
-      script: openssl aes-256-cbc -K $encrypted_fb56f898a62a_key -iv $encrypted_fb56f898a62a_iv -in .travis/sign_key.enc -out sign_key -d && gpg --import sign_key && sbt ++2.12.8 publish
-      name: Publish artifacts for Scala 2.12.8
-    - script: openssl aes-256-cbc -K $encrypted_fb56f898a62a_key -iv $encrypted_fb56f898a62a_iv -in .travis/sign_key.enc -out sign_key -d && gpg --import sign_key && sbt ++2.13.0 publish
-      name: Publish artifacts for Scala 2.13.0
     - script: eval "$(ssh-agent -s)" && cp .travis/id_rsa /tmp/id_rsa && chmod 600 /tmp/id_rsa && ssh-keygen -p -P "$DEPLOY_PASSPHRASE" -N "" -f /tmp/id_rsa && ssh-add /tmp/id_rsa && sbt docs/publishRsync
       name: Publish documentation
 
