@@ -57,7 +57,7 @@ object CassandraCorruptJournalSpec {
 
 class CassandraCorruptJournalSpec extends CassandraSpec(s"""
     akka {
-      loglevel = debug
+      loglevel = INFO
       loggers = ["akka.testkit.TestEventListener"]
     }
 
