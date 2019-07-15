@@ -10,7 +10,7 @@ object Dependencies {
   val CassandraVersionInDocs = "4.0"
 
   val akkaCassandraSessionDependencies = Seq(
-    "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.1",
+    "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.2",
     "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test)
 
