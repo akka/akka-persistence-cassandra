@@ -40,7 +40,7 @@ object EventsByTagSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
+    akka.loglevel = DEBUG
     akka.actor.serialize-messages = off
     akka.actor.warn-about-java-serializer-usage = off
     cassandra-journal {
@@ -76,7 +76,6 @@ object EventsByTagSpec {
     """).withFallback(CassandraLifecycle.config)
 
   val strictConfig = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
     cassandra-query-journal {
       refresh-interval = 100ms
       events-by-tag {
@@ -92,7 +91,6 @@ object EventsByTagSpec {
     """).withFallback(strictConfig)
 
   val disabledConfig = ConfigFactory.parseString("""
-      akka.loglevel = INFO
       cassandra-journal {
         keyspace=EventsByTagDisabled
         events-by-tag.enabled = false
