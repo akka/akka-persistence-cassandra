@@ -87,6 +87,8 @@ abstract class CassandraSpec(
 
   def this(config: String) = this(ConfigFactory.parseString(config))
 
+  def this() = this(CassandraLifecycle.config)
+
   lazy val randomPort = SocketUtil.temporaryLocalPort()
 
   val shortWait = 10.millis

@@ -192,7 +192,10 @@ import akka.util.ByteString
       // migration and journal specs can use dead letters as sender
       if (persistentActor != context.system.deadLetters) {
         currentPersistentActors.get(pid).foreach { ref =>
-          log.debug("Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]", pid, ref)
+          log.warning(
+            "Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]. Persistent Actors with the same PersistenceId should not run concurrently",
+            pid,
+            ref)
         }
         currentPersistentActors += (pid -> persistentActor)
         log.debug("Watching pid [{}] actor [{}]", pid, persistentActor)
@@ -249,13 +252,13 @@ import akka.util.ByteString
           currentPersistentActors -= pid
         case Some(currentRef) =>
           log.debug(
-            "Persistent actor terminated. However new actor ref for pid has been added. [{}]. Terminated ref: [{}] terminatedRef: [{}]",
+            "Persistent actor terminated. However new actor ref for pid has been added. [{}]. Terminated ref: [{}] current ref: [{}]",
             pid,
             ref,
             currentRef)
         case None =>
           log.warning(
-            "Unknown persistent actor terminated. Please raise an issue with debug logs. Pid: [{}]. Ref: [{}]",
+            "Unknown persistent actor terminated. Were multiple actors with the same PersistenceId running concurrently? Check warnings logs for this PersistenceId: [{}]. Ref: [{}]",
             pid,
             ref)
       }
