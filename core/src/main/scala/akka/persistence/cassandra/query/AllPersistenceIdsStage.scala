@@ -11,6 +11,7 @@ import akka.cassandra.session._
 import akka.stream.stage._
 import akka.stream.{ Attributes, Outlet, SourceShape }
 import com.datastax.driver.core.{ PreparedStatement, ResultSet, Session }
+import com.github.ghik.silencer.silent
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
@@ -98,6 +99,7 @@ import scala.concurrent.ExecutionContextExecutor
         }
       }
 
+      @silent("deprecated") // keep compatible with akka 2.5
       override def preStart(): Unit = {
         query()
         refreshInterval.foreach { interval =>
@@ -105,6 +107,7 @@ import scala.concurrent.ExecutionContextExecutor
             if (interval >= 2.seconds)
               (interval / 2) + ThreadLocalRandom.current().nextLong(interval.toMillis / 2).millis
             else interval
+
           schedulePeriodicallyWithInitialDelay(Continue, initial, interval)
         }
       }

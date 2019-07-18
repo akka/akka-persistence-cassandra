@@ -29,6 +29,7 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTag
 import akka.persistence.query.Offset
 import com.datastax.driver.core.{ ResultSet, Row, Session }
 import com.datastax.driver.core.utils.UUIDs
+import com.github.ghik.silencer.silent
 
 /**
  * Walks the tag_views table.
@@ -280,11 +281,16 @@ import com.datastax.driver.core.utils.UUIDs
               if (interval >= 2.seconds)
                 (interval / 2) + ThreadLocalRandom.current().nextLong(interval.toMillis / 2).millis
               else interval
-            schedulePeriodicallyWithInitialDelay(QueryPoll, initial, interval)
+            scheduleQueryPoll(initial, interval)
             log.debug("[{}] Scheduling query poll at: {} ms", stageUuid, interval.toMillis)
           case None =>
             log.debug("[{}] CurrentQuery: No query polling", stageUuid)
         }
+      }
+
+      @silent("deprecated")
+      private def scheduleQueryPoll(initial: FiniteDuration, interval: FiniteDuration): Unit = {
+        schedulePeriodicallyWithInitialDelay(QueryPoll, initial, interval)
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
