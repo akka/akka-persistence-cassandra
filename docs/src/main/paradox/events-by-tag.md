@@ -25,7 +25,7 @@ if you set the offset to be 30 days ago and a day time bucket, it will require 3
 If a particular partition contains many events then it is paged back from Cassandra based on demand.
 
 When no offset is provided EventsByTag queries start at the configured `first-time-bucket`. For new applications
-increase this to the day your application is initially deployed to speed to `NoOffset` queries.
+increase this to the day your application is initially deployed to speed up `NoOffset` queries.
 
 ## Bucket sizes 
 
