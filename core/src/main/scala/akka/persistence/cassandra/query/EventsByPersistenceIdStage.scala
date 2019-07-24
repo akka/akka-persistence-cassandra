@@ -378,6 +378,9 @@ import com.datastax.driver.core.utils.Bytes
                     lookingForMissingSeqNr = Some(
                       MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, event.sequenceNr)
                     )
+                    // Forget about any other rows in this result set until we find
+                    // the missing sequence nrs
+                    queryState = QueryIdle
                     query(false)
                 }
               } else {
