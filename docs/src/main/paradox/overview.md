@@ -15,7 +15,7 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
   group2=com.typesafe.akka
   artifact2=akka-persistence-cassandra-launcher_$scala.binary.version$
   version2=$project.version$
-  scope2=Test
+  scope2=test
 }
 
 The launcher artifact is a utility for starting an embedded Cassandra, useful for running tests. It can be removed if not needed.
