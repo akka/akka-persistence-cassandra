@@ -37,6 +37,8 @@ jobs:
       name: Run all tests with Jdk 8
     - script: jabba use adopt@~1.11.0-2 && java -version && docker-compose up -d cassandra && sbt +test
       name: Run all tests with Jdk 11
+    - script: jabba use adopt@~1.11.0-2 && java -version && docker-compose up -d cassandra && sbt -Doverride.akka.version="2.6.0-M4" +test
+      name: Run all the tests with Akka 2.6
 
     - stage: whitesource
       name: White Source
