@@ -87,6 +87,7 @@ object EventsByTagSpec {
     """).withFallback(config)
 
   val strictConfigFirstOffset1001DaysAgo = ConfigFactory.parseString(s"""
+    akka.loglevel = INFO # DEBUG is very verbose for this test so don't turn it on when debugging other tests
     cassandra-query-journal.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
     """).withFallback(strictConfig)
 

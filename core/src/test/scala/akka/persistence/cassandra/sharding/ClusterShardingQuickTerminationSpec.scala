@@ -39,7 +39,7 @@ object ClusterShardingQuickTerminationSpec {
 
     override def receiveRecover: Receive = {
       case evt: CounterChanged => updateState(evt)
-      case other               => log.info("Other: {}", other)
+      case other               => log.debug("Other: {}", other)
     }
 
     override def receiveCommand: Receive = {
