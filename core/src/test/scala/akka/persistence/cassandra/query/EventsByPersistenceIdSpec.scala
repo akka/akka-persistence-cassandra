@@ -19,7 +19,6 @@ import scala.concurrent.duration._
 
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 2
     cassandra-query-journal.events-by-persistence-id-gap-timeout = 4 seconds

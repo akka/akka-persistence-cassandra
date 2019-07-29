@@ -16,7 +16,6 @@ import scala.concurrent.duration._
 
 object EventsByPersistenceIdWithControlSpec {
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
     cassandra-journal.keyspace=EventsByPersistenceIdWithControlSpec
     cassandra-query-journal.refresh-interval = 120s # effectively disabled
     cassandra-query-journal.max-result-size-query = 20

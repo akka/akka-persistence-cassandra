@@ -24,7 +24,6 @@ object EventsByTagRestartSpec {
 
   val config = ConfigFactory.parseString(s"""
        |akka {
-       |  loglevel = INFO
        |  actor.debug.unhandled = on
        |}
        |cassandra-journal {

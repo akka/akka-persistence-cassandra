@@ -67,7 +67,6 @@ object ClusterShardingQuickTerminationSpec {
 }
 
 class ClusterShardingQuickTerminationSpec extends CassandraSpec("""
-    akka.loglevel = INFO 
     akka.actor.provider = cluster
   """.stripMargin) {
 

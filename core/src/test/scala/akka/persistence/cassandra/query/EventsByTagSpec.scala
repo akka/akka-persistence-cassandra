@@ -40,7 +40,6 @@ object EventsByTagSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = DEBUG
     akka.actor.serialize-messages = off
     akka.actor.warn-about-java-serializer-usage = off
     cassandra-journal {
@@ -501,7 +500,6 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 class EventsByTagZeroEventualConsistencyDelaySpec
     extends AbstractEventsByTagSpec(ConfigFactory.parseString("""
             cassandra-query-journal.eventual-consistency-delay = 0s
-            akka.loglevel = INFO
           """).withFallback(EventsByTagSpec.strictConfig)) {
 
   "Cassandra query currentEventsByTag with zero eventual-consistency-delay" must {
@@ -546,7 +544,6 @@ class EventsByTagFindDelayedEventsSpec
       ConfigFactory
         .parseString(
           """
-akka.loglevel = INFO 
 # find delayed events from offset relies on this as it puts an event before the offset that will not
 # be found and one after that will be found for a new persistence id
 # have it at least 2x the interval so searching for missing tries trice

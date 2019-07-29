@@ -21,7 +21,6 @@ object EventsByTagPubsubSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
     akka.actor.provider = "akka.cluster.ClusterActorRefProvider"
     akka.actor.serialize-messages = off
     akka.actor.serialize-creators = off

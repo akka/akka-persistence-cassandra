@@ -22,7 +22,7 @@ object CassandraEventsByTagLoadSpec {
 
   val config = ConfigFactory.parseString(s"""
        akka {
-         loglevel = INFO
+         " must { = INFO
        }
        cassandra-journal {
          log-queries = off
