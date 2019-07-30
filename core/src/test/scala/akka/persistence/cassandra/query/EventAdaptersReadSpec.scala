@@ -18,7 +18,6 @@ object EventAdaptersReadSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
-    akka." must { = INFO
     akka.actor.serialize-messages=off
     cassandra-journal.keyspace=EventAdaptersReadSpec
     cassandra-query-journal.max-buffer-size = 10
