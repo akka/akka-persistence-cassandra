@@ -21,9 +21,6 @@ object CassandraEventsByTagLoadSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
-       akka {
-         " must { = INFO
-       }
        cassandra-journal {
          log-queries = off
          events-by-tag {
