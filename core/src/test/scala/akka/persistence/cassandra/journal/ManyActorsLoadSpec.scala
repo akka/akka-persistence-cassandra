@@ -17,7 +17,6 @@ import com.typesafe.config.ConfigFactory
 
 object ManyActorsLoadSpec {
   val config = ConfigFactory.parseString(s"""
-      akka.loglevel = INFO
       cassandra-journal.keyspace=ManyActorsLoadSpec
       cassandra-journal.events-by-tag.enabled = on
       # increase this to 3s when benchmarking

@@ -25,7 +25,6 @@ import scala.concurrent.duration._
 object CassandraSessionSpec {
 
   lazy val config = ConfigFactory.parseString(s"""
-      akka.loglevel = INFO
       cassandra-journal.keyspace=CassandraSessionSpec
 
       test-cassandra-session-config {

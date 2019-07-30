@@ -4,10 +4,13 @@
 
 package akka.persistence.cassandra
 
+import java.io.{ OutputStream, PrintStream }
 import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
+import akka.event.Logging
+import akka.event.Logging.{ LogEvent, StdOutLogger }
 import akka.persistence.cassandra.CassandraLifecycle.{ Embedded, External }
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
@@ -18,7 +21,7 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Keep, Sink }
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.{ ImplicitSender, SocketUtil, TestKitBase }
+import akka.testkit.{ EventFilter, ImplicitSender, SocketUtil, TestKitBase }
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Milliseconds, Seconds, Span }
@@ -60,6 +63,8 @@ object CassandraSpec {
     """)
 
   val fallbackConfig = ConfigFactory.parseString(s"""
+        akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
+        akka.loglevel = DEBUG
         cassandra-query-journal {
           first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
           events-by-tag {
@@ -108,13 +113,53 @@ abstract class CassandraSpec(
   private var failed = false
 
   override protected def withFixture(test: NoArgTest): Outcome = {
-    val out = super.withFixture(test)
-    if (!out.isSucceeded)
-      failed = true
+    // When filtering just collects events into this var (yeah, it's a hack to do that in a filter).
+    // We assume that the filter will always ever be used from a single actor, so a regular var should be fine.
+    var events: List[LogEvent] = Nil
 
-    out
+    object LogEventCollector extends EventFilter(Int.MaxValue) {
+      override protected def matches(event: Logging.LogEvent): Boolean = {
+        events ::= event
+        true
+      }
+    }
+
+    val myLogger = Logging(system, classOf[CassandraSpec])
+    val res = LogEventCollector.intercept {
+      myLogger.debug(s"Logging started for test [${test.name}]")
+      val r = test()
+      myLogger.debug(s"Logging finished for test [${test.name}]")
+      r
+    }
+
+    if (!(res.isSucceeded || res.isPending)) {
+      failed = true
+      println(s"--> [${Console.BLUE}${test.name}${Console.RESET}] Start of log messages of test that [$res]")
+      val logger = new StdOutLogger {}
+      withPrefixedOut("| ") { events.reverse.foreach(logger.print) }
+      println(s"<-- [${Console.BLUE}${test.name}${Console.RESET}] End of log messages of test that [$res]")
+    }
+
+    res
   }
-  override protected def externalCassandraCleanup(): Unit =
+
+  /** Adds a prefix to every line printed out during execution of the thunk. */
+  private def withPrefixedOut[T](prefix: String)(thunk: => T): T = {
+    val oldOut = Console.out
+    val prefixingOut =
+      new PrintStream(new OutputStream {
+        override def write(b: Int): Unit = oldOut.write(b)
+      }) {
+        override def println(x: Any): Unit =
+          oldOut.println(prefix + String.valueOf(x).replaceAllLiterally("\n", s"\n$prefix"))
+      }
+
+    Console.withOut(prefixingOut) {
+      thunk
+    }
+  }
+
+  override protected def externalCassandraCleanup(): Unit = {
     Try {
       val c = cluster.connect(journalName)
       if (failed) {
@@ -135,6 +180,7 @@ abstract class CassandraSpec(
       }
       c.close()
     }
+  }
 
   final implicit lazy val system: ActorSystem = {
     // always use this port and keyspace generated here, then test config, then the lifecycle config

@@ -17,7 +17,6 @@ object EventsByPersistenceIdFastForwardSpec {
 
   // separate from EventsByPersistenceIdWithControlSpec since it needs the refreshing enabled
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
     cassandra-journal.keyspace=EventsByPersistenceIdFastForwardSpec
     cassandra-query-journal.refresh-interval = 250ms
     cassandra-query-journal.max-result-size-query = 2
