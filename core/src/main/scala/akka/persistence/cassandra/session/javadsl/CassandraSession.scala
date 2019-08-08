@@ -73,13 +73,23 @@ final class CassandraSession(delegate: akka.persistence.cassandra.session.scalad
     delegate.underlying().toJava
 
   /**
+   * Execute <a href=https://docs.datastax.com/en/archived/cql/3.3/cql/cql_reference/cqlCommandsTOC.html">CQL commands</a>
+   * to manage database resources (create, replace, alter, and drop tables, indexes, user-defined types, etc).
+   *
+   * The returned `CompletionStage` is completed when the command is done, or if the statement fails.
+   */
+  def executeDDL(stmt: String): CompletionStage[Done] =
+    delegate.executeDDL(stmt).toJava
+
+  /**
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useCreateTableTOC.html">Creating a table</a>.
    *
    * The returned `CompletionStage` is completed when the table has been created,
    * or if the statement fails.
    */
+  @deprecated("Use executeDDL instead.", "0.100")
   def executeCreateTable(stmt: String): CompletionStage[Done] =
-    delegate.executeCreateTable(stmt).toJava
+    delegate.executeDDL(stmt).toJava
 
   /**
    * Create a `PreparedStatement` that can be bound and used in
