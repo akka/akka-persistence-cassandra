@@ -19,6 +19,7 @@ import com.typesafe.config.ConfigFactory
 
 import scala.collection.JavaConverters._
 import scala.compat.java8.FutureConverters._
+import scala.compat.java8.OptionConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -64,7 +65,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
 
   def createTable(): Unit =
     Await.ready(
-      session.executeCreateTable(s"""
+      session.executeDDL(s"""
       CREATE TABLE IF NOT EXISTS testcounts (
         partition text,
         key text,
@@ -130,6 +131,18 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
       row should be(Optional.empty())
     }
 
+    "create indexes" in {
+      Await.result(session.executeDDL("CREATE INDEX IF NOT EXISTS count_idx ON testcounts(count)").toScala, 5.seconds)
+      val row = Await
+        .result(
+          session
+            .selectOne("SELECT * FROM system_schema.indexes WHERE table_name = ? ALLOW FILTERING", "testcounts")
+            .toScala,
+          5.seconds)
+        .asScala
+      row.map(index => index.getString("table_name") -> index.getString("index_name")) should be(
+        Some("testcounts" -> "count_idx"))
+    }
   }
 
 }

@@ -195,16 +195,25 @@ final class CassandraSession(
     }
 
   /**
+   * Execute <a href=https://docs.datastax.com/en/archived/cql/3.3/cql/cql_reference/cqlCommandsTOC.html">CQL commands</a>
+   * to manage database resources (create, replace, alter, and drop tables, indexes, user-defined types, etc).
+   *
+   * The returned `Future` is completed when the command is done, or if the statement fails.
+   */
+  def executeDDL(stmt: String): Future[Done] =
+    for {
+      s <- underlying()
+      _ <- s.executeAsync(stmt).asScala
+    } yield Done
+
+  /**
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useCreateTableTOC.html">Creating a table</a>.
    *
    * The returned `Future` is completed when the table has been created,
    * or if the statement fails.
    */
-  def executeCreateTable(stmt: String): Future[Done] =
-    for {
-      s <- underlying()
-      _ <- s.executeAsync(stmt).asScala
-    } yield Done
+  @deprecated("Use executeDDL instead.", "0.100")
+  def executeCreateTable(stmt: String): Future[Done] = executeDDL(stmt)
 
   /**
    * Create a `PreparedStatement` that can be bound and used in
