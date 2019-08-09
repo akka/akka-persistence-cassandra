@@ -16,7 +16,7 @@ From a direct clone (rather than a fork). You will need permission in sonatype t
   * update the 'akka-persistence-cassandra-xx-stable' project name in [WhiteSource](https://saas.whitesourcesoftware.com)
   * checkout the released version, e.g. v0.80
   * `sbt whitesourceUpdate`
-* Ask someone in the Akka team to update the [Lightbend Platform supported modules list](https://developer.lightbend.com/docs/lightbend-platform/2.0/supported-modules/) (requires Lightbend private GitHub permission). Only for stable releases, not milestones/RCs.
+* Ask someone in the Akka team to update the [Lightbend Platform "Library build dependencies" page](https://developer.lightbend.com/docs/lightbend-platform/introduction/getting-help/build-dependencies.html#_akka_persistence_couchbase) (requires Lightbend private GitHub permission). Only for stable releases, not milestones/RCs.
 * Make a release announcement 
 * Update docs: ```
 ssh akkarepo@gustav.akka.io
