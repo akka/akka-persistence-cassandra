@@ -111,6 +111,7 @@ that reason an `eventual-consistency-delay` is used to keep eventsByTag a config
 for events from all nodes to settle to their final order.
 
 Setting this to a small value can lead to:
+
 * Receiving events out of TimeUUID (offset) order for different persistenceIds, meaning if the offset is saved for restart/resume then delayed events can be missed on restart 
 * Increased likelihood of receiving events for the same persistenceId out of order. This is detected but the stream is temporarily paused to search for the missing events which is less efficient then reading them initially in order.
 * Missing events for persistence ids the query instance sees for the first time (unless it is tag pid sequence number 1) due to the query not knowing which tag pid sequence nr to expect.
@@ -151,18 +152,19 @@ On recovery the tag write progress for a given pid / tag is sent to the tag writ
 it bases its tag pid sequence nrs off the recovery. Following scenarios:
 
 No event buffered in the tag writer. Tag write progress has been written.
+
 * Recovery will see that no events needs to be recovered
 
 No events buffered in the tag writer. Tag write progress is lost.
+
 * Events will be in the `tag_views` table but not the `tag_write_progress`.
 * Tag write progress will be out of date
 * Events will be recovered and sent to the tag writer, should receive the same tag pid sequence nr and be upserted.
 
 Events buffered in the tag writer. 
+
 * Buffered events for the persistenceId should be dropped as if they are buffered the tag write progress
 won't have been saved as it happens after the write of the events to tag_views.
-
-
 
 ### Deletion of events
 
