@@ -55,6 +55,7 @@ use `Minute` unless necessary.
 The size of the of the batch is controlled via `max-message-batch-size`. Cassandra imposes a limit on the serialized size
 of a batch, currently 50kb by default. The larger this value the more efficient the tag writes will be but care must 
 be taken not to have batches that will be rejected by Cassandra. Two other cases cause the batch to be written before the batch size is reached:
+
 * Periodically: By default 250ms. To prevent eventsByTag queries being too out of date.
 * When a starting a new timebucket, which translates to a new partition in Cassandra, the events for the old timebucket are written.
 
