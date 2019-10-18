@@ -10,7 +10,7 @@ before_install:
   - git remote set-branches --add origin master && git fetch
   # fetch full history for correct current and previous version detection
   - git fetch --unshallow
-  #  using jabba for custom jdk management
+  # using jabba for custom jdk management
   - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.1/install.sh | bash && . ~/.jabba/jabba.sh
   - jabba install adopt@~1.8-0
   - jabba install adopt@~1.11-0
@@ -72,6 +72,10 @@ stages:
 
 after_failure:
   - docker-compose logs
+
+before_cache:
+  - find $HOME/.ivy2/ -name "ivydata-*.properties" -print -delete
+  - find $HOME/.sbt   -name "*.lock"               -print -delete
 
 cache:
   directories:
