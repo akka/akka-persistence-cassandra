@@ -12,8 +12,8 @@ before_install:
   - git fetch --unshallow
   # using jabba for custom jdk management
   - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.1/install.sh | bash && . ~/.jabba/jabba.sh
-  - jabba install adopt@~1.8.202-08
-  - jabba install adopt@~1.11.0-1
+  - jabba install adopt@~1.8-0
+  - jabba install adopt@~1.11-0
 
 before_script:
   - unset _JAVA_OPTIONS
@@ -33,11 +33,11 @@ jobs:
       name: Create site with Paradox
 
     - stage: test
-      script: jabba use adopt@~1.8.202-08 && java -version && docker-compose up -d cassandra && sbt +test
+      script: jabba use adopt@~1.8-0 && java -version && docker-compose up -d cassandra && sbt +test
       name: Run all tests with Jdk 8
-    - script: jabba use adopt@~1.11.0-2 && java -version && docker-compose up -d cassandra && sbt +test
+    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra && sbt +test
       name: Run all tests with Jdk 11
-    - script: jabba use adopt@~1.11.0-2 && java -version && docker-compose up -d cassandra && sbt -Doverride.akka.version="2.6.0-M4" +test
+    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra && sbt -Doverride.akka.version="2.6.0-M4" +test
       name: Run all the tests with Akka 2.6
 
     - stage: whitesource
@@ -72,6 +72,10 @@ stages:
 
 after_failure:
   - docker-compose logs
+
+before_cache:
+  - find $HOME/.ivy2/ -name "ivydata-*.properties" -print -delete
+  - find $HOME/.sbt   -name "*.lock"               -print -delete
 
 cache:
   directories:
