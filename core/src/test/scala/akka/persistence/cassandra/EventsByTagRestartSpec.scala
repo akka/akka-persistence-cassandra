@@ -102,18 +102,19 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       p2 ! PoisonPill
       probe1.expectTerminated(p2)
 
-      // FIXME test is actually passing if we start and continue here, maybe add a another test for that scenario
-//      val probe2 = TestProbe()
-//      val p2b = system.actorOf(TestTaggingActor.props("p2", Set("green")))
-//      p2b.tell("e5", probe2.ref)
-//      probe2.expectMsg(Ack)
-//      p2b.tell("e6", probe2.ref)
-//      probe2.expectMsg(Ack)
+      Thread.sleep(2000)
+      val probe2 = TestProbe()
+      // tag will be missing until we restart actor, (is that ok?)
+      val p2b = system.actorOf(TestTaggingActor.props("p2", Set("green")))
+      p2b.tell("e5", probe2.ref)
+      probe2.expectMsg(Ack)
+      p2b.tell("e6", probe2.ref)
+      probe2.expectMsg(Ack)
 
       val greenTags = queryJournal.eventsByTag(tag = "green", offset = NoOffset)
       val tagProbe = greenTags.runWith(TestSink.probe[Any](system))
       tagProbe.request(10)
-      (1 to 4).foreach { n =>
+      (1 to 6).foreach { n =>
         val event = s"e$n"
         system.log.debug("Expecting event {} sequenceNr {}", event, n)
         tagProbe.expectNextPF { case EventEnvelope(_, "p2", `n`, `event`) => }
