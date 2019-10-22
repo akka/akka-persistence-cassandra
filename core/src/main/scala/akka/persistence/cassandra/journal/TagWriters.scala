@@ -27,11 +27,12 @@ import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
 import com.datastax.driver.core.{ BatchStatement, BoundStatement, PreparedStatement, ResultSet, Statement }
-
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
+import scala.util.Try
+
 import akka.util.ByteString
 
 @InternalApi private[akka] object TagWriters {
@@ -123,6 +124,7 @@ import akka.util.ByteString
 
   final case class TagWriteFailed(reason: Throwable)
   private case object WriteTagScanningTick
+  private case class WriteTagScanningCompleted(result: Try[Done], startTime: Long, size: Int)
 
   private case class PersistentActorTerminated(pid: PersistenceId, ref: ActorRef)
 }
@@ -187,6 +189,18 @@ import akka.util.ByteString
 
     case WriteTagScanningTick =>
       writeTagScanning()
+
+    case WriteTagScanningCompleted(result, startTime, size) =>
+      scheduleWriteTagScanningTick()
+      result match {
+        case Success(_) =>
+          log.debug(
+            "Update tag scanning of [{}] pids took [{}] ms",
+            size,
+            (System.nanoTime() - startTime) / 1000 / 1000)
+        case Failure(t) =>
+          log.warning("Writing tag scanning failed. Reason {}", t)
+      }
 
     case PersistentActorStarting(pid, persistentActor) =>
       // migration and journal specs can use dead letters as sender
@@ -312,17 +326,9 @@ import akka.util.ByteString
           }
         }
 
-        result.onComplete {
-          case Success(_) =>
-            scheduleWriteTagScanningTick()
-            log.debug(
-              "Update tag scanning of [{}] pids took [{}] ms",
-              updates.size,
-              (System.nanoTime() - startTime) / 1000 / 1000)
-          case Failure(t) =>
-            scheduleWriteTagScanningTick()
-            log.warning("Writing tag scanning failed. Reason {}", t)
-            self ! TagWriteFailed(t)
+        result.onComplete { result =>
+          self ! WriteTagScanningCompleted(result, startTime, updates.size)
+          result.failed.foreach(self ! TagWriteFailed(_))
         }
       }
     } else {
