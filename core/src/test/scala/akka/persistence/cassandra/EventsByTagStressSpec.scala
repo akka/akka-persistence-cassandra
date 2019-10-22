@@ -18,7 +18,7 @@ import scala.concurrent.Future
 
 class EventsByTagStressSpec extends CassandraSpec(s"""
     akka {
-      loglevel = INFO
+      loglevel = DEBUG
     }
     cassandra-journal {
       events-by-tag {

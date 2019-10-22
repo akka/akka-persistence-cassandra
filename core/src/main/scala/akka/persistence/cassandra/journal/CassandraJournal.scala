@@ -286,7 +286,15 @@ class CassandraJournal(cfg: Config)
         result.map(_ => extractTagWrites(serialized))
     }
 
-    val toReturn = bulkTagWrite.map(btw => {
+    // FIXME temporary reproducer
+    import scala.concurrent.duration._
+    val lateBulkTagWrite =
+      if (pid == "persistenceInit" || messages.head.lowestSequenceNr < 3)
+        bulkTagWrite
+      else
+        akka.pattern.after(1500.millis, context.system.scheduler)(bulkTagWrite)
+
+    val toReturn = lateBulkTagWrite.map(btw => {
       // notify TagWriters when write was successful before completing the future otherwise
       // we can get another seq of AtomicWrites for the same persistent actor before this is sent
       tagWrites.foreach(_ ! btw)
