@@ -179,6 +179,10 @@ import akka.util.ByteString
       tagActor(tw.tag).forward(tw)
     case BulkTagWrite(tws, withoutTags) =>
       tws.foreach { tw =>
+        if (!currentPersistentActors.contains(tw.serialised.head.persistenceId)) {
+          log.error("### received BulkTagWrite but actor not active: {}", tw.serialised.head.persistenceId)
+        }
+
         updatePendingScanning(tw.serialised)
         tagActor(tw.tag).forward(tw)
       }
