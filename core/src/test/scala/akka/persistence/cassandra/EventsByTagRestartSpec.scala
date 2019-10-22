@@ -14,8 +14,9 @@ import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
-
 import scala.concurrent.duration._
+
+import akka.actor.PoisonPill
 
 object EventsByTagRestartSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
@@ -69,8 +70,8 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
         probe.expectTerminated(p1)
       }
 
-      val greenTags = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
-      val tagProbe = greenTags.runWith(TestSink.probe[Any](system))
+      val blueTags = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
+      val tagProbe = blueTags.runWith(TestSink.probe[Any](system))
       (0 until restarts).foreach { restart =>
         tagProbe.request(messagesPerRestart + 1)
         (1 to messagesPerRestart).foreach { i =>
@@ -79,6 +80,43 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
           system.log.debug("Expecting event {} sequenceNr {}", event, sequenceNr)
           tagProbe.expectNextPF { case EventEnvelope(_, "p1", `sequenceNr`, `event`) => }
         }
+      }
+      tagProbe.expectNoMessage(waitTime)
+      tagProbe.cancel()
+    }
+
+    "use correct tag sequence nrs when actor is stopped prematurely" in {
+      val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+      val p2 = system.actorOf(TestTaggingActor.props("p2", Set("green")))
+      val probe1 = TestProbe()
+      probe1.watch(p2)
+      p2.tell("e1", probe1.ref)
+      probe1.expectMsg(Ack)
+      p2.tell("e2", probe1.ref)
+      probe1.expectMsg(Ack)
+      p2.tell("e3", probe1.ref)
+      probe1.expectMsg(Ack)
+      p2.tell("e4", probe1.ref)
+      // the PoisonPill will cause the actor to be stopped before the journal write has been completed,
+      // and is therefore similar to if the CircuitBreaker would trigger
+      p2 ! PoisonPill
+      probe1.expectTerminated(p2)
+
+      // FIXME test is actually passing if we start and continue here, maybe add a another test for that scenario
+//      val probe2 = TestProbe()
+//      val p2b = system.actorOf(TestTaggingActor.props("p2", Set("green")))
+//      p2b.tell("e5", probe2.ref)
+//      probe2.expectMsg(Ack)
+//      p2b.tell("e6", probe2.ref)
+//      probe2.expectMsg(Ack)
+
+      val greenTags = queryJournal.eventsByTag(tag = "green", offset = NoOffset)
+      val tagProbe = greenTags.runWith(TestSink.probe[Any](system))
+      tagProbe.request(10)
+      (1 to 4).foreach { n =>
+        val event = s"e$n"
+        system.log.debug("Expecting event {} sequenceNr {}", event, n)
+        tagProbe.expectNextPF { case EventEnvelope(_, "p2", `n`, `event`) => }
       }
       tagProbe.expectNoMessage(waitTime)
       tagProbe.cancel()
