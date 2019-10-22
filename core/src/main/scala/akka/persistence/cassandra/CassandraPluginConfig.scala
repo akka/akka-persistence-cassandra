@@ -27,7 +27,6 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
   val keyspace: String = config.getString("keyspace")
   val table: String = config.getString("table")
   val metadataTable: String = config.getString("metadata-table")
-  val configTable: String = validateTableName(config.getString("config-table"))
 
   val tableCompactionStrategy: CassandraCompactionStrategy =
     CassandraCompactionStrategy(config.getConfig("table-compaction-strategy"))
