@@ -181,7 +181,7 @@ import akka.util.ByteString
       tws.foreach { tw =>
         if (!currentPersistentActors.contains(tw.serialised.head.persistenceId)) {
           log.warning(
-            "received TagWrite but actor not active (dropping, will resolved when actor restarts): [{}]",
+            "received TagWrite but actor not active (dropping, will be resolved when actor restarts): [{}]",
             tw.serialised.head.persistenceId)
         } else {
           updatePendingScanning(tw.serialised)

@@ -14,8 +14,8 @@ import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import akka.actor.PoisonPill
 
 object EventsByTagRestartSpec {
@@ -24,24 +24,23 @@ object EventsByTagRestartSpec {
     DateTimeFormatter.ofPattern("yyyyMMdd'T'HH:mm")
 
   val config = ConfigFactory.parseString(s"""
-       |akka {
-       |  loglevel = INFO
-       |  actor.debug.unhandled = on
-       |}
-       |cassandra-journal {
-       |  log-queries = off
-       |  events-by-tag {
-       |     max-message-batch-size = 250 // make it likely we have messages in the buffer
-       |     bucket-size = "Day"
-       |  }
-       |}
-       |
-       |cassandra-query-journal = {
-       |   first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormat)}"
-       |}
-       |
-       |akka.actor.serialize-messages=off
-    """.stripMargin).withFallback(CassandraLifecycle.config)
+       akka {
+         loglevel = INFO
+       }
+       cassandra-journal {
+         log-queries = off
+         events-by-tag {
+            max-message-batch-size = 250 // make it likely we have messages in the buffer
+            bucket-size = "Day"
+         }
+       }
+
+       cassandra-query-journal = {
+          first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormat)}"
+       }
+
+       akka.actor.serialize-messages=off
+    """).withFallback(CassandraLifecycle.config)
 }
 
 class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config) {
@@ -97,12 +96,15 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       p2.tell("e3", probe1.ref)
       probe1.expectMsg(Ack)
       p2.tell("e4", probe1.ref)
+
       // the PoisonPill will cause the actor to be stopped before the journal write has been completed,
       // and is therefore similar to if the CircuitBreaker would trigger
       p2 ! PoisonPill
       probe1.expectTerminated(p2)
 
-      Thread.sleep(2000)
+      // needed to reproduce #562
+      Thread.sleep(500)
+
       val probe2 = TestProbe()
       // tag will be missing until we restart actor, (is that ok?)
       val p2b = system.actorOf(TestTaggingActor.props("p2", Set("green")))

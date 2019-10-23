@@ -139,7 +139,6 @@ import scala.concurrent.duration._
       // reached to force a flush or that the batch size is met
       val (newTagPidSequenceNrs, events) =
         assignTagPidSequenceNumbers(payload.toVector, tagPidSequenceNrs)
-      println(s"# updatedTagPidSequenceNrs $newTagPidSequenceNrs") // FIXME
       log.debug("Assigned tag pid sequence nrs: {}", events)
       val newBuffer = (buffer ++ events).sortBy(_._1.timeUuid)(timeUuidOrdering)
       flushIfRequired(newBuffer, newTagPidSequenceNrs)
@@ -166,7 +165,6 @@ import scala.concurrent.duration._
     case TagWrite(_, payload) =>
       val (updatedTagPidSequenceNrs, events) =
         assignTagPidSequenceNumbers(payload.toVector, tagPidSequenceNrs)
-      println(s"# updatedTagPidSequenceNrs $updatedTagPidSequenceNrs") // FIXME
       val now = System.nanoTime()
       if (buffer.size > (4 * settings.maxBatchSize) && now > (lastLoggedBufferNs + bufferWarningMinDurationNs)) {
         lastLoggedBufferNs = now
