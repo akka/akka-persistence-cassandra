@@ -55,10 +55,11 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
     val restarts = 10
 
     "continue tag sequence nrs for actor restarts" in {
+      val tag = "blue"
       val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
       (0 until restarts).foreach { restart =>
-        val p1 = system.actorOf(TestTaggingActor.props("p1", Set("blue")))
+        val p1 = system.actorOf(TestTaggingActor.props("p1", Set(tag)))
         val probe = TestProbe()
         probe.watch(p1)
         (1 to messagesPerRestart).foreach { i =>
@@ -69,7 +70,7 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
         probe.expectTerminated(p1)
       }
 
-      val blueTags = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
+      val blueTags = queryJournal.eventsByTag(tag, offset = NoOffset)
       val tagProbe = blueTags.runWith(TestSink.probe[Any](system))
       (0 until restarts).foreach { restart =>
         tagProbe.request(messagesPerRestart + 1)
@@ -84,9 +85,10 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       tagProbe.cancel()
     }
 
-    "use correct tag sequence nrs when actor is stopped prematurely" in {
+    "not write incorrect tag sequence nrs when actor is stopped prematurely" in {
+      val tag = "green"
       val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
-      val p2 = system.actorOf(TestTaggingActor.props("p2", Set("green")))
+      val p2 = system.actorOf(TestTaggingActor.props("p2", Set(tag)))
       val probe1 = TestProbe()
       probe1.watch(p2)
       p2.tell("e1", probe1.ref)
@@ -101,25 +103,57 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       // and is therefore similar to if the CircuitBreaker would trigger
       p2 ! PoisonPill
       probe1.expectTerminated(p2)
+      val greenTags = queryJournal.eventsByTag(tag, offset = NoOffset)
+      val tagProbe = greenTags.runWith(TestSink.probe[Any](system))
+      tagProbe.request(10)
+      (1 to 3).foreach { n =>
+        val event = s"e$n"
+        system.log.debug("Expecting event {} sequenceNr {}", event, n)
+        tagProbe.expectNextPF { case EventEnvelope(_, "p2", `n`, `event`) => }
+      }
+
+      // without the fix this would see a fourth element (with the wrong tagSeqNr)
+      tagProbe.expectNoMessage(waitTime)
+      tagProbe.cancel()
+    }
+
+    "use correct tag sequence nrs when actor is stopped prematurely and then restarted" in {
+      val tag = "orange"
+      val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
+      val p3 = system.actorOf(TestTaggingActor.props("p3", Set(tag)))
+      val probe1 = TestProbe()
+      probe1.watch(p3)
+      p3.tell("e1", probe1.ref)
+      probe1.expectMsg(Ack)
+      p3.tell("e2", probe1.ref)
+      probe1.expectMsg(Ack)
+      p3.tell("e3", probe1.ref)
+      probe1.expectMsg(Ack)
+      p3.tell("e4", probe1.ref)
+
+      // the PoisonPill will cause the actor to be stopped before the journal write has been completed,
+      // and is therefore similar to if the CircuitBreaker would trigger
+      p3 ! PoisonPill
+      probe1.expectTerminated(p3)
 
       // needed to reproduce #562
       Thread.sleep(500)
 
       val probe2 = TestProbe()
-      // tag will be missing until we restart actor, (is that ok?)
-      val p2b = system.actorOf(TestTaggingActor.props("p2", Set("green")))
-      p2b.tell("e5", probe2.ref)
+      val p3b = system.actorOf(TestTaggingActor.props("p3", Set(tag)))
+      p3b.tell("e5", probe2.ref)
       probe2.expectMsg(Ack)
-      p2b.tell("e6", probe2.ref)
+      p3b.tell("e6", probe2.ref)
       probe2.expectMsg(Ack)
 
-      val greenTags = queryJournal.eventsByTag(tag = "green", offset = NoOffset)
+      val greenTags = queryJournal.eventsByTag(tag, offset = NoOffset)
       val tagProbe = greenTags.runWith(TestSink.probe[Any](system))
       tagProbe.request(10)
+      // without the fix this would not complete because e4 will have tagSeqNr 1 rather than the expected 4
       (1 to 6).foreach { n =>
         val event = s"e$n"
         system.log.debug("Expecting event {} sequenceNr {}", event, n)
-        tagProbe.expectNextPF { case EventEnvelope(_, "p2", `n`, `event`) => }
+        tagProbe.expectNextPF { case EventEnvelope(_, "p3", `n`, `event`) => }
       }
       tagProbe.expectNoMessage(waitTime)
       tagProbe.cancel()
