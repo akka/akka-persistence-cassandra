@@ -17,6 +17,7 @@ import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 import akka.actor.PoisonPill
+import org.scalatest.Matchers
 
 object EventsByTagRestartSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
@@ -43,7 +44,7 @@ object EventsByTagRestartSpec {
     """).withFallback(CassandraLifecycle.config)
 }
 
-class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config) {
+class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config) with Matchers {
 
   implicit val materialiser = ActorMaterializer()(system)
 
@@ -113,7 +114,15 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       }
 
       // without the fix this would see a fourth element (with the wrong tagSeqNr)
-      tagProbe.expectNoMessage(waitTime)
+      // this is racy though, so we could also see that fourth event, but with the right tagSeqNr
+      val received = tagProbe.receiveWithin(waitTime)
+      received.headOption match {
+        case None => // not received
+        case Some(evt: EventEnvelope) =>
+          evt.event shouldEqual "e4"
+        case Some(wat) =>
+          fail(s"Unexpected event $wat")
+      }
       tagProbe.cancel()
     }
 
