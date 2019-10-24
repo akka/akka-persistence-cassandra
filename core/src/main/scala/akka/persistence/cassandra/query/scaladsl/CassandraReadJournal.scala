@@ -446,7 +446,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       try {
         val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
-        val toOffset = Some(offsetUuid(System.currentTimeMillis()))
+        // pick up all the events written this millisecond
+        val toOffset = Some(UUIDs.endOf(System.currentTimeMillis()))
 
         createFutureSource(prereqs) { (s, prereqs) =>
           val session =
