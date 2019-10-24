@@ -91,7 +91,6 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
       val p2 = system.actorOf(TestTaggingActor.props("p2", Set(tag)))
       val probe1 = TestProbe()
-      probe1.watch(p2)
       p2.tell("e1", probe1.ref)
       probe1.expectMsg(Ack)
       p2.tell("e2", probe1.ref)
@@ -102,8 +101,11 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
 
       // the PoisonPill will cause the actor to be stopped before the journal write has been completed,
       // and is therefore similar to if the CircuitBreaker would trigger
+      val deathProbe = TestProbe()
+      deathProbe.watch(p2)
       p2 ! PoisonPill
-      probe1.expectTerminated(p2)
+      deathProbe.expectTerminated(p2)
+
       val greenTags = queryJournal.eventsByTag(tag, offset = NoOffset)
       val tagProbe = greenTags.runWith(TestSink.probe[Any](system))
       tagProbe.request(10)
@@ -131,7 +133,6 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
       val p3 = system.actorOf(TestTaggingActor.props("p3", Set(tag)))
       val probe1 = TestProbe()
-      probe1.watch(p3)
       p3.tell("e1", probe1.ref)
       probe1.expectMsg(Ack)
       p3.tell("e2", probe1.ref)
@@ -142,8 +143,10 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
 
       // the PoisonPill will cause the actor to be stopped before the journal write has been completed,
       // and is therefore similar to if the CircuitBreaker would trigger
+      val deathProbe = TestProbe()
+      deathProbe.watch(p3)
       p3 ! PoisonPill
-      probe1.expectTerminated(p3)
+      deathProbe.expectTerminated(p3)
 
       // needed to reproduce #562
       Thread.sleep(500)
