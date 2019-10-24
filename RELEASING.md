@@ -18,7 +18,8 @@ From a direct clone (rather than a fork). You will need permission in sonatype t
   * `sbt whitesourceUpdate`
 * Ask someone in the Akka team to update the [Lightbend Platform "Library build dependencies" page](https://developer.lightbend.com/docs/lightbend-platform/introduction/getting-help/build-dependencies.html#_akka_persistence_cassandra) (requires Lightbend private GitHub permission). Only for stable releases, not milestones/RCs.
 * Make a release announcement 
-* Update docs: ```
+* When the tag is pushed the documentation will be built automatically, but you need to update the links: 
+```
 ssh akkarepo@gustav.akka.io
 cd www
 ln -nsf $VERSION$ api/akka-persistence-cassandra/current
