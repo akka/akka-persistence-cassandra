@@ -240,7 +240,10 @@ import com.datastax.driver.core.utils.UUIDs
             formatOffset(fromOffset),
             toOffset.map(formatOffset))
         }
-        log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs)
+        //FIXME, undo
+        log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs.mapValues {
+          case (tpdn, offset) => (tpdn, formatOffset(offset))
+        })
 
         if (settings.pubsubNotification) {
           Try {
@@ -322,22 +325,7 @@ import com.datastax.driver.core.utils.UUIDs
               s"is no missing. Raise a bug with debug logging.")
         }
         if (missing.deadline.isOverdue()) {
-          if (missing.failIfNotFound) {
-            fail(
-              out,
-              new IllegalStateException(
-                s"Unable to find missing tagged event: PersistenceId: ${missing.persistenceId}. " +
-                s"Tag: ${session.tag}. TagPidSequenceNr: ${missing.missing}. Previous offset: ${missing.previousOffset}"))
-          } else {
-            log.debug(
-              "[{}] [{}]: Finished scanning for older events for persistence id [{}]. Max pid sequence nr found [{}]",
-              stageUuid,
-              session.tag,
-              missing.persistenceId,
-              missing.maxSequenceNr)
-            stopLookingForMissing(missing, missing.buffered)
-            tryPushOne()
-          }
+          abortMissingSearch(missing)
         } else {
           updateQueryState(QueryInProgress())
           if (log.isDebugEnabled) {
@@ -351,6 +339,25 @@ import com.datastax.driver.core.utils.UUIDs
           session
             .selectEventsForBucket(missing.bucket, missing.previousOffset, missing.maxOffset)
             .onComplete(newResultSetCb.invoke)
+        }
+      }
+
+      private def abortMissingSearch(missing: LookingForMissing): Unit = {
+        if (missing.failIfNotFound) {
+          fail(
+            out,
+            new IllegalStateException(
+              s"Unable to find missing tagged event: PersistenceId: ${missing.persistenceId}. " +
+              s"Tag: ${session.tag}. TagPidSequenceNr: ${missing.missing}. Previous offset: ${missing.previousOffset}"))
+        } else {
+          log.debug(
+            "[{}] [{}]: Finished scanning for older events for persistence id [{}]. Max pid sequence nr found [{}]",
+            stageUuid,
+            session.tag,
+            missing.persistenceId,
+            missing.maxSequenceNr)
+          stopLookingForMissing(missing, missing.buffered)
+          continue()
         }
       }
 
@@ -577,18 +584,24 @@ import com.datastax.driver.core.utils.UUIDs
               m.copy(queryPrevious = false, bucket = m.bucket.previous(1)))))
             lookForMissing()
           } else {
-            log.debug(
-              "[{}] [{}]: Still looking for missing. {}. Waiting for next poll.",
-              stageUuid,
-              session.tag,
-              stageState)
-            updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => {
-              val newBucket = TimeBucket(m.maxOffset, bucketSize)
-              m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.previousOffset))
-            })))
-            // a current query doesn't have a poll schedule one
-            if (!isLiveQuery())
-              scheduleOnce(QueryPoll, settings.refreshInterval)
+            if (missing.deadline.isOverdue()) {
+              // here we can abort the looking for missing
+              abortMissingSearch(missing)
+            } else {
+              log.debug(
+                "[{}] [{}]: Still looking for missing. {}. Waiting for next poll.",
+                stageUuid,
+                session.tag,
+                stageState)
+              updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => {
+                val newBucket = TimeBucket(m.maxOffset, bucketSize)
+                m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.previousOffset))
+              })))
+              // a current query doesn't have a poll schedule one
+              if (!isLiveQuery())
+                scheduleOnce(QueryPoll, settings.refreshInterval)
+            }
+
           }
         } else if (stageState.shouldMoveBucket()) {
           nextTimeBucket()

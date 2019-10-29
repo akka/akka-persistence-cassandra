@@ -62,6 +62,7 @@ object EventsByTagStageSpec {
 
 }
 
+// Writes events directly to the tables rather than via the persistence API
 class EventsByTagStageSpec
     extends CassandraSpec(EventsByTagStageSpec.config)
     with BeforeAndAfterAll

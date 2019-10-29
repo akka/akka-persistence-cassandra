@@ -14,7 +14,7 @@ import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraSta
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, EventWithMetaData }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, EventsByTagQuery }
-import akka.persistence.query.{ EventEnvelope, NoOffset, TimeBasedUUID }
+import akka.persistence.query.{ EventEnvelope, NoOffset, Offset, TimeBasedUUID }
 import akka.persistence.{ PersistentActor, PersistentRepr }
 import akka.serialization.SerializationExtension
 import akka.stream.testkit.TestSubscriber
@@ -29,7 +29,7 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 object EventsByTagSpec {
-  def withProbe(probe: TestSubscriber.Probe[Any], f: TestSubscriber.Probe[Any] => Unit): Unit = {
+  def withProbe[T](probe: TestSubscriber.Probe[Any], f: TestSubscriber.Probe[Any] => T): T = {
     try {
       f(probe)
     } finally {
@@ -74,6 +74,17 @@ object EventsByTagSpec {
       }
     }
     """).withFallback(CassandraLifecycle.config)
+
+  val longRefreshInterval = ConfigFactory.parseString("""
+     cassandra-query-journal {
+      refresh-interval = 8s
+      events-by-tag {
+        gap-timeout = 30s
+        # this gives time to write the event before the initial query
+        offset-scanning-period = 2s
+      }
+    } 
+     """).withFallback(config)
 
   val strictConfig = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
@@ -496,6 +507,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
         probe.expectNoMessage(waitTime)
       })
     }
+
   }
 }
 
@@ -788,6 +800,49 @@ class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
     }
   }
 }
+
+/*
+
+It is very trick to create a deterministic test for this. The scenario is that a new persistence id comes
+and the search for it ends after the new-persistence-id-scan-interval and doesn't wait for refresh interval
+
+But the query could be in a state that it is already waiting for a refresh so hard to assert on time of event
+delivery.
+
+class EventsByTagLongRefreshIntervalSpec extends AbstractEventsByTagSpec(EventsByTagSpec.longRefreshInterval) {
+  "only look for new-persistence-id timeout for previous events for new persistence ids" in {
+    // new persistence id timeout = 100ms
+    // gap timeout = 10s
+    val pid = "test-new-pid"
+    val sender = TestProbe()
+    val pa = system.actorOf(TestActor.props(pid))
+    pa.tell(Tagged("cat", Set("animal")), sender.ref)
+    sender.expectMsg("cat-done")
+    sender.expectNoMessage(200.millis) // try and give time for the tagged event to be flushed so the query doesn't need to wait for the refresh interval
+
+    val offset: Offset =
+      withProbe(queries.eventsByTag(tag = "animal", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+        probe.request(2)
+        probe.expectNextPF {
+          case EventEnvelope(offset, `pid`, 1L, "cat") =>
+            offset
+        }
+      })
+
+    println("offset of event " + offset)
+
+    withProbe(queries.eventsByTag(tag = "animal", offset = offset).runWith(TestSink.probe[Any]), probe => {
+      probe.request(2)
+      pa.tell(Tagged("cat2", Set("animal")), sender.ref)
+      sender.expectMsg("cat2-done")
+      probe.expectNextPF {
+        case EventEnvelope(_, `pid`, 2L, "cat2") =>
+      }
+    })
+  }
+}
+
+ */
 
 class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec
     extends AbstractEventsByTagSpec(EventsByTagSpec.strictConfig) {
