@@ -195,7 +195,7 @@ import com.datastax.driver.core.utils.UUIDs
           // The eventual consistency delay is before the end of the query
           val u = UUIDs.endOf(to)
           if (log.isDebugEnabled) {
-            log.debug("{}: New toOffset (EC): {}", stageUuid, formatOffset(u))
+            log.debug("[{}]: New toOffset (EC): {}", stageUuid, formatOffset(u))
           }
           u
         } else {
@@ -240,10 +240,7 @@ import com.datastax.driver.core.utils.UUIDs
             formatOffset(fromOffset),
             toOffset.map(formatOffset))
         }
-        //FIXME, undo
-        log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs.mapValues {
-          case (tpdn, offset) => (tpdn, formatOffset(offset))
-        })
+        log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs)
 
         if (settings.pubsubNotification) {
           Try {
@@ -584,22 +581,29 @@ import com.datastax.driver.core.utils.UUIDs
               m.copy(queryPrevious = false, bucket = m.bucket.previous(1)))))
             lookForMissing()
           } else {
-            if (missing.deadline.isOverdue()) {
-              // here we can abort the looking for missing
+            val timeLeft = missing.deadline.timeLeft
+            if (timeLeft <= Duration.Zero) {
               abortMissingSearch(missing)
             } else {
               log.debug(
-                "[{}] [{}]: Still looking for missing. {}. Waiting for next poll.",
+                "[{}] [{}]: Still looking for missing. {}. Duration left for search: {}",
                 stageUuid,
                 session.tag,
-                stageState)
+                stageState,
+                timeLeft.pretty)
               updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => {
                 val newBucket = TimeBucket(m.maxOffset, bucketSize)
                 m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.previousOffset))
               })))
-              // a current query doesn't have a poll schedule one
-              if (!isLiveQuery())
+
+              // the new persistence-id scan time is typically much smaller than the refresh interval
+              // so do not wait for the next refresh to look again
+              if (timeLeft < settings.refreshInterval) {
+                scheduleOnce(QueryPoll, timeLeft)
+              } else if (!isLiveQuery()) {
+                // a current query doesn't have a poll schedule one
                 scheduleOnce(QueryPoll, settings.refreshInterval)
+              }
             }
 
           }
@@ -631,7 +635,7 @@ import com.datastax.driver.core.utils.UUIDs
         } else {
           BufferedEvents(buffered.sortBy(_.tagPidSequenceNr))
         })
-        log.debug("[{}] No more missing events. Sending buffered events. {}", stageUuid, stageState.state)
+        log.debug("[{}] Search over. Sending buffered events. {}", stageUuid, stageState.state)
         updateStageState(
           _.copy(fromOffset = m.maxOffset, missingLookup = None)
             .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset)))

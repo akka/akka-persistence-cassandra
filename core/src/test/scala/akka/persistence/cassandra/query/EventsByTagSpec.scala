@@ -75,17 +75,6 @@ object EventsByTagSpec {
     }
     """).withFallback(CassandraLifecycle.config)
 
-  val longRefreshInterval = ConfigFactory.parseString("""
-     cassandra-query-journal {
-      refresh-interval = 8s
-      events-by-tag {
-        gap-timeout = 30s
-        # this gives time to write the event before the initial query
-        offset-scanning-period = 2s
-      }
-    } 
-     """).withFallback(config)
-
   val strictConfig = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
     cassandra-query-journal {
@@ -136,7 +125,7 @@ class ColorFruitTagger extends WriteEventAdapter {
   override def manifest(event: Any): String = ""
 }
 
-abstract class AbstractEventsByTagSpec(config: Config)
+abstract class AbstractEventsByTagSpec(config: Config, checkLogMessages: Boolean = true)
     extends CassandraSpec(config)
     with BeforeAndAfterEach
     with TestTagWriter {
@@ -166,12 +155,15 @@ abstract class AbstractEventsByTagSpec(config: Config)
   }
 
   val logProbe = TestProbe()
-  system.eventStream.subscribe(logProbe.ref, classOf[Warning])
-  system.eventStream.subscribe(logProbe.ref, classOf[Error])
+  if (checkLogMessages) {
+    system.eventStream.subscribe(logProbe.ref, classOf[Warning])
+    system.eventStream.subscribe(logProbe.ref, classOf[Error])
+  }
 
   override protected def afterEach(): Unit = {
     // check for the buffer exceeded log (and other issues)
-    logProbe.expectNoMessage(waitTime)
+    if (checkLogMessages)
+      logProbe.expectNoMessage(waitTime)
     super.afterEach()
   }
 }
@@ -801,18 +793,26 @@ class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
   }
 }
 
-/*
+class EventsByTagLongRefreshIntervalSpec
+    extends AbstractEventsByTagSpec(
+      ConfigFactory
+        .parseString(
+          """
+     akka.loglevel = DEBUG
+     cassandra-query-journal {
+      refresh-interval = 10s # set large enough so that it will fail the test if a refresh is required to continue the stream
+      events-by-tag {
+        gap-timeout = 30s
+        offset-scanning-period = 0ms # do no scanning so each new persistence id triggers the serach
+        eventual-consistency-delay = 0ms  # speed up the test
+      }
+    } 
+     """)
+        .withFallback(config),
+      // warnings about EC being set too low
+      checkLogMessages = false) {
 
-It is very trick to create a deterministic test for this. The scenario is that a new persistence id comes
-and the search for it ends after the new-persistence-id-scan-interval and doesn't wait for refresh interval
-
-But the query could be in a state that it is already waiting for a refresh so hard to assert on time of event
-delivery.
-
-class EventsByTagLongRefreshIntervalSpec extends AbstractEventsByTagSpec(EventsByTagSpec.longRefreshInterval) {
   "only look for new-persistence-id timeout for previous events for new persistence ids" in {
-    // new persistence id timeout = 100ms
-    // gap timeout = 10s
     val pid = "test-new-pid"
     val sender = TestProbe()
     val pa = system.actorOf(TestActor.props(pid))
@@ -829,20 +829,19 @@ class EventsByTagLongRefreshIntervalSpec extends AbstractEventsByTagSpec(EventsB
         }
       })
 
-    println("offset of event " + offset)
+    pa.tell(Tagged("cat2", Set("animal")), sender.ref)
+    sender.expectMsg("cat2-done")
 
     withProbe(queries.eventsByTag(tag = "animal", offset = offset).runWith(TestSink.probe[Any]), probe => {
       probe.request(2)
-      pa.tell(Tagged("cat2", Set("animal")), sender.ref)
-      sender.expectMsg("cat2-done")
-      probe.expectNextPF {
+      // less than the refresh interval, previously this would evaluate the new persistence-id timeout and then not re-evaluate
+      // it again until the next refresh interval
+      probe.expectNextWithTimeoutPF(2.seconds, {
         case EventEnvelope(_, `pid`, 2L, "cat2") =>
-      }
+      })
     })
   }
 }
-
- */
 
 class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec
     extends AbstractEventsByTagSpec(EventsByTagSpec.strictConfig) {
