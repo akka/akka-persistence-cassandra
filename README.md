@@ -14,11 +14,11 @@ Implementation in the `master` branch is currently work-in-progress for the upco
 
 ## Documentation
 
-Documentation for version 0.98 and above is available at https://doc.akka.io/docs/akka-persistence-cassandra/0.98/ with the latest docs on https://doc.akka.io/docs/akka-persistence-cassandra/current/.
+Documentation for version 0.100 and above is available at https://doc.akka.io/docs/akka-persistence-cassandra/0.100/ with the latest docs on https://doc.akka.io/docs/akka-persistence-cassandra/current/.
 
 Documentation for the snapshot of the `master` branch is available at https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/.
 
-For versions earlier than 0.98, check this README.md file for the corresponding release tag.
+For versions earlier than 0.100, check this README.md file for the corresponding release tag.
 
 
 ## History
