@@ -26,3 +26,14 @@ For versions earlier than 0.98, check this README.md file for the corresponding 
 This [Apache Cassandra](https://cassandra.apache.org/) plugin to Akka Persistence was initiated [originally](https://github.com/krasserm/akka-persistence-cassandra) by Martin Krasser, [@krasserm](https://github.com/krasserm) in 2014.
 
 It moved to the [Akka](https://github.com/akka/) organisation in 2016 and the first release after that move was 0.7 in January 2016.
+
+## Branches and versions
+
+There are three active branches of development:
+
+* 0.50+ (currently 0.62) -> `release-0.50`- first release under this organisation, previously under krasserm. No planned releases for this version.
+* 0.80+ (currently 0.100) -> `release-0.x`  - removed use of Cassandra Materialized Views after they were marked as not to be used in production. Current stable version.
+* 1.0 -> `master` - not yet released, planned upgrade to 4.0.x of the Cassandra Driver that includes breaking API changes to CassandraSession
+
+To release a 0.50+ or 0.80+ version checkout that branch and see the release instructions there. 
+
