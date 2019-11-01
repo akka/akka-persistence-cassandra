@@ -42,7 +42,7 @@ import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.annotation.InternalApi
 import com.typesafe.config.Config
 
-class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
+class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal with CassandraRecovery with CassandraStatements {
 
   import CassandraJournal._
   val config = new CassandraJournalConfig(context.system, cfg)
@@ -82,7 +82,7 @@ class CassandraJournal(cfg: Config) extends AsyncWriteJournal with CassandraReco
     config.sessionSettings,
     context.dispatcher,
     log,
-    metricsCategory = s"${self.path.name}",
+    metricsCategory = cfgPath,
     init = session =>
     executeCreateKeyspaceAndTables(session, config, maxTagId)
       .flatMap(_ => initializePersistentConfig(session).map(_ => Done))

@@ -30,7 +30,10 @@ import java.util.NoSuchElementException
 import scala.util.Success
 import scala.util.Failure
 
-class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraStatements with ActorLogging {
+class CassandraSnapshotStore(
+  cfg:     Config,
+  cfgPath: String
+) extends SnapshotStore with CassandraStatements with ActorLogging {
   import CassandraSnapshotStore._
   val config = new CassandraSnapshotStoreConfig(context.system, cfg)
   val serialization = SerializationExtension(context.system)
@@ -47,7 +50,7 @@ class CassandraSnapshotStore(cfg: Config) extends SnapshotStore with CassandraSt
     config.sessionSettings,
     context.dispatcher,
     log,
-    metricsCategory = s"${self.path.name}",
+    metricsCategory = cfgPath,
     init = session => executeCreateKeyspaceAndTables(session, config)
   )
 
