@@ -803,7 +803,7 @@ class EventsByTagLongRefreshIntervalSpec
       refresh-interval = 10s # set large enough so that it will fail the test if a refresh is required to continue the stream
       events-by-tag {
         gap-timeout = 30s
-        offset-scanning-period = 0ms # do no scanning so each new persistence id triggers the serach
+        offset-scanning-period = 0ms # do no scanning so each new persistence id triggers the search
         eventual-consistency-delay = 0ms  # speed up the test
       }
     } 
