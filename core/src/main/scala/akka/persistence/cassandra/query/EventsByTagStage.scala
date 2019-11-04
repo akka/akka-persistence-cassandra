@@ -99,6 +99,12 @@ import com.datastax.driver.core.utils.UUIDs
   private final case class QueryResult(resultSet: ResultSet) extends QueryState
   private final case class BufferedEvents(events: List[UUIDRow]) extends QueryState
 
+  /**
+   * @param gapDetected Whether an explicit gap has been detected e.g. events 1-4 have been seen then the next event isn not 5.
+   *                    The other scenario is that the first event for a persistence id is not 1, which when starting from an offset
+   *                    won't fail the stream as this is normal. However due to the eventual consistency of C* the stream still looks for earlier
+   *                    events for a short time.
+   */
   private final case class LookingForMissing(
       buffered: List[UUIDRow],
       previousOffset: UUID,
@@ -109,13 +115,13 @@ import com.datastax.driver.core.utils.UUIDs
       maxSequenceNr: Long,
       missing: Set[Long],
       deadline: Deadline,
-      failIfNotFound: Boolean) {
+      gapDetected: Boolean) {
 
     // don't include buffered in the toString
     override def toString =
       s"LookingForMissing{previousOffset=$previousOffset bucket=$bucket " +
       s"queryPrevious=$queryPrevious maxOffset=$maxOffset persistenceId=$persistenceId maxSequenceNr=$maxSequenceNr " +
-      s"missing=$missing deadline=$deadline failIfNotFound=$failIfNotFound"
+      s"missing=$missing deadline=$deadline gapDetected=$gapDetected"
   }
 
   private case object QueryPoll
@@ -340,7 +346,7 @@ import com.datastax.driver.core.utils.UUIDs
       }
 
       private def abortMissingSearch(missing: LookingForMissing): Unit = {
-        if (missing.failIfNotFound) {
+        if (missing.gapDetected) {
           fail(
             out,
             new IllegalStateException(
@@ -446,7 +452,7 @@ import com.datastax.driver.core.utils.UUIDs
               repr.persistenceId,
               repr.tagPidSequenceNr,
               (1L until repr.tagPidSequenceNr).toSet,
-              failIfNotFound = false,
+              gapDetected = false,
               deadline = Deadline.now + settings.eventsByTagNewPersistenceIdScanTimeout))))
           true
         }
@@ -483,7 +489,7 @@ import com.datastax.driver.core.utils.UUIDs
               repr.persistenceId,
               repr.tagPidSequenceNr,
               (expectedSequenceNr until repr.tagPidSequenceNr).toSet,
-              failIfNotFound = true,
+              gapDetected = true,
               deadline = Deadline.now + settings.eventsByTagGapTimeout))))
           true
         } else {
