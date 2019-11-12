@@ -178,21 +178,10 @@ import akka.util.ByteString
     case TagFlush(tag) =>
       tagActor(tag).tell(Flush, sender())
     case tw: TagWrite =>
-      updatePendingScanning(tw.serialised)
-      tagActor(tw.tag).forward(tw)
+      forwardTagWrite(tw)
     case BulkTagWrite(tws, withoutTags) =>
-      tws.foreach { tw =>
-        if (!currentPersistentActors.contains(tw.serialised.head.persistenceId)) {
-          log.warning(
-            "received TagWrite but actor not active (dropping, will be resolved when actor restarts): [{}]",
-            tw.serialised.head.persistenceId)
-        } else {
-          updatePendingScanning(tw.serialised)
-          tagActor(tw.tag).forward(tw)
-        }
-      }
+      tws.foreach(forwardTagWrite)
       updatePendingScanning(withoutTags)
-
     case WriteTagScanningTick =>
       writeTagScanning()
 
@@ -282,6 +271,17 @@ import akka.util.ByteString
             pid,
             ref)
       }
+  }
+
+  private def forwardTagWrite(tw: TagWrite): Unit = {
+    if (!currentPersistentActors.contains(tw.serialised.head.persistenceId)) {
+      log.warning(
+        "received TagWrite but actor not active (dropping, will be resolved when actor restarts): [{}]",
+        tw.serialised.head.persistenceId)
+    } else {
+      updatePendingScanning(tw.serialised)
+      tagActor(tw.tag).forward(tw)
+    }
   }
 
   private def updatePendingScanning(serialized: immutable.Seq[Serialized]): Unit = {
