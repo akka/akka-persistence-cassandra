@@ -4,19 +4,25 @@ scala:
   - "2.11.12"
   - "2.12.8"
   - "2.13.0"
-jdk:
-  - oraclejdk8
-  - openjdk11
+
 sbt_args: -J-XX:ReservedCodeCacheSize=128m
 
 before_install:
   # make 'git branch' work again
   - git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH"
+  # using jabba for custom jdk management
+  - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.1/install.sh | bash && . ~/.jabba/jabba.sh
+  - jabba install adopt@~1.8-0
+  - jabba install adopt@~1.11-0
 
 jobs:
   include:
     - stage: test
-      script: sbt ++$TRAVIS_SCALA_VERSION test
+      script: jabba use adopt@~1.8-0 && sbt test
+      name: Run all tests with Jdk 8
+    - stage: test
+      script: jabba use adopt@~1.11-0 && sbt test
+      name: Run all tests with Jdk 11
     - stage: whitesource
       name: "White Source"
       script:
