@@ -14,7 +14,7 @@ import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraSta
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, EventWithMetaData }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, EventsByTagQuery }
-import akka.persistence.query.{ EventEnvelope, NoOffset, TimeBasedUUID }
+import akka.persistence.query.{ EventEnvelope, NoOffset, Offset, TimeBasedUUID }
 import akka.persistence.{ PersistentActor, PersistentRepr }
 import akka.serialization.SerializationExtension
 import akka.stream.testkit.TestSubscriber
@@ -29,7 +29,7 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 object EventsByTagSpec {
-  def withProbe(probe: TestSubscriber.Probe[Any], f: TestSubscriber.Probe[Any] => Unit): Unit = {
+  def withProbe[T](probe: TestSubscriber.Probe[Any], f: TestSubscriber.Probe[Any] => T): T = {
     try {
       f(probe)
     } finally {
@@ -123,7 +123,7 @@ class ColorFruitTagger extends WriteEventAdapter {
   override def manifest(event: Any): String = ""
 }
 
-abstract class AbstractEventsByTagSpec(config: Config)
+abstract class AbstractEventsByTagSpec(config: Config, checkLogMessages: Boolean = true)
     extends CassandraSpec(config)
     with BeforeAndAfterEach
     with TestTagWriter {
@@ -153,12 +153,15 @@ abstract class AbstractEventsByTagSpec(config: Config)
   }
 
   val logProbe = TestProbe()
-  system.eventStream.subscribe(logProbe.ref, classOf[Warning])
-  system.eventStream.subscribe(logProbe.ref, classOf[Error])
+  if (checkLogMessages) {
+    system.eventStream.subscribe(logProbe.ref, classOf[Warning])
+    system.eventStream.subscribe(logProbe.ref, classOf[Error])
+  }
 
   override protected def afterEach(): Unit = {
     // check for the buffer exceeded log (and other issues)
-    logProbe.expectNoMessage(waitTime)
+    if (checkLogMessages)
+      logProbe.expectNoMessage(waitTime)
     super.afterEach()
   }
 }
@@ -494,6 +497,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
         probe.expectNoMessage(waitTime)
       })
     }
+
   }
 }
 
@@ -782,6 +786,58 @@ class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
         probe.expectNextN(2000)
       })
     }
+  }
+}
+
+class EventsByTagLongRefreshIntervalSpec
+    extends AbstractEventsByTagSpec(
+      ConfigFactory
+        .parseString(
+          """
+     akka.loglevel = INFO 
+     cassandra-query-journal {
+      refresh-interval = 10s # set large enough so that it will fail the test if a refresh is required to continue the stream
+      events-by-tag {
+        gap-timeout = 30s
+        offset-scanning-period = 0ms # do no scanning so each new persistence id triggers the search
+        eventual-consistency-delay = 0ms  # speed up the test
+      }
+    } 
+     """)
+        .withFallback(config),
+      // warnings about EC being set too low
+      checkLogMessages = false) {
+
+  "only look for new-persistence-id timeout for previous events for new persistence ids" in {
+    val pid = "test-new-pid"
+    val sender = TestProbe()
+    val pa = system.actorOf(TestActor.props(pid))
+    pa.tell(Tagged("cat", Set("animal")), sender.ref)
+    sender.expectMsg("cat-done")
+    sender.expectNoMessage(200.millis) // try and give time for the tagged event to be flushed so the query doesn't need to wait for the refresh interval
+
+    val offset: Offset =
+      withProbe(queries.eventsByTag(tag = "animal", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+        probe.request(2)
+        probe.expectNextPF {
+          case EventEnvelope(offset, `pid`, 1L, "cat") =>
+            offset
+        }
+      })
+
+    pa.tell(Tagged("cat2", Set("animal")), sender.ref)
+    sender.expectMsg("cat2-done")
+    // flush interval for tag writes is 0ms but still give some time for the tag write to complete
+    sender.expectNoMessage(250.millis)
+
+    withProbe(queries.eventsByTag(tag = "animal", offset = offset).runWith(TestSink.probe[Any]), probe => {
+      probe.request(2)
+      // less than the refresh interval, previously this would evaluate the new persistence-id timeout and then not re-evaluate
+      // it again until the next refresh interval
+      probe.expectNextWithTimeoutPF(2.seconds, {
+        case EventEnvelope(_, `pid`, 2L, "cat2") =>
+      })
+    })
   }
 }
 
