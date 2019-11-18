@@ -333,8 +333,8 @@ import com.datastax.driver.core.utils.UUIDs
           updateQueryState(QueryInProgress())
           if (log.isDebugEnabled) {
             log.debug(
-              s"[${stageUuid}] " + "{}: Executing query to look for missing. Timebucket: {}. From: {}. To: {}",
-              session.tag,
+              s"[${stageUuid}] " + s"${session.tag}: Executing query to look for {}. Timebucket: {}. From: {}. To: {}",
+              if (missing.gapDetected) "missing" else "previous events",
               missing.bucket,
               formatOffset(missing.previousOffset),
               formatOffset(missing.maxOffset))
@@ -592,9 +592,9 @@ import com.datastax.driver.core.utils.UUIDs
               abortMissingSearch(missing)
             } else {
               log.debug(
-                "[{}] [{}]: Still looking for missing. {}. Duration left for search: {}",
-                stageUuid,
+                s"[${stageUuid}] [{}]: Still looking for {}. {}. Duration left for search: {}",
                 session.tag,
+                if (missing.gapDetected) "missing" else "previous events",
                 stageState,
                 timeLeft.pretty)
               updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => {

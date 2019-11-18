@@ -798,7 +798,7 @@ class EventsByTagLongRefreshIntervalSpec
       ConfigFactory
         .parseString(
           """
-     akka.loglevel = DEBUG
+     akka.loglevel = INFO 
      cassandra-query-journal {
       refresh-interval = 10s # set large enough so that it will fail the test if a refresh is required to continue the stream
       events-by-tag {
@@ -831,6 +831,8 @@ class EventsByTagLongRefreshIntervalSpec
 
     pa.tell(Tagged("cat2", Set("animal")), sender.ref)
     sender.expectMsg("cat2-done")
+    // flush interval for tag writes is 0ms but still give some time for the tag write to complete
+    sender.expectNoMessage(250.millis)
 
     withProbe(queries.eventsByTag(tag = "animal", offset = offset).runWith(TestSink.probe[Any]), probe => {
       probe.request(2)
