@@ -105,8 +105,10 @@ import akka.util.ByteString
 
   /**
    * All serialised should be for the same persistenceId
+   * @param actorRunning migration sends these messages without the actor running so TagWriters should not
+   *                     validate that the pid is running
    */
-  private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized])
+  private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized], actorRunning: Boolean = true)
       extends NoSerializationVerificationNeeded
 
   def props(settings: TagWriterSettings, tagWriterSession: TagWritersSession): Props =
@@ -274,7 +276,7 @@ import akka.util.ByteString
   }
 
   private def forwardTagWrite(tw: TagWrite): Unit = {
-    if (!currentPersistentActors.contains(tw.serialised.head.persistenceId)) {
+    if (tw.actorRunning && !currentPersistentActors.contains(tw.serialised.head.persistenceId)) {
       log.warning(
         "received TagWrite but actor not active (dropping, will be resolved when actor restarts): [{}]",
         tw.serialised.head.persistenceId)

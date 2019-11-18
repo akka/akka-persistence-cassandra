@@ -36,6 +36,10 @@ object EventsByTagMigrationSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
+  
+       // disable normal failure logging as tall these tests are related 
+       // so if one fails need the logs for all
+       akka.loggers = []
        akka {
         actor.serialize-messages=off
         actor.debug.unhandled = on
