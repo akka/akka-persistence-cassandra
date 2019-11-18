@@ -6,7 +6,6 @@ package akka.persistence.cassandra.query.scaladsl
 
 import java.net.URLEncoder
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicLong
 
 import akka.{ Done, NotUsed }
 import akka.actor.ExtendedActorSystem
@@ -40,9 +39,6 @@ import scala.util.control.NonFatal
 import akka.serialization.SerializationExtension
 
 object CassandraReadJournal {
-  //temporary counter for keeping Read Journal metrics unique
-  // TODO: remove after akka/akka#19822 is fixed
-  private val InstanceUID = new AtomicLong(-1)
 
   /**
    * The default identifier for [[CassandraReadJournal]] to be used with
@@ -78,7 +74,7 @@ object CassandraReadJournal {
  * absolute path corresponding to the identifier, which is `"cassandra-query-journal"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  */
-class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
+class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: String)
     extends ReadJournal
     with PersistenceIdsQuery
     with CurrentPersistenceIdsQuery
@@ -118,16 +114,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     system.dispatchers.lookup(queryPluginConfig.pluginDispatcher)
   implicit private val materializer = ActorMaterializer()(system)
 
-  // TODO: change categoryUid to unique config path after akka/akka#19822 is fixed
-  private val metricsCategory = {
-    val categoryUid =
-      CassandraReadJournal.InstanceUID.incrementAndGet() match {
-        case 0     => ""
-        case other => other
-      }
-    s"${CassandraReadJournal.Identifier}$categoryUid"
-  }
-
   private val queryStatements: CassandraReadStatements =
     new CassandraReadStatements {
       override def config = queryPluginConfig
@@ -144,7 +130,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     writePluginConfig.sessionSettings,
     ec,
     log,
-    metricsCategory,
+    metricsCategory = cfgPath,
     init = session => executeCreateKeyspaceAndTables(session, writePluginConfig))
 
   /**

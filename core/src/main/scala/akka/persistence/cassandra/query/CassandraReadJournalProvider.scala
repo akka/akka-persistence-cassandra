@@ -9,11 +9,12 @@ import akka.persistence.query.ReadJournalProvider
 import com.typesafe.config.Config
 import scala.util.control.NonFatal
 
-class CassandraReadJournalProvider(system: ExtendedActorSystem, config: Config) extends ReadJournalProvider {
+class CassandraReadJournalProvider(system: ExtendedActorSystem, config: Config, configPath: String)
+    extends ReadJournalProvider {
 
   override val scaladslReadJournal: scaladsl.CassandraReadJournal =
     try {
-      new scaladsl.CassandraReadJournal(system, config)
+      new scaladsl.CassandraReadJournal(system, config, configPath)
     } catch {
       case NonFatal(e) =>
         // TODO can be removed when https://github.com/akka/akka/issues/18976 is fixed
