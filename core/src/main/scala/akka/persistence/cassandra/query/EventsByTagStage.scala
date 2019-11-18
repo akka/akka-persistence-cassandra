@@ -111,6 +111,12 @@ import com.github.ghik.silencer.silent
   private final case class QueryResult(resultSet: ResultSet) extends QueryState
   private final case class BufferedEvents(events: List[UUIDRow]) extends QueryState
 
+  /**
+   * @param gapDetected Whether an explicit gap has been detected e.g. events 1-4 have been seen then the next event isn not 5.
+   *                    The other scenario is that the first event for a persistence id is not 1, which when starting from an offset
+   *                    won't fail the stream as this is normal. However due to the eventual consistency of C* the stream still looks for earlier
+   *                    events for a short time.
+   */
   private final case class LookingForMissing(
       buffered: List[UUIDRow],
       previousOffset: UUID,
@@ -121,13 +127,13 @@ import com.github.ghik.silencer.silent
       maxSequenceNr: Long,
       missing: Set[Long],
       deadline: Deadline,
-      failIfNotFound: Boolean) {
+      gapDetected: Boolean) {
 
     // don't include buffered in the toString
     override def toString =
       s"LookingForMissing{previousOffset=$previousOffset bucket=$bucket " +
       s"queryPrevious=$queryPrevious maxOffset=$maxOffset persistenceId=$persistenceId maxSequenceNr=$maxSequenceNr " +
-      s"missing=$missing deadline=$deadline failIfNotFound=$failIfNotFound"
+      s"missing=$missing deadline=$deadline gapDetected=$gapDetected"
   }
 
   private case object QueryPoll
@@ -207,7 +213,7 @@ import com.github.ghik.silencer.silent
           // The eventual consistency delay is before the end of the query
           val u = UUIDs.endOf(to)
           if (log.isDebugEnabled) {
-            log.debug("{}: New toOffset (EC): {}", stageUuid, formatOffset(u))
+            log.debug("[{}]: New toOffset (EC): {}", stageUuid, formatOffset(u))
           }
           u
         } else {
@@ -340,30 +346,13 @@ import com.github.ghik.silencer.silent
         }
 
         if (missing.deadline.isOverdue()) {
-          if (missing.failIfNotFound) {
-            fail(
-              out,
-              new MissingTaggedEventException(
-                session.tag,
-                missing.persistenceId,
-                missing.missing,
-                Offset.timeBasedUUID(missing.previousOffset)))
-          } else {
-            log.debug(
-              "[{}] [{}]: Finished scanning for older events for persistence id [{}]. Max pid sequence nr found [{}]",
-              stageUuid,
-              session.tag,
-              missing.persistenceId,
-              missing.maxSequenceNr)
-            stopLookingForMissing(missing, missing.buffered)
-            tryPushOne()
-          }
+          abortMissingSearch(missing)
         } else {
           updateQueryState(QueryInProgress())
           if (log.isDebugEnabled) {
             log.debug(
-              s"[${stageUuid}] " + "{}: Executing query to look for missing. Timebucket: {}. From: {}. To: {}",
-              session.tag,
+              s"[${stageUuid}] " + s"${session.tag}: Executing query to look for {}. Timebucket: {}. From: {}. To: {}",
+              if (missing.gapDetected) "missing" else "previous events",
               missing.bucket,
               formatOffset(missing.previousOffset),
               formatOffset(missing.maxOffset))
@@ -371,6 +360,27 @@ import com.github.ghik.silencer.silent
           session
             .selectEventsForBucket(missing.bucket, missing.previousOffset, missing.maxOffset)
             .onComplete(newResultSetCb.invoke)
+        }
+      }
+
+      private def abortMissingSearch(missing: LookingForMissing): Unit = {
+        if (missing.gapDetected) {
+          fail(
+            out,
+            new MissingTaggedEventException(
+              session.tag,
+              missing.persistenceId,
+              missing.missing,
+              Offset.timeBasedUUID(missing.previousOffset)))
+        } else {
+          log.debug(
+            "[{}] [{}]: Finished scanning for older events for persistence id [{}]. Max pid sequence nr found [{}]",
+            stageUuid,
+            session.tag,
+            missing.persistenceId,
+            missing.maxSequenceNr)
+          stopLookingForMissing(missing, missing.buffered)
+          tryPushOne()
         }
       }
 
@@ -462,7 +472,7 @@ import com.github.ghik.silencer.silent
               repr.persistenceId,
               repr.tagPidSequenceNr,
               (1L until repr.tagPidSequenceNr).toSet,
-              failIfNotFound = false,
+              gapDetected = false,
               deadline = Deadline.now + settings.eventsByTagNewPersistenceIdScanTimeout))))
           true
         }
@@ -499,7 +509,7 @@ import com.github.ghik.silencer.silent
               repr.persistenceId,
               repr.tagPidSequenceNr,
               (expectedSequenceNr until repr.tagPidSequenceNr).toSet,
-              failIfNotFound = true,
+              gapDetected = true,
               deadline = Deadline.now + settings.eventsByTagGapTimeout))))
           true
         } else {
@@ -597,18 +607,31 @@ import com.github.ghik.silencer.silent
               m.copy(queryPrevious = false, bucket = m.bucket.previous(1)))))
             lookForMissing()
           } else {
-            log.debug(
-              "[{}] [{}]: Still looking for missing. {}. Waiting for next poll.",
-              stageUuid,
-              session.tag,
-              stageState)
-            updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => {
-              val newBucket = TimeBucket(m.maxOffset, bucketSize)
-              m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.previousOffset))
-            })))
-            // a current query doesn't have a poll schedule one
-            if (!isLiveQuery())
-              scheduleOnce(QueryPoll, settings.refreshInterval)
+            val timeLeft = missing.deadline.timeLeft
+            if (timeLeft <= Duration.Zero) {
+              abortMissingSearch(missing)
+            } else {
+              log.debug(
+                s"[${stageUuid}] [{}]: Still looking for {}. {}. Duration left for search: {}",
+                session.tag,
+                if (missing.gapDetected) "missing" else "previous events",
+                stageState,
+                timeLeft.pretty)
+              updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => {
+                val newBucket = TimeBucket(m.maxOffset, bucketSize)
+                m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.previousOffset))
+              })))
+
+              // the new persistence-id scan time is typically much smaller than the refresh interval
+              // so do not wait for the next refresh to look again
+              if (timeLeft < settings.refreshInterval) {
+                scheduleOnce(QueryPoll, timeLeft)
+              } else if (!isLiveQuery()) {
+                // a current query doesn't have a poll schedule one
+                scheduleOnce(QueryPoll, settings.refreshInterval)
+              }
+            }
+
           }
         } else if (stageState.shouldMoveBucket()) {
           nextTimeBucket()
@@ -638,7 +661,7 @@ import com.github.ghik.silencer.silent
         } else {
           BufferedEvents(buffered.sortBy(_.tagPidSequenceNr))
         })
-        log.debug("[{}] No more missing events. Sending buffered events. {}", stageUuid, stageState.state)
+        log.debug("[{}] Search over. Sending buffered events. {}", stageUuid, stageState.state)
         updateStageState(
           _.copy(fromOffset = m.maxOffset, missingLookup = None)
             .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset)))
