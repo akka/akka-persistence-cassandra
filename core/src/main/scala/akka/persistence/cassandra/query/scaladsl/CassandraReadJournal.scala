@@ -27,7 +27,6 @@ import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
 import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.util.ByteString
-import com.datastax.driver.core._
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.Config
@@ -38,6 +37,7 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
 import akka.serialization.SerializationExtension
+import com.datastax.driver.core.{ ConsistencyLevel, PreparedStatement, Session }
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -349,7 +349,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     val currentBucket =
       TimeBucket(System.currentTimeMillis(), writePluginConfig.bucketSize)
     val initialTagPidSequenceNrs =
-      if (usingOffset && currentBucket.within(fromOffset))
+      if (usingOffset && currentBucket.within(fromOffset) && queryPluginConfig.eventsByTagOffsetScanning > Duration.Zero)
         scanTagSequenceNrs(tag, fromOffset)
       else
         Future.successful(Map.empty[Tag, (TagPidSequenceNr, UUID)])
