@@ -244,7 +244,7 @@ import com.github.ghik.silencer.silent
           updateStageState(_.copy(state = QueryResult(rs)))
           tryPushOne()
         case Failure(e) =>
-          log.warning("Cassandra query failed", e)
+          log.warning("Cassandra query failed: {}", e)
           fail(out, e)
       }
 
