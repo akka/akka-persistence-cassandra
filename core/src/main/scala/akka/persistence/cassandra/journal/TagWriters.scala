@@ -105,8 +105,10 @@ import akka.util.ByteString
 
   /**
    * All serialised should be for the same persistenceId
+   * @param actorRunning migration sends these messages without the actor running so TagWriters should not
+   *                     validate that the pid is running
    */
-  private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized])
+  private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized], actorRunning: Boolean = true)
       extends NoSerializationVerificationNeeded
 
   def props(settings: TagWriterSettings, tagWriterSession: TagWritersSession): Props =
@@ -178,21 +180,10 @@ import akka.util.ByteString
     case TagFlush(tag) =>
       tagActor(tag).tell(Flush, sender())
     case tw: TagWrite =>
-      updatePendingScanning(tw.serialised)
-      tagActor(tw.tag).forward(tw)
+      forwardTagWrite(tw)
     case BulkTagWrite(tws, withoutTags) =>
-      tws.foreach { tw =>
-        if (!currentPersistentActors.contains(tw.serialised.head.persistenceId)) {
-          log.warning(
-            "received TagWrite but actor not active (dropping, will be resolved when actor restarts): [{}]",
-            tw.serialised.head.persistenceId)
-        } else {
-          updatePendingScanning(tw.serialised)
-          tagActor(tw.tag).forward(tw)
-        }
-      }
+      tws.foreach(forwardTagWrite)
       updatePendingScanning(withoutTags)
-
     case WriteTagScanningTick =>
       writeTagScanning()
 
@@ -282,6 +273,17 @@ import akka.util.ByteString
             pid,
             ref)
       }
+  }
+
+  private def forwardTagWrite(tw: TagWrite): Unit = {
+    if (tw.actorRunning && !currentPersistentActors.contains(tw.serialised.head.persistenceId)) {
+      log.warning(
+        "received TagWrite but actor not active (dropping, will be resolved when actor restarts): [{}]",
+        tw.serialised.head.persistenceId)
+    } else {
+      updatePendingScanning(tw.serialised)
+      tagActor(tw.tag).forward(tw)
+    }
   }
 
   private def updatePendingScanning(serialized: immutable.Seq[Serialized]): Unit = {

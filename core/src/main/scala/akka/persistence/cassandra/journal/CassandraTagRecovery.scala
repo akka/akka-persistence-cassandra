@@ -56,7 +56,8 @@ trait CassandraTagRecovery {
       case None      => 1L
     }
 
-  private[akka] def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], to: ActorRef)(rawEvent: RawEvent): RawEvent = {
+  private[akka] def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], to: ActorRef, actorRunning: Boolean = true)(
+      rawEvent: RawEvent): RawEvent = {
     // FIXME logging once stable
     log.debug("Processing tag write for event {} tags {}", rawEvent.sequenceNr, rawEvent.serialized.tags)
     rawEvent.serialized.tags.foreach(tag => {
@@ -67,7 +68,7 @@ trait CassandraTagRecovery {
             rawEvent.serialized.persistenceId,
             tag,
             rawEvent.sequenceNr)
-          to ! TagWrite(tag, rawEvent.serialized :: Nil)
+          to ! TagWrite(tag, rawEvent.serialized :: Nil, actorRunning)
         case Some(progress) =>
           if (rawEvent.sequenceNr > progress.sequenceNr) {
             log.debug(
@@ -75,7 +76,7 @@ trait CassandraTagRecovery {
               rawEvent.serialized.persistenceId,
               tag,
               rawEvent.sequenceNr)
-            to ! TagWrite(tag, rawEvent.serialized :: Nil)
+            to ! TagWrite(tag, rawEvent.serialized :: Nil, actorRunning)
           }
       }
     })

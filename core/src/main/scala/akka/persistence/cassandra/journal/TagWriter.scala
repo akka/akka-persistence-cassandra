@@ -134,7 +134,7 @@ import scala.concurrent.duration._
         log.debug("External flush request from [{}], buffer empty.", sender())
         sender() ! FlushComplete
       }
-    case TagWrite(_, payload) =>
+    case TagWrite(_, payload, _) =>
       // FIXME, keeping this sorted is over kill. We only need to know if a new timebucket is
       // reached to force a flush or that the batch size is met
       val (newTagPidSequenceNrs, events) =
@@ -162,7 +162,7 @@ import scala.concurrent.duration._
     case Flush =>
       log.debug("External flush while write in progress. Will flush after write complete")
       become(writeInProgress(buffer, tagPidSequenceNrs, Some(sender())))
-    case TagWrite(_, payload) =>
+    case TagWrite(_, payload, _) =>
       val (updatedTagPidSequenceNrs, events) =
         assignTagPidSequenceNumbers(payload.toVector, tagPidSequenceNrs)
       val now = System.nanoTime()
