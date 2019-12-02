@@ -8,7 +8,6 @@ import java.util.concurrent.TimeUnit
 
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import com.datastax.driver.core.Session
-import com.github.ghik.silencer.silent
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
 
@@ -93,60 +92,6 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
       assertThrows[IllegalArgumentException] {
         CassandraCompactionStrategy(twConfig.getConfig("table-compaction-strategy"))
           .asInstanceOf[TimeWindowCompactionStrategy]
-      }
-    }
-
-    "successfully create a DateTieredCompactionStrategy" in {
-      val uniqueConfig = ConfigFactory.parseString("""table-compaction-strategy {
-          | class = "DateTieredCompactionStrategy"
-          | enabled = true
-          | tombstone_compaction_interval = 86400
-          | tombstone_threshold = 0.1
-          | unchecked_tombstone_compaction = false
-          | base_time_seconds = 100
-          | max_sstable_age_days = 100
-          | max_threshold = 20
-          | min_threshold = 10
-          | timestamp_resolution = "MICROSECONDS"
-          |}
-        """.stripMargin)
-
-      @silent
-      val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy"))
-        .asInstanceOf[DateTieredCompactionStrategy]
-
-      compactionStrategy.enabled shouldEqual true
-      compactionStrategy.tombstoneCompactionInterval shouldEqual 86400
-      compactionStrategy.tombstoneThreshold shouldEqual 0.1
-      compactionStrategy.uncheckedTombstoneCompaction shouldEqual false
-      compactionStrategy.baseTimeSeconds shouldEqual 100
-      compactionStrategy.maxSSTableAgeDays shouldEqual 100
-      compactionStrategy.maxThreshold shouldEqual 20
-      compactionStrategy.minThreshold shouldEqual 10
-      compactionStrategy.timestampResolution shouldEqual TimeUnit.MICROSECONDS
-    }
-
-    "successfully create CQL from DateTieredCompactionStrategy" in {
-      val uniqueConfig = ConfigFactory.parseString("""table-compaction-strategy {
-          | class = "DateTieredCompactionStrategy"
-          | enabled = true
-          | tombstone_compaction_interval = 86400
-          | tombstone_threshold = 0.1
-          | unchecked_tombstone_compaction = false
-          | base_time_seconds = 100
-          | max_sstable_age_days = 100
-          | max_threshold = 20
-          | min_threshold = 10
-          | timestamp_resolution = "MICROSECONDS"
-          |}
-        """.stripMargin)
-
-      val cqlExpression =
-        s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable1 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(
-          uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
-
-      noException must be thrownBy {
-        session.execute(cqlExpression)
       }
     }
 
