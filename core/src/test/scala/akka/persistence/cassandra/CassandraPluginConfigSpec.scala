@@ -165,7 +165,7 @@ class CassandraPluginConfigSpec
         """).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, configWithHostsAndPort)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      val clusterBuilder = Await.result(sessionProvider.clusterBuilder(""), 3.seconds)
+      val clusterBuilder = Await.result(sessionProvider.sessionBuilder(""), 3.seconds)
       clusterBuilder.getConfiguration.getProtocolOptions.getPort mustBe 19042
     }
 
@@ -294,7 +294,7 @@ class CassandraPluginConfigSpec
         """).withFallback(defaultConfig)
       val config = new CassandraPluginConfig(system, metricsConfig)
       val sessionProvider = config.sessionProvider.asInstanceOf[ConfigSessionProvider]
-      val clusterBuilder = Await.result(sessionProvider.clusterBuilder(""), 3.seconds)
+      val clusterBuilder = Await.result(sessionProvider.sessionBuilder(""), 3.seconds)
       clusterBuilder.getConfiguration.getMetricsOptions.isEnabled mustBe false
       clusterBuilder.getConfiguration.getMetricsOptions.isJMXReportingEnabled mustBe false
     }

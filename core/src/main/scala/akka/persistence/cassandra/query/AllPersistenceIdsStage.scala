@@ -7,10 +7,11 @@ package akka.persistence.cassandra.query
 import java.util.concurrent.ThreadLocalRandom
 
 import akka.annotation.InternalApi
-import akka.cassandra.session._
 import akka.stream.stage._
 import akka.stream.{ Attributes, Outlet, SourceShape }
-import com.datastax.driver.core.{ PreparedStatement, ResultSet, Session }
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet
+import com.datastax.oss.driver.api.core.cql.PreparedStatement
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
@@ -32,7 +33,7 @@ import scala.concurrent.ExecutionContextExecutor
     refreshInterval: Option[FiniteDuration],
     fetchSize: Int,
     preparedStatement: PreparedStatement,
-    session: Session)
+    session: CqlSession)
     extends GraphStage[SourceShape[String]] {
 
   import AllPersistenceIdsStage._
@@ -48,41 +49,44 @@ import scala.concurrent.ExecutionContextExecutor
 
       private var queryInProgress = false
       private var knownPersistenceIds: Set[String] = Set.empty
-      private var maybeResultSet = Option.empty[ResultSet]
+      private var maybeResultSet = Option.empty[AsyncResultSet]
       private var buffer: Queue[String] = Queue.empty[String]
 
-      private val queryCallback: AsyncCallback[ResultSet] =
-        getAsyncCallback[ResultSet] { rs =>
+      private val queryCallback: AsyncCallback[AsyncResultSet] =
+        getAsyncCallback[AsyncResultSet] { rs =>
           queryInProgress = false
           maybeResultSet = Some(rs)
-          val available = rs.getAvailableWithoutFetching
-          for (_ <- 1 to available) {
-            val s = rs.one().getString("persistence_id")
+          rs.currentPage().forEach { row =>
+            val s = row.getString("persistence_id")
             if (!knownPersistenceIds.contains(s)) {
               buffer = buffer.enqueue(s)
               knownPersistenceIds += s
             }
           }
           flush()
-          if (refreshInterval.isEmpty && buffer.isEmpty && rs.isExhausted) {
+          if (refreshInterval.isEmpty && buffer.isEmpty && rs.hasMorePages) {
             complete(out)
-          } else if (!rs.isExhausted) {
+          } else if (rs.hasMorePages) {
             // don't check getAvailableWithoutFetching here as it may be > 0 as they can be fetched in the background
-            rs.fetchMoreResults().asScala.foreach(queryCallback.invoke)
+            rs.fetchNextPage().thenAccept(queryCallback.invoke)
           }
         }
 
+      private def isExhausted(rs: AsyncResultSet): Boolean = {
+        rs.remaining() == 0 && !rs.hasMorePages
+      }
+
       private def query(): Unit = {
         def doQuery(): Unit = {
+          // FIXME, what has happened tgo fetch size per statement?
           queryInProgress = true
           val boundStatement = preparedStatement.bind()
-          boundStatement.setFetchSize(fetchSize)
-          session.executeAsync(boundStatement).asScala.foreach(queryCallback.invoke)
+          session.executeAsync(boundStatement).thenAccept(queryCallback.invoke)
         }
         maybeResultSet match {
           case None =>
             doQuery()
-          case Some(rs) if rs.isExhausted && !queryInProgress =>
+          case Some(rs) if isExhausted(rs) && !queryInProgress =>
             doQuery()
           case _ =>
           // ignore query request as either a query is in progress or there's a result set
@@ -126,11 +130,11 @@ import scala.concurrent.ExecutionContextExecutor
               query()
 
             case Some(rs) =>
-              if (refreshInterval.isEmpty && rs.isExhausted) {
+              if (refreshInterval.isEmpty && isExhausted(rs)) {
                 complete(out)
               } else {
-                if (!queryInProgress && !rs.isFullyFetched) {
-                  rs.fetchMoreResults().asScala.foreach(queryCallback.invoke)
+                if (!queryInProgress && rs.remaining() == 0) {
+                  rs.fetchNextPage().thenAccept(queryCallback.invoke)
                 }
               }
           }

@@ -27,9 +27,9 @@ import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
 import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.util.ByteString
-import com.datastax.driver.core._
-import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.cql._
+import com.datastax.oss.driver.api.core.cql.policies.{ LoggingRetryPolicy, RetryPolicy }
+import com.datastax.oss.driver.api.core.cql.utils.Uuids
 import com.typesafe.config.Config
 
 import scala.collection.immutable
@@ -38,6 +38,9 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
 import akka.serialization.SerializationExtension
+import com.datastax.oss.driver.api.core.ConsistencyLevel
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.retry.RetryPolicy
 
 object CassandraReadJournal {
   //temporary counter for keeping Read Journal metrics unique
@@ -223,7 +226,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     // FIXME perhaps we can do something smarter, such as caching the highest offset retrieved
     // from queries
     val timestamp = queryPluginConfig.firstTimeBucket.key
-    UUIDs.startOf(timestamp)
+    Uuids.startOf(timestamp)
   }
 
   /**
@@ -232,7 +235,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * `System#currentTimeMillis`.
    */
   def offsetUuid(timestamp: Long): UUID =
-    if (timestamp == 0L) firstOffset else UUIDs.startOf(timestamp)
+    if (timestamp == 0L) firstOffset else Uuids.startOf(timestamp)
 
   /**
    * Create a time based UUID that can be used as offset in `eventsByTag`
@@ -248,7 +251,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * `System#currentTimeMillis`.
    */
   def timestampFrom(offset: TimeBasedUUID): Long =
-    UUIDs.unixTimestamp(offset.value)
+    Uuids.unixTimestamp(offset.value)
 
   /**
    * `eventsByTag` is used for retrieving events that were marked with
@@ -408,10 +411,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * INTERNAL API
    */
   @InternalApi private[akka] def createFutureSource[T, P, M](prepStmt: Future[P])(
-      source: (Session, P) => Source[T, M]): Source[T, Future[M]] = {
+      source: (CqlSession, P) => Source[T, M]): Source[T, Future[M]] = {
     // when we get the PreparedStatement we know that the session is initialized,
     // i.e.the get is safe
-    def getSession: Session = session.underlying().value.get.get
+    def getSession: CqlSession = session.underlying().value.get.get
 
     prepStmt.value match {
       case Some(Success(ps)) =>
@@ -569,7 +572,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       refreshInterval: Option[FiniteDuration],
       name: String,
       customConsistencyLevel: Option[ConsistencyLevel] = None,
-      customRetryPolicy: Option[RetryPolicy] = None,
       extractor: Extractor[T],
       fastForwardEnabled: Boolean = false): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
 

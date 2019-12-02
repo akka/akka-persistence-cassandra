@@ -14,7 +14,7 @@ import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider, _ }
 import akka.event.Logging
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.stream.testkit.scaladsl.TestSink
-import com.datastax.driver.core.{ BatchStatement, Session, SimpleStatement }
+import com.datastax.oss.driver.api.core.cql.{ BatchStatement, Session, SimpleStatement }
 import com.typesafe.config.ConfigFactory
 
 import scala.collection.JavaConverters._

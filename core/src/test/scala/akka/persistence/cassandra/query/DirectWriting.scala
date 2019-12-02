@@ -10,7 +10,7 @@ import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
 import akka.serialization.SerializationExtension
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.cql.utils.Uuids
 import org.scalatest.{ BeforeAndAfterAll, Suite }
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -57,8 +57,8 @@ trait DirectWriting extends BeforeAndAfterAll {
     bs.setString("persistence_id", persistent.persistenceId)
     bs.setLong("partition_nr", partitionNr)
     bs.setLong("sequence_nr", persistent.sequenceNr)
-    val nowUuid = UUIDs.timeBased()
-    val now = UUIDs.unixTimestamp(nowUuid)
+    val nowUuid = Uuids.timeBased()
+    val now = Uuids.unixTimestamp(nowUuid)
     bs.setUUID("timestamp", nowUuid)
     bs.setString("timebucket", TimeBucket(now, Hour).key.toString)
     bs.setInt("ser_id", serializer.identifier)

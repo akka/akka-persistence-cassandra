@@ -10,7 +10,7 @@ import scala.concurrent.Future
 import akka.Done
 import akka.cassandra.session.FutureDone
 import akka.cassandra.session._
-import com.datastax.driver.core.Session
+import com.datastax.oss.driver.api.core.cql.Session
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.indent
 

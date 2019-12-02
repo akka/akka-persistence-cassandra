@@ -6,10 +6,11 @@ package akka.cassandra.session
 
 import java.util.concurrent.TimeUnit
 
+import com.datastax.oss.driver.api.core.ConsistencyLevel
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel
+
 import scala.concurrent.duration._
 import scala.concurrent.duration.FiniteDuration
-
-import com.datastax.driver.core.ConsistencyLevel
 import com.typesafe.config.Config
 
 object CassandraSessionSettings {
@@ -18,11 +19,11 @@ object CassandraSessionSettings {
 }
 
 class CassandraSessionSettings(val config: Config) {
-  val fetchSize = config.getInt("max-result-size")
+  val fetchSize: Int = config.getInt("max-result-size")
   val readConsistency: ConsistencyLevel =
-    ConsistencyLevel.valueOf(config.getString("read-consistency"))
+    DefaultConsistencyLevel.valueOf(config.getString("read-consistency"))
   val writeConsistency: ConsistencyLevel =
-    ConsistencyLevel.valueOf(config.getString("write-consistency"))
+    DefaultConsistencyLevel.valueOf(config.getString("write-consistency"))
   val connectionRetries: Int = config.getInt("connect-retries")
   val connectionRetryDelay: FiniteDuration =
     config.getDuration("connect-retry-delay", TimeUnit.MILLISECONDS).millis

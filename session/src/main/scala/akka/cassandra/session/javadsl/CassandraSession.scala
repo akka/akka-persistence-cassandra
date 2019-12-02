@@ -14,18 +14,17 @@ import scala.collection.JavaConverters._
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
 import akka.event.LoggingAdapter
 import akka.stream.javadsl.Source
-import com.datastax.driver.core.BatchStatement
-import com.datastax.driver.core.PreparedStatement
-import com.datastax.driver.core.Row
-import com.datastax.driver.core.Session
-import com.datastax.driver.core.Statement
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.BatchStatement
+import com.datastax.oss.driver.api.core.cql.PreparedStatement
+import com.datastax.oss.driver.api.core.cql.Row
+import com.datastax.oss.driver.api.core.cql.Statement
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
@@ -49,7 +48,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
       executionContext: ExecutionContext,
       log: LoggingAdapter,
       metricsCategory: String,
-      init: JFunction[Session, CompletionStage[Done]]) =
+      init: JFunction[CqlSession, CompletionStage[Done]]) =
     this(
       new akka.cassandra.session.scaladsl.CassandraSession(
         system,
@@ -58,7 +57,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
         executionContext,
         log,
         metricsCategory,
-        (session => init.apply(session).toScala)))
+        session => init.apply(session).toScala))
 
   implicit private val ec = delegate.ec
 
@@ -68,7 +67,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
    * Can be used in case you need to do something that is not provided by the
    * API exposed by this class. Be careful to not use blocking calls.
    */
-  def underlying(): CompletionStage[Session] =
+  def underlying(): CompletionStage[CqlSession] =
     delegate.underlying().toJava
 
   /**
@@ -114,7 +113,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
    * The returned `CompletionStage` is completed when the statement has been
    * successfully executed, or if it fails.
    */
-  def executeWrite(stmt: Statement): CompletionStage[Done] =
+  def executeWrite(stmt: Statement[_]): CompletionStage[Done] =
     delegate.executeWrite(stmt).toJava
 
   /**
@@ -143,7 +142,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
    * Note that you have to connect a `Sink` that consumes the messages from
    * this `Source` and then `run` the stream.
    */
-  def select(stmt: Statement): Source[Row, NotUsed] =
+  def select(stmt: Statement[_]): Source[Row, NotUsed] =
     delegate.select(stmt).asJava
 
   /**
@@ -171,7 +170,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
    *
    * The returned `CompletionStage` is completed with the found rows.
    */
-  def selectAll(stmt: Statement): CompletionStage[JList[Row]] =
+  def selectAll(stmt: Statement[_]): CompletionStage[JList[Row]] =
     delegate.selectAll(stmt).map(_.asJava).toJava
 
   /**
@@ -197,7 +196,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
    * The returned `CompletionStage` is completed with the first row,
    * if any.
    */
-  def selectOne(stmt: Statement): CompletionStage[Optional[Row]] =
+  def selectOne(stmt: Statement[_]): CompletionStage[Optional[Row]] =
     delegate.selectOne(stmt).map(_.asJava).toJava
 
   /**

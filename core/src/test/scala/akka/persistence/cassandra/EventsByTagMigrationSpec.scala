@@ -21,7 +21,7 @@ import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import akka.{ Done, NotUsed }
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.cql.utils.Uuids
 import com.typesafe.config.ConfigFactory
 
 import org.scalatest.BeforeAndAfterAll
@@ -430,8 +430,8 @@ abstract class AbstractEventsByTagMigrationSpec
     bound.setString("persistence_id", pr.persistenceId)
     bound.setLong("partition_nr", 0L)
     bound.setLong("sequence_nr", pr.sequenceNr)
-    val nowUuid = UUIDs.timeBased()
-    val now = UUIDs.unixTimestamp(nowUuid)
+    val nowUuid = Uuids.timeBased()
+    val now = Uuids.unixTimestamp(nowUuid)
     bound.setUUID("timestamp", nowUuid)
     bound.setString("timebucket", TimeBucket(now, Hour).key.toString)
     val bytes: Array[Byte] = serialization.serialize(pr).get
@@ -466,8 +466,8 @@ abstract class AbstractEventsByTagMigrationSpec
     bs.setString("persistence_id", persistent.persistenceId)
     bs.setLong("partition_nr", 0L)
     bs.setLong("sequence_nr", persistent.sequenceNr)
-    val nowUuid = UUIDs.timeBased()
-    val now = UUIDs.unixTimestamp(nowUuid)
+    val nowUuid = Uuids.timeBased()
+    val now = Uuids.unixTimestamp(nowUuid)
     bs.setUUID("timestamp", nowUuid)
     bs.setString("timebucket", TimeBucket(now, Hour).key.toString)
     bs.setInt("ser_id", serializer.identifier)

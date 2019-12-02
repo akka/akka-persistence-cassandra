@@ -11,7 +11,7 @@ import akka.actor.{ ActorSystem, Props }
 import akka.persistence.PersistentActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.testkit.{ TestKitBase, TestProbe }
-import com.datastax.driver.core.Cluster
+import com.datastax.oss.driver.api.core.cql.Cluster
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
 

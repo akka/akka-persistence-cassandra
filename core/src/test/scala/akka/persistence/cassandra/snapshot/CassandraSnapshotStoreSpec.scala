@@ -13,7 +13,7 @@ import akka.persistence._
 import akka.persistence.cassandra.{ CassandraLifecycle, SnapshotWithMetaData }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
-import com.datastax.driver.core._
+import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.ConfigFactory
 
 import scala.collection.immutable.Seq

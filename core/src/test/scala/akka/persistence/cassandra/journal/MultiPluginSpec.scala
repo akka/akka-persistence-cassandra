@@ -9,7 +9,7 @@ import akka.persistence.cassandra.journal.MultiPluginSpec._
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import akka.persistence.{ PersistentActor, SaveSnapshotSuccess }
-import com.datastax.driver.core.Session
+import com.datastax.oss.driver.api.core.cql.Session
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.Await

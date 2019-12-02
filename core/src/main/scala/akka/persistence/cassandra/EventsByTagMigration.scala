@@ -4,8 +4,9 @@
 
 package akka.persistence.cassandra
 
-import scala.concurrent.ExecutionContext
+import java.util.UUID
 
+import scala.concurrent.ExecutionContext
 import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.event.Logging
@@ -24,8 +25,9 @@ import akka.stream.{ ActorMaterializer, OverflowStrategy }
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
-import com.datastax.driver.core.Row
-import com.datastax.driver.core.utils.Bytes
+import com.datastax.oss.driver.api.core.cql.Row
+import com.datastax.oss.protocol.internal.util.Bytes
+
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -54,16 +56,16 @@ object EventsByTagMigration {
             Set.empty
           }
 
-        val timeUuid = row.getUUID("timestamp")
+        val timeUuid = row.getUuid("timestamp")
         val sequenceNr = row.getLong("sequence_nr")
         val meta = if (ed.hasMetaColumns(row)) {
-          val m = row.getBytes("meta")
+          val m = row.getByteBuffer("meta")
           Option(m).map(SerializedMeta(_, row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
         } else {
           None
         }
 
-        row.getBytes("message") match {
+        row.getByteBuffer("message") match {
           case null =>
             Future.successful(
               RawEvent(
@@ -71,7 +73,7 @@ object EventsByTagMigration {
                 Serialized(
                   row.getString("persistence_id"),
                   row.getLong("sequence_nr"),
-                  row.getBytes("event"),
+                  row.getByteBuffer("event"),
                   tags,
                   row.getString("event_manifest"),
                   row.getString("ser_manifest"),

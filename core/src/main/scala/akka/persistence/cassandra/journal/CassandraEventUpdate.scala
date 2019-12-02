@@ -8,7 +8,7 @@ import akka.Done
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
 import akka.cassandra.session.scaladsl.CassandraSession
-import com.datastax.driver.core.{ PreparedStatement, Row, Statement }
+import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row, Statement }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }

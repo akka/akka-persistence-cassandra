@@ -30,9 +30,9 @@ import akka.serialization.Serializers
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
-import com.datastax.driver.core._
-import com.datastax.driver.core.policies.LoggingRetryPolicy
-import com.datastax.driver.core.utils.Bytes
+import com.datastax.oss.driver.api.core.cql._
+import com.datastax.oss.driver.api.core.cql.policies.LoggingRetryPolicy
+import com.datastax.oss.driver.api.core.cql.utils.Bytes
 import com.typesafe.config.Config
 
 class CassandraSnapshotStore(cfg: Config)
@@ -169,7 +169,7 @@ class CassandraSnapshotStore(cfg: Config)
           s"No snapshot for persistenceId [${metadata.persistenceId}] " +
           s"with with sequenceNr [${metadata.sequenceNr}]")
       case Some(row) =>
-        row.getBytes("snapshot") match {
+        row.getByteBuffer("snapshot") match {
           case null =>
             snapshotDeserializer.deserializeSnapshot(row).map(Snapshot.apply)
           case bytes =>
@@ -340,7 +340,7 @@ private[snapshot] object CassandraSnapshotStore {
 
         def meta: OptionVal[AnyRef] =
           if (hasMetaColumns(row)) {
-            row.getBytes("meta") match {
+            row.getByteBuffer("meta") match {
               case null =>
                 OptionVal.None // no meta data
               case metaBytes =>
@@ -361,7 +361,7 @@ private[snapshot] object CassandraSnapshotStore {
             OptionVal.None // no meta data
           }
 
-        val bytes = Bytes.getArray(row.getBytes("snapshot_data"))
+        val bytes = Bytes.getArray(row.getByteBuffer("snapshot_data"))
         val serId = row.getInt("ser_id")
         val manifest = row.getString("ser_manifest")
         serialization.serializerByIdentity.get(serId) match {

@@ -11,7 +11,7 @@ import akka.actor.ActorRef
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
-import com.datastax.driver.core.Session
+import com.datastax.oss.driver.api.core.cql.Session
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterEach
 

@@ -12,8 +12,8 @@ import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Hour }
 import akka.persistence.cassandra.query.TagViewSequenceNumberScannerSpec.config
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.serialization.{ Serialization, SerializationExtension }
-import com.datastax.driver.core.Session
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.cql.Session
+import com.datastax.oss.driver.api.core.cql.utils.Uuids
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.Await
@@ -50,7 +50,7 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
 
   "Tag Pid Sequence Number Scanning" must {
     "be empty for no events" in {
-      val now = UUIDs.timeBased()
+      val now = Uuids.timeBased()
       val pidSequenceNrs = queries.scanTagSequenceNrs("Tag1", now).futureValue
       pidSequenceNrs should equal(Map.empty[PersistenceId, (TagPidSequenceNr, UUID)])
     }
@@ -58,7 +58,7 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
     "pick the lowest sequence number after the offset and deduct 1" in {
       // not picked up as before the offset
       writeTaggedEvent(PersistentRepr("p2e4", persistenceId = "p2"), Set("blue"), 4, bucketSize)
-      val now = UUIDs.timeBased()
+      val now = Uuids.timeBased()
       writeTaggedEvent(PersistentRepr("p1e1", persistenceId = "p1"), Set("blue"), 1, bucketSize)
       writeTaggedEvent(PersistentRepr("p1e2", persistenceId = "p1"), Set("blue"), 2, bucketSize)
       writeTaggedEvent(PersistentRepr("p2e1", persistenceId = "p2"), Set("blue"), 5, bucketSize)

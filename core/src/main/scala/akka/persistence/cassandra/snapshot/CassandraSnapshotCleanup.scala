@@ -10,7 +10,7 @@ import akka.Done
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.SnapshotMetadata
 import akka.persistence.cassandra.journal.FixedRetryPolicy
-import com.datastax.driver.core.policies.LoggingRetryPolicy
+import com.datastax.oss.driver.api.core.cql.policies.LoggingRetryPolicy
 
 import scala.concurrent.{ ExecutionContext, Future }
 

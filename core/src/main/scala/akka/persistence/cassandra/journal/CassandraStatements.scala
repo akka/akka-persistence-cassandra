@@ -6,10 +6,11 @@ package akka.persistence.cassandra.journal
 
 import akka.Done
 import akka.cassandra.session.scaladsl.CassandraSession
-import com.datastax.driver.core.Session
 
 import scala.concurrent.{ ExecutionContext, Future }
 import akka.persistence.cassandra.indent
+import com.datastax.oss.driver.api.core.CqlSession
+import scala.compat.java8.FutureConverters._
 
 trait CassandraStatements {
   private[akka] def config: CassandraJournalConfig
@@ -75,7 +76,7 @@ trait CassandraStatements {
        else ""}
     """.stripMargin.trim
 
-  def createTagsProgressTable =
+  def createTagsProgressTable: String =
     s"""
      |CREATE TABLE IF NOT EXISTS $tagProgressTableName(
      |  persistence_id text,
@@ -86,7 +87,7 @@ trait CassandraStatements {
      |  PRIMARY KEY (persistence_id, tag))
      """.stripMargin.trim
 
-  def createTagScanningTable =
+  def createTagScanningTable: String =
     s"""
      |CREATE TABLE IF NOT EXISTS $tagScanningTableName(
      |  persistence_id text,
@@ -296,7 +297,7 @@ trait CassandraStatements {
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
    */
-  private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(
+  private[akka] def executeCreateKeyspaceAndTables(session: CqlSession, config: CassandraJournalConfig)(
       implicit ec: ExecutionContext): Future[Done] = {
     import akka.cassandra.session._
 
@@ -305,22 +306,22 @@ trait CassandraStatements {
       def tagStatements: Future[Done] =
         if (config.eventsByTagEnabled) {
           for {
-            _ <- session.executeAsync(createTagsTable).asScala
-            _ <- session.executeAsync(createTagsProgressTable).asScala
-            _ <- session.executeAsync(createTagScanningTable).asScala
+            _ <- session.executeAsync(createTagsTable).toScala
+            _ <- session.executeAsync(createTagsProgressTable).toScala
+            _ <- session.executeAsync(createTagScanningTable).toScala
           } yield Done
         } else FutureDone
 
       val keyspace: Future[Done] =
         if (config.keyspaceAutoCreate)
-          session.executeAsync(createKeyspace).asScala.map(_ => Done)
+          session.executeAsync(createKeyspace).toScala.map(_ => Done)
         else Future.successful(Done)
 
       if (config.tablesAutoCreate) {
         for {
           _ <- keyspace
-          _ <- session.executeAsync(createTable).asScala
-          _ <- session.executeAsync(createMetadataTable).asScala
+          _ <- session.executeAsync(createTable).toScala
+          _ <- session.executeAsync(createMetadataTable).toScala
           done <- tagStatements
         } yield done
       } else keyspace

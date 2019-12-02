@@ -5,7 +5,7 @@
 package akka.cassandra.session
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
-import com.datastax.driver.core.Session
+import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.Config
 
 import scala.collection.immutable
@@ -14,7 +14,7 @@ import scala.util.Failure
 
 /**
  * The implementation of the `SessionProvider` is used for creating the
- * Cassandra Session. By default the [[ConfigSessionProvider]] is building
+ * Cassandra Session. By default the `ConfigSessionProvider` is building
  * the Cluster from configuration properties but it is possible to
  * replace the implementation of the SessionProvider to reuse another
  * session or override the Cluster builder with other settings.
@@ -25,7 +25,7 @@ import scala.util.Failure
  */
 trait SessionProvider {
 
-  def connect()(implicit ec: ExecutionContext): Future[Session]
+  def connect()(implicit ec: ExecutionContext): Future[CqlSession]
 
 }
 

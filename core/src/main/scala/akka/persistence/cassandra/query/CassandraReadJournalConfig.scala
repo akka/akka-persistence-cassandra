@@ -9,7 +9,8 @@ import java.time.{ LocalDateTime, ZoneOffset }
 import akka.actor.NoSerializationVerificationNeeded
 import akka.annotation.InternalApi
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
-import com.datastax.driver.core.ConsistencyLevel
+import com.datastax.oss.driver.api.core.ConsistencyLevel
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel
 import com.typesafe.config.Config
 
 import scala.concurrent.duration._
@@ -33,14 +34,14 @@ import scala.concurrent.duration._
     0.0 <= fetchMoreThreshold && fetchMoreThreshold <= 1.0,
     s"fetch-more-threshold must be between 0.0 and 1.0, was $fetchMoreThreshold")
   val readConsistency: ConsistencyLevel =
-    ConsistencyLevel.valueOf(config.getString("read-consistency"))
+    DefaultConsistencyLevel.valueOf(config.getString("read-consistency"))
   val readRetries: Int = config.getInt("read-retries")
 
   val firstTimeBucket: TimeBucket = {
     val firstBucket = config.getString("first-time-bucket")
     val firstBucketPadded = (writePluginConfig.bucketSize, firstBucket) match {
       case (_, fb) if fb.length == 14    => fb
-      case (Hour, fb) if fb.length == 11 => s"${fb}:00"
+      case (Hour, fb) if fb.length == 11 => s"$fb:00"
       case (Day, fb) if fb.length == 8   => s"${fb}T00:00"
       case _ =>
         throw new IllegalArgumentException("Invalid first-time-bucket format. Use: " + firstBucketFormat)

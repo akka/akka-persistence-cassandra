@@ -14,8 +14,8 @@ import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal._
 import akka.serialization.Serialization
 import akka.serialization.Serializers
-import com.datastax.driver.core.Session
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.cql.Session
+import com.datastax.oss.driver.api.core.cql.utils.Uuids
 
 private[akka] trait TestTagWriter {
   def system: ActorSystem
@@ -45,7 +45,7 @@ private[akka] trait TestTagWriter {
       tags: Set[String],
       tagPidSequenceNr: Long,
       bucketSize: BucketSize): Unit = {
-    val nowUuid = UUIDs.timeBased()
+    val nowUuid = Uuids.timeBased()
     write(persistent, tags, tagPidSequenceNr, nowUuid, bucketSize)
   }
 
@@ -69,7 +69,7 @@ private[akka] trait TestTagWriter {
 
     val serManifest = Serializers.manifestFor(serializer, pr)
 
-    val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), bucketSize)
+    val timeBucket = TimeBucket(Uuids.unixTimestamp(uuid), bucketSize)
 
     val bs = preparedWriteTagMessage.bind()
 

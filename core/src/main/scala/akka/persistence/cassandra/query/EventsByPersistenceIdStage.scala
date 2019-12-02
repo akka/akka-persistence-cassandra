@@ -17,9 +17,9 @@ import akka.serialization.Serialization
 import akka.stream.{ Attributes, Outlet, SourceShape }
 import akka.cassandra.session._
 import akka.stream.stage._
-import com.datastax.driver.core._
-import com.datastax.driver.core.policies.RetryPolicy
-import com.datastax.driver.core.utils.Bytes
+import com.datastax.oss.driver.api.core.cql._
+import com.datastax.oss.driver.api.core.cql.policies.RetryPolicy
+import com.datastax.oss.driver.api.core.cql.utils.Bytes
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
@@ -169,7 +169,7 @@ import akka.util.OptionVal
 
     private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization, async: Boolean)(
         implicit ec: ExecutionContext): Future[PersistentRepr] =
-      row.getBytes("message") match {
+      row.getByteBuffer("message") match {
         case null =>
           ed.deserializeEvent(row, async).map { payload =>
             PersistentRepr(

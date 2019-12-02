@@ -18,8 +18,8 @@ import akka.serialization.{ Serialization, SerializationExtension }
 import akka.stream.scaladsl.{ Keep, Source }
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.ImplicitSender
-import com.datastax.driver.core.utils.UUIDs
-import com.datastax.driver.core.Session
+import com.datastax.oss.driver.api.core.cql.utils.Uuids
+import com.datastax.oss.driver.api.core.cql.Session
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 
@@ -200,7 +200,7 @@ class EventsByTagStageSpec
     "find missing event" in {
       val tag = "CurrentMissingEvent"
       val times = (1 to 5).map { _ =>
-        UUIDs.timeBased()
+        Uuids.timeBased()
       }
 
       writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
@@ -231,7 +231,7 @@ class EventsByTagStageSpec
     "timeout looking for missing events" in {
       val tag = "CurrentMissingEventTimeout"
       val times = (1 to 5).map { _ =>
-        UUIDs.timeBased()
+        Uuids.timeBased()
       }
 
       writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
@@ -389,7 +389,7 @@ class EventsByTagStageSpec
     "find missing event" in {
       val tag = "LiveMissingEvent"
       val times = (1 to 5).map { _ =>
-        UUIDs.timeBased()
+        Uuids.timeBased()
       }
       writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
       writeTaggedEvent(PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, times(1), bucketSize)
@@ -418,7 +418,7 @@ class EventsByTagStageSpec
     "find multiple missing events" in {
       val tag = "LiveMultipleMissingEvent"
       val times = (1 to 7).map { _ =>
-        UUIDs.timeBased()
+        Uuids.timeBased()
       }
       writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
       writeTaggedEvent(PersistentRepr("p1e2", 2, "p-1"), Set(tag), 2, times(1), bucketSize)
@@ -454,7 +454,7 @@ class EventsByTagStageSpec
     "find missing first event" in {
       val tag = "LiveMissingFirstEvent"
       val times = (1 to 5).map { _ =>
-        UUIDs.timeBased()
+        Uuids.timeBased()
       }
       writeTaggedEvent(PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, times(0), bucketSize)
       writeTaggedEvent(PersistentRepr("p2e3", 3, "p-2"), Set(tag), 3, times(3), bucketSize)
@@ -476,7 +476,7 @@ class EventsByTagStageSpec
       sub.expectNextPF { case EventEnvelope(_, "p-2", 3, "p2e3") => }
 
       writeTaggedEvent(PersistentRepr("p2e4", 4, "p-2"), Set(tag), 4, times(4), bucketSize)
-      writeTaggedEvent(PersistentRepr("p2e5", 5, "p-2"), Set(tag), 5, UUIDs.timeBased(), bucketSize)
+      writeTaggedEvent(PersistentRepr("p2e5", 5, "p-2"), Set(tag), 5, Uuids.timeBased(), bucketSize)
       sub.expectNextPF { case EventEnvelope(_, "p-2", 4, "p2e4") => }
       sub.expectNextPF { case EventEnvelope(_, "p-2", 5, "p2e5") => }
 

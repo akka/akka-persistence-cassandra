@@ -28,7 +28,7 @@ import scala.collection.immutable
 import scala.concurrent.duration._
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
-import com.datastax.driver.core.Cluster
+import com.datastax.oss.driver.api.core.cql.Cluster
 
 import scala.util.Try
 

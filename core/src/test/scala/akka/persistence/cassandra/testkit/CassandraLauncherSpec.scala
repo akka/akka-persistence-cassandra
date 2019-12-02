@@ -8,7 +8,7 @@ import java.io.File
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
-import com.datastax.driver.core.Cluster
+import com.datastax.oss.driver.api.core.cql.Cluster
 import org.scalatest.{ Matchers, WordSpecLike }
 import scala.concurrent.duration._
 import org.scalatest.BeforeAndAfterAll
