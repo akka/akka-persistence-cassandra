@@ -59,8 +59,6 @@ object BaseCompactionStrategy extends CassandraCompactionStrategyConfig[BaseComp
     className match {
       case TimeWindowCompactionStrategy.ClassName =>
         TimeWindowCompactionStrategy.fromConfig(config)
-      case DateTieredCompactionStrategy.ClassName =>
-        DateTieredCompactionStrategy.fromConfig(config)
       case LeveledCompactionStrategy.ClassName =>
         LeveledCompactionStrategy.fromConfig(config)
       case SizeTieredCompactionStrategy.ClassName =>
