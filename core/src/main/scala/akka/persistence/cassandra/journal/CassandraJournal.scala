@@ -54,7 +54,7 @@ import scala.compat.java8.FutureConverters._
  * Inheritance is possible but without any guarantees for future source compatibility.
  */
 @DoNotInherit
-class CassandraJournal(cfg: Config)
+class CassandraJournal(cfg: Config, cfgPath: String)
     extends AsyncWriteJournal
     with CassandraRecovery
     with CassandraStatements
@@ -98,7 +98,7 @@ class CassandraJournal(cfg: Config)
     config.sessionSettings,
     context.dispatcher,
     log,
-    metricsCategory = s"${self.path.name}",
+    metricsCategory = cfgPath,
     init = (session: CqlSession) => executeCreateKeyspaceAndTables(session, config))
 
   private val tagWriterSession = TagWritersSession(

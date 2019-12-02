@@ -19,7 +19,6 @@ object CassandraSessionSettings {
 }
 
 class CassandraSessionSettings(val config: Config) {
-  val fetchSize: Int = config.getInt("max-result-size")
   val readConsistency: ConsistencyLevel =
     DefaultConsistencyLevel.valueOf(config.getString("read-consistency"))
   val writeConsistency: ConsistencyLevel =

@@ -25,7 +25,7 @@ if you set the offset to be 30 days ago and a day time bucket, it will require 3
 If a particular partition contains many events then it is paged back from Cassandra based on demand.
 
 When no offset is provided EventsByTag queries start at the configured `first-time-bucket`. For new applications
-increase this to the day your application is initially deployed to speed to `NoOffset` queries.
+increase this to the day your application is initially deployed to speed up `NoOffset` queries.
 
 ## Bucket sizes 
 
@@ -55,6 +55,7 @@ use `Minute` unless necessary.
 The size of the of the batch is controlled via `max-message-batch-size`. Cassandra imposes a limit on the serialized size
 of a batch, currently 50kb by default. The larger this value the more efficient the tag writes will be but care must 
 be taken not to have batches that will be rejected by Cassandra. Two other cases cause the batch to be written before the batch size is reached:
+
 * Periodically: By default 250ms. To prevent eventsByTag queries being too out of date.
 * When a starting a new timebucket, which translates to a new partition in Cassandra, the events for the old timebucket are written.
 
@@ -111,6 +112,7 @@ that reason an `eventual-consistency-delay` is used to keep eventsByTag a config
 for events from all nodes to settle to their final order.
 
 Setting this to a small value can lead to:
+
 * Receiving events out of TimeUUID (offset) order for different persistenceIds, meaning if the offset is saved for restart/resume then delayed events can be missed on restart 
 * Increased likelihood of receiving events for the same persistenceId out of order. This is detected but the stream is temporarily paused to search for the missing events which is less efficient then reading them initially in order.
 * Missing events for persistence ids the query instance sees for the first time (unless it is tag pid sequence number 1) due to the query not knowing which tag pid sequence nr to expect.
@@ -151,18 +153,19 @@ On recovery the tag write progress for a given pid / tag is sent to the tag writ
 it bases its tag pid sequence nrs off the recovery. Following scenarios:
 
 No event buffered in the tag writer. Tag write progress has been written.
+
 * Recovery will see that no events needs to be recovered
 
 No events buffered in the tag writer. Tag write progress is lost.
+
 * Events will be in the `tag_views` table but not the `tag_write_progress`.
 * Tag write progress will be out of date
 * Events will be recovered and sent to the tag writer, should receive the same tag pid sequence nr and be upserted.
 
 Events buffered in the tag writer. 
+
 * Buffered events for the persistenceId should be dropped as if they are buffered the tag write progress
 won't have been saved as it happens after the write of the events to tag_views.
-
-
 
 ### Deletion of events
 

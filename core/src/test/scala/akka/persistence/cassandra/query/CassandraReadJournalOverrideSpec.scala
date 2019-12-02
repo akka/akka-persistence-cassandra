@@ -16,13 +16,14 @@ import com.typesafe.config.{ Config, ConfigFactory }
 
 import scala.concurrent.duration._
 
-class JournalOverride(as: ExtendedActorSystem, config: Config) extends CassandraReadJournal(as, config) {
+class JournalOverride(as: ExtendedActorSystem, config: Config, configPath: String)
+    extends CassandraReadJournal(as, config, configPath) {
   override private[akka] def mapEvent(pr: PersistentRepr) =
     PersistentRepr("cat", pr.sequenceNr, pr.persistenceId, pr.manifest, pr.deleted, pr.sender, pr.writerUuid)
 }
 
-class JournalOverrideProvider(as: ExtendedActorSystem, config: Config) extends ReadJournalProvider {
-  override def scaladslReadJournal() = new JournalOverride(as, config)
+class JournalOverrideProvider(as: ExtendedActorSystem, config: Config, configPath: String) extends ReadJournalProvider {
+  override def scaladslReadJournal() = new JournalOverride(as, config, configPath)
   override def javadslReadJournal() = null
 }
 

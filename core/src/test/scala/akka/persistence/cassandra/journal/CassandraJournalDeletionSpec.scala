@@ -61,7 +61,6 @@ object CassandraJournalDeletionSpec {
 }
 
 class CassandraJournalDeletionSpec extends CassandraSpec(s"""
-    akka.loglevel = INFO
     akka.loggers = ["akka.testkit.TestEventListener"]
     akka.log-dead-letters = off
     cassandra-journal.max-concurrent-deletes = 100

@@ -44,6 +44,12 @@ object Common extends AutoPlugin {
       // define scalac options that are only valid or desirable for 2.12
       if (scalaVersion.value.startsWith("2.13"))
         Seq()
+      else if (Dependencies.AkkaVersion.startsWith("2.6"))
+        Seq(
+          // -deprecation causes some warnings with Akka 2.6 because of deprecation of ActorMaterializer
+          // We only enable `fatal-warnings` on Akka 2.5 and accept the warning on 2.6
+          "-Xfuture" // invalid in 2.13
+        )
       else
         Seq(
           // -deprecation causes some warnings on 2.13 because of collection converters.

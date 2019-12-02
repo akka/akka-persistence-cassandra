@@ -82,10 +82,7 @@ lazy val docs = project
         "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
         // Scala
         "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
-        "scaladoc.akka.persistence.cassandra.base_url" -> {
-          val docsHost = sys.env.get("CI").map(_ => "https://doc.akka.io").getOrElse("")
-          s"$docsHost/api/akka-persistence-cassandra/${if (isSnapshot.value) "snapshot" else version.value}/"
-        }),
+        "scaladoc.akka.persistence.cassandra.base_url" -> s"/${(Preprocess / siteSubdirName).value}/"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     resolvers += Resolver.jcenterRepo,
     publishRsyncArtifact := makeSite.value -> "www/",

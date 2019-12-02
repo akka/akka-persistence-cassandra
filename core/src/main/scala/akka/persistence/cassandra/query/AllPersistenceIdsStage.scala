@@ -102,6 +102,7 @@ import scala.concurrent.ExecutionContextExecutor
         }
       }
 
+      @silent("deprecated") // keep compatible with akka 2.5
       override def preStart(): Unit = {
         query()
         refreshInterval.foreach { interval =>
@@ -109,6 +110,7 @@ import scala.concurrent.ExecutionContextExecutor
             if (interval >= 2.seconds)
               (interval / 2) + ThreadLocalRandom.current().nextLong(interval.toMillis / 2).millis
             else interval
+
           schedulePeriodicallyWithInitialDelay(Continue, initial, interval)
         }
       }

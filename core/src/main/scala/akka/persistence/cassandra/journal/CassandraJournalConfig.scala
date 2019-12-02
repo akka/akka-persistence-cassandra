@@ -52,7 +52,6 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     with NoSerializationVerificationNeeded {
   val targetPartitionSize: Long =
     config.getLong(CassandraJournalConfig.TargetPartitionProperty)
-  val maxResultSize: Int = config.getInt("max-result-size")
   val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
   val maxMessageBatchSize: Int = config.getInt("max-message-batch-size")
 

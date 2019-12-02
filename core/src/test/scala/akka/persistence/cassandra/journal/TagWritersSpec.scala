@@ -4,11 +4,15 @@
 
 package akka.persistence.cassandra.journal
 
+import java.nio.ByteBuffer
+
 import akka.actor.{ Actor, ActorRef, ActorSystem, PoisonPill, Props }
+import akka.persistence.cassandra.journal.CassandraJournal.Serialized
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import akka.util.Timeout
+import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 
@@ -39,6 +43,18 @@ class TagWritersSpec
       override def createTagWriter(tag: String): ActorRef = tagWriterCreator(tag)
     })
 
+  val pid = "pid"
+
+  def dummySerialized(tag: String) = {
+    val uuid = UUIDs.timeBased()
+    Serialized(pid, 1L, ByteBuffer.wrap(Array()), Set(tag), "", "", 1, "", None, uuid, TimeBucket(uuid, Hour))
+  }
+
+  def initializePid(tagWriters: ActorRef) = {
+    tagWriters ! PersistentActorStarting(pid, TestProbe().ref)
+    expectMsgType[PersistentActorStartingAck.type]
+  }
+
   "Tag writers" must {
     "forward flush requests" in {
       val probe = TestProbe()
@@ -58,12 +74,13 @@ class TagWritersSpec
       val blueProbe = TestProbe()
       val probes = Map("red" -> redProbe, "blue" -> blueProbe)
       val tagWriters = system.actorOf(testProps(defaultSettings, tag => probes(tag).ref))
+      initializePid(tagWriters)
 
-      // do something to make it create a couple
-      val blueTagWrite = TagWrite("blue", Vector.empty)
+      // do something to make it create a couple of tag writers
+      val blueTagWrite = TagWrite("blue", List(dummySerialized("blue")))
       tagWriters ! blueTagWrite
       blueProbe.expectMsg(blueTagWrite)
-      val redTagWrite = TagWrite("red", Vector.empty)
+      val redTagWrite = TagWrite("red", List(dummySerialized("red")))
       tagWriters ! redTagWrite
       redProbe.expectMsg(redTagWrite)
 
@@ -82,12 +99,13 @@ class TagWritersSpec
       val blueProbe = TestProbe()
       val probes = Map("red" -> redProbe, "blue" -> blueProbe)
       val tagWriters = system.actorOf(testProps(defaultSettings, tag => probes(tag).ref))
+      initializePid(tagWriters)
 
       // do something to make it create a couple
-      val blueTagWrite = TagWrite("blue", Vector.empty)
+      val blueTagWrite = TagWrite("blue", List(dummySerialized("blue")))
       tagWriters ! blueTagWrite
       blueProbe.expectMsg(blueTagWrite)
-      val redTagWrite = TagWrite("red", Vector.empty)
+      val redTagWrite = TagWrite("red", List(dummySerialized("ref")))
       tagWriters ! redTagWrite
       redProbe.expectMsg(redTagWrite)
 
@@ -106,6 +124,7 @@ class TagWritersSpec
       val blueProbe = TestProbe()
       val probes = Map("red" -> redProbe, "blue" -> blueProbe)
       val tagWriters = system.actorOf(testProps(defaultSettings, tag => probes(tag).ref))
+      initializePid(tagWriters)
 
       val persistentActor = system.actorOf(Props(new Actor {
         override def receive: Receive = { case _ => }
@@ -113,10 +132,10 @@ class TagWritersSpec
       tagWriters ! PersistentActorStarting("pid1", persistentActor)
       expectMsg(PersistentActorStartingAck)
 
-      val blueTagWrite = TagWrite("blue", Vector.empty)
+      val blueTagWrite = TagWrite("blue", List(dummySerialized("blue")))
       tagWriters ! blueTagWrite
       blueProbe.expectMsg(blueTagWrite)
-      val redTagWrite = TagWrite("red", Vector.empty)
+      val redTagWrite = TagWrite("red", List(dummySerialized("red")))
       tagWriters ! redTagWrite
       redProbe.expectMsg(redTagWrite)
 

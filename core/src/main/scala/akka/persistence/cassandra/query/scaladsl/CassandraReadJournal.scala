@@ -6,7 +6,6 @@ package akka.persistence.cassandra.query.scaladsl
 
 import java.net.URLEncoder
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicLong
 
 import akka.{ Done, NotUsed }
 import akka.actor.ExtendedActorSystem
@@ -43,9 +42,6 @@ import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.retry.RetryPolicy
 
 object CassandraReadJournal {
-  //temporary counter for keeping Read Journal metrics unique
-  // TODO: remove after akka/akka#19822 is fixed
-  private val InstanceUID = new AtomicLong(-1)
 
   /**
    * The default identifier for [[CassandraReadJournal]] to be used with
@@ -81,7 +77,7 @@ object CassandraReadJournal {
  * absolute path corresponding to the identifier, which is `"cassandra-query-journal"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  */
-class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
+class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: String)
     extends ReadJournal
     with PersistenceIdsQuery
     with CurrentPersistenceIdsQuery
@@ -99,12 +95,12 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private val queryPluginConfig =
     new CassandraReadJournalConfig(cfg, writePluginConfig)
 
-  if (queryPluginConfig.eventsByTagEventualConsistency < 2.seconds) {
-    log.info(
-      "EventsByTag eventual consistency set below 2 seconds. This can result in missed events. See reference.conf for details.")
-  } else if (queryPluginConfig.eventsByTagEventualConsistency < 1.seconds) {
+  if (queryPluginConfig.eventsByTagEventualConsistency < 1.seconds) {
     log.warning(
       "EventsByTag eventual consistency set below 1 second. This is likely to result in missed events. See reference.conf for details.")
+  } else if (queryPluginConfig.eventsByTagEventualConsistency < 2.seconds) {
+    log.info(
+      "EventsByTag eventual consistency set below 2 seconds. This can result in missed events. See reference.conf for details.")
   }
   private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
 
@@ -120,16 +116,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   implicit private val ec =
     system.dispatchers.lookup(queryPluginConfig.pluginDispatcher)
   implicit private val materializer = ActorMaterializer()(system)
-
-  // TODO: change categoryUid to unique config path after akka/akka#19822 is fixed
-  private val metricsCategory = {
-    val categoryUid =
-      CassandraReadJournal.InstanceUID.incrementAndGet() match {
-        case 0     => ""
-        case other => other
-      }
-    s"${CassandraReadJournal.Identifier}$categoryUid"
-  }
 
   private val queryStatements: CassandraReadStatements =
     new CassandraReadStatements {
@@ -147,7 +133,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     writePluginConfig.sessionSettings,
     ec,
     log,
-    metricsCategory,
+    metricsCategory = cfgPath,
     init = session => executeCreateKeyspaceAndTables(session, writePluginConfig))
 
   /**
@@ -359,7 +345,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     val currentBucket =
       TimeBucket(System.currentTimeMillis(), writePluginConfig.bucketSize)
     val initialTagPidSequenceNrs =
-      if (usingOffset && currentBucket.within(fromOffset))
+      if (usingOffset && currentBucket.within(fromOffset) && queryPluginConfig.eventsByTagOffsetScanning > Duration.Zero)
         scanTagSequenceNrs(tag, fromOffset)
       else
         Future.successful(Map.empty[Tag, (TagPidSequenceNr, UUID)])
@@ -449,7 +435,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       try {
         val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
-        val toOffset = Some(offsetUuid(System.currentTimeMillis()))
+        // pick up all the events written this millisecond
+        val toOffset = Some(UUIDs.endOf(System.currentTimeMillis()))
 
         createFutureSource(prereqs) { (s, prereqs) =>
           val session =

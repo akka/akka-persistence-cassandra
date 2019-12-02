@@ -16,7 +16,6 @@ import scala.concurrent.duration._
 
 object CassandraReadJournalSpec {
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
     akka.actor.serialize-messages=off
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s

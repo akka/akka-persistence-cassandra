@@ -6,18 +6,12 @@ package akka.persistence.cassandra.journal
 
 import akka.actor._
 import akka.persistence._
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.cassandra.CassandraSpec
 import akka.testkit._
-import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 
 object StartupLoadSpec {
-  val config = ConfigFactory.parseString(s"""
-      |cassandra-journal.keyspace=StartupLoadSpec
-      |cassandra-snapshot-store.keyspace=StartupLoadSpecSnapshot
-    """.stripMargin).withFallback(CassandraLifecycle.config)
-
   class ProcessorA(val persistenceId: String, receiver: ActorRef) extends PersistentActor {
     def receiveRecover: Receive = {
       case _ =>
@@ -38,7 +32,7 @@ object StartupLoadSpec {
 
 }
 
-class StartupLoadSpec extends CassandraSpec(StartupLoadSpec.config) {
+class StartupLoadSpec extends CassandraSpec {
 
   import StartupLoadSpec._
 
@@ -50,20 +44,24 @@ class StartupLoadSpec extends CassandraSpec(StartupLoadSpec.config) {
     "handle many persistent actors starting at the same time" in {
       val N = 500
       for (i <- 1 to 3) {
-        val probes = (1 to N).map { n =>
+        val probesAndRefs = (1 to N).map { n =>
           val probe = TestProbe()
           val persistenceId = n.toString
           val r = system.actorOf(Props(classOf[ProcessorA], persistenceId, probe.ref))
           r ! s"a-$i"
-          probe
+          (probe, r)
         }
 
-        probes.foreach { p =>
-          if (i == 1 && p == probes.head)
-            p.expectMsg(30.seconds, s"a-$i")
-          else
-            p.expectMsg(s"a-$i")
-          p.expectMsg(i.toLong) // seq number
+        probesAndRefs.foreach {
+          case (p, r) =>
+            if (i == 1 && p == probesAndRefs.head._1)
+              p.expectMsg(30.seconds, s"a-$i")
+            else
+              p.expectMsg(s"a-$i")
+            p.expectMsg(i.toLong) // seq number
+            p.watch(r)
+            r ! PoisonPill
+            p.expectTerminated(r)
         }
       }
     }

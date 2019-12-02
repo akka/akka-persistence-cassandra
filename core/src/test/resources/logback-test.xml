@@ -13,9 +13,10 @@
          cassandra-journal.log-queries = on
          cassandra-snapshot-store.log-queries = on
      -->
-    <logger name="com.datastax.oss.driver.api.core.cql.QueryLogger.NORMAL" level="DEBUG" />
-    <logger name="com.datastax.oss.driver.api.core.cql" level="WARN" />
+    <logger name="com.datastax.driver.core.QueryLogger.NORMAL" level="DEBUG" />
     <logger name="com.codahale.metrics.JmxReporter" level="INFO" />
+    <!-- latest version of driver/cassandra spam logs at WARN when many dropped keyspaces happen -->
+    <logger name="com.datastax.driver.core" level="ERROR" />
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

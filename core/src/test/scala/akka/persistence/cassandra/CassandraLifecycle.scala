@@ -44,6 +44,9 @@ object CassandraLifecycle {
     akka.test.single-expect-default = 20s
     akka.test.filter-leeway = 20s
     akka.actor.serialize-messages=on
+    # needed when testing with Akka 2.6
+    akka.actor.allow-java-serialization = on
+    akka.actor.warn-about-java-serializer-usage = off
     """).resolve()
 
     // this isn't used if extending CassandraSpec

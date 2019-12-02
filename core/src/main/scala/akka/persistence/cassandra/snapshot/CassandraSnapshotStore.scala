@@ -35,7 +35,7 @@ import com.datastax.oss.driver.api.core.cql.policies.LoggingRetryPolicy
 import com.datastax.oss.driver.api.core.cql.utils.Bytes
 import com.typesafe.config.Config
 
-class CassandraSnapshotStore(cfg: Config)
+class CassandraSnapshotStore(cfg: Config, cfgPath: String)
     extends SnapshotStore
     with CassandraStatements
     with ActorLogging
@@ -58,7 +58,7 @@ class CassandraSnapshotStore(cfg: Config)
     snapshotConfig.sessionSettings,
     context.dispatcher,
     log,
-    metricsCategory = s"${self.path.name}",
+    metricsCategory = cfgPath,
     init = session => executeCreateKeyspaceAndTables(session, snapshotConfig))
 
   private val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.writeRetries))

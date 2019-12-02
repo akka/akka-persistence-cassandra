@@ -26,6 +26,7 @@ import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.concurrent.duration.{ FiniteDuration, _ }
 import scala.util.{ Failure, Success, Try }
 import akka.util.OptionVal
+import com.github.ghik.silencer.silent
 
 /**
  * INTERNAL API
@@ -344,9 +345,15 @@ import akka.util.OptionVal
               if (interval >= 2.seconds)
                 (interval / 2) + ThreadLocalRandom.current().nextLong(interval.toMillis / 2).millis
               else interval
-            schedulePeriodicallyWithInitialDelay(Continue, initial, interval)
+
+            scheduleContinue(initial, interval)
           case None =>
         }
+      }
+
+      @silent("deprecated")
+      private def scheduleContinue(initial: FiniteDuration, interval: FiniteDuration): Unit = {
+        schedulePeriodicallyWithInitialDelay(Continue, initial, interval)
       }
 
       override def postStop(): Unit = {

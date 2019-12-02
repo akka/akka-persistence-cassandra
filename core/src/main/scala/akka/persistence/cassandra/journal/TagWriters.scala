@@ -28,11 +28,12 @@ import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
 import com.datastax.oss.driver.api.core.cql.{ BoundStatement, PreparedStatement, Statement }
-
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
+import scala.util.Try
+
 import akka.util.ByteString
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder
@@ -108,8 +109,10 @@ import com.datastax.oss.driver.api.core.cql.BatchType
 
   /**
    * All serialised should be for the same persistenceId
+   * @param actorRunning migration sends these messages without the actor running so TagWriters should not
+   *                     validate that the pid is running
    */
-  private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized])
+  private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized], actorRunning: Boolean = true)
       extends NoSerializationVerificationNeeded
 
   def props(settings: TagWriterSettings, tagWriterSession: TagWritersSession): Props =
@@ -127,6 +130,7 @@ import com.datastax.oss.driver.api.core.cql.BatchType
 
   final case class TagWriteFailed(reason: Throwable)
   private case object WriteTagScanningTick
+  private case class WriteTagScanningCompleted(result: Try[Done], startTime: Long, size: Int)
 
   private case class PersistentActorTerminated(pid: PersistenceId, ref: ActorRef)
 }
@@ -180,23 +184,33 @@ import com.datastax.oss.driver.api.core.cql.BatchType
     case TagFlush(tag) =>
       tagActor(tag).tell(Flush, sender())
     case tw: TagWrite =>
-      updatePendingScanning(tw.serialised)
-      tagActor(tw.tag).forward(tw)
+      forwardTagWrite(tw)
     case BulkTagWrite(tws, withoutTags) =>
-      tws.foreach { tw =>
-        updatePendingScanning(tw.serialised)
-        tagActor(tw.tag).forward(tw)
-      }
+      tws.foreach(forwardTagWrite)
       updatePendingScanning(withoutTags)
-
     case WriteTagScanningTick =>
       writeTagScanning()
+
+    case WriteTagScanningCompleted(result, startTime, size) =>
+      scheduleWriteTagScanningTick()
+      result match {
+        case Success(_) =>
+          log.debug(
+            "Update tag scanning of [{}] pids took [{}] ms",
+            size,
+            (System.nanoTime() - startTime) / 1000 / 1000)
+        case Failure(t) =>
+          log.warning("Writing tag scanning failed. Reason {}", t)
+      }
 
     case PersistentActorStarting(pid, persistentActor) =>
       // migration and journal specs can use dead letters as sender
       if (persistentActor != context.system.deadLetters) {
         currentPersistentActors.get(pid).foreach { ref =>
-          log.debug("Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]", pid, ref)
+          log.warning(
+            "Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]. Persistent Actors with the same PersistenceId should not run concurrently",
+            pid,
+            ref)
         }
         currentPersistentActors += (pid -> persistentActor)
         log.debug("Watching pid [{}] actor [{}]", pid, persistentActor)
@@ -253,16 +267,27 @@ import com.datastax.oss.driver.api.core.cql.BatchType
           currentPersistentActors -= pid
         case Some(currentRef) =>
           log.debug(
-            "Persistent actor terminated. However new actor ref for pid has been added. [{}]. Terminated ref: [{}] terminatedRef: [{}]",
+            "Persistent actor terminated. However new actor ref for pid has been added. [{}]. Terminated ref: [{}] current ref: [{}]",
             pid,
             ref,
             currentRef)
         case None =>
           log.warning(
-            "Unknown persistent actor terminated. Please raise an issue with debug logs. Pid: [{}]. Ref: [{}]",
+            "Unknown persistent actor terminated. Were multiple actors with the same PersistenceId running concurrently? Check warnings logs for this PersistenceId: [{}]. Ref: [{}]",
             pid,
             ref)
       }
+  }
+
+  private def forwardTagWrite(tw: TagWrite): Unit = {
+    if (tw.actorRunning && !currentPersistentActors.contains(tw.serialised.head.persistenceId)) {
+      log.warning(
+        "received TagWrite but actor not active (dropping, will be resolved when actor restarts): [{}]",
+        tw.serialised.head.persistenceId)
+    } else {
+      updatePendingScanning(tw.serialised)
+      tagActor(tw.tag).forward(tw)
+    }
   }
 
   private def updatePendingScanning(serialized: immutable.Seq[Serialized]): Unit = {
@@ -316,17 +341,9 @@ import com.datastax.oss.driver.api.core.cql.BatchType
           }
         }
 
-        result.onComplete {
-          case Success(_) =>
-            scheduleWriteTagScanningTick()
-            log.debug(
-              "Update tag scanning of [{}] pids took [{}] ms",
-              updates.size,
-              (System.nanoTime() - startTime) / 1000 / 1000)
-          case Failure(t) =>
-            scheduleWriteTagScanningTick()
-            log.warning("Writing tag scanning failed. Reason {}", t)
-            self ! TagWriteFailed(t)
+        result.onComplete { result =>
+          self ! WriteTagScanningCompleted(result, startTime, updates.size)
+          result.failed.foreach(self ! TagWriteFailed(_))
         }
       }
     } else {

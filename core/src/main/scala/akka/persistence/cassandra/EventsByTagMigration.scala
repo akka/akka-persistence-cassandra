@@ -243,7 +243,7 @@ class EventsByTagMigration(
                   s"migrateToTag-$pid",
                   extractor =
                     EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system))
-                .map(sendMissingTagWriteRaw(tp, tagWriters))
+                .map(sendMissingTagWriteRaw(tp, tagWriters, false))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
                 .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])
             }

@@ -9,18 +9,11 @@ import akka.actor.Props
 import akka.event.Logging
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.{ CassandraSpec, Persister }
-import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.{ ExecutionContext, Future }
 import Persister._
 
-object CassandraSnapshotCleanupSpec {
-  val config = ConfigFactory.parseString("""
-      akka.loglevel = INFO
-    """.stripMargin)
-}
-
-class CassandraSnapshotCleanupSpec extends CassandraSpec(CassandraSnapshotCleanupSpec.config) {
+class CassandraSnapshotCleanupSpec extends CassandraSpec {
 
   private val log = Logging(system, getClass)
   val snapshotCleanup = new CassandraSnapshotCleanup {
