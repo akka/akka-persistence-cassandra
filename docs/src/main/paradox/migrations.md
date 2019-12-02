@@ -1,5 +1,9 @@
 # Migration
 
+### Migrations to 1.0
+
+* After being deprecated, the DateTieredCompactionStrategy has been removed.
+
 ### Migrations to 0.80 and later
 
 0.80 introduces a completely different way to manage tags for events. You can skip right ahead to 0.98 without going to
