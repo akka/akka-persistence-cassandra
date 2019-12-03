@@ -52,8 +52,10 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     with NoSerializationVerificationNeeded {
   val targetPartitionSize: Long =
     config.getLong(CassandraJournalConfig.TargetPartitionProperty)
-  val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
   val maxMessageBatchSize: Int = config.getInt("max-message-batch-size")
+
+  val readProfile: String = config.getString("read-profile")
+  val writeProfile: String = config.getString("write-profile")
 
   // TODO this is now only used when deciding how to delete, remove this config and just
   // query what version of cassandra we're connected to and do the right thing

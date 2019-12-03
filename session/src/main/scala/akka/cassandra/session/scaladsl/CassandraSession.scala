@@ -69,6 +69,7 @@ final class CassandraSession(
   private lazy implicit val materializer = ActorMaterializer()(system)
 
   // cache of PreparedStatement[_](PreparedStatement[_]should only be prepared once)
+  // FIXME, this can be removed as it is now built into the driver
   private val preparedStatements =
     new ConcurrentHashMap[String, Future[PreparedStatement]]
   private val computePreparedStatement =
@@ -254,8 +255,10 @@ final class CassandraSession(
    * successfully executed, or if it fails.
    */
   def executeWrite(stmt: Statement[_]): Future[Done] = {
+    // FIXME, this is now a mutable builder, fix in all cases and/or chage it to use profiles
     if (stmt.getConsistencyLevel == null)
       stmt.setConsistencyLevel(writeConsistency)
+
     underlying().flatMap { s =>
       s.executeAsync(stmt).toScala.map(_ => Done)
     }

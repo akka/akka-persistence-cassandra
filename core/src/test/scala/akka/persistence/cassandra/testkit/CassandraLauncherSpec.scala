@@ -29,7 +29,11 @@ class CassandraLauncherSpec
 
   private def testCassandra(): Unit = {
     val session =
-      CqlSession.builder().addContactPoint(new InetSocketAddress("localhost", CassandraLauncher.randomPort)).build()
+      CqlSession
+        .builder()
+        .withLocalDatacenter("datacenter1")
+        .addContactPoint(new InetSocketAddress("localhost", CassandraLauncher.randomPort))
+        .build()
     try session.execute("SELECT now() from system.local;").one()
     finally {
       session.close()

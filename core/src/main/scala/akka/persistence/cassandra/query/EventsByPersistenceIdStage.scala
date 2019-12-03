@@ -72,12 +72,12 @@ import scala.compat.java8.FutureConverters._
       selectDeletedToQuery: PreparedStatement,
       session: CqlSession) {
 
+    // FIXME, maybe pass in profile?
     def selectEventsByPersistenceId(
         persistenceId: String,
         partitionNr: Long,
         progress: Long,
-        toSeqNr: Long,
-        fetchSize: Int): Future[AsyncResultSet] = {
+        toSeqNr: Long): Future[AsyncResultSet] = {
       val boundStatement =
         selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
       executeStatement(boundStatement)
@@ -215,7 +215,6 @@ import scala.compat.java8.FutureConverters._
     fromSeqNr: Long,
     toSeqNr: Long,
     max: Long,
-    fetchSize: Int,
     refreshInterval: Option[FiniteDuration],
     session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
     config: CassandraReadJournalConfig,
@@ -234,7 +233,6 @@ import scala.compat.java8.FutureConverters._
         classOf[EventsByPersistenceIdStage]
 
       implicit def ec = materializer.executionContext
-      val fetchMoreThresholdRows = (fetchSize * config.fetchMoreThreshold).toInt
 
       val donePromise = Promise[Done]()
 
@@ -421,7 +419,7 @@ import scala.compat.java8.FutureConverters._
             toSeqNr
         }
         session
-          .selectEventsByPersistenceId(persistenceId, pnr, expectedNextSeqNr, endNr, fetchSize)
+          .selectEventsByPersistenceId(persistenceId, pnr, expectedNextSeqNr, endNr)
           .onComplete(newResultSetCb.invoke)
       }
 

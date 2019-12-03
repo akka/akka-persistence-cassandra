@@ -107,8 +107,8 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   private val tagWriterSession = TagWritersSession(
     () => preparedWriteToTagViewWithoutMeta,
     () => preparedWriteToTagViewWithMeta,
-    session.executeWrite,
-    session.selectResultSet,
+    session.executeWrite, // FIXME, set the profile
+    session.selectResultSet, // FIXME, set the profile
     () => preparedWriteToTagProgress,
     () => preparedWriteTagScanning)
 
@@ -684,7 +684,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   // FIXME, is this always UNLOGGED? It was before
   // FIXME, not that useful with the new mutable builder API
   private def executeBatch(body: BatchStatement => BatchStatement): Future[Unit] = {
-    var batch = new BatchStatementBuilder(BatchType.UNLOGGED).build()
+    var batch = new BatchStatementBuilder(BatchType.UNLOGGED).build().setExecutionProfileName(config.writeProfile)
     batch = body(batch)
     session.underlying().flatMap(_.executeAsync(batch).toScala).map(_ => ())
   }
@@ -692,9 +692,10 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   private def minSequenceNr(partitionNr: Long): Long =
     partitionNr * config.targetPartitionSize + 1
 
-  private def execute(stmt: Statement[_]): Future[Unit] = {
-    stmt.setConsistencyLevel(writeConsistency)
-    session.executeWrite(stmt).map(_ => ())
+  private def execute[T <: Statement[T]](stmt: Statement[T]): Future[Unit] = {
+    // Is it okay if this profile does not exist?
+    val withProfile: Statement[T] = stmt.setExecutionProfileName(config.writeProfile)
+    session.executeWrite(withProfile).map(_ => ())
   }
 
   private def partitionNew(sequenceNr: Long): Boolean =

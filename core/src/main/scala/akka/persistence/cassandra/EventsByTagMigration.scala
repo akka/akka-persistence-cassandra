@@ -236,7 +236,6 @@ class EventsByTagMigration(
                   startingSeq,
                   Long.MaxValue,
                   Long.MaxValue,
-                  config.replayMaxResultSize,
                   None,
                   s"migrateToTag-$pid",
                   extractor =
