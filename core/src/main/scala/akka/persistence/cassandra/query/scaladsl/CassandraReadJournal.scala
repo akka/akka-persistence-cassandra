@@ -35,7 +35,6 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
 import akka.serialization.SerializationExtension
-import com.datastax.oss.driver.api.core.ConsistencyLevel
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
@@ -281,7 +280,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
         createFutureSource(prereqs) { (s, prereqs) =>
           val session =
-            TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
+            TagStageSession(tag, s, prereqs._1)
           Source.fromGraph(
             EventsByTagStage(
               session,
@@ -424,7 +423,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
 
         createFutureSource(prereqs) { (s, prereqs) =>
           val session =
-            TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
+            TagStageSession(tag, s, prereqs._1)
           Source.fromGraph(
             EventsByTagStage(
               session,
@@ -476,7 +475,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       persistenceId,
       fromSequenceNr,
       toSequenceNr,
-      queryPluginConfig.fetchSize,
+      Long.MaxValue,
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
@@ -538,7 +537,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       max: Long,
       refreshInterval: Option[FiniteDuration],
       name: String,
-      customConsistencyLevel: Option[ConsistencyLevel] = None,
       extractor: Extractor[T],
       fastForwardEnabled: Boolean = false): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
 
@@ -636,7 +634,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       preparedSelectDistinctPersistenceIds,
       (s, ps) =>
         Source
-          .fromGraph(new AllPersistenceIdsStage(refreshInterval, queryPluginConfig.fetchSize, ps, s))
+          .fromGraph(new AllPersistenceIdsStage(refreshInterval, ps, s))
           .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
           .named(name))

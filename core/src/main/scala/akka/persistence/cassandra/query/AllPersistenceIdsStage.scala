@@ -31,7 +31,6 @@ import scala.concurrent.duration._
  */
 @InternalApi private[akka] final class AllPersistenceIdsStage(
     refreshInterval: Option[FiniteDuration],
-    fetchSize: Int,
     preparedStatement: PreparedStatement,
     session: CqlSession)
     extends GraphStage[SourceShape[String]] {

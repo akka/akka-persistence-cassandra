@@ -9,7 +9,6 @@ import com.typesafe.config.Config
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
 import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
-import com.datastax.oss.driver.api.core.ConsistencyLevel
 
 case class StorePathPasswordConfig(path: String, password: String)
 
@@ -21,7 +20,7 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
     SessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
 
   val sessionSettings: CassandraSessionSettings =
-    CassandraSessionSettings(config)
+    CassandraSessionSettings(config.getString("write-profile"))
 
   val keyspace: String = config.getString("keyspace")
   val table: String = config.getString("table")
@@ -37,13 +36,6 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
     config.getString("replication-strategy"),
     config.getInt("replication-factor"),
     getListFromConfig(config, "data-center-replication-factors"))
-
-  val readConsistency: ConsistencyLevel = sessionSettings.readConsistency
-  val writeConsistency: ConsistencyLevel = sessionSettings.writeConsistency
-
-  val deleteRetries: Int = config.getInt("delete-retries")
-  val writeRetries: Int = config.getInt("write-retries")
-  val readRetries: Int = config.getInt("read-retries")
 
   val gcGraceSeconds: Long = config.getLong("gc-grace-seconds")
 

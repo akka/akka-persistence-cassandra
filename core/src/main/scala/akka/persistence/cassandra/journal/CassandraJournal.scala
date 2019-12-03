@@ -217,8 +217,6 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       }
   }
 
-  private[akka] val someReadConsistency = Some(config.readConsistency)
-
   override def postStop(): Unit = {
     session.close()
   }
@@ -633,7 +631,6 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         persistenceId,
         fromSequenceNr,
         highestDeletedSequenceNumber,
-        1,
         1,
         None,
         "asyncReadLowestSequenceNr",

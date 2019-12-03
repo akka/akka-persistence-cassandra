@@ -66,7 +66,6 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
               max,
               None,
               "asyncReplayMessages",
-              someReadConsistency,
               extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
             .mapAsync(1)(sendMissingTagWrite(tp, tagWrites.get))
         }))
@@ -83,7 +82,6 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
           max,
           None,
           "asyncReplayMessages",
-          someReadConsistency,
           extractor = Extractors.persistentRepr(eventDeserializer, serialization))
         .map(p => queries.mapEvent(p.persistentRepr))
         .runForeach(replayCallback)
@@ -112,7 +110,6 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
           max,
           None,
           "asyncReplayMessagesPreSnapshot",
-          someReadConsistency,
           Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization))
         .mapAsync(1) { t =>
           t.tagged match {

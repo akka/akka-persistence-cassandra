@@ -155,7 +155,8 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
   }
 
   private def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
-    val boundSelectSnapshot = preparedSelectSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
+    val boundSelectSnapshot = preparedSelectSnapshot.map(
+      _.bind(metadata.persistenceId, metadata.sequenceNr: JLong).setExecutionProfileName(readProfile))
     boundSelectSnapshot.flatMap(session.selectOne).flatMap {
       case None =>
         // Can happen since metadata and the actual snapshot might not be replicated at exactly same time.
@@ -251,7 +252,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
   def executeBatch(body: BatchStatementBuilder => Unit): Future[Unit] = {
     import scala.compat.java8.FutureConverters._
     val batch =
-      new BatchStatementBuilder(BatchType.UNLOGGED).setConsistencyLevel(writeConsistency)
+      new BatchStatementBuilder(BatchType.UNLOGGED).setExecutionProfileName(writeProfile)
     body(batch)
     session.underlying().flatMap(_.executeAsync(batch.build()).toScala).map(_ => ())
   }

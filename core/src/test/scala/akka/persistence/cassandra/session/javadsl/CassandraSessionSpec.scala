@@ -30,10 +30,6 @@ object CassandraSessionSpec {
 
   lazy val config = ConfigFactory.parseString(s"""
       cassandra-journal.keyspace=CassandraSessionSpec
-
-      test-cassandra-session-config {
-        max-result-size = 2
-      }
     """).withFallback(CassandraLifecycle.config)
 
 }
@@ -50,7 +46,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
     new CassandraSession(
       system,
       SessionProvider(system.asInstanceOf[ExtendedActorSystem], cfg),
-      CassandraSessionSettings(cfg),
+      CassandraSessionSettings("cassandra-journal"),
       system.dispatcher,
       log,
       "CassandraSessionSpec-metrics",

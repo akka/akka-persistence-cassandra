@@ -238,7 +238,6 @@ abstract class CassandraSpec(
         pid,
         0,
         Long.MaxValue,
-        Long.MaxValue,
         100,
         None,
         "test",
@@ -252,7 +251,6 @@ abstract class CassandraSpec(
       .eventsByPersistenceId(
         pid,
         0,
-        Long.MaxValue,
         Long.MaxValue,
         100,
         None,
