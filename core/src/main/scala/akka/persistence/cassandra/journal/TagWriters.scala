@@ -74,12 +74,18 @@ import com.datastax.oss.driver.api.core.cql.BatchType
                   event.serId: JInt,
                   event.serManifest,
                   event.writerUuid)
-                event.meta.foreach { m =>
-                  bound.setByteBuffer("meta", m.serialized)
-                  bound.setString("meta_ser_manifest", m.serManifest)
-                  bound.setInt("meta_ser_id", m.serId)
+
+                val finished = event.meta match {
+                  case Some(m) =>
+                    bound
+                      .setByteBuffer("meta", m.serialized)
+                      .setString("meta_ser_manifest", m.serManifest)
+                      .setInt("meta_ser_id", m.serId)
+                  case None =>
+                    bound
                 }
-                batch.addStatement(bound)
+
+                batch.addStatement(finished)
             }
             batch.build()
         }

@@ -37,7 +37,6 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
   // Could have an events by persistenceId stage that has the raw payload
   override def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(
       replayCallback: PersistentRepr => Unit): Future[Unit] = {
-    println("DEBUG REPLAY")
     log.debug("[{}] asyncReplayMessages from [{}] to [{}]", persistenceId, fromSequenceNr, toSequenceNr)
 
     if (config.eventsByTagEnabled) {

@@ -184,24 +184,26 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
         else preparedWriteSnapshot
 
       stmt.flatMap { ps =>
-        val bs = ps.bind()
-        bs.setString("persistence_id", metadata.persistenceId)
-        bs.setLong("sequence_nr", metadata.sequenceNr)
-        bs.setLong("timestamp", metadata.timestamp)
-        bs.setInt("ser_id", ser.serId)
-        bs.setString("ser_manifest", ser.serManifest)
-        bs.setByteBuffer("snapshot_data", ser.serialized)
+        val bs = ps
+          .bind()
+          .setString("persistence_id", metadata.persistenceId)
+          .setLong("sequence_nr", metadata.sequenceNr)
+          .setLong("timestamp", metadata.timestamp)
+          .setInt("ser_id", ser.serId)
+          .setString("ser_manifest", ser.serManifest)
+          .setByteBuffer("snapshot_data", ser.serialized)
 
         // meta data, if any
-        ser.meta match {
+        val finished = ser.meta match {
           case Some(meta) =>
             bs.setInt("meta_ser_id", meta.serId)
-            bs.setString("meta_ser_manifest", meta.serManifest)
-            bs.setByteBuffer("meta", meta.serialized)
+              .setString("meta_ser_manifest", meta.serManifest)
+              .setByteBuffer("meta", meta.serialized)
           case None =>
+            bs
         }
 
-        session.executeWrite(bs).map(_ => ())
+        session.executeWrite(finished).map(_ => ())
       }
     }
 

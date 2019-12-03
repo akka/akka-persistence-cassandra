@@ -172,13 +172,9 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
   "Cassandra query currentEventsByTag" must {
     "set ttl on table" in {
-      session.getMetadata
-        .getKeyspace(journalName)
-        .get
-        .getTable("tag_views")
-        .get()
-        .getOptions
-        .get(CqlIdentifier.fromCql("ttl")) shouldEqual 86400
+      val options = session.getMetadata.getKeyspace(journalName).get.getTable("tag_views").get().getOptions
+
+      options.get(CqlIdentifier.fromCql("default_time_to_live")) shouldEqual 86400
     }
 
     "implement standard CurrentEventsByTagQuery" in {

@@ -73,12 +73,13 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
   private def updateEventInTagViews(event: Serialized, tag: String): Future[Done] =
     psSelectTagPidSequenceNr
       .flatMap { ps =>
-        val bind = ps.bind()
-        bind.setString("tag_name", tag)
-        bind.setLong("timebucket", event.timeBucket.key)
-        bind.setUuid("timestamp", event.timeUuid)
-        bind.setString("persistence_id", event.persistenceId)
-        session.selectOne(bind)
+        val bound = ps
+          .bind()
+          .setString("tag_name", tag)
+          .setLong("timebucket", event.timeBucket.key)
+          .setUuid("timestamp", event.timeUuid)
+          .setString("persistence_id", event.persistenceId)
+        session.selectOne(bound)
       }
       .map {
         case Some(r) => r.getLong("tag_pid_sequence_nr")
@@ -93,38 +94,33 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
   private def updateEventInTagViews(event: Serialized, tag: String, tagPidSequenceNr: TagPidSequenceNr): Future[Done] =
     psUpdateTagView.flatMap { ps =>
       // primary key
-      val bind = ps.bind()
-      bind.setString("tag_name", tag)
-      bind.setLong("timebucket", event.timeBucket.key)
-      bind.setUuid("timestamp", event.timeUuid)
-      bind.setString("persistence_id", event.persistenceId)
-      bind.setLong("tag_pid_sequence_nr", tagPidSequenceNr)
+      val bound = ps
+        .bind()
+        .setString("tag_name", tag)
+        .setLong("timebucket", event.timeBucket.key)
+        .setUuid("timestamp", event.timeUuid)
+        .setString("persistence_id", event.persistenceId)
+        .setLong("tag_pid_sequence_nr", tagPidSequenceNr)
+        .setByteBuffer("event", event.serialized)
+        .setString("ser_manifest", event.serManifest)
+        .setInt("ser_id", event.serId)
+        .setString("event_manifest", event.eventAdapterManifest)
 
-      // event update
-      bind.setByteBuffer("event", event.serialized)
-      bind.setString("ser_manifest", event.serManifest)
-      bind.setInt("ser_id", event.serId)
-      bind.setString("event_manifest", event.eventAdapterManifest)
-
-      session.executeWrite(bind)
+      session.executeWrite(bound)
     }
 
   private def prepareUpdate(ps: PreparedStatement, s: Serialized, partitionNr: Long): Statement[_] = {
-    val bs = ps.bind()
-
     // primary key
-    bs.setString("persistence_id", s.persistenceId)
-    bs.setLong("partition_nr", partitionNr)
-    bs.setLong("sequence_nr", s.sequenceNr)
-    bs.setUuid("timestamp", s.timeUuid)
-    bs.setString("timebucket", s.timeBucket.key.toString)
-
-    // fields to update
-    bs.setInt("ser_id", s.serId)
-    bs.setString("ser_manifest", s.serManifest)
-    bs.setString("event_manifest", s.eventAdapterManifest)
-    bs.setByteBuffer("event", s.serialized)
-    bs.setSet("tags", s.tags.asJava, classOf[String])
-    bs
+    ps.bind()
+      .setString("persistence_id", s.persistenceId)
+      .setLong("partition_nr", partitionNr)
+      .setLong("sequence_nr", s.sequenceNr)
+      .setUuid("timestamp", s.timeUuid)
+      .setString("timebucket", s.timeBucket.key.toString)
+      .setInt("ser_id", s.serId)
+      .setString("ser_manifest", s.serManifest)
+      .setString("event_manifest", s.eventAdapterManifest)
+      .setByteBuffer("event", s.serialized)
+      .setSet("tags", s.tags.asJava, classOf[String])
   }
 }

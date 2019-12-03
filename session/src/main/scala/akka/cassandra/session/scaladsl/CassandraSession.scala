@@ -326,7 +326,6 @@ final class CassandraSession(
         if (bindValues.isEmpty) ps.bind()
         else ps.bind(bindValues: _*)
       bs.setConsistencyLevel(readConsistency)
-      bs
     }
     Source.fromGraph(new SelectSource(bound))
   }

@@ -71,20 +71,20 @@ private[akka] trait TestTagWriter {
 
     val timeBucket = TimeBucket(Uuids.unixTimestamp(uuid), bucketSize)
 
-    val bs = preparedWriteTagMessage.bind()
-
     tags.foreach(tag => {
-      bs.setString("tag_name", tag)
-      bs.setLong("timebucket", timeBucket.key)
-      bs.setUuid("timestamp", uuid)
-      bs.setLong("tag_pid_sequence_nr", tagPidSequenceNr)
-      bs.setByteBuffer("event", serialized)
-      bs.setString("event_manifest", pr.manifest)
-      bs.setString("persistence_id", pr.persistenceId)
-      bs.setInt("ser_id", serializer.identifier)
-      bs.setString("ser_manifest", serManifest)
-      bs.setString("writer_uuid", "ManualWrite")
-      bs.setLong("sequence_nr", pr.sequenceNr)
+      val bs = preparedWriteTagMessage
+        .bind()
+        .setString("tag_name", tag)
+        .setLong("timebucket", timeBucket.key)
+        .setUuid("timestamp", uuid)
+        .setLong("tag_pid_sequence_nr", tagPidSequenceNr)
+        .setByteBuffer("event", serialized)
+        .setString("event_manifest", pr.manifest)
+        .setString("persistence_id", pr.persistenceId)
+        .setInt("ser_id", serializer.identifier)
+        .setString("ser_manifest", serManifest)
+        .setString("writer_uuid", "ManualWrite")
+        .setLong("sequence_nr", pr.sequenceNr)
       session.execute(bs)
     })
 

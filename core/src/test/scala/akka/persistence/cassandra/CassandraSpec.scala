@@ -162,6 +162,7 @@ abstract class CassandraSpec(
       if (failed) {
         println("RowDump::")
         import scala.collection.JavaConverters._
+        println("tag_views")
         cluster
           .execute(s"select * from ${journalName}.tag_views")
           .asScala
@@ -171,7 +172,18 @@ abstract class CassandraSpec(
               .getLong("sequence_nr")}""")
 
           })
+        println("messages")
+        cluster
+          .execute(s"select * from ${journalName}.messages")
+          .asScala
+          .foreach(row => {
+            println(s"""Row:${row.getBoolean("used")}, ${row.getLong("partition_nr")}, ${row
+              .getLong("persistence_id")}, ${row.getLong("sequence_nr")}""")
+          })
+      } else {
+        println("Test did not fail")
       }
+      println("finished row dump")
       system.log.info("Dropping keyspaces: {}", keyspaces())
       keyspaces().foreach { keyspace =>
         cluster.execute(s"drop keyspace if exists $keyspace")

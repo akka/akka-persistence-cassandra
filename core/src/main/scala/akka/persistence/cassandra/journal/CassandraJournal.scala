@@ -129,7 +129,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     else
       None
   }
-  def preparedSelectHighestSequenceNr =
+  def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
     session.prepare(selectHighestSequenceNr)
 
   private def deletesNotSupportedException: Future[PreparedStatement] =
@@ -346,14 +346,14 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   }
 
   private def writeMessages(atomicWrites: Seq[SerializedAtomicWrite]): Future[Unit] = {
-    val boundStatements = statementGroup(atomicWrites)
+    val boundStatements: Seq[Future[BoundStatement]] = statementGroup(atomicWrites)
     boundStatements.size match {
       case 1 =>
         boundStatements.head.flatMap(execute(_))
       case 0 => Future.successful(())
       case _ =>
         Future.sequence(boundStatements).flatMap { stmts =>
-          executeBatch(batch => stmts.foreach(batch.add))
+          executeBatch(batch => stmts.foldLeft(batch) { case (acc, next) => acc.add(next) })
         }
     }
   }
@@ -408,10 +408,13 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     }
     // in case we skip an entire partition we want to make sure the empty partition has in in-use flag so scans
     // keep going when they encounter it
-    if (partitionNew(firstSeq) && minPnr != maxPnr)
+    if (partitionNew(firstSeq) && minPnr != maxPnr) {
+      log.debug("Skipping partition, adding used flag for {} {}", persistenceId, minPnr)
       writes :+ preparedWriteInUse.map(_.bind(persistenceId, minPnr: JLong))
-    else
+    } else {
+      log.debug("Not skipping partition for {} {}", persistenceId, minPnr)
       writes
+    }
 
   }
 
@@ -421,7 +424,6 @@ class CassandraJournal(cfg: Config, cfgPath: String)
    * in here rather than during replay messages.
    */
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
-    println("HIGHEST")
     log.debug("[{}] asyncReadHighestSequenceNr [{}] [{}]", persistenceId, fromSequenceNr, sender())
     val highestSequenceNr = writeInProgress.get(persistenceId) match {
       case null =>
@@ -430,7 +432,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         f.flatMap(_ => asyncReadHighestSequenceNrInternal(persistenceId, fromSequenceNr))
     }
 
-    if (config.eventsByTagEnabled) {
+    val toReturn = if (config.eventsByTagEnabled) {
 
       // This relies on asyncReadHighestSequenceNr having the correct sender()
       // No other calls into the async journal have this as they are called from Future callbacks
@@ -458,6 +460,12 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     } else {
       highestSequenceNr
     }
+
+    toReturn.onComplete { highestSeq =>
+      log.debug("asyncReadHighestSequenceNr {} returning {}", persistenceId, highestSeq)
+    }
+
+    toReturn
   }
 
   /**
@@ -501,7 +509,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
           val boundStatements = messageIds.map(mid =>
             preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
           Future.sequence(boundStatements).flatMap { stmts =>
-            executeBatch(batch => stmts.foreach(batch.add))
+            executeBatch(batch => stmts.foldLeft(batch) { case (acc, next) => acc.add(next) })
           }
         }
 
@@ -644,10 +652,17 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       partitionSize: Long): Future[Long] = {
     def find(currentPnr: Long, currentSnr: Long): Future[Long] = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
-      val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, currentPnr: JLong))
+      val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(ps => {
+        log.debug("Binding {} {} to {}", persistenceId, currentPnr)
+        val bound = ps.bind(persistenceId, currentPnr: JLong)
+        log.debug("Binding {} {}  = {}", persistenceId, currentPnr, bound)
+        bound
+
+      })
       boundSelectHighestSequenceNr
         .flatMap(session.selectOne)
         .map { rowOption =>
+          log.debug("asyncFind {}", rowOption)
           rowOption.map { row =>
             (row.getBoolean("used"), row.getLong("sequence_nr"))
           }
@@ -666,9 +681,11 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     find(partitionNr(fromSequenceNr, partitionSize), fromSequenceNr)
   }
 
-  private def executeBatch(body: BatchStatement => Unit): Future[Unit] = {
-    val batch = new BatchStatementBuilder(BatchType.UNLOGGED).build()
-    body(batch)
+  // FIXME, is this always UNLOGGED? It was before
+  // FIXME, not that useful with the new mutable builder API
+  private def executeBatch(body: BatchStatement => BatchStatement): Future[Unit] = {
+    var batch = new BatchStatementBuilder(BatchType.UNLOGGED).build()
+    batch = body(batch)
     session.underlying().flatMap(_.executeAsync(batch).toScala).map(_ => ())
   }
 

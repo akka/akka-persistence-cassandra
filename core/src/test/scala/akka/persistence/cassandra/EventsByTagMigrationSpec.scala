@@ -427,20 +427,22 @@ abstract class AbstractEventsByTagMigrationSpec
 
   def writeOldTestEventInMessagesColumn(pr: PersistentRepr, tags: Set[String]): Unit = {
     require(tags.size <= 3)
-    val bound = preparedWriteVersion0p7.bind()
-    bound.setString("persistence_id", pr.persistenceId)
-    bound.setLong("partition_nr", 0L)
-    bound.setLong("sequence_nr", pr.sequenceNr)
     val nowUuid = Uuids.timeBased()
     val now = Uuids.unixTimestamp(nowUuid)
-    bound.setUuid("timestamp", nowUuid)
-    bound.setString("timebucket", TimeBucket(now, Hour).key.toString)
     val bytes: Array[Byte] = serialization.serialize(pr).get
-    bound.setByteBuffer("message", ByteBuffer.wrap(bytes))
-    tags.zipWithIndex.foreach {
-      case (tag, index) =>
-        bound.setString(s"tag${index + 1}", tag)
-    }
+
+    val bound = tags.zipWithIndex
+      .foldLeft(preparedWriteVersion0p7.bind()) {
+        case (acc, (tag, index)) =>
+          acc.setString(s"tag${index + 1}", tag)
+      }
+      .setString("persistence_id", pr.persistenceId)
+      .setLong("partition_nr", 0L)
+      .setLong("sequence_nr", pr.sequenceNr)
+      .setUuid("timestamp", nowUuid)
+      .setString("timebucket", TimeBucket(now, Hour).key.toString)
+      .setByteBuffer("message", ByteBuffer.wrap(bytes))
+
     cluster.execute(bound)
   }
 
@@ -459,34 +461,38 @@ abstract class AbstractEventsByTagMigrationSpec
     val serManifest = Serializers.manifestFor(serializer, persistent)
 
     val ps = if (metadata.isDefined) preparedWriteMessageWithMeta else preparedWriteMessageWithoutMeta
-    val bs = ps.bind()
-    tags.zipWithIndex.foreach {
-      case (tag, index) =>
-        bs.setString(s"tag${index + 1}", tag)
-    }
-    bs.setString("persistence_id", persistent.persistenceId)
-    bs.setLong("partition_nr", 0L)
-    bs.setLong("sequence_nr", persistent.sequenceNr)
     val nowUuid = Uuids.timeBased()
     val now = Uuids.unixTimestamp(nowUuid)
-    bs.setUuid("timestamp", nowUuid)
-    bs.setString("timebucket", TimeBucket(now, Hour).key.toString)
-    bs.setInt("ser_id", serializer.identifier)
-    bs.setString("ser_manifest", serManifest)
-    bs.setString("event_manifest", persistent.manifest)
-    bs.setByteBuffer("event", serialized)
+    val bound = tags.zipWithIndex
+      .foldLeft(ps.bind()) {
+        case (acc, (tag, index)) =>
+          acc.setString(s"tag${index + 1}", tag)
+      }
+      .setString("persistence_id", persistent.persistenceId)
+      .setLong("partition_nr", 0L)
+      .setLong("sequence_nr", persistent.sequenceNr)
+      .setUuid("timestamp", nowUuid)
+      .setString("timebucket", TimeBucket(now, Hour).key.toString)
+      .setInt("ser_id", serializer.identifier)
+      .setString("ser_manifest", serManifest)
+      .setString("event_manifest", persistent.manifest)
+      .setByteBuffer("event", serialized)
 
-    metadata.foreach { m =>
-      val meta = m.asInstanceOf[AnyRef]
-      val metaSerialiser = serialization.findSerializerFor(meta)
-      val metaSerialised = ByteBuffer.wrap(serialization.serialize(meta).get)
-      bs.setByteBuffer("meta", metaSerialised)
-      bs.setInt("meta_ser_id", metaSerialiser.identifier)
-      val serManifest = Serializers.manifestFor(serializer, meta)
-      bs.setString("meta_ser_manifest", serManifest)
+    val finished = metadata match {
+      case Some(m) =>
+        val meta = m.asInstanceOf[AnyRef]
+        val metaSerialiser = serialization.findSerializerFor(meta)
+        val metaSerialised = ByteBuffer.wrap(serialization.serialize(meta).get)
+        val serManifest = Serializers.manifestFor(serializer, meta)
+        bound
+          .setByteBuffer("meta", metaSerialised)
+          .setInt("meta_ser_id", metaSerialiser.identifier)
+          .setString("meta_ser_manifest", serManifest)
+      case None =>
+        bound
+
     }
-
-    cluster.execute(bs)
+    cluster.execute(finished)
     system.log.debug("Directly wrote payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
   }
 
