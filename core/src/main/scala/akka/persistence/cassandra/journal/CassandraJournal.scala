@@ -647,28 +647,27 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       persistenceId: String,
       fromSequenceNr: Long,
       partitionSize: Long): Future[Long] = {
-    def find(currentPnr: Long, currentSnr: Long): Future[Long] = {
+    def find(currentPnr: Long, currentSnr: Long, foundEmptyPartition: Boolean): Future[Long] = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
       val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, currentPnr: JLong))
       boundSelectHighestSequenceNr
         .flatMap(session.selectOne)
         .map { rowOption =>
-          rowOption.map { row =>
-            (row.getBool("used"), row.getLong("sequence_nr"))
-          }
+          rowOption.map(_.getLong("sequence_nr"))
         }
         .flatMap {
-          // never been to this partition
-          case None => Future.successful(currentSnr)
-          // don't currently explicitly set false
-          case Some((false, _)) => Future.successful(currentSnr)
-          // everything deleted in this partition, move to the next
-          case Some((true, 0))        => find(currentPnr + 1, currentSnr)
-          case Some((_, nextHighest)) => find(currentPnr + 1, nextHighest)
+          case None | Some(0) =>
+            // never been to this partition, query one more partition because AtomicWrite can span (skip)
+            // one entire partition
+            // Some(0) when old schema with static used column, everything deleted in this partition
+            if (foundEmptyPartition) Future.successful(currentSnr)
+            else find(currentPnr + 1, currentSnr, foundEmptyPartition = true)
+          case Some(nextHighest) =>
+            find(currentPnr + 1, nextHighest, foundEmptyPartition = false)
         }
     }
 
-    find(partitionNr(fromSequenceNr, partitionSize), fromSequenceNr)
+    find(partitionNr(fromSequenceNr, partitionSize), fromSequenceNr, foundEmptyPartition = false)
   }
 
   private def executeBatch(body: BatchStatement => Unit, retryPolicy: RetryPolicy): Future[Unit] = {
