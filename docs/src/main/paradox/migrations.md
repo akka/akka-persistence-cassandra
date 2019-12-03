@@ -1,5 +1,24 @@
 # Migration
 
+## Migrations to 0.101 and 0.102
+
+Version 0.101 and 0.102 removes the static column `used`. It is released in two versions to be able to
+support rolling update where an Akka Cluster is running a mix of versions 0.100 and 0.101 in the first update
+and then a mix of 0.101 and 0.102 in the second update.
+
+If you can accept a full cluster shutdown you can update to 0.102 directly.
+
+0.101 is not using the static column `used` in the reads but still populates it in the writes so that earlier
+versions can read it.
+
+0.102 is not using the static column `used` at all, but it can run with an old schema where the column exists. 
+
+After completed update to version 0.102 the column can be dropped with:
+
+```
+alter table akka.messages drop used;
+```  
+
 ### Migrations to 0.80 and later
 
 0.80 introduces a completely different way to manage tags for events. You can skip right ahead to 0.98 without going to
@@ -15,6 +34,7 @@ The `EventsByTagMigration` class provides a set of tools to assist in the migrat
 
 The first two are schema changes that should be performed once on a single node 
 and can be done while your application is running with the old version of this plugin:
+
 * `createTables` creates the two new tables required
 * `addTagsColumn` adds a `set<text>` column to the `messages` table 
 
@@ -27,7 +47,9 @@ val migrator = EventsByTagMigration(system)
 
 val schemaMigration: Future[Done] = for {
   _ <- migrator.createTables()
-  done <- migrator.addTagsColumn().recover { case i: ExecutionException if i.getMessage.contains("conflicts with an existing column") => Done}
+  done <- migrator.addTagsColumn().recover { 
+    case i: ExecutionException if i.getMessage.contains("conflicts with an existing column") => Done
+  }
 } yield done
 ```
 
@@ -46,6 +68,7 @@ which is likely to time out. You can also use this method to stagger your migrat
 You do not need to worry if a small number of events are missed by `migrateToTagViews` as they will be
 fixed during your `PersistentActor` recovery. However do not rely on this for full migration as only active `PersistentActor`s
 will be recovered and it will mean the start up time for your `PersistentActor`s will be very long.
+Moreover, if your application consumes events through `eventsByTag` query, the missed events will only show up on the query side once you instantiate the respective `PersistentActor`. 
 
 After you have migrated your data you can now remove the materialized view and `tagN` columns from the 
 `messages` table. It is *highly* recommended you do this as maintaining a materialized view is expensive
