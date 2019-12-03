@@ -32,8 +32,8 @@ class TagScanningSpec extends CassandraSpec(TagScanningSpec.config) {
       awaitAssert {
         import scala.collection.JavaConverters._
         val expected = (0 until nrActors).map(n => (s"$n".toInt, 1L)).toList
-        val scanning = journalSession
-          .execute("select * from tag_scanning")
+        val scanning = cluster
+          .execute(s"select * from ${journalName}.tag_scanning")
           .all()
           .asScala
           .toList

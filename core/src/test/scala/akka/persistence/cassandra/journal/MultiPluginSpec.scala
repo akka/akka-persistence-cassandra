@@ -9,7 +9,7 @@ import akka.persistence.cassandra.journal.MultiPluginSpec._
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import akka.persistence.{ PersistentActor, SaveSnapshotSuccess }
-import com.datastax.oss.driver.api.core.cql.Session
+import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.Await
@@ -88,7 +88,7 @@ class MultiPluginSpec
   lazy val cassandraPluginConfig =
     new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-journal"))
 
-  var session: Session = _
+  var session: CqlSession = _
 
   // default journal plugin is not configured for this test
   override def awaitPersistenceInit(): Unit = ()
@@ -112,7 +112,6 @@ class MultiPluginSpec
 
   override protected def afterAll(): Unit = {
     session.close()
-    session.getCluster.close()
     super.afterAll()
   }
 

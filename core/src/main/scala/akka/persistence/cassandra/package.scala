@@ -12,7 +12,6 @@ import java.util.UUID
 import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, SerializedMeta }
 import akka.serialization.Serialization
-import com.datastax.oss.driver.api.core.cql.utils.Uuids
 
 import scala.concurrent._
 import scala.util.control.NonFatal

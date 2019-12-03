@@ -10,13 +10,13 @@ import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
 import akka.serialization.SerializationExtension
-import com.datastax.oss.driver.api.core.cql.utils.Uuids
 import org.scalatest.{ BeforeAndAfterAll, Suite }
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.Try
-
 import akka.serialization.Serializers
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 trait DirectWriting extends BeforeAndAfterAll {
   self: Suite =>
@@ -33,7 +33,6 @@ trait DirectWriting extends BeforeAndAfterAll {
   override protected def afterAll(): Unit = {
     Try {
       session.close()
-      session.getCluster.close()
     }
     super.afterAll()
   }
@@ -59,12 +58,12 @@ trait DirectWriting extends BeforeAndAfterAll {
     bs.setLong("sequence_nr", persistent.sequenceNr)
     val nowUuid = Uuids.timeBased()
     val now = Uuids.unixTimestamp(nowUuid)
-    bs.setUUID("timestamp", nowUuid)
+    bs.setUuid("timestamp", nowUuid)
     bs.setString("timebucket", TimeBucket(now, Hour).key.toString)
     bs.setInt("ser_id", serializer.identifier)
     bs.setString("ser_manifest", serManifest)
     bs.setString("event_manifest", persistent.manifest)
-    bs.setBytes("event", serialized)
+    bs.setByteBuffer("event", serialized)
     session.execute(bs)
     system.log.debug("Directly wrote payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
   }

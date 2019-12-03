@@ -13,7 +13,8 @@ import akka.persistence._
 import akka.persistence.cassandra.{ CassandraLifecycle, SnapshotWithMetaData }
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
-import com.datastax.oss.driver.api.core.cql._
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.typesafe.config.ConfigFactory
 
 import scala.collection.immutable.Seq
@@ -46,7 +47,7 @@ class CassandraSnapshotStoreSpec
     def snapshotConfig = storeConfig
   }
 
-  var session: Session = _
+  var session: CqlSession = _
 
   import storeStatements._
 
@@ -61,7 +62,6 @@ class CassandraSnapshotStoreSpec
   override def afterAll(): Unit = {
     Try {
       session.close()
-      session.getCluster.close()
     }
     super.afterAll()
   }
@@ -86,21 +86,24 @@ class CassandraSnapshotStoreSpec
 
       // write two more snapshots that cannot be de-serialized.
       session.execute(
-        writeSnapshot(withMeta = false),
-        pid,
-        17L: JLong,
-        123L: JLong,
-        serId,
-        "",
-        ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
+        SimpleStatement.newInstance(
+          writeSnapshot(withMeta = false),
+          pid,
+          17L: JLong,
+          123L: JLong,
+          serId,
+          "",
+          ByteBuffer.wrap("fail-1".getBytes("UTF-8"))))
+
       session.execute(
-        writeSnapshot(withMeta = false),
-        pid,
-        18L: JLong,
-        124L: JLong,
-        serId,
-        "",
-        ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
+        SimpleStatement.newInstance(
+          writeSnapshot(withMeta = false),
+          pid,
+          18L: JLong,
+          124L: JLong,
+          serId,
+          "",
+          ByteBuffer.wrap("fail-2".getBytes("UTF-8"))))
 
       // load most recent snapshot, first two attempts will fail ...
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
@@ -119,29 +122,32 @@ class CassandraSnapshotStoreSpec
 
       // write three more snapshots that cannot be de-serialized.
       session.execute(
-        writeSnapshot(withMeta = false),
-        pid,
-        17L: JLong,
-        123L: JLong,
-        serId,
-        "",
-        ByteBuffer.wrap("fail-1".getBytes("UTF-8")))
+        SimpleStatement.newInstance(
+          writeSnapshot(withMeta = false),
+          pid,
+          17L: JLong,
+          123L: JLong,
+          serId,
+          "",
+          ByteBuffer.wrap("fail-1".getBytes("UTF-8"))))
       session.execute(
-        writeSnapshot(withMeta = false),
-        pid,
-        18L: JLong,
-        124L: JLong,
-        serId,
-        "",
-        ByteBuffer.wrap("fail-2".getBytes("UTF-8")))
+        SimpleStatement.newInstance(
+          writeSnapshot(withMeta = false),
+          pid,
+          18L: JLong,
+          124L: JLong,
+          serId,
+          "",
+          ByteBuffer.wrap("fail-2".getBytes("UTF-8"))))
       session.execute(
-        writeSnapshot(withMeta = false),
-        pid,
-        19L: JLong,
-        125L: JLong,
-        serId,
-        "",
-        ByteBuffer.wrap("fail-3".getBytes("UTF-8")))
+        SimpleStatement.newInstance(
+          writeSnapshot(withMeta = false),
+          pid,
+          19L: JLong,
+          125L: JLong,
+          serId,
+          "",
+          ByteBuffer.wrap("fail-3".getBytes("UTF-8"))))
 
       // load most recent snapshot, first three attempts will fail ...
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)

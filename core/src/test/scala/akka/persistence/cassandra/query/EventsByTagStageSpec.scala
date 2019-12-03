@@ -18,11 +18,12 @@ import akka.serialization.{ Serialization, SerializationExtension }
 import akka.stream.scaladsl.{ Keep, Source }
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.ImplicitSender
-import com.datastax.oss.driver.api.core.cql.utils.Uuids
-import com.datastax.oss.driver.api.core.cql.Session
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 
+import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -32,7 +33,7 @@ object EventsByTagStageSpec {
   val eventualConsistencyDelay: FiniteDuration = 400.millis
   val waitTime: FiniteDuration = (eventualConsistencyDelay * 1.5).asInstanceOf[FiniteDuration] // bigger than the eventual consistency delay but less than the new pid timeout
   val longWaitTime: FiniteDuration = waitTime * 2
-  val newPersistenceIdTimeout = 3 * longWaitTime // Give time for 2-3 long waits before a new persitenceId search gives up
+  val newPersistenceIdTimeout = 3 * longWaitTime // Give time for 2-3 long waits before a new persistenceId search gives up
   val config = ConfigFactory.parseString(s"""
         akka.loglevel = DEBUG
 
@@ -74,14 +75,13 @@ class EventsByTagStageSpec
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   val serialization: Serialization = SerializationExtension(system)
 
-  lazy val session: Session = {
+  lazy val session: CqlSession = {
     import system.dispatcher
     Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
   }
 
   override protected def afterAll(): Unit = {
     session.close()
-    session.getCluster.close()
     super.afterAll()
   }
 
@@ -554,6 +554,7 @@ class EventsByTagStageSpec
   }
 
   private def currentAndPreviousBucket(): (LocalDateTime, LocalDateTime) = {
+    @tailrec
     def nowTime(): LocalDateTime = {
       val now = LocalDateTime.now(ZoneOffset.UTC)
       // If too close to the end of bucket the query might span 3 buckets and events by tag only goes

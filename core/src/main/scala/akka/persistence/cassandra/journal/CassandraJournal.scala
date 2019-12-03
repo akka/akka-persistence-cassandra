@@ -34,9 +34,13 @@ import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
-import akka.cassandra.session._
+import com.datastax.oss.driver.api.core.ConsistencyLevel
 import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.retry.RetryDecision
 import com.datastax.oss.driver.api.core.retry.RetryPolicy
+import com.datastax.oss.driver.api.core.servererrors.CoordinatorException
+import com.datastax.oss.driver.api.core.servererrors.WriteType
+import com.datastax.oss.driver.api.core.session.Request
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
 
@@ -66,14 +70,13 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
   // For TagWriters/TagWriter children
   override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
-    case e: Exception => {
+    case e: Exception =>
       log.error(e, "Cassandra Journal has experienced an unexpected error and requires an ActorSystem restart.")
       if (config.coordinatedShutdownOnError) {
         CoordinatedShutdown(context.system).run(CassandraJournalUnexpectedError)
       }
       context.stop(context.self)
       Stop
-    }
   }
 
   import CassandraJournal._
@@ -376,29 +379,32 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         if (m.meta.isDefined) preparedWriteMessageWithMeta
         else preparedWriteMessage
 
-      stmt.map { stmt =>
-        val bs = stmt.bind()
-        bs.setString("persistence_id", persistenceId)
-        bs.setLong("partition_nr", maxPnr)
-        bs.setLong("sequence_nr", m.sequenceNr)
-        bs.setUUID("timestamp", m.timeUuid)
-        // Keeping as text for backward compatibility
-        bs.setString("timebucket", m.timeBucket.key.toString)
-        bs.setString("writer_uuid", m.writerUuid)
-        bs.setInt("ser_id", m.serId)
-        bs.setString("ser_manifest", m.serManifest)
-        bs.setString("event_manifest", m.eventAdapterManifest)
-        bs.setBytes("event", m.serialized)
-        bs.setSet("tags", m.tags.asJava, classOf[String])
+      val eh: Future[BoundStatement] = stmt.map { stmt =>
+        val bs = stmt
+          .bind()
+          .setString("persistence_id", persistenceId)
+          .setLong("partition_nr", maxPnr)
+          .setLong("sequence_nr", m.sequenceNr)
+          .setUuid("timestamp", m.timeUuid)
+          // Keeping as text for backward compatibility
+          .setString("timebucket", m.timeBucket.key.toString)
+          .setString("writer_uuid", m.writerUuid)
+          .setInt("ser_id", m.serId)
+          .setString("ser_manifest", m.serManifest)
+          .setString("event_manifest", m.eventAdapterManifest)
+          .setByteBuffer("event", m.serialized)
+          .setSet("tags", m.tags.asJava, classOf[String])
 
         // meta data, if any
-        m.meta.foreach(meta => {
-          bs.setInt("meta_ser_id", meta.serId)
-          bs.setString("meta_ser_manifest", meta.serManifest)
-          bs.setBytes("meta", meta.serialized)
-        })
-        bs
+        m.meta
+          .map(meta => {
+            bs.setInt("meta_ser_id", meta.serId)
+              .setString("meta_ser_manifest", meta.serManifest)
+              .setByteBuffer("meta", meta.serialized)
+          })
+          .getOrElse(bs)
       }
+      eh
     }
     // in case we skip an entire partition we want to make sure the empty partition has in in-use flag so scans
     // keep going when they encounter it
@@ -415,6 +421,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
    * in here rather than during replay messages.
    */
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
+    println("HIGHEST")
     log.debug("[{}] asyncReadHighestSequenceNr [{}] [{}]", persistenceId, fromSequenceNr, sender())
     val highestSequenceNr = writeInProgress.get(persistenceId) match {
       case null =>
@@ -494,7 +501,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
           val boundStatements = messageIds.map(mid =>
             preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
           Future.sequence(boundStatements).flatMap { stmts =>
-            executeBatch(batch => stmts.foreach(batch.add), deleteRetryPolicy)
+            executeBatch(batch => stmts.foreach(batch.add))
           }
         }
 
@@ -526,7 +533,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
           Future.sequence((lowestPartition to highestPartition).map { partitionNr =>
             val boundDeleteMessages =
               preparedDeleteMessages.map(_.bind(persistenceId, partitionNr: JLong, toSeqNr: JLong))
-            boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
+            boundDeleteMessages.flatMap(execute(_))
           })
         deleteResult.failed.foreach { e =>
           log.warning(
@@ -622,8 +629,6 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         1,
         None,
         "asyncReadLowestSequenceNr",
-        readConsistency,
-        retryPolicy,
         extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
       .map(_.sequenceNr)
       .runWith(Sink.headOption)
@@ -644,7 +649,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         .flatMap(session.selectOne)
         .map { rowOption =>
           rowOption.map { row =>
-            (row.getBool("used"), row.getLong("sequence_nr"))
+            (row.getBoolean("used"), row.getLong("sequence_nr"))
           }
         }
         .flatMap {
@@ -817,7 +822,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
  */
 class FixedRetryPolicy(number: Int) extends RetryPolicy {
   override def onUnavailable(
-      statement: Statement,
+      statement: Request,
       cl: ConsistencyLevel,
       requiredReplica: Int,
       aliveReplica: Int,
@@ -828,48 +833,45 @@ class FixedRetryPolicy(number: Int) extends RetryPolicy {
     // they're down), but still able to communicate with the client; in that case, retrying on the same host has almost
     // no chance of success, but moving to the next host might solve the issue.
     if (nbRetry == 0)
-      tryNextHost(cl, nbRetry) // see DefaultRetryPolicy
+      tryNextHost(nbRetry) // see DefaultRetryPolicy
     else
-      retry(cl, nbRetry)
+      retry(nbRetry)
   }
 
   override def onWriteTimeout(
-      statement: Statement,
+      statement: Request,
       cl: ConsistencyLevel,
       writeType: WriteType,
       requiredAcks: Int,
       receivedAcks: Int,
       nbRetry: Int): RetryDecision = {
-    retry(cl, nbRetry)
+    retry(nbRetry)
   }
 
   override def onReadTimeout(
-      statement: Statement,
+      statement: Request,
       cl: ConsistencyLevel,
       requiredResponses: Int,
       receivedResponses: Int,
       dataRetrieved: Boolean,
       nbRetry: Int): RetryDecision = {
-    retry(cl, nbRetry)
-  }
-  override def onRequestError(
-      statement: Statement,
-      cl: ConsistencyLevel,
-      cause: DriverException,
-      nbRetry: Int): RetryDecision = {
-    tryNextHost(cl, nbRetry)
+    retry(nbRetry)
   }
 
-  private def retry(cl: ConsistencyLevel, nbRetry: Int): RetryDecision = {
-    if (nbRetry < number) RetryDecision.retry(cl) else RetryDecision.rethrow()
+  private def retry(nbRetry: Int): RetryDecision = {
+    if (nbRetry < number) RetryDecision.RETRY_SAME else RetryDecision.RETHROW
   }
 
-  private def tryNextHost(cl: ConsistencyLevel, nbRetry: Int): RetryDecision = {
-    if (nbRetry < number) RetryDecision.tryNextHost(cl)
-    else RetryDecision.rethrow()
+  // FIXME, check this still matches the default
+  private def tryNextHost(nbRetry: Int): RetryDecision = {
+    if (nbRetry < number) RetryDecision.RETRY_NEXT
+    else RetryDecision.RETHROW
   }
 
-  override def init(c: Cluster): Unit = ()
   override def close(): Unit = ()
 
+  override def onRequestAborted(request: Request, error: Throwable, retryCount: Int): RetryDecision = retry(retryCount)
+
+  override def onErrorResponse(request: Request, error: CoordinatorException, retryCount: Int): RetryDecision =
+    tryNextHost(retryCount)
 }

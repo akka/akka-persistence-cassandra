@@ -6,7 +6,7 @@ package akka.persistence.cassandra
 
 import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.Ack
-import com.datastax.oss.driver.api.core.cql.Session
+import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.{ Config, ConfigFactory }
 
 import scala.concurrent.{ ExecutionContext, Future }

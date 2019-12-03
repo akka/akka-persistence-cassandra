@@ -21,6 +21,7 @@ import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 import EventsByTagSpec._
 import akka.testkit.TestProbe
+import com.datastax.oss.driver.api.core.CqlIdentifier
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.BeforeAndAfterEach
 
@@ -148,7 +149,6 @@ abstract class AbstractEventsByTagSpec(config: Config, checkLogMessages: Boolean
 
   override protected def afterAll(): Unit = {
     Try(session.close())
-    Try(session.getCluster.close())
     super.afterAll()
   }
 
@@ -172,11 +172,13 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
   "Cassandra query currentEventsByTag" must {
     "set ttl on table" in {
-      session.getCluster.getMetadata
+      session.getMetadata
         .getKeyspace(journalName)
+        .get
         .getTable("tag_views")
+        .get()
         .getOptions
-        .getDefaultTimeToLive shouldEqual 86400
+        .get(CqlIdentifier.fromCql("ttl")) shouldEqual 86400
     }
 
     "implement standard CurrentEventsByTagQuery" in {
@@ -1055,11 +1057,11 @@ class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.di
 
   "Events by tag disabled" must {
     "stop tag_views being created" in {
-      session.getCluster.getMetadata.getKeyspace(journalName).getTable("tag_views") shouldEqual null
+      session.getMetadata.getKeyspace(journalName).get.getTable("tag_views") shouldEqual null
     }
 
     "stop tag_progress being created" in {
-      session.getCluster.getMetadata.getKeyspace(journalName).getTable("tag_write_progress") shouldEqual null
+      session.getMetadata.getKeyspace(journalName).get.getTable("tag_write_progress") shouldEqual null
     }
 
     "fail current events by tag queries" in {

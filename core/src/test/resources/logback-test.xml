@@ -4,7 +4,7 @@
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <target>System.out</target>
         <encoder>
-            <pattern>%date{MM/dd HH:mm:ss} %-5level[%thread] %logger{1} - %m%n%xException</pattern>
+            <pattern>%date{MM/dd HH:mm:ss} %-5level[%thread] %logger{1} [%X{akkaSource}] - %m%n%xException</pattern>
         </encoder>
     </appender>
 
@@ -13,12 +13,13 @@
          cassandra-journal.log-queries = on
          cassandra-snapshot-store.log-queries = on
      -->
-    <logger name="com.datastax.driver.core.QueryLogger.NORMAL" level="DEBUG" />
-    <logger name="com.codahale.metrics.JmxReporter" level="INFO" />
+<!--    <logger name="com.datastax.driver.core.QueryLogger.NORMAL" level="DEBUG" />-->
+<!--    <logger name="com.codahale.metrics.JmxReporter" level="INFO" />-->
     <!-- latest version of driver/cassandra spam logs at WARN when many dropped keyspaces happen -->
-    <logger name="com.datastax.driver.core" level="ERROR" />
+    <logger name="com.datastax" level="INFO" />
+    <logger name="io.netty" level="ERROR" />
 
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="CONSOLE"/>
     </root>
 

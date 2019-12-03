@@ -58,7 +58,6 @@ class EventsByTagPubsubSpec extends CassandraSpec(EventsByTagPubsubSpec.config) 
 
   override protected def afterAll(): Unit = {
     Try(session.close())
-    Try(session.getCluster.close())
     super.afterAll()
   }
 

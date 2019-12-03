@@ -14,12 +14,12 @@ import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal._
 import akka.serialization.Serialization
 import akka.serialization.Serializers
-import com.datastax.oss.driver.api.core.cql.Session
-import com.datastax.oss.driver.api.core.cql.utils.Uuids
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 private[akka] trait TestTagWriter {
   def system: ActorSystem
-  val session: Session
+  val session: CqlSession
   val serialization: Serialization
   val writePluginConfig: CassandraJournalConfig
 
@@ -76,9 +76,9 @@ private[akka] trait TestTagWriter {
     tags.foreach(tag => {
       bs.setString("tag_name", tag)
       bs.setLong("timebucket", timeBucket.key)
-      bs.setUUID("timestamp", uuid)
+      bs.setUuid("timestamp", uuid)
       bs.setLong("tag_pid_sequence_nr", tagPidSequenceNr)
-      bs.setBytes("event", serialized)
+      bs.setByteBuffer("event", serialized)
       bs.setString("event_manifest", pr.manifest)
       bs.setString("persistence_id", pr.persistenceId)
       bs.setInt("ser_id", serializer.identifier)

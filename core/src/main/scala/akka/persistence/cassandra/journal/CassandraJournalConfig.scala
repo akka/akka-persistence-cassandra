@@ -91,7 +91,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
   val coordinatedShutdownOnError: Boolean = config.getBoolean("coordinated-shutdown-on-error")
 
   /**
-   * The Cassandra statement that can be used to create the configured keyspace.
+   * The Cassandra Statement[_]that can be used to create the configured keyspace.
    *
    * This can be queried in for example a startup script without accessing the actual
    * Cassandra plugin actor.

@@ -5,6 +5,8 @@
 package akka.persistence.cassandra
 
 import akka.actor.NoSerializationVerificationNeeded
-import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Session }
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.PreparedStatement
 
-case class PreparedStatementEnvelope(session: Session, ps: PreparedStatement) extends NoSerializationVerificationNeeded
+case class PreparedStatementEnvelope(session: CqlSession, ps: PreparedStatement)
+    extends NoSerializationVerificationNeeded

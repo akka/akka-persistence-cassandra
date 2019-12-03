@@ -22,14 +22,10 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
   private[akka] implicit val ec: ExecutionContext
   private[akka] val log: LoggingAdapter
 
-  def psUpdateMessage: Future[PreparedStatement] =
-    session.prepare(updateMessagePayloadAndTags).map(_.setIdempotent(true))
-  def psSelectTagPidSequenceNr: Future[PreparedStatement] =
-    session.prepare(selectTagPidSequenceNr).map(_.setIdempotent(true))
-  def psUpdateTagView: Future[PreparedStatement] =
-    session.prepare(updateMessagePayloadInTagView).map(_.setIdempotent(true))
-  def psSelectMessages: Future[PreparedStatement] =
-    session.prepare(selectMessages).map(_.setIdempotent(true))
+  def psUpdateMessage: Future[PreparedStatement] = session.prepare(updateMessagePayloadAndTags)
+  def psSelectTagPidSequenceNr: Future[PreparedStatement] = session.prepare(selectTagPidSequenceNr)
+  def psUpdateTagView: Future[PreparedStatement] = session.prepare(updateMessagePayloadInTagView)
+  def psSelectMessages: Future[PreparedStatement] = session.prepare(selectMessages)
 
   /**
    * Update the given event in the messages table and the tag_views table.
@@ -80,7 +76,7 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
         val bind = ps.bind()
         bind.setString("tag_name", tag)
         bind.setLong("timebucket", event.timeBucket.key)
-        bind.setUUID("timestamp", event.timeUuid)
+        bind.setUuid("timestamp", event.timeUuid)
         bind.setString("persistence_id", event.persistenceId)
         session.selectOne(bind)
       }
@@ -100,12 +96,12 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
       val bind = ps.bind()
       bind.setString("tag_name", tag)
       bind.setLong("timebucket", event.timeBucket.key)
-      bind.setUUID("timestamp", event.timeUuid)
+      bind.setUuid("timestamp", event.timeUuid)
       bind.setString("persistence_id", event.persistenceId)
       bind.setLong("tag_pid_sequence_nr", tagPidSequenceNr)
 
       // event update
-      bind.setBytes("event", event.serialized)
+      bind.setByteBuffer("event", event.serialized)
       bind.setString("ser_manifest", event.serManifest)
       bind.setInt("ser_id", event.serId)
       bind.setString("event_manifest", event.eventAdapterManifest)
@@ -113,21 +109,21 @@ private[akka] trait CassandraEventUpdate extends CassandraStatements {
       session.executeWrite(bind)
     }
 
-  private def prepareUpdate(ps: PreparedStatement, s: Serialized, partitionNr: Long): Statement = {
+  private def prepareUpdate(ps: PreparedStatement, s: Serialized, partitionNr: Long): Statement[_] = {
     val bs = ps.bind()
 
     // primary key
     bs.setString("persistence_id", s.persistenceId)
     bs.setLong("partition_nr", partitionNr)
     bs.setLong("sequence_nr", s.sequenceNr)
-    bs.setUUID("timestamp", s.timeUuid)
+    bs.setUuid("timestamp", s.timeUuid)
     bs.setString("timebucket", s.timeBucket.key.toString)
 
     // fields to update
     bs.setInt("ser_id", s.serId)
     bs.setString("ser_manifest", s.serManifest)
     bs.setString("event_manifest", s.eventAdapterManifest)
-    bs.setBytes("event", s.serialized)
+    bs.setByteBuffer("event", s.serialized)
     bs.setSet("tags", s.tags.asJava, classOf[String])
     bs
   }

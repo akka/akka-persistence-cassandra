@@ -5,11 +5,13 @@
 package akka.persistence.cassandra.testkit
 
 import java.io.File
+import java.net.InetSocketAddress
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
-import com.datastax.oss.driver.api.core.cql.Cluster
+import com.datastax.oss.driver.api.core.CqlSession
 import org.scalatest.{ Matchers, WordSpecLike }
+
 import scala.concurrent.duration._
 import org.scalatest.BeforeAndAfterAll
 
@@ -27,17 +29,10 @@ class CassandraLauncherSpec
 
   private def testCassandra(): Unit = {
     val session =
-      Cluster
-        .builder()
-        .withClusterName("CassandraLauncherSpec")
-        .addContactPoints("localhost")
-        .withPort(CassandraLauncher.randomPort)
-        .build()
-        .connect()
+      CqlSession.builder().addContactPoint(new InetSocketAddress("localhost", CassandraLauncher.randomPort)).build()
     try session.execute("SELECT now() from system.local;").one()
     finally {
       session.close()
-      session.getCluster.close()
     }
   }
 

@@ -12,10 +12,10 @@ import akka.stream.{ Attributes, Outlet, SourceShape }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
 import com.datastax.oss.driver.api.core.cql.PreparedStatement
+import com.github.ghik.silencer.silent
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContextExecutor
 
 /**
  * INTERNAL API
@@ -44,8 +44,6 @@ import scala.concurrent.ExecutionContextExecutor
 
   def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new TimerGraphStageLogic(shape) with StageLogging with OutHandler {
-
-      implicit def executionContext: ExecutionContextExecutor = materializer.executionContext
 
       private var queryInProgress = false
       private var knownPersistenceIds: Set[String] = Set.empty
@@ -78,7 +76,7 @@ import scala.concurrent.ExecutionContextExecutor
 
       private def query(): Unit = {
         def doQuery(): Unit = {
-          // FIXME, what has happened tgo fetch size per statement?
+          // FIXME, what has happened to fetch size per statement?
           queryInProgress = true
           val boundStatement = preparedStatement.bind()
           session.executeAsync(boundStatement).thenAccept(queryCallback.invoke)

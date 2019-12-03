@@ -13,13 +13,12 @@ import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
 import akka.persistence.cassandra.query.EventsByTagStage._
 import akka.stream.stage.{ GraphStage, _ }
 import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
-import akka.cassandra.session._
 import akka.util.PrettyDuration._
 
 import scala.annotation.tailrec
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
+import scala.concurrent.{ ExecutionContextExecutor, Future }
 import scala.util.{ Failure, Success, Try }
 import java.lang.{ Long => JLong }
 
@@ -29,8 +28,9 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTag
 import akka.persistence.query.Offset
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
-import com.datastax.oss.driver.api.core.cql.{ ResultSet, Row }
+import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.uuid.Uuids
+import com.github.ghik.silencer.silent
 
 import scala.compat.java8.FutureConverters._
 
@@ -94,8 +94,7 @@ import scala.compat.java8.FutureConverters._
       session: CqlSession,
       statements: EventByTagStatements,
       fetchSize: Int) {
-    def selectEventsForBucket(bucket: TimeBucket, from: UUID, to: UUID)(
-        implicit ec: ExecutionContext): Future[AsyncResultSet] = {
+    def selectEventsForBucket(bucket: TimeBucket, from: UUID, to: UUID): Future[AsyncResultSet] = {
       val bound =
         statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to)
 
@@ -111,7 +110,7 @@ import scala.compat.java8.FutureConverters._
   private sealed trait QueryState
   private case object QueryIdle extends QueryState
   private final case class QueryInProgress(startTime: Long = System.nanoTime()) extends QueryState
-  private final case class QueryResult(resultSet: ResultSet) extends QueryState
+  private final case class QueryResult(resultSet: AsyncResultSet) extends QueryState
   private final case class BufferedEvents(events: List[UUIDRow]) extends QueryState
 
   /**
@@ -239,7 +238,7 @@ import scala.compat.java8.FutureConverters._
 
       setHandler(out, this)
 
-      val newResultSetCb = getAsyncCallback[Try[ResultSet]] {
+      val newResultSetCb = getAsyncCallback[Try[AsyncResultSet]] {
         case Success(rs) =>
           if (!stageState.state.isInstanceOf[QueryInProgress]) {
             throw new IllegalStateException(s"New ResultSet when in unexpected state ${stageState.state}")
@@ -387,7 +386,7 @@ import scala.compat.java8.FutureConverters._
         }
       }
 
-      def checkResultSetForMissing(rs: ResultSet, m: LookingForMissing): Unit = {
+      def checkResultSetForMissing(rs: AsyncResultSet, m: LookingForMissing): Unit = {
         val row = rs.one()
         // we only extract the event if it is the missing one we've looking for
         val rowPersistenceId = row.getString("persistence_id")
@@ -536,9 +535,9 @@ import scala.compat.java8.FutureConverters._
       @tailrec def tryPushOne(): Unit =
         stageState.state match {
           case QueryResult(rs) if isAvailable(out) =>
-            if (rs.isExhausted) {
+            if (isExhausted(rs)) {
               queryExhausted()
-            } else if (rs.getAvailableWithoutFetching == 0) {
+            } else if (rs.remaining() == 0) {
               log.debug("[{}] Fetching more", stageUuid)
               fetchMore(rs)
             } else if (stageState.isLookingForMissing) {
@@ -563,9 +562,9 @@ import scala.compat.java8.FutureConverters._
               }
             }
           case QueryResult(rs) =>
-            if (rs.isExhausted) {
+            if (isExhausted(rs)) {
               queryExhausted()
-            } else if (rs.getAvailableWithoutFetching == 0) {
+            } else if (rs.remaining() == 0) {
               log.debug("[{}] Fully fetched, getting more for next pull (not implemented yet)", stageUuid)
             }
           case BufferedEvents(events) if isAvailable(out) =>
@@ -670,9 +669,9 @@ import scala.compat.java8.FutureConverters._
             .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset)))
       }
 
-      private def fetchMore(rs: ResultSet): Unit = {
+      private def fetchMore(rs: AsyncResultSet): Unit = {
         log.debug("[{}] No more results without paging. Requesting more.", stageUuid)
-        val moreResults: Future[ResultSet] = rs.fetchMoreResults().asScala
+        val moreResults = rs.fetchNextPage().toScala
         updateQueryState(QueryInProgress())
         moreResults.onComplete(newResultSetCb.invoke)
       }
@@ -681,7 +680,7 @@ import scala.compat.java8.FutureConverters._
         UUIDRow(
           persistenceId = row.getString("persistence_id"),
           sequenceNr = row.getLong("sequence_nr"),
-          offset = row.getUUID("timestamp"),
+          offset = row.getUuid("timestamp"),
           tagPidSequenceNr = row.getLong("tag_pid_sequence_nr"),
           row)
 

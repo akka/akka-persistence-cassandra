@@ -17,8 +17,8 @@ import akka.persistence.cassandra.journal.TagWriterSpec.{ EventWrite, ProgressWr
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
-import com.datastax.oss.driver.api.core.cql.utils.Uuids
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Statement }
+import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.github.ghik.silencer.silent
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, WordSpecLike }
@@ -64,7 +64,7 @@ class TagWriterSpec
     shutdown()
 
   val fakePs: Future[PreparedStatement] = Future.successful(null)
-  val successfulWrite: Statement => Future[Done] = _ => Future.successful(Done)
+  val successfulWrite: Statement[_] => Future[Done] = _ => Future.successful(Done)
   val defaultSettings = TagWriterSettings(
     maxBatchSize = 10,
     flushInterval = 10.seconds,

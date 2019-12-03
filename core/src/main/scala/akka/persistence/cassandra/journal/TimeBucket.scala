@@ -8,7 +8,7 @@ import java.util.UUID
 
 import akka.annotation.InternalApi
 import akka.util.HashCode
-import com.datastax.oss.driver.api.core.cql.utils.Uuids
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 @InternalApi private[akka] object TimeBucket {
 

@@ -60,7 +60,7 @@ import com.datastax.oss.driver.api.core.cql.BatchType
         .map {
           case (withMeta, withoutMeta) =>
             events.foreach {
-              case (event, pidTagSequenceNr) => {
+              case (event, pidTagSequenceNr) =>
                 val ps = if (event.meta.isDefined) withMeta else withoutMeta
                 val bound = ps.bind(
                   tag,
@@ -80,7 +80,6 @@ import com.datastax.oss.driver.api.core.cql.BatchType
                   bound.setInt("meta_ser_id", m.serId)
                 }
                 batch.addStatement(bound)
-              }
             }
             batch.build()
         }

@@ -15,7 +15,7 @@ import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.formatOffset
 import akka.stream.ActorMaterializer
 import com.datastax.oss.driver.api.core.cql.PreparedStatement
-import com.datastax.oss.driver.api.core.cql.utils.Uuids
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 import scala.concurrent.duration.{ Deadline, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
@@ -49,7 +49,7 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
           formatOffset(to))
         val source = session.select(bound)
         val doneIt = source
-          .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUUID("timestamp")))
+          .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUuid("timestamp")))
           .runFold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) {
             case (acc, (pid, tagPidSequenceNr, timestamp)) =>
               val (newTagPidSequenceNr, newTimestamp) = acc.get(pid) match {
@@ -76,7 +76,7 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
       // event that the stage can't find the event found during this scan
       doIt().map { progress =>
         progress.map {
-          case (key, ((tagPidSequenceNr, uuid))) =>
+          case (key, (tagPidSequenceNr, uuid)) =>
             val unixTime = Uuids.unixTimestamp(uuid)
             (key, (tagPidSequenceNr - 1, Uuids.startOf(unixTime - 1)))
         }

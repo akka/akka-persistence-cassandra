@@ -5,6 +5,7 @@
 package akka.persistence.cassandra
 
 import java.io.{ OutputStream, PrintStream }
+import java.net.InetSocketAddress
 import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -31,7 +32,7 @@ import scala.collection.immutable
 import scala.concurrent.duration._
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
-import com.datastax.oss.driver.api.core.cql.Cluster
+import com.datastax.oss.driver.api.core.CqlSession
 
 import scala.util.Try
 
@@ -63,7 +64,7 @@ object CassandraSpec {
     """)
 
   val fallbackConfig = ConfigFactory.parseString(s"""
-        akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
+//      akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
         akka.loglevel = DEBUG
         cassandra-query-journal {
           first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
@@ -99,9 +100,6 @@ abstract class CassandraSpec(
   val shortWait = 10.millis
 
   lazy val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
-
-  // cluster is shutdown by cassandra lifecycle
-  lazy val journalSession = cluster.connect(journalName)
 
   override def port(): Int = CassandraLifecycle.mode match {
     case External => 9042
@@ -161,24 +159,24 @@ abstract class CassandraSpec(
 
   override protected def externalCassandraCleanup(): Unit = {
     Try {
-      val c = cluster.connect(journalName)
       if (failed) {
         println("RowDump::")
         import scala.collection.JavaConverters._
-        c.execute("select * from tag_views")
+        cluster
+          .execute(s"select * from ${journalName}.tag_views")
           .asScala
           .foreach(row => {
             println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(
-              row.getUUID("timestamp"))},${row.getString("persistence_id")},${row.getLong("tag_pid_sequence_nr")},${row
+              row.getUuid("timestamp"))},${row.getString("persistence_id")},${row.getLong("tag_pid_sequence_nr")},${row
               .getLong("sequence_nr")}""")
 
           })
       }
       system.log.info("Dropping keyspaces: {}", keyspaces())
       keyspaces().foreach { keyspace =>
-        c.execute(s"drop keyspace if exists $keyspace")
+        cluster.execute(s"drop keyspace if exists $keyspace")
       }
-      c.close()
+      cluster.close()
     }
   }
 
@@ -197,7 +195,8 @@ abstract class CassandraSpec(
     as
   }
 
-  final override lazy val cluster = Cluster.builder().addContactPoint("localhost").withPort(port()).build()
+  final override lazy val cluster: CqlSession =
+    CqlSession.builder().addContactPoint(new InetSocketAddress("localhost", port())).build()
 
   final override def systemName = system.name
 

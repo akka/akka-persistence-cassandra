@@ -5,13 +5,14 @@
 package akka.persistence.cassandra
 
 import java.io.File
+import java.net.InetSocketAddress
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{ ActorSystem, Props }
 import akka.persistence.PersistentActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.testkit.{ TestKitBase, TestProbe }
-import com.datastax.oss.driver.api.core.cql.Cluster
+import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
@@ -37,6 +38,7 @@ object CassandraLifecycle {
 
   val config = {
     val always = ConfigFactory.parseString(s"""
+                                               akka.loglevel = DEBUG
     akka.test.timefactor = $${?AKKA_TEST_TIMEFACTOR}
     akka.persistence.journal.plugin = "cassandra-journal"
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
@@ -110,11 +112,9 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   def cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource
 
   lazy val cluster = {
-    Cluster
+    CqlSession
       .builder()
-      .addContactPoint("localhost")
-      .withClusterName(systemName + "TestCluster")
-      .withPort(system.settings.config.getInt("cassandra-journal.port"))
+      .addContactPoint(new InetSocketAddress("localhost", system.settings.config.getInt("cassandra-journal.port")))
       .build()
   }
 
@@ -162,8 +162,8 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
     val journalKeyspace = system.settings.config.getString("cassandra-journal.keyspace")
     val snapshotKeyspace = system.settings.config.getString("cassandra-snapshot-store.keyspace")
     val dropped = Try {
-      cluster.connect().execute(s"drop keyspace if exists ${journalKeyspace}")
-      cluster.connect().execute(s"drop keyspace if exists ${snapshotKeyspace}")
+      cluster.execute(s"drop keyspace if exists ${journalKeyspace}")
+      cluster.execute(s"drop keyspace if exists ${snapshotKeyspace}")
     }
     dropped match {
       case Failure(t) => system.log.error(t, "Failed to drop keyspaces {} {}", journalKeyspace, snapshotKeyspace)

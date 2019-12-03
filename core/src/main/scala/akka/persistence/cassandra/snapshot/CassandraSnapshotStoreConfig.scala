@@ -15,7 +15,7 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
   val cassandra2xCompat = config.getBoolean("cassandra-2x-compat")
 
   /**
-   * The Cassandra statement that can be used to create the configured keyspace.
+   * The Cassandra Statement[_]that can be used to create the configured keyspace.
    *
    * This can be queried in for example a startup script without accessing the actual
    * Cassandra plugin actor.

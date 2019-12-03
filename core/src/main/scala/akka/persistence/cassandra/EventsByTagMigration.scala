@@ -4,8 +4,6 @@
 
 package akka.persistence.cassandra
 
-import java.util.UUID
-
 import scala.concurrent.ExecutionContext
 import akka.actor.ActorSystem
 import akka.pattern.ask
@@ -243,7 +241,7 @@ class EventsByTagMigration(
                   s"migrateToTag-$pid",
                   extractor =
                     EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system))
-                .map(sendMissingTagWriteRaw(tp, tagWriters, false))
+                .map(sendMissingTagWriteRaw(tp, tagWriters, actorRunning = false))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
                 .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])
             }

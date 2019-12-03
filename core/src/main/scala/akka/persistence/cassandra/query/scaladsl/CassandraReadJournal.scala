@@ -27,8 +27,6 @@ import akka.stream.scaladsl.Source
 import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.util.ByteString
 import com.datastax.oss.driver.api.core.cql._
-import com.datastax.oss.driver.api.core.cql.policies.{ LoggingRetryPolicy, RetryPolicy }
-import com.datastax.oss.driver.api.core.cql.utils.Uuids
 import com.typesafe.config.Config
 
 import scala.collection.immutable
@@ -39,7 +37,7 @@ import scala.util.control.NonFatal
 import akka.serialization.SerializationExtension
 import com.datastax.oss.driver.api.core.ConsistencyLevel
 import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.driver.api.core.retry.RetryPolicy
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 object CassandraReadJournal {
 
@@ -153,37 +151,23 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
           preparedSelectTagSequenceNrs))
       .map(_ => Done)
 
-  private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(queryPluginConfig.readRetries))
-
   private def preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
-    session
-      .prepare(selectMessages)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(selectMessages)
 
   private def preparedSelectDeletedTo: Future[PreparedStatement] =
-    session
-      .prepare(selectDeletedTo)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(selectDeletedTo)
 
   private def preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
-    session
-      .prepare(queryStatements.selectDistinctPersistenceIds)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(queryStatements.selectDistinctPersistenceIds)
 
   private def preparedSelectFromTagViewWithUpperBound: Future[PreparedStatement] =
-    session
-      .prepare(queryStatements.selectEventsFromTagViewWithUpperBound)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(queryStatements.selectEventsFromTagViewWithUpperBound)
 
   private def preparedSelectTagSequenceNrs: Future[PreparedStatement] =
-    session
-      .prepare(queryStatements.selectTagSequenceNrs)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(queryStatements.selectTagSequenceNrs)
 
   private def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
-    session
-      .prepare(selectHighestSequenceNr)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(selectHighestSequenceNr)
 
   /**
    * INTERNAL API
@@ -370,10 +354,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    */
   @InternalApi private[akka] def createSource[T, P](
       prepStmt: Future[P],
-      source: (Session, P) => Source[T, NotUsed]): Source[T, NotUsed] = {
-    // when we get the PreparedStatement we know that the session is initialized,
+      source: (CqlSession, P) => Source[T, NotUsed]): Source[T, NotUsed] = {
+    // when we get the PreparedStatement[_]we know that the session is initialized,
     // i.e.the get is safe
-    def getSession: Session = session.underlying().value.get.get
+    def getSession: CqlSession = session.underlying().value.get.get
 
     prepStmt.value match {
       case Some(Success(ps)) => source(getSession, ps)
@@ -398,7 +382,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    */
   @InternalApi private[akka] def createFutureSource[T, P, M](prepStmt: Future[P])(
       source: (CqlSession, P) => Source[T, M]): Source[T, Future[M]] = {
-    // when we get the PreparedStatement we know that the session is initialized,
+    // when we get the PreparedStatement[_]we know that the session is initialized,
     // i.e.the get is safe
     def getSession: CqlSession = session.underlying().value.get.get
 
@@ -436,7 +420,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
         val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
         // pick up all the events written this millisecond
-        val toOffset = Some(UUIDs.endOf(System.currentTimeMillis()))
+        val toOffset = Some(Uuids.endOf(System.currentTimeMillis()))
 
         createFutureSource(prereqs) { (s, prereqs) =>
           val session =
@@ -579,9 +563,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
               c.preparedSelectEventsByPersistenceId,
               c.prepareSelectHighestNr,
               c.preparedSelectDeletedTo,
-              s,
-              customConsistencyLevel,
-              customRetryPolicy),
+              s),
             queryPluginConfig,
             fastForwardEnabled))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))

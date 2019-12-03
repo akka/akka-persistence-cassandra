@@ -11,7 +11,7 @@ import akka.actor.ActorRef
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
-import com.datastax.oss.driver.api.core.cql.Session
+import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterEach
 
@@ -33,7 +33,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
   val cfg = system.settings.config.getConfig("cassandra-journal")
   val pluginConfig = new CassandraPluginConfig(system, cfg)
 
-  var session: Session = _
+  var session: CqlSession = _
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
@@ -44,7 +44,6 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
   override protected def afterAll(): Unit = {
     Try {
       session.close()
-      session.getCluster.close()
     }
     super.afterAll()
   }

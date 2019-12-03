@@ -12,8 +12,8 @@ import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Hour }
 import akka.persistence.cassandra.query.TagViewSequenceNumberScannerSpec.config
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.serialization.{ Serialization, SerializationExtension }
-import com.datastax.oss.driver.api.core.cql.Session
-import com.datastax.oss.driver.api.core.cql.utils.Uuids
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.Await
@@ -34,7 +34,7 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
 
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   val serialization: Serialization = SerializationExtension(system)
-  lazy val session: Session = {
+  lazy val session: CqlSession = {
     import system.dispatcher
     Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
   }
@@ -42,7 +42,6 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
   override protected def afterAll(): Unit = {
     Try {
       session.close()
-      session.getCluster.close()
     }
     super.afterAll()
   }
