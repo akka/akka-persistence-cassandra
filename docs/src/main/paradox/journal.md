@@ -35,7 +35,6 @@ CREATE KEYSPACE IF NOT EXISTS akka
 WITH REPLICATION = { 'class' : 'SimpleStrategy','replication_factor':1 };
 
 CREATE TABLE IF NOT EXISTS akka.messages (
-  used boolean static,
   persistence_id text,
   partition_nr bigint,
   sequence_nr bigint,
