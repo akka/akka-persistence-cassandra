@@ -8,15 +8,16 @@ import java.nio.ByteBuffer
 
 import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
+import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.CassandraStatements
+import akka.persistence.cassandra.journal.Hour
+import akka.persistence.cassandra.journal.TimeBucket
 import akka.serialization.SerializationExtension
-import org.scalatest.{ BeforeAndAfterAll, Suite }
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.util.Try
 import akka.serialization.Serializers
+import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.Suite
 
 trait DirectWriting extends BeforeAndAfterAll {
   self: Suite =>
@@ -26,24 +27,15 @@ trait DirectWriting extends BeforeAndAfterAll {
   private lazy val writePluginConfig =
     new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
 
-  private lazy val session = {
-    Await.result(writePluginConfig.sessionProvider.connect()(system.dispatcher), 5.seconds)
-  }
-
-  override protected def afterAll(): Unit = {
-    Try {
-      session.close()
-    }
-    super.afterAll()
-  }
+  def cluster: CqlSession
 
   private lazy val writeStatements: CassandraStatements = new CassandraStatements {
     def config: CassandraJournalConfig = writePluginConfig
   }
 
-  private lazy val preparedWriteMessage = session.prepare(writeStatements.writeMessage(withMeta = false))
+  private lazy val preparedWriteMessage = cluster.prepare(writeStatements.writeMessage(withMeta = false))
 
-  private lazy val preparedDeleteMessage = session.prepare(writeStatements.deleteMessage)
+  private lazy val preparedDeleteMessage = cluster.prepare(writeStatements.deleteMessage)
 
   protected def writeTestEvent(persistent: PersistentRepr, partitionNr: Long = 1L): Unit = {
     val event = persistent.payload.asInstanceOf[AnyRef]
@@ -64,7 +56,7 @@ trait DirectWriting extends BeforeAndAfterAll {
       .setString("ser_manifest", serManifest)
       .setString("event_manifest", persistent.manifest)
       .setByteBuffer("event", serialized)
-    session.execute(bs)
+    cluster.execute(bs)
     system.log.debug("Directly wrote payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
   }
 
@@ -75,7 +67,7 @@ trait DirectWriting extends BeforeAndAfterAll {
       .setString("persistence_id", persistent.persistenceId)
       .setLong("partition_nr", partitionNr)
       .setLong("sequence_nr", persistent.sequenceNr)
-    session.execute(bs)
+    cluster.execute(bs)
     system.log.debug("Directly deleted payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
   }
 

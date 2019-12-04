@@ -221,8 +221,13 @@ abstract class CassandraSpec(
   final override lazy val cluster: CqlSession =
     CqlSession
       .builder()
+<<<<<<< HEAD
       .withLocalDatacenter("datacenter1")
       .addContactPoint(new InetSocketAddress("localhost", port()))
+=======
+      .addContactPoint(new InetSocketAddress("localhost", port()))
+      .withLocalDatacenter("datacenter1")
+>>>>>>> 064e9ead072bcb2963c41d1965e16af523e7ddfc
       .build()
 
   final override def systemName = system.name

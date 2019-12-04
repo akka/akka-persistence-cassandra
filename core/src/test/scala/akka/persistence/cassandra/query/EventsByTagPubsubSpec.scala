@@ -13,9 +13,7 @@ import akka.persistence.query.{ EventEnvelope, NoOffset }
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.util.Try
 
 object EventsByTagPubsubSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
@@ -46,19 +44,10 @@ object EventsByTagPubsubSpec {
 class EventsByTagPubsubSpec extends CassandraSpec(EventsByTagPubsubSpec.config) {
 
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
-  lazy val session = {
-    import system.dispatcher
-    Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
-  }
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
     Cluster(system).join(Cluster(system).selfAddress)
-  }
-
-  override protected def afterAll(): Unit = {
-    Try(session.close())
-    super.afterAll()
   }
 
   "Cassandra query getEventsByTag when running clustered with pubsub enabled" must {

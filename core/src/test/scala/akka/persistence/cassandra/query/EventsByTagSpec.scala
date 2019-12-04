@@ -25,9 +25,7 @@ import com.datastax.oss.driver.api.core.CqlIdentifier
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.BeforeAndAfterEach
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.util.Try
 
 object EventsByTagSpec {
   def withProbe[T](probe: TestSubscriber.Probe[Any], f: TestSubscriber.Probe[Any] => T): T = {
@@ -135,21 +133,11 @@ abstract class AbstractEventsByTagSpec(config: Config, checkLogMessages: Boolean
   val serialization = SerializationExtension(system)
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
 
-  lazy val session = {
-    import system.dispatcher
-    Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
-  }
-
   lazy val preparedWriteMessage = {
     val writeStatements: CassandraStatements = new CassandraStatements {
       def config: CassandraJournalConfig = writePluginConfig
     }
-    session.prepare(writeStatements.writeMessage(withMeta = false))
-  }
-
-  override protected def afterAll(): Unit = {
-    Try(session.close())
-    super.afterAll()
+    cluster.prepare(writeStatements.writeMessage(withMeta = false))
   }
 
   val logProbe = TestProbe()
@@ -172,7 +160,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
   "Cassandra query currentEventsByTag" must {
     "set ttl on table" in {
-      val options = session.getMetadata.getKeyspace(journalName).get.getTable("tag_views").get().getOptions
+      val options = cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_views").get().getOptions
 
       options.get(CqlIdentifier.fromCql("default_time_to_live")) shouldEqual 86400
     }
@@ -1053,11 +1041,11 @@ class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.di
 
   "Events by tag disabled" must {
     "stop tag_views being created" in {
-      session.getMetadata.getKeyspace(journalName).get.getTable("tag_views") shouldEqual null
+      cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_views") shouldEqual null
     }
 
     "stop tag_progress being created" in {
-      session.getMetadata.getKeyspace(journalName).get.getTable("tag_write_progress") shouldEqual null
+      cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_write_progress") shouldEqual null
     }
 
     "fail current events by tag queries" in {

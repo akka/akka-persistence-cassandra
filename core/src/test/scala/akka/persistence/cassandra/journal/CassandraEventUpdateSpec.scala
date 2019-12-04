@@ -34,14 +34,8 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
     override private[akka] def config: CassandraJournalConfig =
       new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
     override private[akka] implicit val ec: ExecutionContext = system.dispatcher
-    override private[akka] val session: CassandraSession = new CassandraSession(
-      system,
-      config.sessionProvider,
-      config.sessionSettings,
-      ec,
-      log,
-      systemName,
-      init = _ => Future.successful(Done))
+    override private[akka] val session: CassandraSession =
+      new CassandraSession(system, config.sessionSettings, ec, log, systemName, init = _ => Future.successful(Done))
   }
 
   "CassandraEventUpdate" must {

@@ -53,7 +53,6 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
 
   val session = new CassandraSession(
     context.system,
-    snapshotConfig.sessionProvider,
     snapshotConfig.sessionSettings,
     context.dispatcher,
     log,
@@ -204,7 +203,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
             bs
         }
 
-        session.executeWrite(finished).map(_ => ())
+        session.executeWrite(finished.setExecutionProfileName(writeProfile)).map(_ => ())
       }
     }
 
