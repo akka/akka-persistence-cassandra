@@ -64,7 +64,7 @@ object CassandraSpec {
     """)
 
   val fallbackConfig = ConfigFactory.parseString(s"""
-//      akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
+      akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
       akka.loglevel = DEBUG
 
       datastax-java-driver {
