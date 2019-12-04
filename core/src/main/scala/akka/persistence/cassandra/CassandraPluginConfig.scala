@@ -6,14 +6,17 @@ package akka.persistence.cassandra
 
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
 import com.typesafe.config.Config
-import akka.actor.ActorSystem
-import akka.cassandra.session.CassandraSessionSettings
+import akka.actor.{ ActorSystem, ExtendedActorSystem }
+import akka.cassandra.session.{ CassandraSessionSettings, CqlSessionProvider }
 
 case class StorePathPasswordConfig(path: String, password: String)
 
 class CassandraPluginConfig(system: ActorSystem, config: Config) {
 
   import akka.persistence.cassandra.CassandraPluginConfig._
+
+  val sessionProvider: CqlSessionProvider =
+    CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
 
   val sessionSettings: CassandraSessionSettings =
     CassandraSessionSettings(config.getString("write-profile"))

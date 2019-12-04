@@ -4,7 +4,7 @@
 
 package akka.cassandra.session
 
-// FIXME, get rid of?
+// FIXME probably get rid of this
 object CassandraSessionSettings {
   def apply(profile: String): CassandraSessionSettings =
     new CassandraSessionSettings(profile)

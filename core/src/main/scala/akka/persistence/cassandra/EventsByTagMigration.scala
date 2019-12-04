@@ -117,6 +117,7 @@ class EventsByTagMigration(
   val session: CassandraSession = {
     new CassandraSession(
       system,
+      config.sessionProvider,
       config.sessionSettings,
       ec,
       log,

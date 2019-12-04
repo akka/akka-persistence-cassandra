@@ -49,9 +49,9 @@ import scala.compat.java8.FutureConverters._
  *
  * All methods are non-blocking.
  */
-// FIXME, allow ConfigLoader to be overridden
 final class CassandraSession(
     system: ActorSystem,
+    sessionProvider: CqlSessionProvider,
     settings: CassandraSessionSettings,
     executionContext: ExecutionContext,
     log: LoggingAdapter,
@@ -63,7 +63,7 @@ final class CassandraSession(
   private lazy implicit val materializer = ActorMaterializer()(system)
 
   // FIXME, make this more configurable
-  private val _underlyingSession: Future[CqlSession] = CqlSession.builder().buildAsync().toScala.flatMap { session =>
+  private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
     session.getMetrics.ifPresent(metrics => {
       CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)
     })

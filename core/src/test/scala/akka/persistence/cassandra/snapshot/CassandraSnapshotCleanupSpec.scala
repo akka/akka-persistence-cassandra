@@ -21,6 +21,7 @@ class CassandraSnapshotCleanupSpec extends CassandraSpec {
       new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-snapshot-store"))
     override val session: CassandraSession = new CassandraSession(
       system,
+      snapshotConfig.sessionProvider,
       snapshotConfig.sessionSettings,
       system.dispatcher,
       log,

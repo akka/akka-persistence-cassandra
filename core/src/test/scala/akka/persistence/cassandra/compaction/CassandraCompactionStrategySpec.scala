@@ -7,7 +7,6 @@ package akka.persistence.cassandra.compaction
 import java.util.concurrent.TimeUnit
 
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
-import com.github.ghik.silencer.silent
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
 

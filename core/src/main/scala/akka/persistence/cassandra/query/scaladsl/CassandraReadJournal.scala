@@ -126,6 +126,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    */
   val session: CassandraSession = new CassandraSession(
     system,
+    writePluginConfig.sessionProvider,
     writePluginConfig.sessionSettings,
     ec,
     log,

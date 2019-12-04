@@ -1,8 +1,22 @@
 # Migration
 
-### Migrations to 1.0
+### Migrating from 0.80+ to 1.0
 
-* After being deprecated, the DateTieredCompactionStrategy has been removed.
+#### Driver upgrade with significant configuration changes
+
+Version 4.x of the cassandra driver comes with a new way to configure it via [typesafe configuration](https://github.com/lightbend/config)
+which matches how Akka manages configuration.
+
+All driver related configuration related to driver connection, query consistency, query retries etc has been removed from this
+project's `reference.conf` and now each part of the plugin (journal, snapshot and query) specify a read and write 
+[execution profile](https://docs.datastax.com/en/developer/java-driver/4.3/manual/core/configuration/#execution-profiles) that gives
+fine grained control over consistencies and retires for each are. By default all read/write profiles are the same and under
+`datastax-java-driver.profile.cassandra-journal`. The only value in the profile provided by the plugin is setting the `basic.request.consistency`
+to `QUORUM`.
+
+#### Removals
+
+Using DateTieredCompactionStrategy with automatic schema creation
 
 ### Migrations to 0.80 and later
 
