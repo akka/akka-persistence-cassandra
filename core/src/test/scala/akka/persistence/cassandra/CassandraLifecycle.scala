@@ -8,7 +8,7 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ ActorSystem, Props }
+import akka.actor.{ ActorSystem, PoisonPill, Props }
 import akka.persistence.PersistentActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.testkit.{ TestKitBase, TestProbe }
@@ -72,10 +72,18 @@ object CassandraLifecycle {
     probe.within(45.seconds) {
       probe.awaitAssert {
         n += 1
-        system
-          .actorOf(Props(classOf[AwaitPersistenceInit], journalPluginId, snapshotPluginId), "persistenceInit" + n)
-          .tell("hello", probe.ref)
-        probe.expectMsg(5.seconds, "hello")
+        val a =
+          system.actorOf(Props(classOf[AwaitPersistenceInit], journalPluginId, snapshotPluginId), "persistenceInit" + n)
+        a.tell("hello", probe.ref)
+        try {
+          probe.expectMsg(5.seconds, "hello")
+        } catch {
+          case t: Throwable =>
+            probe.watch(a)
+            a ! PoisonPill
+            probe.expectTerminated(a, 10.seconds)
+            throw t
+        }
         system.log.debug(
           "awaitPersistenceInit took {} ms {}",
           TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0),
@@ -111,9 +119,11 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
 
   def cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource
 
+  // FIXME why do we have this and the one in Cassandra spec?
   lazy val cluster = {
     CqlSession
       .builder()
+      .withLocalDatacenter("datacenter1")
       .addContactPoint(new InetSocketAddress("localhost", system.settings.config.getInt("cassandra-journal.port")))
       .build()
   }

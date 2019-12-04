@@ -29,7 +29,6 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-multi-node-testkit" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion % Test,
-    "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion % Test,
     "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
     "org.scalatest" %% "scalatest" % "3.0.8" % Test,
     "org.pegdown" % "pegdown" % "1.6.0" % Test,

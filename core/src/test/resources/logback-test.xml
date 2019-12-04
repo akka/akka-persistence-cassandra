@@ -19,7 +19,7 @@
     <logger name="com.datastax" level="INFO" />
     <logger name="io.netty" level="ERROR" />
 
-    <root level="DEBUG">
+    <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
 

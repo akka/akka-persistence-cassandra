@@ -34,7 +34,7 @@ import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
 import com.datastax.oss.driver.api.core.CqlSession
 
-import scala.util.Try
+import scala.util.control.NonFatal
 
 object CassandraSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
@@ -65,7 +65,14 @@ object CassandraSpec {
 
   val fallbackConfig = ConfigFactory.parseString(s"""
 //      akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
-        akka.loglevel = DEBUG
+//        akka.loglevel = DEBUG
+
+      datastax-java-driver {
+        basic.request {
+          timeout = 10s # drop keyspaces 
+        }
+      }
+  
         cassandra-query-journal {
           first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
           events-by-tag {
@@ -158,7 +165,7 @@ abstract class CassandraSpec(
   }
 
   override protected def externalCassandraCleanup(): Unit = {
-    Try {
+    try {
       if (failed) {
         println("RowDump::")
         import scala.collection.JavaConverters._
@@ -178,7 +185,7 @@ abstract class CassandraSpec(
           .asScala
           .foreach(row => {
             println(s"""Row:${row.getBoolean("used")}, ${row.getLong("partition_nr")}, ${row
-              .getLong("persistence_id")}, ${row.getLong("sequence_nr")}""")
+              .getString("persistence_id")}, ${row.getLong("sequence_nr")}""")
           })
       } else {
         println("Test did not fail")
@@ -189,6 +196,10 @@ abstract class CassandraSpec(
         cluster.execute(s"drop keyspace if exists $keyspace")
       }
       cluster.close()
+    } catch {
+      case NonFatal(t) =>
+        println("Exception during cleanup")
+        t.printStackTrace(System.out)
     }
   }
 
@@ -208,7 +219,11 @@ abstract class CassandraSpec(
   }
 
   final override lazy val cluster: CqlSession =
-    CqlSession.builder().addContactPoint(new InetSocketAddress("localhost", port())).build()
+    CqlSession
+      .builder()
+      .withLocalDatacenter("datacenter1")
+      .addContactPoint(new InetSocketAddress("localhost", port()))
+      .build()
 
   final override def systemName = system.name
 
