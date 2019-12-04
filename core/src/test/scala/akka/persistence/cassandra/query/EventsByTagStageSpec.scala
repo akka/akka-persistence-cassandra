@@ -18,13 +18,11 @@ import akka.serialization.{ Serialization, SerializationExtension }
 import akka.stream.scaladsl.{ Keep, Source }
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.ImplicitSender
-import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 
 import scala.annotation.tailrec
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 object EventsByTagStageSpec {
@@ -74,16 +72,6 @@ class EventsByTagStageSpec
 
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   val serialization: Serialization = SerializationExtension(system)
-
-  lazy val session: CqlSession = {
-    import system.dispatcher
-    Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
-  }
-
-  override protected def afterAll(): Unit = {
-    session.close()
-    super.afterAll()
-  }
 
   private val bucketSize = Minute
 

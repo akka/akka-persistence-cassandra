@@ -9,11 +9,7 @@ import akka.persistence.cassandra.journal.MultiPluginSpec._
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import akka.persistence.{ PersistentActor, SaveSnapshotSuccess }
-import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 object MultiPluginSpec {
   val journalKeyspace = "multiplugin_spec_journal"
@@ -88,31 +84,21 @@ class MultiPluginSpec
   lazy val cassandraPluginConfig =
     new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-journal"))
 
-  var session: CqlSession = _
-
   // default journal plugin is not configured for this test
   override def awaitPersistenceInit(): Unit = ()
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
-    import system.dispatcher
-    session = Await.result(cassandraPluginConfig.sessionProvider.connect(), 25.seconds)
-
-    session.execute(
+    cluster.execute(
       s"CREATE KEYSPACE IF NOT EXISTS $journalKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
-    session.execute(
+    cluster.execute(
       s"CREATE KEYSPACE IF NOT EXISTS $snapshotKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
 
     CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-a")
     CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-b")
     CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-c", "cassandra-snapshot-c")
     CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-d", "cassandra-snapshot-d")
-  }
-
-  override protected def afterAll(): Unit = {
-    session.close()
-    super.afterAll()
   }
 
   "A Cassandra journal" must {

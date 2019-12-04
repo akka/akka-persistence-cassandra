@@ -4,23 +4,21 @@
 
 package akka.persistence.cassandra.snapshot
 
-import java.lang.{ Integer => JInteger, Long => JLong }
+import java.lang.{ Long => JLong }
+import java.lang.{ Integer => JInteger }
 import java.nio.ByteBuffer
 
 import akka.cassandra.session.CassandraMetricsRegistry
 import akka.persistence.SnapshotProtocol._
 import akka.persistence._
-import akka.persistence.cassandra.{ CassandraLifecycle, SnapshotWithMetaData }
+import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.SnapshotWithMetaData
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.testkit.TestProbe
-import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.typesafe.config.ConfigFactory
 
 import scala.collection.immutable.Seq
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.util.Try
 
 object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(s"""
@@ -47,23 +45,12 @@ class CassandraSnapshotStoreSpec
     def snapshotConfig = storeConfig
   }
 
-  var session: CqlSession = _
-
   import storeStatements._
 
   override def systemName: String = "CassandraSnapshotStoreSpec"
 
   override def beforeAll(): Unit = {
     super.beforeAll()
-    import system.dispatcher
-    session = Await.result(storeConfig.sessionProvider.connect(), 5.seconds)
-  }
-
-  override def afterAll(): Unit = {
-    Try {
-      session.close()
-    }
-    super.afterAll()
   }
 
   // ByteArraySerializer
@@ -85,7 +72,7 @@ class CassandraSnapshotStoreSpec
       val expected = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
 
       // write two more snapshots that cannot be de-serialized.
-      session.execute(
+      cluster.execute(
         SimpleStatement.newInstance(
           writeSnapshot(withMeta = false),
           pid,
@@ -95,7 +82,7 @@ class CassandraSnapshotStoreSpec
           "",
           ByteBuffer.wrap("fail-1".getBytes("UTF-8"))))
 
-      session.execute(
+      cluster.execute(
         SimpleStatement.newInstance(
           writeSnapshot(withMeta = false),
           pid,
@@ -121,7 +108,7 @@ class CassandraSnapshotStoreSpec
       probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
 
       // write three more snapshots that cannot be de-serialized.
-      session.execute(
+      cluster.execute(
         SimpleStatement.newInstance(
           writeSnapshot(withMeta = false),
           pid,
@@ -130,7 +117,7 @@ class CassandraSnapshotStoreSpec
           serId,
           "",
           ByteBuffer.wrap("fail-1".getBytes("UTF-8"))))
-      session.execute(
+      cluster.execute(
         SimpleStatement.newInstance(
           writeSnapshot(withMeta = false),
           pid,
@@ -139,7 +126,7 @@ class CassandraSnapshotStoreSpec
           serId,
           "",
           ByteBuffer.wrap("fail-2".getBytes("UTF-8"))))
-      session.execute(
+      cluster.execute(
         SimpleStatement.newInstance(
           writeSnapshot(withMeta = false),
           pid,

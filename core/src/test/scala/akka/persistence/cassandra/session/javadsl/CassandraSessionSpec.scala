@@ -5,12 +5,10 @@
 package akka.persistence.cassandra.session.javadsl
 
 import java.util.Optional
-import java.util.concurrent.CompletionStage
 
 import akka.Done
-import akka.actor.ExtendedActorSystem
 import akka.cassandra.session.javadsl.CassandraSession
-import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
+import akka.cassandra.session.CassandraSessionSettings
 import akka.event.Logging
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.stream.testkit.scaladsl.TestSink
@@ -45,15 +43,11 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
       .withFallback(system.settings.config.getConfig("cassandra-journal"))
     new CassandraSession(
       system,
-      SessionProvider(system.asInstanceOf[ExtendedActorSystem], cfg),
       CassandraSessionSettings("cassandra-journal"),
       system.dispatcher,
       log,
       "CassandraSessionSpec-metrics",
-      new java.util.function.Function[CqlSession, CompletionStage[Done]] {
-        override def apply(s: CqlSession): CompletionStage[Done] =
-          s.executeAsync(s"USE ${cfg.getString("keyspace")};").toScala.map(_ => Done.getInstance).toJava
-      })
+      (s: CqlSession) => s.executeAsync(s"USE ${cfg.getString("keyspace")};").toScala.map(_ => Done.getInstance).toJava)
   }
 
   override def beforeAll(): Unit = {

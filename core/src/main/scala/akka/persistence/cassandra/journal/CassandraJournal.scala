@@ -97,7 +97,6 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
   val session = new CassandraSession(
     context.system,
-    config.sessionProvider,
     config.sessionSettings,
     context.dispatcher,
     log,

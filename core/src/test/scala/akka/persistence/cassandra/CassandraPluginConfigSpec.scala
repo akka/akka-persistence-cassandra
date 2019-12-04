@@ -6,29 +6,19 @@ package akka.persistence.cassandra
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
-import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.MustMatchers
 import org.scalatest.WordSpecLike
 import org.scalatest.prop.TableDrivenPropertyChecks._
 
-import scala.concurrent.Await
-import scala.concurrent.duration._
 import scala.util.Random
-
-object CassandraPluginConfigSpec {
-  // TODO, do we still support this? Probably not
-  class TestContactPointsProvider(system: ActorSystem, config: Config) extends ConfigSessionProvider(system, config) {}
-}
 
 class CassandraPluginConfigSpec
     extends TestKit(ActorSystem("CassandraPluginConfigSpec"))
     with WordSpecLike
     with MustMatchers
     with BeforeAndAfterAll {
-
-  import system.dispatcher
 
   lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-journal")
 
@@ -68,22 +58,10 @@ class CassandraPluginConfigSpec
   }
 
   "A CassandraPluginConfig" must {
-    "use ConfigSessionProvider by default" in {
-      val config = new CassandraPluginConfig(system, defaultConfig)
-      config.sessionProvider.getClass must be(classOf[ConfigSessionProvider])
-    }
 
     "set the metadata table" in {
       val config = new CassandraPluginConfig(system, defaultConfig)
       config.metadataTable must be("metadata")
-    }
-
-    "throw an exception when contact point list is empty" in {
-      val cfg = ConfigFactory.parseString("""contact-points = []""").withFallback(defaultConfig)
-      intercept[IllegalArgumentException] {
-        val config = new CassandraPluginConfig(system, cfg)
-        Await.result(config.sessionProvider.connect(), 3.seconds)
-      }
     }
 
     "parse config with SimpleStrategy as default for replication-strategy" in {

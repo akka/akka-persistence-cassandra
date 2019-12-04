@@ -32,7 +32,7 @@ import com.datastax.oss.driver.api.core.ProtocolVersion
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.cql.Statement
 import akka.annotation.InternalApi
-import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
+import akka.cassandra.session.CassandraSessionSettings
 import akka.cassandra.session._
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
@@ -51,7 +51,6 @@ import scala.compat.java8.FutureConverters._
  */
 final class CassandraSession(
     system: ActorSystem,
-    sessionProvider: SessionProvider,
     settings: CassandraSessionSettings,
     executionContext: ExecutionContext,
     log: LoggingAdapter,
@@ -62,7 +61,7 @@ final class CassandraSession(
   implicit private[akka] val ec = executionContext
   private lazy implicit val materializer = ActorMaterializer()(system)
 
-  private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
+  private val _underlyingSession: Future[CqlSession] = CqlSession.builder().buildAsync().toScala.flatMap { session =>
     init(session).map(_ => session)
   }
 
@@ -146,7 +145,6 @@ final class CassandraSession(
    * successfully executed, or if it fails.
    */
   def executeWrite(stmt: Statement[_]): Future[Done] = {
-
     underlying().flatMap { s =>
       s.executeAsync(withProfile(stmt)).toScala.map(_ => Done)
     }

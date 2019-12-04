@@ -19,7 +19,7 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 
 private[akka] trait TestTagWriter {
   def system: ActorSystem
-  val session: CqlSession
+  def cluster: CqlSession
   val serialization: Serialization
   val writePluginConfig: CassandraJournalConfig
 
@@ -27,7 +27,7 @@ private[akka] trait TestTagWriter {
     val writeStatements: CassandraStatements = new CassandraStatements {
       def config: CassandraJournalConfig = writePluginConfig
     }
-    (session.prepare(writeStatements.writeTags(false)), session.prepare(writeStatements.writeTags(true)))
+    (cluster.prepare(writeStatements.writeTags(false)), cluster.prepare(writeStatements.writeTags(true)))
   }
 
   def writeTaggedEvent(
@@ -85,7 +85,7 @@ private[akka] trait TestTagWriter {
         .setString("ser_manifest", serManifest)
         .setString("writer_uuid", "ManualWrite")
         .setLong("sequence_nr", pr.sequenceNr)
-      session.execute(bs)
+      cluster.execute(bs)
     })
 
     system.log.debug("Written event: {} Uuid: {} Timebucket: {}", pr.payload, formatOffset(uuid), timeBucket)

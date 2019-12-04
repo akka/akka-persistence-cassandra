@@ -7,18 +7,17 @@ package akka.persistence.cassandra.query
 import java.util.UUID
 
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, TagPidSequenceNr }
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Hour }
+import akka.persistence.cassandra.journal.CassandraJournal.PersistenceId
+import akka.persistence.cassandra.journal.CassandraJournal.TagPidSequenceNr
+import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.Hour
 import akka.persistence.cassandra.query.TagViewSequenceNumberScannerSpec.config
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
-import akka.serialization.{ Serialization, SerializationExtension }
-import com.datastax.oss.driver.api.core.CqlSession
+import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.CassandraSpec
+import akka.serialization.Serialization
+import akka.serialization.SerializationExtension
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.ConfigFactory
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.util.Try
 
 object TagViewSequenceNumberScannerSpec {
   val bucketSize = Hour
@@ -34,17 +33,6 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
 
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   val serialization: Serialization = SerializationExtension(system)
-  lazy val session: CqlSession = {
-    import system.dispatcher
-    Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
-  }
-
-  override protected def afterAll(): Unit = {
-    Try {
-      session.close()
-    }
-    super.afterAll()
-  }
 
   "Tag Pid Sequence Number Scanning" must {
     "be empty for no events" in {
