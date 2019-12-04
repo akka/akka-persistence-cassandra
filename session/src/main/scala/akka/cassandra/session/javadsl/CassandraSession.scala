@@ -17,7 +17,7 @@ import scala.concurrent.ExecutionContext
 import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.cassandra.session.{ CassandraSessionSettings, CqlSessionProvider }
+import akka.cassandra.session.CqlSessionProvider
 import akka.event.LoggingAdapter
 import akka.stream.javadsl.Source
 import com.datastax.oss.driver.api.core.CqlSession
@@ -45,7 +45,6 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
   def this(
       system: ActorSystem,
       sessionProvider: CqlSessionProvider,
-      settings: CassandraSessionSettings,
       executionContext: ExecutionContext,
       log: LoggingAdapter,
       metricsCategory: String,
@@ -54,7 +53,6 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
       new akka.cassandra.session.scaladsl.CassandraSession(
         system,
         sessionProvider,
-        settings,
         executionContext,
         log,
         metricsCategory,

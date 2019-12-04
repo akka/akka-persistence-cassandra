@@ -21,9 +21,10 @@ import scala.concurrent.duration.{ Deadline, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
 
 @InternalApi
-private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: Future[PreparedStatement])(
-    implicit materializer: ActorMaterializer,
-    ec: ExecutionContext) {
+private[akka] class TagViewSequenceNumberScanner(
+    session: CassandraSession,
+    profile: String,
+    ps: Future[PreparedStatement])(implicit materializer: ActorMaterializer, ec: ExecutionContext) {
   private val log = Logging(materializer.system, getClass)
 
   /**
@@ -40,7 +41,7 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
       val to = Uuids.endOf(System.currentTimeMillis() + scanningPeriod.toMillis)
 
       def doIt(): Future[Map[Tag, (TagPidSequenceNr, UUID)]] = {
-        val bound = ps.bind(tag, bucket.key: JLong, offset, to)
+        val bound = ps.bind(tag, bucket.key: JLong, offset, to).setExecutionProfileName(profile)
         log.debug(
           "Scanning tag: {} bucket: {}, from: {}, to: {}",
           tag,

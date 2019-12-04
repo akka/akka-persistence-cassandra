@@ -32,7 +32,8 @@ import scala.concurrent.duration._
 @InternalApi private[akka] final class AllPersistenceIdsStage(
     refreshInterval: Option[FiniteDuration],
     preparedStatement: PreparedStatement,
-    session: CqlSession)
+    session: CqlSession,
+    readProfile: String)
     extends GraphStage[SourceShape[String]] {
 
   import AllPersistenceIdsStage._
@@ -75,9 +76,8 @@ import scala.concurrent.duration._
 
       private def query(): Unit = {
         def doQuery(): Unit = {
-          // FIXME, what has happened to fetch size per statement?
           queryInProgress = true
-          val boundStatement = preparedStatement.bind()
+          val boundStatement = preparedStatement.bind().setExecutionProfileName(readProfile)
           session.executeAsync(boundStatement).thenAccept(queryCallback.invoke)
         }
         maybeResultSet match {

@@ -22,35 +22,45 @@ import akka.actor.Props
 import akka.actor.SupervisorStrategy
 import akka.actor.Timers
 import akka.annotation.InternalApi
+import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
-import com.datastax.oss.driver.api.core.cql.{ BoundStatement, PreparedStatement, Statement }
+import com.datastax.oss.driver.api.core.cql.{
+  BatchStatementBuilder,
+  BatchType,
+  BoundStatement,
+  PreparedStatement,
+  Statement
+}
+
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-
 import akka.util.ByteString
-import com.datastax.oss.driver.api.core.cql.AsyncResultSet
-import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder
-import com.datastax.oss.driver.api.core.cql.BatchType
 
 @InternalApi private[akka] object TagWriters {
 
   private[akka] case class TagWritersSession(
+      session: CassandraSession,
+      writeProfile: String,
+      readProfile: String,
       tagWritePs: () => Future[PreparedStatement],
       tagWriteWithMetaPs: () => Future[PreparedStatement],
-      executeStatement: Statement[_] => Future[Done],
-      selectStatement: Statement[_] => Future[AsyncResultSet],
       tagProgressPs: () => Future[PreparedStatement],
       tagScanningPs: () => Future[PreparedStatement]) {
 
+    def executeWrite[T <: Statement[T]](stmt: Statement[T]): Future[Done] = {
+      session.executeWrite(stmt.setExecutionProfileName(writeProfile))
+    }
+
     def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext): Future[Done] = {
       val batch = new BatchStatementBuilder(BatchType.UNLOGGED)
+      batch.setExecutionProfileName(writeProfile)
       val tagWritePSs = for {
         withMeta <- tagWriteWithMetaPs()
         withoutMeta <- tagWritePs()
@@ -90,14 +100,17 @@ import com.datastax.oss.driver.api.core.cql.BatchType
             }
             batch.build()
         }
-        .flatMap(executeStatement)
+        .flatMap(executeWrite)
     }
 
     def writeProgress(tag: Tag, persistenceId: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)(
         implicit ec: ExecutionContext): Future[Done] = {
       tagProgressPs()
-        .map(ps => ps.bind(persistenceId, tag, seqNr: JLong, tagPidSequenceNr: JLong, offset))
-        .flatMap(executeStatement)
+        .map(
+          ps =>
+            ps.bind(persistenceId, tag, seqNr: JLong, tagPidSequenceNr: JLong, offset)
+              .setExecutionProfileName(writeProfile))
+        .flatMap(executeWrite)
     }
 
   }
@@ -334,7 +347,7 @@ import com.datastax.oss.driver.api.core.cql.BatchType
           val statements: Seq[BoundStatement] = group.map {
             case (pid, seqNr) => ps.bind(pid, seqNr: JLong)
           }
-          Future.traverse(statements)(tagWriterSession.executeStatement).map(_ => Done)
+          Future.traverse(statements)(tagWriterSession.executeWrite).map(_ => Done)
         }
 
         // Execute 10 async statements at a time to not introduce too much load see issue #408.

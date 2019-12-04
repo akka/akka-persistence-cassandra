@@ -10,6 +10,7 @@ import akka.cassandra.session.scaladsl.CassandraSession
 import scala.concurrent.{ ExecutionContext, Future }
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
+
 import scala.compat.java8.FutureConverters._
 
 trait CassandraStatements {
@@ -331,4 +332,5 @@ trait CassandraStatements {
       recur = () => executeCreateKeyspaceAndTables(session, config),
       exec = () => create())
   }
+
 }

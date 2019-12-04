@@ -54,7 +54,6 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
   val session = new CassandraSession(
     context.system,
     snapshotConfig.sessionProvider,
-    snapshotConfig.sessionSettings,
     context.dispatcher,
     log,
     metricsCategory = cfgPath,

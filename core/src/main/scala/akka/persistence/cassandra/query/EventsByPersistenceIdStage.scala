@@ -70,26 +70,28 @@ import scala.compat.java8.FutureConverters._
       selectEventsByPersistenceIdQuery: PreparedStatement,
       selectSingleRowQuery: PreparedStatement,
       selectDeletedToQuery: PreparedStatement,
-      session: CqlSession) {
+      session: CqlSession,
+      profile: String) {
 
-    // FIXME, maybe pass in profile?
     def selectEventsByPersistenceId(
         persistenceId: String,
         partitionNr: Long,
         progress: Long,
         toSeqNr: Long): Future[AsyncResultSet] = {
       val boundStatement =
-        selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
+        selectEventsByPersistenceIdQuery
+          .bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
+          .setExecutionProfileName(profile)
       executeStatement(boundStatement)
     }
 
     def selectSingleRow(persistenceId: String, pnr: Long)(implicit ec: ExecutionContext): Future[Option[Row]] = {
-      val boundStatement = selectSingleRowQuery.bind(persistenceId, pnr: JLong)
+      val boundStatement = selectSingleRowQuery.bind(persistenceId, pnr: JLong).setExecutionProfileName(profile)
       session.executeAsync(boundStatement).toScala.map(rs => Option(rs.one()))
     }
 
     def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContext): Future[Long] =
-      executeStatement(selectDeletedToQuery.bind(persistenceId)).map(r =>
+      executeStatement(selectDeletedToQuery.bind(persistenceId).setExecutionProfileName(profile)).map(r =>
         Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
 
     private def executeStatement(statement: Statement[_]): Future[AsyncResultSet] =

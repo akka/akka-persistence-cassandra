@@ -127,7 +127,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   val session: CassandraSession = new CassandraSession(
     system,
     writePluginConfig.sessionProvider,
-    writePluginConfig.sessionSettings,
     ec,
     log,
     metricsCategory = cfgPath,
@@ -280,7 +279,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
         createFutureSource(prereqs) { (s, prereqs) =>
           val session =
-            TagStageSession(tag, s, prereqs._1)
+            new TagStageSession(tag, queryPluginConfig.readProfile, s, prereqs._1)
           Source.fromGraph(
             EventsByTagStage(
               session,
@@ -343,7 +342,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       tag: String,
       fromOffset: UUID): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
     val scanner =
-      new TagViewSequenceNumberScanner(session, preparedSelectTagSequenceNrs)
+      new TagViewSequenceNumberScanner(session, queryPluginConfig.readProfile, preparedSelectTagSequenceNrs)
     val bucket = TimeBucket(fromOffset, writePluginConfig.bucketSize)
     scanner.scan(tag, fromOffset, bucket, queryPluginConfig.eventsByTagOffsetScanning)
   }
@@ -354,7 +353,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   @InternalApi private[akka] def createSource[T, P](
       prepStmt: Future[P],
       source: (CqlSession, P) => Source[T, NotUsed]): Source[T, NotUsed] = {
-    // when we get the PreparedStatement[_]we know that the session is initialized,
+    // when we get the PreparedStatement we know that the session is initialized,
     // i.e.the get is safe
     def getSession: CqlSession = session.underlying().value.get.get
 
@@ -423,7 +422,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
 
         createFutureSource(prereqs) { (s, prereqs) =>
           val session =
-            TagStageSession(tag, s, prereqs._1)
+            new TagStageSession(tag, queryPluginConfig.readProfile, s, prereqs._1)
           Source.fromGraph(
             EventsByTagStage(
               session,
@@ -556,7 +555,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
               c.preparedSelectEventsByPersistenceId,
               c.prepareSelectHighestNr,
               c.preparedSelectDeletedTo,
-              s),
+              s,
+              queryPluginConfig.readProfile),
             queryPluginConfig,
             fastForwardEnabled))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
@@ -634,7 +634,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       preparedSelectDistinctPersistenceIds,
       (s, ps) =>
         Source
-          .fromGraph(new AllPersistenceIdsStage(refreshInterval, ps, s))
+          .fromGraph(new AllPersistenceIdsStage(refreshInterval, ps, s, queryPluginConfig.readProfile))
           .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
           .named(name))

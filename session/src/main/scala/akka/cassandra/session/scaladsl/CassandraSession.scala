@@ -32,7 +32,6 @@ import com.datastax.oss.driver.api.core.ProtocolVersion
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.cql.Statement
 import akka.annotation.InternalApi
-import akka.cassandra.session.CassandraSessionSettings
 import akka.cassandra.session._
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
@@ -52,7 +51,6 @@ import scala.compat.java8.FutureConverters._
 final class CassandraSession(
     system: ActorSystem,
     sessionProvider: CqlSessionProvider,
-    settings: CassandraSessionSettings,
     executionContext: ExecutionContext,
     log: LoggingAdapter,
     metricsCategory: String,
@@ -62,7 +60,6 @@ final class CassandraSession(
   implicit private[akka] val ec = executionContext
   private lazy implicit val materializer = ActorMaterializer()(system)
 
-  // FIXME, make this more configurable
   private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
     session.getMetrics.ifPresent(metrics => {
       CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)
@@ -151,7 +148,7 @@ final class CassandraSession(
    */
   def executeWrite(stmt: Statement[_]): Future[Done] = {
     underlying().flatMap { s =>
-      s.executeAsync(withProfile(stmt)).toScala.map(_ => Done)
+      s.executeAsync(stmt).toScala.map(_ => Done)
     }
   }
 
@@ -180,15 +177,8 @@ final class CassandraSession(
    */
   @InternalApi private[akka] def selectResultSet(stmt: Statement[_]): Future[AsyncResultSet] = {
     underlying().flatMap { s =>
-      s.executeAsync(withProfile(stmt)).toScala
+      s.executeAsync(stmt).toScala
     }
-  }
-
-  private def withProfile[T <: Statement[T]](stmt: Statement[T]): Statement[T] = {
-    if (stmt.getExecutionProfileName == null)
-      stmt.setExecutionProfileName(settings.profile)
-    else
-      stmt
   }
 
   /**
@@ -204,7 +194,7 @@ final class CassandraSession(
    * this `Source` and then `run` the stream.
    */
   def select(stmt: Statement[_]): Source[Row, NotUsed] = {
-    Source.fromGraph(new SelectSource(Future.successful(withProfile(stmt))))
+    Source.fromGraph(new SelectSource(Future.successful(stmt)))
   }
 
   /**
@@ -219,10 +209,8 @@ final class CassandraSession(
    */
   def select(stmt: String, bindValues: AnyRef*): Source[Row, NotUsed] = {
     val bound = prepare(stmt).map { ps =>
-      val bs =
-        if (bindValues.isEmpty) ps.bind()
-        else ps.bind(bindValues: _*)
-      withProfile(bs)
+      if (bindValues.isEmpty) ps.bind()
+      else ps.bind(bindValues: _*)
     }
     Source.fromGraph(new SelectSource(bound))
   }
@@ -240,7 +228,7 @@ final class CassandraSession(
    */
   def selectAll(stmt: Statement[_]): Future[immutable.Seq[Row]] = {
     Source
-      .fromGraph(new SelectSource(Future.successful(withProfile(stmt))))
+      .fromGraph(new SelectSource(Future.successful(stmt)))
       .runWith(Sink.seq)
       .map(_.toVector) // Sink.seq returns Seq, not immutable.Seq (compilation issue in Eclipse)
   }
@@ -274,7 +262,7 @@ final class CassandraSession(
    */
   def selectOne(stmt: Statement[_]): Future[Option[Row]] = {
 
-    selectResultSet(withProfile(stmt)).map { rs =>
+    selectResultSet(stmt).map { rs =>
       Option(rs.one()) // rs.one returns null if exhausted
     }
   }

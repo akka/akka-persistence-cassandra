@@ -646,29 +646,30 @@ class TagWriterSpec
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
-    val session = new TagWritersSession(() => fakePs, () => fakePs, successfulWrite, null, () => fakePs, () => fakePs) {
+    val session =
+      new TagWritersSession(null, "unused", "unused", () => fakePs, () => fakePs, () => fakePs, () => fakePs) {
 
-      override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
-        probe.ref ! events.map {
-          case (event, tagPidSequenceNr) => toEw(event, tagPidSequenceNr)
+        override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
+          probe.ref ! events.map {
+            case (event, tagPidSequenceNr) => toEw(event, tagPidSequenceNr)
+          }
+          val (result, tail) = (writeResponseStream.head, writeResponseStream.tail)
+          writeResponseStream = tail
+          result
         }
-        val (result, tail) = (writeResponseStream.head, writeResponseStream.tail)
-        writeResponseStream = tail
-        result
-      }
 
-      override def writeProgress(
-          tag: Tag,
-          pid: PersistenceId,
-          seqNr: SequenceNr,
-          tagPidSequenceNr: TagPidSequenceNr,
-          offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
-        val (head, tail) = (progressWriteResponseStream.head, progressWriteResponseStream.tail)
-        probe.ref ! ProgressWrite(pid, seqNr, tagPidSequenceNr, offset)
-        progressWriteResponseStream = tail
-        head
+        override def writeProgress(
+            tag: Tag,
+            pid: PersistenceId,
+            seqNr: SequenceNr,
+            tagPidSequenceNr: TagPidSequenceNr,
+            offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
+          val (head, tail) = (progressWriteResponseStream.head, progressWriteResponseStream.tail)
+          probe.ref ! ProgressWrite(pid, seqNr, tagPidSequenceNr, offset)
+          progressWriteResponseStream = tail
+          head
+        }
       }
-    }
 
     val ref = system.actorOf(TagWriter.props(settings, session, tag))
     (probe, ref)

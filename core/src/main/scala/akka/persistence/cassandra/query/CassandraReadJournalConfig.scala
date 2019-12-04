@@ -19,6 +19,8 @@ import scala.concurrent.duration._
 @InternalApi private[akka] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig)
     extends NoSerializationVerificationNeeded {
 
+  val readProfile = config.getString("read-profile")
+
   val refreshInterval: FiniteDuration =
     config.getDuration("refresh-interval", MILLISECONDS).millis
   val gapFreeSequenceNumbers: Boolean =

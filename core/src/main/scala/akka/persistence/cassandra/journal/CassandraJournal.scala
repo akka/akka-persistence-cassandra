@@ -98,17 +98,17 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   val session = new CassandraSession(
     context.system,
     config.sessionProvider,
-    config.sessionSettings,
     context.dispatcher,
     log,
     metricsCategory = cfgPath,
     init = (session: CqlSession) => executeCreateKeyspaceAndTables(session, config))
 
   private val tagWriterSession = TagWritersSession(
+    session,
+    writeProfile,
+    readProfile,
     () => preparedWriteToTagViewWithoutMeta,
     () => preparedWriteToTagViewWithMeta,
-    session.executeWrite, // FIXME, set the profile
-    session.selectResultSet, // FIXME, set the profile
     () => preparedWriteToTagProgress,
     () => preparedWriteTagScanning)
 
@@ -120,7 +120,6 @@ class CassandraJournal(cfg: Config, cfgPath: String)
           "tagWrites"))
     else None
 
-  // FIXME, check all the consistencies and retry policies are set every where they need to be
   def preparedWriteMessage =
     session.prepare(writeMessage(withMeta = false))
   def preparedSelectDeletedTo: Option[Future[PreparedStatement]] = {
@@ -570,7 +569,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         } else {
           val boundInsertDeletedTo =
             preparedInsertDeletedTo.map(_.bind(persistenceId, toSeqNr: JLong))
-          boundInsertDeletedTo.flatMap(session.executeWrite)
+          boundInsertDeletedTo.flatMap(execute)
         }
       logicalDelete.flatMap(_ => physicalDelete(lowestPartition, highestPartition, toSeqNr))
     }
@@ -598,7 +597,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
     val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, partitionNr: JLong))
     boundSelectHighestSequenceNr
-      .flatMap(session.selectOne)
+      .flatMap(selectOne)
       .map(
         row =>
           row
@@ -611,9 +610,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     preparedSelectDeletedTo match {
       case Some(pstmt) =>
         val boundSelectDeletedTo = pstmt.map(_.bind(persistenceId))
-        boundSelectDeletedTo
-          .flatMap(session.selectOne)
-          .map(rowOption => rowOption.map(_.getLong("deleted_to")).getOrElse(0))
+        boundSelectDeletedTo.flatMap(selectOne).map(rowOption => rowOption.map(_.getLong("deleted_to")).getOrElse(0))
       case None =>
         Future.successful(0L)
     }
@@ -656,7 +653,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
       })
       boundSelectHighestSequenceNr
-        .flatMap(session.selectOne)
+        .flatMap(selectOne)
         .map { rowOption =>
           log.debug("asyncFind {}", rowOption)
           rowOption.map { row =>
@@ -677,21 +674,21 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     find(partitionNr(fromSequenceNr, partitionSize), fromSequenceNr)
   }
 
-  // FIXME, is this always UNLOGGED? It was before
-  // FIXME, not that useful with the new mutable builder API
   private def executeBatch(body: BatchStatement => BatchStatement): Future[Unit] = {
     var batch = new BatchStatementBuilder(BatchType.UNLOGGED).build().setExecutionProfileName(config.writeProfile)
     batch = body(batch)
     session.underlying().flatMap(_.executeAsync(batch).toScala).map(_ => ())
   }
 
+  def selectOne[T <: Statement[T]](stmt: Statement[T]): Future[Option[Row]] = {
+    session.selectOne(stmt.setExecutionProfileName(readProfile))
+  }
+
   private def minSequenceNr(partitionNr: Long): Long =
     partitionNr * config.targetPartitionSize + 1
 
   private def execute[T <: Statement[T]](stmt: Statement[T]): Future[Unit] = {
-    // Is it okay if this profile does not exist?
-    val withProfile: Statement[T] = stmt.setExecutionProfileName(config.writeProfile)
-    session.executeWrite(withProfile).map(_ => ())
+    session.executeWrite(stmt.setExecutionProfileName(config.writeProfile)).map(_ => ())
   }
 
   private def partitionNew(sequenceNr: Long): Boolean =

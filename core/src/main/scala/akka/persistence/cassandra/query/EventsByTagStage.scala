@@ -89,18 +89,17 @@ import scala.compat.java8.FutureConverters._
       usingOffset,
       initialTagPidSequenceNrs)
 
-  private[akka] class TagStageSession(val tag: String, session: CqlSession, statements: EventByTagStatements) {
+  private[akka] class TagStageSession(
+      val tag: String,
+      readProfile: String,
+      session: CqlSession,
+      statements: EventByTagStatements) {
     def selectEventsForBucket(bucket: TimeBucket, from: UUID, to: UUID): Future[AsyncResultSet] = {
       val bound =
-        statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to)
+        statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setExecutionProfileName(readProfile)
 
       session.executeAsync(bound).toScala
     }
-  }
-
-  private[akka] object TagStageSession {
-    def apply(tag: String, session: CqlSession, statements: EventByTagStatements): TagStageSession =
-      new TagStageSession(tag, session, statements)
   }
 
   private sealed trait QueryState

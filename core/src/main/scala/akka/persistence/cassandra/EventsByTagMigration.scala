@@ -118,7 +118,6 @@ class EventsByTagMigration(
     new CassandraSession(
       system,
       config.sessionProvider,
-      config.sessionSettings,
       ec,
       log,
       "EventsByTagMigration",
@@ -192,10 +191,11 @@ class EventsByTagMigration(
       flushTimeout: Timeout): Future[Done] = {
     log.info("Beginning migration of data to tag_views table in keyspace {}", config.keyspace)
     val tagWriterSession = TagWritersSession(
+      session,
+      config.writeProfile,
+      config.readProfile,
       () => preparedWriteToTagViewWithoutMeta,
       () => preparedWriteToTagViewWithMeta,
-      session.executeWrite,
-      session.selectResultSet,
       () => preparedWriteToTagProgress,
       () => preparedWriteTagScanning)
     val tagWriters = system.actorOf(TagWriters.props(config.tagWriterSettings, tagWriterSession))

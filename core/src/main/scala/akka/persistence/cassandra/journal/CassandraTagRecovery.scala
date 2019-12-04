@@ -38,7 +38,7 @@ trait CassandraTagRecovery {
   private[akka] def lookupTagProgress(
       persistenceId: String)(implicit ec: ExecutionContext, mat: Materializer): Future[Map[Tag, TagProgress]] =
     preparedSelectTagProgressForPersistenceId
-      .map(_.bind(persistenceId))
+      .map(_.bind(persistenceId).setExecutionProfileName(config.readProfile))
       .flatMap(stmt => {
         session.select(stmt).runWith(Sink.seq)
       })
@@ -54,10 +54,13 @@ trait CassandraTagRecovery {
   // or min tag scanning sequence number, and fix any tags. This recovers any tag writes that
   // happened before the latest snapshot
   private[akka] def tagScanningStartingSequenceNr(persistenceId: String): Future[SequenceNr] =
-    preparedSelectTagScanningForPersistenceId.map(_.bind(persistenceId)).flatMap(session.selectOne).map {
-      case Some(row) => row.getLong("sequence_nr")
-      case None      => 1L
-    }
+    preparedSelectTagScanningForPersistenceId
+      .map(_.bind(persistenceId).setExecutionProfileName(config.readProfile))
+      .flatMap(session.selectOne)
+      .map {
+        case Some(row) => row.getLong("sequence_nr")
+        case None      => 1L
+      }
 
   private[akka] def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], to: ActorRef, actorRunning: Boolean = true)(
       rawEvent: RawEvent): RawEvent = {

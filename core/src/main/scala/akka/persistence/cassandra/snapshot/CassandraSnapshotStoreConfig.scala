@@ -11,10 +11,10 @@ import akka.persistence.cassandra.CassandraPluginConfig
 import akka.actor.ActorSystem
 
 class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
+  val writeProfile: String = config.getString("write-profile")
+  val readProfile: String = config.getString("read-profile")
   val maxLoadAttempts = config.getInt("max-load-attempts")
   val cassandra2xCompat = config.getBoolean("cassandra-2x-compat")
-  val writeProfile = config.getString("write-profile")
-  val readProfile = config.getString("read-profile")
 
   /**
    * The Cassandra Statement[_]that can be used to create the configured keyspace.

@@ -5,13 +5,14 @@
 package akka.cassandra.session
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
-import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.Config
 
 import scala.collection.immutable
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.Failure
 import scala.compat.java8.FutureConverters._
+
+import com.datastax.oss.driver.api.core.CqlSession
 
 /**
  * The implementation of the `SessionProvider` is used for creating the
@@ -29,7 +30,9 @@ trait CqlSessionProvider {
 }
 
 class DefaultSessionProvider extends CqlSessionProvider {
-  override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = CqlSession.builder().buildAsync().toScala
+  override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
+    CqlSession.builder().buildAsync().toScala
+  }
 }
 
 object CqlSessionProvider {

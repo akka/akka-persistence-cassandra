@@ -8,7 +8,7 @@ import java.util.Optional
 
 import akka.Done
 import akka.cassandra.session.javadsl.CassandraSession
-import akka.cassandra.session.{ CassandraSessionSettings, DefaultSessionProvider }
+import akka.cassandra.session.DefaultSessionProvider
 import akka.event.Logging
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.stream.testkit.scaladsl.TestSink
@@ -42,7 +42,6 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
     new CassandraSession(
       system,
       new DefaultSessionProvider,
-      CassandraSessionSettings("cassandra-journal"),
       system.dispatcher,
       log,
       "CassandraSessionSpec-metrics",
