@@ -132,7 +132,7 @@ import scala.concurrent.duration._
               if (refreshInterval.isEmpty && isExhausted(rs)) {
                 complete(out)
               } else {
-                if (!queryInProgress && rs.remaining() == 0) {
+                if (!queryInProgress && rs.remaining() == 0 && rs.hasMorePages) {
                   rs.fetchNextPage().thenAccept(queryCallback.invoke)
                 }
               }

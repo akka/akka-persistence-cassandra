@@ -38,7 +38,7 @@ object CassandraLifecycle {
 
   val config = {
     val always = ConfigFactory.parseString(s"""
-                                               akka.loglevel = DEBUG
+    # akka.loglevel = DEBUG
     akka.test.timefactor = $${?AKKA_TEST_TIMEFACTOR}
     akka.persistence.journal.plugin = "cassandra-journal"
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
@@ -73,7 +73,9 @@ object CassandraLifecycle {
       probe.awaitAssert {
         n += 1
         val a =
-          system.actorOf(Props(classOf[AwaitPersistenceInit], journalPluginId, snapshotPluginId), "persistenceInit" + n)
+          system.actorOf(
+            Props(classOf[AwaitPersistenceInit], "persistenceInit" + n, journalPluginId, snapshotPluginId),
+            "persistenceInit" + n)
         a.tell("hello", probe.ref)
         try {
           probe.expectMsg(5.seconds, "hello")
@@ -92,9 +94,11 @@ object CassandraLifecycle {
     }
   }
 
-  class AwaitPersistenceInit(override val journalPluginId: String, override val snapshotPluginId: String)
+  class AwaitPersistenceInit(
+      override val persistenceId: String,
+      override val journalPluginId: String,
+      override val snapshotPluginId: String)
       extends PersistentActor {
-    def persistenceId: String = "persistenceInit"
 
     def receiveRecover: Receive = {
       case _ =>

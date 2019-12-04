@@ -38,9 +38,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
   val log = Logging.getLogger(system, this.getClass)
 
   lazy val session: CassandraSession = {
-    val cfg = system.settings.config
-      .getConfig("test-cassandra-session-config")
-      .withFallback(system.settings.config.getConfig("cassandra-journal"))
+    val cfg = system.settings.config.withFallback(system.settings.config.getConfig("cassandra-journal"))
     new CassandraSession(
       system,
       CassandraSessionSettings("cassandra-journal"),

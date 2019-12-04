@@ -62,6 +62,7 @@ class CassandraSnapshotStoreSpec
       val snapshots = registry.getNames.toArray()
       snapshots.length should be > 0
     }
+
     "make up to 3 snapshot loading attempts" in {
       val probe = TestProbe()
 

@@ -6,6 +6,7 @@ package akka.persistence.cassandra.query
 
 import java.time.temporal.ChronoUnit
 import java.time.{ LocalDateTime, ZoneOffset }
+import java.util.Optional
 import java.util.UUID
 
 import akka.actor.{ PoisonPill, Props }
@@ -1041,11 +1042,11 @@ class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.di
 
   "Events by tag disabled" must {
     "stop tag_views being created" in {
-      cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_views") shouldEqual null
+      cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_views") shouldEqual Optional.empty()
     }
 
     "stop tag_progress being created" in {
-      cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_write_progress") shouldEqual null
+      cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_write_progress") shouldEqual Optional.empty()
     }
 
     "fail current events by tag queries" in {
@@ -1063,14 +1064,15 @@ class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.di
     }
 
     "allow recovery" in {
+      val probe = TestProbe()
       val a = system.actorOf(EventsByTagDisabledSpec.props("a"))
-      a ! 2
-      expectMsg(20.seconds, 2)
+      a.tell(2, probe.ref)
+      probe.expectMsg(20.seconds, 2)
       a ! PoisonPill
 
       val aMk2 = system.actorOf(EventsByTagDisabledSpec.props("a"))
-      aMk2 ! 4
-      expectMsg(20.seconds, 6)
+      aMk2.tell(4, probe.ref)
+      probe.expectMsg(20.seconds, 6)
     }
   }
 }
