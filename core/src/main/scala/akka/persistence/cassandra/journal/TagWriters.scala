@@ -85,6 +85,7 @@ import com.datastax.oss.driver.api.core.cql.BatchType
                     bound
                 }
 
+                // this is a mutable builder
                 batch.addStatement(finished)
             }
             batch.build()

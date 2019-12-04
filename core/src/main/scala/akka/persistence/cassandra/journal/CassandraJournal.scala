@@ -376,7 +376,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         if (m.meta.isDefined) preparedWriteMessageWithMeta
         else preparedWriteMessage
 
-      val eh: Future[BoundStatement] = stmt.map { stmt =>
+      stmt.map { stmt =>
         val bs = stmt
           .bind()
           .setString("persistence_id", persistenceId)
@@ -401,7 +401,6 @@ class CassandraJournal(cfg: Config, cfgPath: String)
           })
           .getOrElse(bs)
       }
-      eh
     }
     // in case we skip an entire partition we want to make sure the empty partition has in in-use flag so scans
     // keep going when they encounter it

@@ -96,7 +96,7 @@ final class CassandraSession(
    * Execute <a href=https://docs.datastax.com/en/archived/cql/3.3/cql/cql_reference/cqlCommandsTOC.html">CQL commands</a>
    * to manage database resources (create, replace, alter, and drop tables, indexes, user-defined types, etc).
    *
-   * The returned `Future` is completed when the command is done, or if the Statement[_]fails.
+   * The returned `Future` is completed when the command is done, or if the statement fails.
    */
   def executeDDL(stmt: String): Future[Done] =
     for {
@@ -108,7 +108,7 @@ final class CassandraSession(
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useCreateTableTOC.html">Creating a table</a>.
    *
    * The returned `Future` is completed when the table has been created,
-   * or if the Statement[_]fails.
+   * or if the statement fails.
    */
   @deprecated("Use executeDDL instead.", "0.100")
   def executeCreateTable(stmt: String): Future[Done] = executeDDL(stmt)
@@ -139,14 +139,14 @@ final class CassandraSession(
 
   /**
    * Execute one statement. First you must [[#prepare]] the
-   * Statement[_]and bind its parameters.
+   * statement and bind its parameters.
    *
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
    *
    * The configured write consistency level is used if a specific consistency
    * level has not been set on the `Statement`.
    *
-   * The returned `Future` is completed when the Statement[_]has been
+   * The returned `Future` is completed when the statement has been
    * successfully executed, or if it fails.
    */
   def executeWrite(stmt: Statement[_]): Future[Done] = {
@@ -156,13 +156,13 @@ final class CassandraSession(
   }
 
   /**
-   * Prepare, bind and execute one Statement[_]in one go.
+   * Prepare, bind and execute one statement in one go.
    *
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
    *
    * The configured write consistency level is used.
    *
-   * The returned `Future` is completed when the Statement[_]has been
+   * The returned `Future` is completed when the statement has been
    * successfully executed, or if it fails.
    */
   def executeWrite(stmt: String, bindValues: AnyRef*): Future[Done] = {
@@ -193,7 +193,7 @@ final class CassandraSession(
 
   /**
    * Execute a select statement. First you must [[#prepare]] the
-   * Statement[_]and bind its parameters.
+   * statement and bind its parameters.
    *
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
    *
@@ -208,7 +208,7 @@ final class CassandraSession(
   }
 
   /**
-   * Prepare, bind and execute a select Statement[_]in one go.
+   * Prepare, bind and execute a select statement in one go.
    *
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
    *
@@ -228,7 +228,7 @@ final class CassandraSession(
   }
 
   /**
-   * Execute a select statement. First you must [[#prepare]] the Statement[_]and
+   * Execute a select statement. First you must [[#prepare]] the statement and
    * bind its parameters. Only use this method when you know that the result
    * is small, e.g. includes a `LIMIT` clause. Otherwise you should use the
    * `select` method that returns a `Source`.
@@ -246,7 +246,7 @@ final class CassandraSession(
   }
 
   /**
-   * Prepare, bind and execute a select Statement[_]in one go. Only use this method
+   * Prepare, bind and execute a select statement in one go. Only use this method
    * when you know that the result is small, e.g. includes a `LIMIT` clause.
    * Otherwise you should use the `select` method that returns a `Source`.
    *
@@ -263,8 +263,8 @@ final class CassandraSession(
   }
 
   /**
-   * Execute a select Statement[_]that returns one row. First you must [[#prepare]] the
-   * Statement[_]and bind its parameters.
+   * Execute a select statement that returns one row. First you must [[#prepare]] the
+   * statement and bind its parameters.
    *
    * The configured read consistency level is used if a specific consistency
    * level has not been set on the `Statement`.
@@ -280,7 +280,7 @@ final class CassandraSession(
   }
 
   /**
-   * Prepare, bind and execute a select Statement[_]that returns one row.
+   * Prepare, bind and execute a select statement that returns one row.
    *
    * The configured read consistency level is used.
    *

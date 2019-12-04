@@ -309,16 +309,10 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
         SnapshotMetadata(row.getString("persistence_id"), row.getLong("sequence_nr"), row.getLong("timestamp")))
       .dropWhile(_.timestamp > criteria.maxTimestamp)
 
-    val done = limit match {
+    limit match {
       case Some(n) => source.take(n.toLong).runWith(Sink.seq)
       case None    => source.runWith(Sink.seq)
     }
-
-    done.onComplete { result =>
-      log.debug("Snapshot load complete {}", result)
-    }
-
-    done
   }
 
 }
