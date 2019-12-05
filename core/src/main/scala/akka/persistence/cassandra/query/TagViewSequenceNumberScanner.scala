@@ -20,6 +20,9 @@ import com.datastax.driver.core.utils.UUIDs
 import scala.concurrent.duration.{ Deadline, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
 
+/**
+ * INTERNAL API
+ */
 @InternalApi
 private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: Future[PreparedStatement])(
     implicit materializer: ActorMaterializer,
@@ -27,10 +30,11 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
   private val log = Logging(materializer.system, getClass)
 
   /**
+   * INTERNAL API
    * This could be its own stage and return half way through a query to better meet the deadline
    * but this is a quick and simple way to do it given we're scanning a small segment
    */
-  private[akka] def scan(
+  @InternalApi private[akka] def scan(
       tag: String,
       offset: UUID,
       bucket: TimeBucket,

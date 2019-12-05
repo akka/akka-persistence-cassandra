@@ -313,7 +313,10 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
 
 }
 
-private[snapshot] object CassandraSnapshotStore {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[snapshot] object CassandraSnapshotStore {
   private case object Init
 
   private case class Serialized(serialized: ByteBuffer, serManifest: String, serId: Int, meta: Option[SerializedMeta])

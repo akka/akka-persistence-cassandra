@@ -15,7 +15,10 @@ import scala.concurrent.{ ExecutionContext, Future }
 
 import java.lang.{ Long => JLong }
 
-private[akka] trait CassandraEventUpdate extends CassandraStatements {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] trait CassandraEventUpdate extends CassandraStatements {
 
   private[akka] val session: CassandraSession
   private[akka] def config: CassandraJournalConfig

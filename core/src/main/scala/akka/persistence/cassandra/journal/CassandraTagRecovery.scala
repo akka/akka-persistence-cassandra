@@ -34,7 +34,7 @@ trait CassandraTagRecovery {
   // No other writes for this pid should be taking place during recovery
   // The result set size will be the number of distinct tags that this pid has used, expecting
   // that to be small (<10) so call to all should be safe
-  private[akka] def lookupTagProgress(persistenceId: String)(
+  @InternalApi private[akka] def lookupTagProgress(persistenceId: String)(
       implicit ec: ExecutionContext): Future[Map[Tag, TagProgress]] =
     preparedSelectTagProgressForPersistenceId
       .map(_.bind(persistenceId))
@@ -50,13 +50,13 @@ trait CassandraTagRecovery {
   // Before starting the actual recovery first go from the oldest tag progress -> fromSequenceNr
   // or min tag scanning sequence number, and fix any tags. This recovers any tag writes that
   // happened before the latest snapshot
-  private[akka] def tagScanningStartingSequenceNr(persistenceId: String): Future[SequenceNr] =
+  @InternalApi private[akka] def tagScanningStartingSequenceNr(persistenceId: String): Future[SequenceNr] =
     preparedSelectTagScanningForPersistenceId.map(_.bind(persistenceId)).flatMap(session.selectOne).map {
       case Some(row) => row.getLong("sequence_nr")
       case None      => 1L
     }
 
-  private[akka] def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], to: ActorRef, actorRunning: Boolean = true)(
+  @InternalApi private[akka] def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], to: ActorRef, actorRunning: Boolean = true)(
       rawEvent: RawEvent): RawEvent = {
     // FIXME logging once stable
     log.debug("Processing tag write for event {} tags {}", rawEvent.sequenceNr, rawEvent.serialized.tags)
@@ -87,7 +87,7 @@ trait CassandraTagRecovery {
    * Before starting to process tagged messages then a [SetTagProgress] is sent to the
    * [TagWriters] to initialise the sequence numbers for each tag.
    */
-  private[akka] def setTagProgress(
+  @InternalApi private[akka] def setTagProgress(
       pid: String,
       tagProgress: Map[Tag, TagProgress],
       tagWriters: ActorRef): Future[Done] = {
@@ -95,7 +95,7 @@ trait CassandraTagRecovery {
     (tagWriters ? SetTagProgress(pid, tagProgress)).mapTo[TagProcessAck.type].map(_ => Done)
   }
 
-  private[akka] def sendPersistentActorStarting(
+  @InternalApi private[akka] def sendPersistentActorStarting(
       pid: String,
       persistentActor: ActorRef,
       tagWriters: ActorRef): Future[Done] = {

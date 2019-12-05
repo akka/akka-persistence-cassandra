@@ -21,7 +21,8 @@ import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.concurrent.duration._
 
-/*
+/**
+ * INTERNAL API
  * Groups writes into un-logged batches for the same partition.
  *
  * For the read stage to work correctly events must be written in order for a given
@@ -35,33 +36,35 @@ import scala.concurrent.duration._
  */
 @InternalApi private[akka] object TagWriter {
 
-  private[akka] def props(settings: TagWriterSettings, session: TagWritersSession, tag: Tag): Props =
+  @InternalApi private[akka] def props(settings: TagWriterSettings, session: TagWritersSession, tag: Tag): Props =
     Props(new TagWriter(settings, session, tag))
 
-  private[akka] case class TagWriterSettings(
+  @InternalApi private[akka] case class TagWriterSettings(
       maxBatchSize: Int,
       flushInterval: FiniteDuration,
       scanningFlushInterval: FiniteDuration,
       pubsubNotification: Boolean)
 
-  private[akka] case class TagProgress(
+  @InternalApi private[akka] case class TagProgress(
       persistenceId: PersistenceId,
       sequenceNr: SequenceNr,
       pidTagSequenceNr: TagPidSequenceNr)
 
-  /*
-   * Reset pid tag sequence numbers to the given [[TagProgress]] and discard any messages for the given persistenceId
+  /**
+   * INTERNAL API
+   * Reset pid tag sequence numbers to the given [[TagProgress]] and discard any messages for the given persistenceId.
    */
-  private[akka] case class ResetPersistenceId(tag: Tag, progress: TagProgress) extends NoSerializationVerificationNeeded
+  @InternalApi private[akka] case class ResetPersistenceId(tag: Tag, progress: TagProgress) extends NoSerializationVerificationNeeded
 
-  /*
-   * Sent in response to a [[ResetPersistenceId]]
+  /**
+   * INTERNAL APIa
+   * Sent in response to a [[ResetPersistenceId]].
    */
-  private[akka] case object ResetPersistenceIdComplete
+  @InternalApi private[akka] case object ResetPersistenceIdComplete
 
   // Flush buffer regardless of size
-  private[akka] case object Flush
-  private[akka] case object FlushComplete
+  @InternalApi private[akka] case object Flush
+  @InternalApi private[akka] case object FlushComplete
 
   type TagWriteSummary = Map[PersistenceId, PidProgress]
   case class PidProgress(seqNrFrom: SequenceNr, seqNrTo: SequenceNr, tagPidSequenceNr: TagPidSequenceNr, offset: UUID)
@@ -72,7 +75,7 @@ import scala.concurrent.duration._
   private final case class TagWriteFailed(reason: Throwable, failedEvents: Vector[(Serialized, TagPidSequenceNr)])
       extends TagWriteFinished
 
-  private[akka] case class DropState(pid: PersistenceId)
+  @InternalApi private[akka] case class DropState(pid: PersistenceId)
 
   val timeUuidOrdering = new Ordering[UUID] {
     override def compare(x: UUID, y: UUID) =
@@ -80,6 +83,9 @@ import scala.concurrent.duration._
   }
 }
 
+/**
+ * INTERNAL API
+ */
 @InternalApi private[akka] class TagWriter(settings: TagWriterSettings, session: TagWritersSession, tag: String)
     extends Actor
     with Timers

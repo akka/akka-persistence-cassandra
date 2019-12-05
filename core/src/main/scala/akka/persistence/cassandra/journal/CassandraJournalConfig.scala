@@ -15,25 +15,47 @@ import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
 import com.typesafe.config.Config
 import scala.concurrent.duration._
 
+/**
+ * INTERNAL API
+ */
 @InternalApi private[akka] sealed trait BucketSize {
   val durationMillis: Long
 }
 
-private[akka] case object Day extends BucketSize {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] case object Day extends BucketSize {
   override val durationMillis: Long = 1.day.toMillis
 }
-private[akka] case object Hour extends BucketSize {
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] case object Hour extends BucketSize {
   override val durationMillis: Long = 1.hour.toMillis
 }
-private[akka] case object Minute extends BucketSize {
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] case object Minute extends BucketSize {
   override val durationMillis: Long = 1.minute.toMillis
 }
 
+/**
+ * INTERNAL API
+ */
+@InternalApi
 // Not to be used for real production apps. Just to make testing bucket transitions easier.
 private[akka] case object Second extends BucketSize {
   override val durationMillis: Long = 1.second.toMillis
 }
 
+/**
+ * INTERNAL API
+ */
+@InternalApi
 private[akka] object BucketSize {
   def fromString(value: String): BucketSize =
     Vector(Day, Hour, Minute, Second)

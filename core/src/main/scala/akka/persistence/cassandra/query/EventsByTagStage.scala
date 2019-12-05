@@ -32,6 +32,7 @@ import com.datastax.driver.core.utils.UUIDs
 import com.github.ghik.silencer.silent
 
 /**
+ * INTERNAL API
  * Walks the tag_views table.
  *
  * For current queries:
@@ -86,7 +87,7 @@ import com.github.ghik.silencer.silent
       usingOffset,
       initialTagPidSequenceNrs)
 
-  private[akka] class TagStageSession(
+  @InternalApi private[akka] class TagStageSession(
       val tag: String,
       session: Session,
       statements: EventByTagStatements,
@@ -100,7 +101,7 @@ import com.github.ghik.silencer.silent
     }
   }
 
-  private[akka] object TagStageSession {
+  @InternalApi private[akka] object TagStageSession {
     def apply(tag: String, session: Session, statements: EventByTagStatements, fetchSize: Int): TagStageSession =
       new TagStageSession(tag, session, statements, fetchSize)
   }
@@ -173,6 +174,9 @@ import com.github.ghik.silencer.silent
   }
 }
 
+/**
+ * INTERNAL API
+ */
 @InternalApi private[akka] class EventsByTagStage(
     session: TagStageSession,
     fromOffset: UUID,
