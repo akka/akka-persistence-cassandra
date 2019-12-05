@@ -4,7 +4,6 @@
 
 package akka.persistence.cassandra
 
-import java.io.File
 import java.net.InetSocketAddress
 import java.util.concurrent.TimeUnit
 
@@ -20,24 +19,9 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
 object CassandraLifecycle {
-  sealed trait CassandraMode
-  final case object Embedded extends CassandraMode
-  final case object External extends CassandraMode
 
-  // Set to external to use your own cassandra instance running on localhost:9042
-  // beware that most tests rely on the data directory being removed for clean up
-  // which won't happen for an external cassandra unless extending CassandraSpec
-  //  val mode: CassandraMode = Embedded
-  val mode: CassandraMode = Option(System.getenv("CASSANDRA_MODE")).map(_.toLowerCase) match {
-    case Some("external") => External
-    case Some("embedded") => Embedded
-    case _                => External
-  }
-
-  def isExternal: Boolean = mode == External
-
-  val config = {
-    val always = ConfigFactory.parseString(s"""
+  val config =
+    ConfigFactory.parseString(s"""
     akka.test.timefactor = $${?AKKA_TEST_TIMEFACTOR}
     akka.persistence.journal.plugin = "cassandra-journal"
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
@@ -49,20 +33,6 @@ object CassandraLifecycle {
     akka.actor.allow-java-serialization = on
     akka.actor.warn-about-java-serializer-usage = off
     """).resolve()
-
-    // this isn't used if extending CassandraSpec
-    val port = mode match {
-      case Embedded =>
-        CassandraLauncher.randomPort
-      case External =>
-        9042
-    }
-
-    always.withFallback(ConfigFactory.parseString(s"""
-      cassandra-journal.port = $port
-      cassandra-snapshot-store.port = $port
-    """))
-  }
 
   def awaitPersistenceInit(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
     val probe = TestProbe()(system)
@@ -116,60 +86,31 @@ object CassandraLifecycle {
 trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   this: Suite =>
 
-  import CassandraLifecycle._
-
   def systemName: String
 
   def cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource
 
-  // FIXME why do we have this and the one in Cassandra spec?
+  def port(): Int = 9042
+
   lazy val cluster = {
     CqlSession
       .builder()
       .withLocalDatacenter("datacenter1")
-      .addContactPoint(new InetSocketAddress("localhost", system.settings.config.getInt("cassandra-journal.port")))
+      .addContactPoint(new InetSocketAddress("localhost", port()))
       .build()
   }
 
   override protected def beforeAll(): Unit = {
-    startCassandra(port())
     awaitPersistenceInit()
     super.beforeAll()
   }
-
-  def port(): Int = 0
-
-  def startCassandra(): Unit =
-    startCassandra(port())
-
-  def startCassandra(port: Int): Unit =
-    mode match {
-      case Embedded =>
-        val cassandraDirectory = new File("target/" + systemName)
-        CassandraLauncher.start(
-          cassandraDirectory,
-          configResource = cassandraConfigResource,
-          clean = true,
-          port = port,
-          CassandraLauncher.classpathForResources("logback-test.xml"))
-      case External =>
-    }
 
   def awaitPersistenceInit(): Unit =
     CassandraLifecycle.awaitPersistenceInit(system)
 
   override protected def afterAll(): Unit =
-    try {
-      shutdown(system, verifySystemShutdown = true)
-    } finally {
-      mode match {
-        case Embedded =>
-          CassandraLauncher.stop()
-        case External =>
-          externalCassandraCleanup()
-      }
-      super.afterAll()
-    }
+    shutdown(system, verifySystemShutdown = true)
+  super.afterAll()
 
   def dropKeyspaces(): Unit = {
     val journalKeyspace = system.settings.config.getString("cassandra-journal.keyspace")

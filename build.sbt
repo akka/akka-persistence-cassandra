@@ -58,6 +58,11 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assemblyJarName in assembly := "cassandra-bundle.jar")
 
+lazy val dseTest =
+  (project in file("dse-test"))
+    .dependsOn(core % "test->test")
+    .settings(libraryDependencies ++= Dependencies.dseTestDependencies)
+
 lazy val docs = project
   .enablePlugins(Common, AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
   .settings(

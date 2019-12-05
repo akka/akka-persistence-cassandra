@@ -8,3 +8,11 @@ services:
     image: cassandra:latest
     ports:
       - "9042:9042"
+
+  # for testing against dse
+  dse:
+    image: datastax/dse-server
+    environment:
+      - DS_LICENSE=accept
+    ports:
+      - "9043:9042"

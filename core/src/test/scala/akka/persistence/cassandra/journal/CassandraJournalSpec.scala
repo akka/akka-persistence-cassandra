@@ -16,7 +16,7 @@ import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 
 object CassandraJournalConfiguration {
-  lazy val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory.parseString(s"""
        |cassandra-journal.keyspace=CassandraJournalSpec
        |cassandra-snapshot-store.keyspace=CassandraJournalSpecSnapshot
     """.stripMargin).withFallback(CassandraLifecycle.config)

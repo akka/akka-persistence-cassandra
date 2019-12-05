@@ -33,4 +33,11 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % "3.0.8" % Test,
     "org.pegdown" % "pegdown" % "1.6.0" % Test,
     "org.osgi" % "org.osgi.core" % "5.0.0" % Provided)
+
+  val dseTestDependencies = Seq(
+    "com.datastax.dse" % "dse-java-driver-core" % "2.3.0" % Test,
+    "com.typesafe.akka" %% "akka-persistence-tck" % AkkaVersion % Test,
+    "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
+    "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
+    "ch.qos.logback" % "logback-classic" % "1.2.3" % Test)
 }

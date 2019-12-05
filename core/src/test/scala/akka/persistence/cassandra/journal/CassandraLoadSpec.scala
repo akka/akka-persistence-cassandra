@@ -15,17 +15,11 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 object CassandraLoadSpec {
-  val config = ConfigFactory
-    .parseString(if (CassandraLifecycle.isExternal) {
-      "akka.actor.serialize-messages=off"
-    } else {
-      s"""
+  val config = ConfigFactory.parseString(s"""
       cassandra-journal.replication-strategy = NetworkTopologyStrategy
       cassandra-journal.data-center-replication-factors = ["dc1:1"]
       akka.actor.serialize-messages=off
-     """
-    })
-    .withFallback(CassandraLifecycle.config)
+     """).withFallback(CassandraLifecycle.config)
 
   trait Measure { this: Actor =>
     val NanoToSecond = 1000.0 * 1000 * 1000

@@ -14,6 +14,8 @@ fine grained control over consistencies and retires for each are. By default all
 `datastax-java-driver.profile.cassandra-journal`. The only value in the profile provided by the plugin is setting the `basic.request.consistency`
 to `QUORUM`.
 
+The new driver has reduced
+
 #### Removals
 
 Using DateTieredCompactionStrategy with automatic schema creation

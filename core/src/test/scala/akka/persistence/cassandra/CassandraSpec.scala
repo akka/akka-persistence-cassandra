@@ -5,14 +5,12 @@
 package akka.persistence.cassandra
 
 import java.io.{ OutputStream, PrintStream }
-import java.net.InetSocketAddress
 import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.event.Logging.{ LogEvent, StdOutLogger }
-import akka.persistence.cassandra.CassandraLifecycle.{ Embedded, External }
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
@@ -32,7 +30,6 @@ import scala.collection.immutable
 import scala.concurrent.duration._
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
-import com.datastax.oss.driver.api.core.CqlSession
 
 import scala.util.control.NonFatal
 
@@ -107,11 +104,6 @@ abstract class CassandraSpec(
   val shortWait = 10.millis
 
   lazy val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
-
-  override def port(): Int = CassandraLifecycle.mode match {
-    case External => 9042
-    case Embedded => randomPort
-  }
 
   def keyspaces(): Set[String] = Set(journalName, snapshotName)
 
@@ -216,13 +208,6 @@ abstract class CassandraSpec(
     as.log.info("Using key spaces: {} {}", journalName, snapshotName)
     as
   }
-
-  final override lazy val cluster: CqlSession =
-    CqlSession
-      .builder()
-      .withLocalDatacenter("datacenter1")
-      .addContactPoint(new InetSocketAddress("localhost", port()))
-      .build()
 
   final override def systemName = system.name
 
