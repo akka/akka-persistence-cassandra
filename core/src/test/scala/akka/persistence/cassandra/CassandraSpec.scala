@@ -161,7 +161,7 @@ abstract class CassandraSpec(
       if (failed) {
         println("RowDump::")
         import scala.collection.JavaConverters._
-        if (config.getBoolean("cassandra-journal.events-by-tag.enabled")) {
+        if (system.settings.config.getBoolean("cassandra-journal.events-by-tag.enabled")) {
           println("tag_views")
           cluster
             .execute(s"select * from ${journalName}.tag_views")

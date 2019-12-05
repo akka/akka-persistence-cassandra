@@ -108,6 +108,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
 
   override protected def afterAll(): Unit = {
     shutdown(system, verifySystemShutdown = true)
+    externalCassandraCleanup()
     super.afterAll()
   }
 
