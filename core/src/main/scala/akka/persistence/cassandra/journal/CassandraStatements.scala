@@ -114,7 +114,7 @@ trait CassandraStatements {
 
   // could just use the write tags Statement[_]if we're going to update all the fields.
   // Fields that are not updated atm: writer_uuid and metadata fields
-  private[akka] def updateMessagePayloadAndTags =
+  private[akka] def updateMessagePayloadAndTags: String =
     s"""
        UPDATE $tableName
        SET
@@ -131,7 +131,7 @@ trait CassandraStatements {
         timebucket = ?
      """
 
-  private[akka] def addTagsToMessagesTable =
+  private[akka] def addTagsToMessagesTable: String =
     s"""
        UPDATE $tableName
        SET tags = tags + ?
@@ -143,7 +143,7 @@ trait CassandraStatements {
         timebucket = ?
      """
 
-  private[akka] def writeTags(withMeta: Boolean) =
+  private[akka] def writeTags(withMeta: Boolean): String =
     s"""
        INSERT INTO $tagTableName(
         tag_name,
@@ -313,12 +313,15 @@ trait CassandraStatements {
           } yield Done
         } else FutureDone
 
-      val keyspace: Future[Done] =
+      val startTime = System.nanoTime()
+
+      def keyspace: Future[Done] =
         if (config.keyspaceAutoCreate)
           session.executeAsync(createKeyspace).toScala.map(_ => Done)
-        else Future.successful(Done)
+        else FutureDone
 
-      if (config.tablesAutoCreate) {
+      val done = if (config.tablesAutoCreate) {
+        session.setSchemaMetadataEnabled(false)
         for {
           _ <- keyspace
           _ <- session.executeAsync(createTable).toScala
@@ -326,6 +329,15 @@ trait CassandraStatements {
           done <- tagStatements
         } yield done
       } else keyspace
+
+      import scala.concurrent.duration._
+      import akka.util.PrettyDuration._
+      done.onComplete { result =>
+        session.setSchemaMetadataEnabled(null)
+        println("Schema update took " + (System.nanoTime() - startTime).nanos.pretty)
+      }
+
+      done
     }
 
     CassandraSession.serializedExecution(
