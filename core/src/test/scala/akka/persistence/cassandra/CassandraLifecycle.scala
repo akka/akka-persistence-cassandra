@@ -102,12 +102,14 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
     super.beforeAll()
   }
 
-  def awaitPersistenceInit(): Unit =
+  def awaitPersistenceInit(): Unit = {
     CassandraLifecycle.awaitPersistenceInit(system)
+  }
 
-  override protected def afterAll(): Unit =
+  override protected def afterAll(): Unit = {
     shutdown(system, verifySystemShutdown = true)
-  super.afterAll()
+    super.afterAll()
+  }
 
   def dropKeyspaces(): Unit = {
     val journalKeyspace = system.settings.config.getString("cassandra-journal.keyspace")
