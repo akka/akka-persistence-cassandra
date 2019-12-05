@@ -36,11 +36,7 @@ import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.ConsistencyLevel
 import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.driver.api.core.retry.RetryDecision
 import com.datastax.oss.driver.api.core.retry.RetryPolicy
-import com.datastax.oss.driver.api.core.servererrors.CoordinatorException
-import com.datastax.oss.driver.api.core.servererrors.WriteType
-import com.datastax.oss.driver.api.core.session.Request
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
 
