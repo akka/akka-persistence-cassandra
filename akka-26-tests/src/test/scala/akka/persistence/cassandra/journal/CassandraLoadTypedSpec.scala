@@ -19,9 +19,6 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 object CassandraLoadTypedSpec {
-  val config = ConfigFactory.parseString("""
-      
-     """).withFallback(CassandraLifecycle.config)
 
   class Measure {
     private val NanoToSecond = 1000.0 * 1000 * 1000
@@ -109,7 +106,7 @@ object CassandraLoadTypedSpec {
 
 }
 
-class CassandraLoadTypedSpec extends CassandraSpec(CassandraLoadTypedSpec.config) with WordSpecLike with Matchers {
+class CassandraLoadTypedSpec extends CassandraSpec() with WordSpecLike with Matchers {
 
   import CassandraLoadTypedSpec._
 

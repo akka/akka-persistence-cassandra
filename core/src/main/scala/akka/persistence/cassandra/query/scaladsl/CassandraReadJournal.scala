@@ -376,7 +376,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    */
   @InternalApi private[akka] def createFutureSource[T, P, M](prepStmt: Future[P])(
       source: (CqlSession, P) => Source[T, M]): Source[T, Future[M]] = {
-    // when we get the PreparedStatement[_]we know that the session is initialized,
+    // when we get the PreparedStatement we know that the session is initialized,
     // i.e.the get is safe
     def getSession: CqlSession = session.underlying().value.get.get
 

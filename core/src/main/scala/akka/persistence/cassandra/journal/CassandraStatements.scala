@@ -112,7 +112,7 @@ trait CassandraStatements {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true, ?)
     """
 
-  // could just use the write tags Statement[_]if we're going to update all the fields.
+  // could just use the write tags Statement if we're going to update all the fields.
   // Fields that are not updated atm: writer_uuid and metadata fields
   private[akka] def updateMessagePayloadAndTags: String =
     s"""
