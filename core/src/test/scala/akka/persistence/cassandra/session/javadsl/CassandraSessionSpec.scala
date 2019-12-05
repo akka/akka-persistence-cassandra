@@ -41,7 +41,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
     val cfg = system.settings.config.withFallback(system.settings.config.getConfig("cassandra-journal"))
     new CassandraSession(
       system,
-      new DefaultSessionProvider,
+      new DefaultSessionProvider(system, cfg),
       system.dispatcher,
       log,
       "CassandraSessionSpec-metrics",

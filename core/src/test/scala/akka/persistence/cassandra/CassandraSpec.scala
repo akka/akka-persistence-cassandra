@@ -50,14 +50,20 @@ object CassandraSpec {
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
     ConfigFactory.parseString(s"""
       cassandra-journal {
+        session-name = $journalKeyspace
         keyspace = $journalKeyspace
         port = $port
       }
 
       cassandra-snapshot-store {
+        session-name = ${snapshotStoreKeyspace}Snapshot
         keyspace = $snapshotStoreKeyspace
         port = $port
       }
+    
+      cassandra-query-plugin { 
+        session-name = ${journalKeyspace}Query
+      }     
     """)
 
   val fallbackConfig = ConfigFactory.parseString(s"""

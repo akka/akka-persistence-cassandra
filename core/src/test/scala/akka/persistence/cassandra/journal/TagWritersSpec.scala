@@ -13,18 +13,12 @@ import akka.persistence.cassandra.journal.TagWriters._
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import akka.util.Timeout
 import com.datastax.oss.driver.api.core.uuid.Uuids
-import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
 
 class TagWritersSpec
-    extends TestKit(
-      ActorSystem(
-        "TagWriterSpec",
-        ConfigFactory.parseString("""
-        akka.loglevel = INFO
-      """)))
+    extends TestKit(ActorSystem("TagWriterSpec"))
     with WordSpecLike
     with BeforeAndAfterAll
     with ImplicitSender

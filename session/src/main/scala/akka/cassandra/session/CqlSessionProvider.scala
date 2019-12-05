@@ -5,14 +5,15 @@
 package akka.cassandra.session
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
+import akka.util.unused
 import com.typesafe.config.Config
 
 import scala.collection.immutable
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.Failure
 import scala.compat.java8.FutureConverters._
-
 import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.config.{ DefaultDriverOption, DriverConfigLoader }
 
 /**
  * The implementation of the `SessionProvider` is used for creating the
@@ -29,9 +30,17 @@ trait CqlSessionProvider {
   def connect()(implicit ec: ExecutionContext): Future[CqlSession]
 }
 
-class DefaultSessionProvider extends CqlSessionProvider {
+class DefaultSessionProvider(@unused system: ActorSystem, config: Config) extends CqlSessionProvider {
   override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
-    CqlSession.builder().buildAsync().toScala
+    val builder = CqlSession.builder()
+    val sessionName = config.getString("session-name")
+    (if (sessionName != null && sessionName.nonEmpty) {
+       val overload: DriverConfigLoader =
+         DriverConfigLoader.programmaticBuilder().withString(DefaultDriverOption.SESSION_NAME, sessionName).build()
+       builder.withConfigLoader(overload)
+     } else {
+       builder
+     }).buildAsync().toScala
   }
 }
 

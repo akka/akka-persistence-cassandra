@@ -6,8 +6,9 @@ package akka.persistence.cassandra.query
 
 import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.actor.NoSerializationVerificationNeeded
+import akka.actor.{ ActorSystem, ExtendedActorSystem, NoSerializationVerificationNeeded }
 import akka.annotation.InternalApi
+import akka.cassandra.session.CqlSessionProvider
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
 import com.typesafe.config.Config
 
@@ -16,13 +17,19 @@ import scala.concurrent.duration._
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig)
+@InternalApi private[akka] class CassandraReadJournalConfig(
+    system: ActorSystem,
+    config: Config,
+    writePluginConfig: CassandraJournalConfig)
     extends NoSerializationVerificationNeeded {
 
   val readProfile = config.getString("read-profile")
 
+  val sessionProvider: CqlSessionProvider = CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
+
   val refreshInterval: FiniteDuration =
     config.getDuration("refresh-interval", MILLISECONDS).millis
+
   val gapFreeSequenceNumbers: Boolean =
     config.getBoolean("gap-free-sequence-numbers")
   val maxBufferSize: Int = config.getInt("max-buffer-size")
