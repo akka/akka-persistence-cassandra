@@ -24,15 +24,7 @@ object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(s"""
        |cassandra-journal.keyspace=CassandraSnapshotStoreSpec
        |cassandra-snapshot-store.keyspace=CassandraSnapshotStoreSpecSnapshot
-       |cassandra-snapshot-store.max-metadata-result-size = 2
     """.stripMargin).withFallback(CassandraLifecycle.config)
-
-  lazy val protocolV3Config = ConfigFactory.parseString(s"""
-      cassandra-journal.protocol-version = 3
-      cassandra-journal.enable-events-by-tag-query = off
-      cassandra-journal.keyspace=CassandraSnapshotStoreProtocolV3Spec
-      cassandra-snapshot-store.keyspace=CassandraSnapshotStoreProtocolV3Spec
-    """).withFallback(config)
 }
 
 class CassandraSnapshotStoreSpec
@@ -183,14 +175,4 @@ class CassandraSnapshotStoreSpec
       probe.expectMsg(LoadSnapshotResult(Some(SelectedSnapshot(metadata(3), s"s-4")), Long.MaxValue))
     }
   }
-}
-
-/**
- * Cassandra 2.2.0 or later should support protocol version V4, but as long as we
- * support 2.1.6+ we do some compatibility testing with V3.
- */
-class CassandraSnapshotStoreProtocolV3Spec
-    extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.protocolV3Config)
-    with CassandraLifecycle {
-  override def systemName: String = "CassandraSnapshotStoreProtocolV3Spec"
 }

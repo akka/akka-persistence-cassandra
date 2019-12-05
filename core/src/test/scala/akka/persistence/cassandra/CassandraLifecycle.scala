@@ -9,7 +9,6 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor.{ ActorSystem, PoisonPill, Props }
 import akka.persistence.PersistentActor
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.testkit.{ TestKitBase, TestProbe }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
@@ -87,8 +86,6 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   this: Suite =>
 
   def systemName: String
-
-  def cassandraConfigResource: String = CassandraLauncher.DefaultTestConfigResource
 
   def port(): Int = 9042
 

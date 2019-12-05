@@ -14,7 +14,9 @@ fine grained control over consistencies and retires for each are. By default all
 `datastax-java-driver.profile.cassandra-journal`. The only value in the profile provided by the plugin is setting the `basic.request.consistency`
 to `QUORUM`.
 
-The new driver has reduced
+The new driver supports reconnection during initialization which was previously built into the plugin. It is recommended to turn this on with:
+`datastax-java-driver.advanced.reconnect-on-init = true`
+It can't be turned on by the plugin as it is in the driver's reference.conf and is not overridable in a profile.
 
 #### Removals
 

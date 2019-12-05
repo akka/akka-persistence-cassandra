@@ -17,7 +17,7 @@ import org.scalatest._
 object CassandraLoadSpec {
   val config = ConfigFactory.parseString(s"""
       cassandra-journal.replication-strategy = NetworkTopologyStrategy
-      cassandra-journal.data-center-replication-factors = ["dc1:1"]
+      cassandra-journal.data-center-replication-factors = ["datacenter1:1"]
       akka.actor.serialize-messages=off
      """).withFallback(CassandraLifecycle.config)
 
@@ -112,9 +112,6 @@ class CassandraLoadSpec
     with Matchers {
 
   import CassandraLoadSpec._
-
-  // use PropertyFileSnitch with cassandra-topology.properties
-  override def cassandraConfigResource: String = "test-embedded-cassandra-net.yaml"
 
   private def testThroughput(processor: ActorRef): Unit = {
     val warmCycles = 100L
