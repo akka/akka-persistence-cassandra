@@ -7,6 +7,12 @@ package akka.persistence.cassandra.query.scaladsl
 import java.net.URLEncoder
 import java.util.UUID
 
+import scala.collection.immutable
+import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.util.{ Failure, Success }
+import scala.util.control.NonFatal
+
 import akka.{ Done, NotUsed }
 import akka.actor.ExtendedActorSystem
 import akka.annotation.InternalApi
@@ -22,21 +28,15 @@ import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
+import akka.serialization.SerializationExtension
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
 import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.util.ByteString
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.UUIDs
-import com.typesafe.config.Config
-
-import scala.collection.immutable
-import scala.concurrent.Future
-import scala.concurrent.duration._
-import scala.util.{ Failure, Success }
-import scala.util.control.NonFatal
-import akka.serialization.SerializationExtension
 import com.datastax.driver.core.{ ConsistencyLevel, PreparedStatement, Session }
+import com.typesafe.config.Config
 
 object CassandraReadJournal {
 
@@ -57,6 +57,9 @@ object CassandraReadJournal {
       prepareSelectHighestNr: PreparedStatement,
       preparedSelectDeletedTo: PreparedStatement)
 
+  /**
+   * INTERNAL API
+   */
   @InternalApi private[akka] case class EventByTagStatements(byTagWithUpperLimit: PreparedStatement)
 }
 
@@ -285,7 +288,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       .mapMaterializedValue(_ => NotUsed)
       .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
 
-  private[akka] def eventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
+  @InternalApi private[akka] def eventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
     if (!config.eventsByTagEnabled)
       Source.failed(new IllegalStateException("Events by tag queries are disabled"))
     else {
@@ -353,7 +356,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
     } yield (statements, tagSequenceNrs)
   }
 
-  private[akka] def scanTagSequenceNrs(
+  @InternalApi private[akka] def scanTagSequenceNrs(
       tag: String,
       fromOffset: UUID): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
     val scanner =
@@ -425,7 +428,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
       .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
 
-  private[akka] def currentEventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
+  @InternalApi private[akka] def currentEventsByTagInternal(
+      tag: String,
+      offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
     if (!config.eventsByTagEnabled)
       Source.failed(new IllegalStateException("Events by tag queries are disabled"))
     else {

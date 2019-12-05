@@ -16,6 +16,7 @@ import scala.util.Success
 import scala.util.control.NonFatal
 
 import akka.actor._
+import akka.annotation.InternalApi
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.FixedRetryPolicy
@@ -313,7 +314,10 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
 
 }
 
-private[snapshot] object CassandraSnapshotStore {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[snapshot] object CassandraSnapshotStore {
   private case object Init
 
   private case class Serialized(serialized: ByteBuffer, serManifest: String, serId: Int, meta: Option[SerializedMeta])

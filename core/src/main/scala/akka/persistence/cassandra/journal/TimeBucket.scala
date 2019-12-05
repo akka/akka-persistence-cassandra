@@ -10,6 +10,9 @@ import akka.annotation.InternalApi
 import akka.util.HashCode
 import com.datastax.driver.core.utils.UUIDs
 
+/**
+ * INTERNAL API
+ */
 @InternalApi private[akka] object TimeBucket {
 
   def apply(timeuuid: UUID, bucketSize: BucketSize): TimeBucket =
@@ -25,6 +28,9 @@ import com.datastax.driver.core.utils.UUIDs
   }
 }
 
+/**
+ * INTERNAL API
+ */
 @InternalApi private[akka] final class TimeBucket private (val key: Long, val bucketSize: BucketSize) {
   def inPast: Boolean =
     key < TimeBucket.roundDownBucketSize(System.currentTimeMillis(), bucketSize)

@@ -4,18 +4,22 @@
 
 package akka.persistence.cassandra.journal
 
+import java.lang.{ Long => JLong }
+
+import scala.collection.JavaConverters._
+import scala.concurrent.{ ExecutionContext, Future }
+
+import akka.annotation.InternalApi
 import akka.Done
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
 import akka.cassandra.session.scaladsl.CassandraSession
 import com.datastax.driver.core.{ PreparedStatement, Row, Statement }
 
-import scala.collection.JavaConverters._
-import scala.concurrent.{ ExecutionContext, Future }
-
-import java.lang.{ Long => JLong }
-
-private[akka] trait CassandraEventUpdate extends CassandraStatements {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] trait CassandraEventUpdate extends CassandraStatements {
 
   private[akka] val session: CassandraSession
   private[akka] def config: CassandraJournalConfig

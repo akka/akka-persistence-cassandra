@@ -605,7 +605,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
             .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
   }
 
-  private[akka] def asyncHighestDeletedSequenceNumber(persistenceId: String): Future[Long] = {
+  @InternalApi private[akka] def asyncHighestDeletedSequenceNumber(persistenceId: String): Future[Long] = {
     preparedSelectDeletedTo match {
       case Some(pstmt) =>
         val boundSelectDeletedTo = pstmt.map(_.bind(persistenceId))
@@ -617,7 +617,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     }
   }
 
-  private[akka] def asyncReadLowestSequenceNr(
+  @InternalApi private[akka] def asyncReadLowestSequenceNr(
       persistenceId: String,
       fromSequenceNr: Long,
       highestDeletedSequenceNumber: Long,
@@ -643,7 +643,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       }
   }
 
-  private[akka] def asyncFindHighestSequenceNr(
+  @InternalApi private[akka] def asyncFindHighestSequenceNr(
       persistenceId: String,
       fromSequenceNr: Long,
       partitionSize: Long): Future[Long] = {
@@ -713,6 +713,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
   private case class SerializedAtomicWrite(persistenceId: String, payload: Seq[Serialized])
 
+  @InternalApi
   private[akka] case class Serialized(
       persistenceId: String,
       sequenceNr: Long,
@@ -726,6 +727,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       timeUuid: UUID,
       timeBucket: TimeBucket)
 
+  @InternalApi
   private[akka] case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
 
   private case class PartitionInfo(partitionNr: Long, minSequenceNr: Long, maxSequenceNr: Long)

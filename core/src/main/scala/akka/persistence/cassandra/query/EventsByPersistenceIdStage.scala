@@ -9,6 +9,12 @@ import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
 
+import scala.annotation.tailrec
+import scala.collection.JavaConverters._
+import scala.concurrent.{ ExecutionContext, Future, Promise }
+import scala.concurrent.duration.{ FiniteDuration, _ }
+import scala.util.{ Failure, Success, Try }
+
 import akka.Done
 import akka.annotation.InternalApi
 import akka.persistence.PersistentRepr
@@ -20,12 +26,6 @@ import akka.stream.stage._
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.RetryPolicy
 import com.datastax.driver.core.utils.Bytes
-
-import scala.annotation.tailrec
-import scala.collection.JavaConverters._
-import scala.concurrent.{ ExecutionContext, Future, Promise }
-import scala.concurrent.duration.{ FiniteDuration, _ }
-import scala.util.{ Failure, Success, Try }
 import akka.util.OptionVal
 import com.github.ghik.silencer.silent
 
@@ -34,13 +34,13 @@ import com.github.ghik.silencer.silent
  */
 @InternalApi private[akka] object EventsByPersistenceIdStage {
 
-  private[akka] case class TaggedPersistentRepr(pr: PersistentRepr, tags: Set[String], offset: UUID) {
+  @InternalApi private[akka] case class TaggedPersistentRepr(pr: PersistentRepr, tags: Set[String], offset: UUID) {
     def sequenceNr: Long = pr.sequenceNr
   }
 
-  private[akka] case class OptionalTagged(sequenceNr: Long, tagged: OptionVal[TaggedPersistentRepr])
+  @InternalApi private[akka] case class OptionalTagged(sequenceNr: Long, tagged: OptionVal[TaggedPersistentRepr])
 
-  private[akka] case class RawEvent(sequenceNr: Long, serialized: Serialized)
+  @InternalApi private[akka] case class RawEvent(sequenceNr: Long, serialized: Serialized)
 
   // materialized value
   trait Control {

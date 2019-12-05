@@ -4,8 +4,15 @@
 
 package akka.persistence.cassandra.query
 
+import java.lang.{ Long => JLong }
 import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
+
+import scala.annotation.tailrec
+import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
+import scala.util.{ Failure, Success, Try }
 
 import akka.annotation.InternalApi
 import akka.persistence.cassandra._
@@ -15,14 +22,6 @@ import akka.stream.stage.{ GraphStage, _ }
 import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
 import akka.cassandra.session._
 import akka.util.PrettyDuration._
-
-import scala.annotation.tailrec
-import scala.concurrent.duration.Duration
-import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
-import scala.util.{ Failure, Success, Try }
-import java.lang.{ Long => JLong }
-
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
@@ -32,6 +31,7 @@ import com.datastax.driver.core.utils.UUIDs
 import com.github.ghik.silencer.silent
 
 /**
+ * INTERNAL API
  * Walks the tag_views table.
  *
  * For current queries:
@@ -86,7 +86,7 @@ import com.github.ghik.silencer.silent
       usingOffset,
       initialTagPidSequenceNrs)
 
-  private[akka] class TagStageSession(
+  @InternalApi private[akka] class TagStageSession(
       val tag: String,
       session: Session,
       statements: EventByTagStatements,
@@ -100,7 +100,7 @@ import com.github.ghik.silencer.silent
     }
   }
 
-  private[akka] object TagStageSession {
+  @InternalApi private[akka] object TagStageSession {
     def apply(tag: String, session: Session, statements: EventByTagStatements, fetchSize: Int): TagStageSession =
       new TagStageSession(tag, session, statements, fetchSize)
   }
@@ -173,6 +173,9 @@ import com.github.ghik.silencer.silent
   }
 }
 
+/**
+ * INTERNAL API
+ */
 @InternalApi private[akka] class EventsByTagStage(
     session: TagStageSession,
     fromOffset: UUID,

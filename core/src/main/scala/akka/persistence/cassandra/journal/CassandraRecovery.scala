@@ -4,8 +4,11 @@
 
 package akka.persistence.cassandra.journal
 
+import scala.concurrent._
+
 import akka.Done
 import akka.actor.ActorRef
+import akka.annotation.InternalApi
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.CassandraJournal.Tag
@@ -14,7 +17,6 @@ import akka.persistence.cassandra.journal.TagWriters.TagWrite
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extractors, TaggedPersistentRepr }
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.OptionVal
-import scala.concurrent._
 import akka.cassandra.session._
 
 trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatements {
@@ -27,7 +29,9 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
   private[akka] val eventDeserializer: CassandraJournal.EventDeserializer =
     new CassandraJournal.EventDeserializer(context.system)
 
-  private[akka] def asyncReadHighestSequenceNrInternal(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
+  @InternalApi private[akka] def asyncReadHighestSequenceNrInternal(
+      persistenceId: String,
+      fromSequenceNr: Long): Future[Long] = {
     asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
       asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h), targetPartitionSize)
     }
@@ -95,7 +99,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
     }
   }
 
-  private[akka] def sendPreSnapshotTagWrites(
+  @InternalApi private[akka] def sendPreSnapshotTagWrites(
       minProgressNr: Long,
       fromSequenceNr: Long,
       pid: String,
