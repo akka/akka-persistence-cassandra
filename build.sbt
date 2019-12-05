@@ -33,8 +33,7 @@ lazy val core = (project in file("core"))
     OsgiKeys.privatePackage := Nil,
     testOptions in Test ++= Seq(
         Tests.Argument(TestFrameworks.ScalaTest, "-o"),
-        Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports"))
-      ))
+        Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports")))
   .configs(MultiJvm)
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
