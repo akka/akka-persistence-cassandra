@@ -371,8 +371,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
 
   }
 
-  // FIXME perhaps use createFutureSource in all places
-
   /**
    * INTERNAL API
    */
