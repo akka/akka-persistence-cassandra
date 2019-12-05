@@ -405,13 +405,10 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     // in case we skip an entire partition we want to make sure the empty partition has in in-use flag so scans
     // keep going when they encounter it
     if (partitionNew(firstSeq) && minPnr != maxPnr) {
-      log.debug("Skipping partition, adding used flag for {} {}", persistenceId, minPnr)
       writes :+ preparedWriteInUse.map(_.bind(persistenceId, minPnr: JLong))
     } else {
-      log.debug("Not skipping partition for {} {}", persistenceId, minPnr)
       writes
     }
-
   }
 
   /**

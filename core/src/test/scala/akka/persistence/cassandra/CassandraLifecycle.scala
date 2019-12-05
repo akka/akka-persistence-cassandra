@@ -38,7 +38,6 @@ object CassandraLifecycle {
 
   val config = {
     val always = ConfigFactory.parseString(s"""
-    akka.loglevel = DEBUG
     akka.test.timefactor = $${?AKKA_TEST_TIMEFACTOR}
     akka.persistence.journal.plugin = "cassandra-journal"
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
