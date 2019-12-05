@@ -9,17 +9,10 @@
     </appender>
 
     <logger name="org.apache.cassandra" level="ERROR" />
-    <!-- Change to DEBUG to see query logging, and set config:
-         cassandra-journal.log-queries = on
-         cassandra-snapshot-store.log-queries = on
-     -->
-<!--    <logger name="com.datastax.driver.core.QueryLogger.NORMAL" level="DEBUG" />-->
-<!--    <logger name="com.codahale.metrics.JmxReporter" level="INFO" />-->
-    <!-- latest version of driver/cassandra spam logs at WARN when many dropped keyspaces happen -->
     <logger name="com.datastax" level="INFO" />
     <logger name="io.netty" level="ERROR" />
 
-    <root level="DEBUG">
+    <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
 

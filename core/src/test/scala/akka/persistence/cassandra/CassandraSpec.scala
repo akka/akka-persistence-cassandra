@@ -86,7 +86,8 @@ object CassandraSpec {
 abstract class CassandraSpec(
     config: Config,
     val journalName: String = getCallerName(getClass),
-    val snapshotName: String = getCallerName(getClass))
+    val snapshotName: String = getCallerName(getClass),
+    dumpRowsOnFailure: Boolean = false)
     extends TestKitBase
     with Suite
     with ImplicitSender
@@ -158,7 +159,7 @@ abstract class CassandraSpec(
 
   override protected def externalCassandraCleanup(): Unit = {
     try {
-      if (failed) {
+      if (failed && dumpRowsOnFailure) {
         println("RowDump::")
         import scala.collection.JavaConverters._
         if (system.settings.config.getBoolean("cassandra-journal.events-by-tag.enabled")) {

@@ -191,8 +191,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    * events from the beginning of time.
    */
   val firstOffset: UUID = {
-    // FIXME perhaps we can do something smarter, such as caching the highest offset retrieved
-    // from queries
     val timestamp = queryPluginConfig.firstTimeBucket.key
     Uuids.startOf(timestamp)
   }

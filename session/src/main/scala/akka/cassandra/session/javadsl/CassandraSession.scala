@@ -36,7 +36,6 @@ import com.datastax.oss.driver.api.core.cql.Statement
  *
  * All methods are non-blocking.
  */
-// FIXME see which methods can be done on the underlying without going via a Scala Future.
 final class CassandraSession(delegate: akka.cassandra.session.scaladsl.CassandraSession) {
 
   /**

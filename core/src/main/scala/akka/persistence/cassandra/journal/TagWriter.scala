@@ -127,7 +127,7 @@ import scala.concurrent.duration._
       }
     case Flush =>
       if (buffer.nonEmpty) {
-        // FIXME, this should br broken into batches https://github.com/akka/akka-persistence-cassandra/issues/405
+        // TODO this should br broken into batches https://github.com/akka/akka-persistence-cassandra/issues/405
         log.debug("External flush request from [{}]. Flushing.", sender())
         write(buffer, Vector.empty[(Serialized, TagPidSequenceNr)], tagPidSequenceNrs, Some(sender()))
       } else {
