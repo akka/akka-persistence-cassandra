@@ -30,11 +30,10 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
   private val log = Logging(materializer.system, getClass)
 
   /**
-   * INTERNAL API
    * This could be its own stage and return half way through a query to better meet the deadline
    * but this is a quick and simple way to do it given we're scanning a small segment
    */
-  @InternalApi private[akka] def scan(
+  private[akka] def scan(
       tag: String,
       offset: UUID,
       bucket: TimeBucket,

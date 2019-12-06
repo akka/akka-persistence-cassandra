@@ -40,7 +40,7 @@ import akka.util.ByteString
  */
 @InternalApi private[akka] object TagWriters {
 
-  @InternalApi private[akka] case class TagWritersSession(
+  private[akka] case class TagWritersSession(
       tagWritePs: () => Future[PreparedStatement],
       tagWriteWithMetaPs: () => Future[PreparedStatement],
       executeStatement: Statement => Future[Done],
@@ -95,10 +95,7 @@ import akka.util.ByteString
 
   }
 
-  /**
-   * INTERNAL API
-   */
-  @InternalApi private[akka] object BulkTagWrite {
+  private[akka] object BulkTagWrite {
     def apply(tw: TagWrite, owner: ActorRef): BulkTagWrite =
       BulkTagWrite(tw :: Nil, Nil)
   }
@@ -107,9 +104,7 @@ import akka.util.ByteString
    * INTERNAL API
    * All tag writes should be for the same persistenceId
    */
-  @InternalApi private[akka] case class BulkTagWrite(
-      tagWrites: immutable.Seq[TagWrite],
-      withoutTags: immutable.Seq[Serialized])
+  private[akka] case class BulkTagWrite(tagWrites: immutable.Seq[TagWrite], withoutTags: immutable.Seq[Serialized])
       extends NoSerializationVerificationNeeded
 
   /**
@@ -118,10 +113,7 @@ import akka.util.ByteString
    * @param actorRunning migration sends these messages without the actor running so TagWriters should not
    *                     validate that the pid is running
    */
-  @InternalApi private[akka] case class TagWrite(
-      tag: Tag,
-      serialised: immutable.Seq[Serialized],
-      actorRunning: Boolean = true)
+  private[akka] case class TagWrite(tag: Tag, serialised: immutable.Seq[Serialized], actorRunning: Boolean = true)
       extends NoSerializationVerificationNeeded
 
   def props(settings: TagWriterSettings, tagWriterSession: TagWritersSession): Props =
@@ -145,6 +137,7 @@ import akka.util.ByteString
 }
 
 /**
+ * INTERNAL API
  * Manages all the tag writers.
  */
 @InternalApi private[akka] class TagWriters(settings: TagWriterSettings, tagWriterSession: TagWritersSession)

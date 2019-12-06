@@ -22,40 +22,21 @@ import scala.concurrent.duration._
   val durationMillis: Long
 }
 
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] case object Day extends BucketSize {
+private[akka] case object Day extends BucketSize {
   override val durationMillis: Long = 1.day.toMillis
 }
-
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] case object Hour extends BucketSize {
+private[akka] case object Hour extends BucketSize {
   override val durationMillis: Long = 1.hour.toMillis
 }
-
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] case object Minute extends BucketSize {
+private[akka] case object Minute extends BucketSize {
   override val durationMillis: Long = 1.minute.toMillis
 }
 
-/**
- * INTERNAL API
- */
-@InternalApi
 // Not to be used for real production apps. Just to make testing bucket transitions easier.
 private[akka] case object Second extends BucketSize {
   override val durationMillis: Long = 1.second.toMillis
 }
 
-/**
- * INTERNAL API
- */
-@InternalApi
 private[akka] object BucketSize {
   def fromString(value: String): BucketSize =
     Vector(Day, Hour, Minute, Second)

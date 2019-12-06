@@ -12,11 +12,11 @@ import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.indent
 import com.datastax.driver.core.Session
 
-trait CassandraStatements {
+/** INTERNAL API */
+@InternalApi private[akka] trait CassandraStatements {
+  private[akka] def config: CassandraJournalConfig
 
-  @InternalApi private[akka] def config: CassandraJournalConfig
-
-  @InternalApi private[akka] def createKeyspace =
+  private[akka] def createKeyspace =
     s"""
      |CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
      |WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
@@ -28,7 +28,7 @@ trait CassandraStatements {
   // PersistentRepr.manifest is stored in event_manifest (sorry for naming confusion).
   // PersistentRepr.manifest is used by the event adapters (in akka-persistence).
   // ser_manifest together with ser_id is used for the serialization of the event (payload).
-  @InternalApi private[akka] def createTable =
+  private[akka] def createTable =
     s"""
       |CREATE TABLE IF NOT EXISTS ${tableName} (
       |  used boolean static,
@@ -52,7 +52,7 @@ trait CassandraStatements {
       |  AND compaction = ${indent(config.tableCompactionStrategy.asCQL, "    ")}
     """.stripMargin.trim
 
-  @InternalApi private[akka] def createTagsTable =
+  private[akka] def createTagsTable =
     s"""
       |CREATE TABLE IF NOT EXISTS ${tagTableName} (
       |  tag_name text,
@@ -96,7 +96,7 @@ trait CassandraStatements {
      |  PRIMARY KEY (persistence_id))
      """.stripMargin.trim
 
-  @InternalApi private[akka] def createMetadataTable =
+  private[akka] def createMetadataTable =
     s"""
      |CREATE TABLE IF NOT EXISTS $metadataTableName(
      |  persistence_id text PRIMARY KEY,
@@ -104,7 +104,7 @@ trait CassandraStatements {
      |  properties map<text,text>)
     """.stripMargin.trim
 
-  @InternalApi private[akka] def writeMessage(withMeta: Boolean) =
+  private[akka] def writeMessage(withMeta: Boolean) =
     s"""
       INSERT INTO $tableName (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
         ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
@@ -114,7 +114,7 @@ trait CassandraStatements {
 
   // could just use the write tags statement if we're going to update all the fields.
   // Fields that are not updated atm: writer_uuid and metadata fields
-  @InternalApi private[akka] def updateMessagePayloadAndTags =
+  private[akka] def updateMessagePayloadAndTags =
     s"""
        UPDATE $tableName
        SET
@@ -131,7 +131,7 @@ trait CassandraStatements {
         timebucket = ?
      """
 
-  @InternalApi private[akka] def addTagsToMessagesTable =
+  private[akka] def addTagsToMessagesTable =
     s"""
        UPDATE $tableName
        SET tags = tags + ?
@@ -143,7 +143,7 @@ trait CassandraStatements {
         timebucket = ?
      """
 
-  @InternalApi private[akka] def writeTags(withMeta: Boolean) =
+  private[akka] def writeTags(withMeta: Boolean) =
     s"""
        INSERT INTO $tagTableName(
         tag_name,
@@ -163,7 +163,7 @@ trait CassandraStatements {
         ?)
      """
 
-  @InternalApi private[akka] def updateMessagePayloadInTagView =
+  private[akka] def updateMessagePayloadInTagView =
     s"""
        UPDATE $tagTableName
        SET
@@ -179,7 +179,7 @@ trait CassandraStatements {
         tag_pid_sequence_nr = ?
      """
 
-  @InternalApi private[akka] def selectTagPidSequenceNr =
+  private[akka] def selectTagPidSequenceNr =
     s"""
        SELECT tag_pid_sequence_nr
        FROM $tagTableName WHERE
@@ -189,7 +189,7 @@ trait CassandraStatements {
        persistence_id = ?
      """.stripMargin
 
-  @InternalApi private[akka] def writeTagProgress =
+  private[akka] def writeTagProgress =
     s"""
        INSERT INTO $tagProgressTableName(
         persistence_id,
@@ -199,32 +199,32 @@ trait CassandraStatements {
         offset) VALUES (?, ?, ?, ?, ?)
      """
 
-  @InternalApi private[akka] def selectTagProgress =
+  private[akka] def selectTagProgress =
     s"""
        SELECT * from $tagProgressTableName WHERE
        persistence_id = ? AND
        tag = ?
      """
 
-  @InternalApi private[akka] def selectTagProgressForPersistenceId =
+  private[akka] def selectTagProgressForPersistenceId =
     s"""
        SELECT * from $tagProgressTableName WHERE
        persistence_id = ?
      """
 
-  @InternalApi private[akka] def writeTagScanning =
+  private[akka] def writeTagScanning =
     s"""
        INSERT INTO $tagScanningTableName(
          persistence_id, sequence_nr) VALUES (?, ?)
      """
 
-  @InternalApi private[akka] def selectTagScanningForPersistenceId =
+  private[akka] def selectTagScanningForPersistenceId =
     s"""
        SELECT sequence_nr from $tagScanningTableName WHERE
        persistence_id = ?
      """
 
-  @InternalApi private[akka] def deleteMessage =
+  private[akka] def deleteMessage =
     s"""
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND
@@ -232,7 +232,7 @@ trait CassandraStatements {
         sequence_nr = ?
     """
 
-  @InternalApi private[akka] def deleteMessages =
+  private[akka] def deleteMessages =
     if (config.cassandra2xCompat)
       s"""
       DELETE FROM ${tableName} WHERE
@@ -249,7 +249,7 @@ trait CassandraStatements {
         sequence_nr <= ?
     """
 
-  @InternalApi private[akka] def selectMessages =
+  private[akka] def selectMessages =
     s"""
       SELECT * FROM ${tableName} WHERE
         persistence_id = ? AND
@@ -258,7 +258,7 @@ trait CassandraStatements {
         sequence_nr <= ?
     """
 
-  @InternalApi private[akka] def selectHighestSequenceNr =
+  private[akka] def selectHighestSequenceNr =
     s"""
      SELECT sequence_nr, used FROM ${tableName} WHERE
        persistence_id = ? AND
@@ -267,19 +267,19 @@ trait CassandraStatements {
        DESC LIMIT 1
    """
 
-  @InternalApi private[akka] def selectDeletedTo =
+  private[akka] def selectDeletedTo =
     s"""
       SELECT deleted_to FROM ${metadataTableName} WHERE
         persistence_id = ?
     """
 
-  @InternalApi private[akka] def insertDeletedTo =
+  private[akka] def insertDeletedTo =
     s"""
       INSERT INTO ${metadataTableName} (persistence_id, deleted_to)
       VALUES ( ?, ? )
     """
 
-  @InternalApi private[akka] def writeInUse =
+  private[akka] def writeInUse =
     s"""
        INSERT INTO ${tableName} (persistence_id, partition_nr, used)
        VALUES(?, ?, true)
@@ -298,7 +298,7 @@ trait CassandraStatements {
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
    */
-  @InternalApi private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(
+  private[akka] def executeCreateKeyspaceAndTables(session: Session, config: CassandraJournalConfig)(
       implicit ec: ExecutionContext): Future[Done] = {
     import akka.cassandra.session._
 

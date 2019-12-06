@@ -86,7 +86,7 @@ import com.github.ghik.silencer.silent
       usingOffset,
       initialTagPidSequenceNrs)
 
-  @InternalApi private[akka] class TagStageSession(
+  private[akka] class TagStageSession(
       val tag: String,
       session: Session,
       statements: EventByTagStatements,
@@ -100,7 +100,7 @@ import com.github.ghik.silencer.silent
     }
   }
 
-  @InternalApi private[akka] object TagStageSession {
+  private[akka] object TagStageSession {
     def apply(tag: String, session: Session, statements: EventByTagStatements, fetchSize: Int): TagStageSession =
       new TagStageSession(tag, session, statements, fetchSize)
   }

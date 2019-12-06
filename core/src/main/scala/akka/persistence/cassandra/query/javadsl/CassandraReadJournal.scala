@@ -8,12 +8,10 @@ import java.util.UUID
 import java.util.concurrent.CompletionStage
 
 import akka.cassandra.session.javadsl.CassandraSession
-import akka.{ Done, NotUsed }
-import akka.persistence.query.EventEnvelope
-import akka.persistence.query.Offset
-import akka.persistence.query.TimeBasedUUID
+import akka.persistence.query.{ EventEnvelope, Offset, TimeBasedUUID }
 import akka.persistence.query.javadsl._
 import akka.stream.javadsl.Source
+import akka.{ Done, NotUsed }
 
 import scala.compat.java8.FutureConverters
 
