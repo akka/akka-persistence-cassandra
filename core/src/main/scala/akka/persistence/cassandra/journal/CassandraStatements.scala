@@ -31,7 +31,6 @@ trait CassandraStatements {
   private[akka] def createTable =
     s"""
       |CREATE TABLE IF NOT EXISTS ${tableName} (
-      |  used boolean static,
       |  persistence_id text,
       |  partition_nr bigint,
       |  sequence_nr bigint,
@@ -108,8 +107,8 @@ trait CassandraStatements {
     s"""
       INSERT INTO $tableName (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
         ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
-        used, tags)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true, ?)
+        tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} ?)
     """
 
   // could just use the write tags Statement if we're going to update all the fields.
@@ -260,7 +259,7 @@ trait CassandraStatements {
 
   private[akka] def selectHighestSequenceNr =
     s"""
-     SELECT sequence_nr, used FROM ${tableName} WHERE
+     SELECT sequence_nr FROM ${tableName} WHERE
        persistence_id = ? AND
        partition_nr = ?
        ORDER BY sequence_nr
@@ -278,12 +277,6 @@ trait CassandraStatements {
       INSERT INTO ${metadataTableName} (persistence_id, deleted_to)
       VALUES ( ?, ? )
     """
-
-  private[akka] def writeInUse =
-    s"""
-       INSERT INTO ${tableName} (persistence_id, partition_nr, used)
-       VALUES(?, ?, true)
-     """
 
   protected def tableName = s"${config.keyspace}.${config.table}"
   private def tagTableName = s"${config.keyspace}.${config.tagTable.name}"

@@ -16,7 +16,7 @@ import akka.testkit.EventFilter
 object CassandraJournalDeletionSpec {
   case class PersistMe(msg: Long)
   case class DeleteTo(sequenceNr: Long)
-  case object Ack
+  case class Ack(sequenceNr: Long)
   case object GetRecoveredEvents
 
   case class RecoveredEvents(events: Seq[Any])
@@ -42,7 +42,7 @@ object CassandraJournalDeletionSpec {
     override def receiveCommand: Receive = {
       case p: PersistMe =>
         persist(p) { _ =>
-          sender() ! Ack
+          sender() ! Ack(lastSequenceNr)
         }
       case GetRecoveredEvents =>
         sender() ! RecoveredEvents(recoveredEvents.reverse)
@@ -108,7 +108,7 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       val p1 = system.actorOf(Props(new PAThatDeletes("p1", deleteSuccess.ref, deleteFail.ref)))
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)
-        expectMsg(Ack)
+        expectMsgType[Ack]
       }
 
       (1 to 99).foreach { i =>
@@ -138,7 +138,7 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
 
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)
-        expectMsg(Ack)
+        expectMsgType[Ack]
       }
 
       (1 to 99).foreach { i =>
@@ -155,15 +155,39 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       successes shouldEqual successes.sorted
     }
 
+    "handle deletes of all events" in {
+      val deleteSuccess = TestProbe()
+      val deleteFail = TestProbe()
+      val props =
+        Props(new PAThatDeletes("p3", deleteSuccess.ref, deleteFail.ref))
+      val p1 = system.actorOf(props)
+      (1 to 17).foreach { i =>
+        p1 ! PersistMe(i)
+        expectMsg(Ack(i))
+      }
+
+      p1 ! DeleteTo(17)
+      deleteSuccess.expectMsg(Deleted(17))
+
+      p1 ! PoisonPill
+
+      // Recovery should not find a deleted sequence nr, and use next sequence nr for persist
+      val p1TakeTwo = system.actorOf(props)
+      p1TakeTwo ! GetRecoveredEvents
+      expectMsg(RecoveredEvents(List(RecoveryCompleted)))
+      p1TakeTwo ! PersistMe(18)
+      expectMsg(Ack(18))
+    }
+
     "handle deletes over many partitions" in {
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
       val props =
-        Props(new PAThatDeletes("p3", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-small-partition-size"))
+        Props(new PAThatDeletes("p4", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-small-partition-size"))
       val p1 = system.actorOf(props)
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)
-        expectMsg(Ack)
+        expectMsgType[Ack]
       }
 
       p1 ! DeleteTo(10)
@@ -181,6 +205,8 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       val p1TakeTwo = system.actorOf(props)
       p1TakeTwo ! GetRecoveredEvents
       expectMsg(RecoveredEvents(List(PersistMe(99), PersistMe(100), RecoveryCompleted)))
+      p1TakeTwo ! PersistMe(101)
+      expectMsg(Ack(101))
 
       // Delete all with Long.MaxValue
       p1TakeTwo ! DeleteTo(Long.MaxValue)
@@ -191,22 +217,48 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       val p1TakeThree = system.actorOf(props)
       p1TakeThree ! GetRecoveredEvents
       expectMsg(RecoveredEvents(List(RecoveryCompleted)))
+      p1TakeThree ! PersistMe(102)
+      expectMsg(Ack(102))
+    }
+
+    "handle deletes of all events over many partitions" in {
+      val deleteSuccess = TestProbe()
+      val deleteFail = TestProbe()
+      val props =
+        Props(new PAThatDeletes("p5", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-small-partition-size"))
+      val p1 = system.actorOf(props)
+      (1 to 100).foreach { i =>
+        p1 ! PersistMe(i)
+        expectMsgType[Ack]
+      }
+
+      p1 ! DeleteTo(100)
+      deleteSuccess.expectMsg(Deleted(100))
+
+      p1 ! PoisonPill
+
+      // Recovery should not find a deleted sequence nr, and use next sequence nr for persist
+      val p1TakeTwo = system.actorOf(props)
+      p1TakeTwo ! GetRecoveredEvents
+      expectMsg(RecoveredEvents(List(RecoveryCompleted)))
+      p1TakeTwo ! PersistMe(101)
+      expectMsg(Ack(101))
     }
 
     "recover with support-deletes=off" in {
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
       val p1 =
-        system.actorOf(Props(new PAThatDeletes("p3", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-no-delete")))
+        system.actorOf(Props(new PAThatDeletes("p6", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-no-delete")))
 
       (1 to 3).foreach { i =>
         p1 ! PersistMe(i)
-        expectMsg(Ack)
+        expectMsgType[Ack]
       }
 
       p1 ! PoisonPill
 
-      val p1TakeTwo = system.actorOf(Props(new PAThatDeletes("p3", deleteSuccess.ref, deleteFail.ref)))
+      val p1TakeTwo = system.actorOf(Props(new PAThatDeletes("p6", deleteSuccess.ref, deleteFail.ref)))
       p1TakeTwo ! GetRecoveredEvents
       expectMsg(RecoveredEvents(List(PersistMe(1), PersistMe(2), PersistMe(3), RecoveryCompleted)))
     }
@@ -215,11 +267,11 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
       val p1 =
-        system.actorOf(Props(new PAThatDeletes("p4", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-no-delete")))
+        system.actorOf(Props(new PAThatDeletes("p7", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-no-delete")))
 
       (1 to 3).foreach { i =>
         p1 ! PersistMe(i)
-        expectMsg(Ack)
+        expectMsgType[Ack]
       }
 
       EventFilter.error(start = "Failed to delete to 2", occurrences = 1).intercept {

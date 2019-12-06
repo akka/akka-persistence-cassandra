@@ -22,6 +22,25 @@ It can't be turned on by the plugin as it is in the driver's reference.conf and 
 
 Using DateTieredCompactionStrategy with automatic schema creation
 
+## Migrations to 0.101 and 0.102
+
+Version 0.101 and 0.102 removes the static column `used`. It is released in two versions to be able to
+support rolling update where an Akka Cluster is running a mix of versions 0.100 and 0.101 in the first update
+and then a mix of 0.101 and 0.102 in the second update.
+
+If you can accept a full cluster shutdown you can update to 0.102 directly.
+
+0.101 is not using the static column `used` in the reads but still populates it in the writes so that earlier
+versions can read it.
+
+0.102 is not using the static column `used` at all, but it can run with an old schema where the column exists. 
+
+After completed update to version 0.102 the column can be dropped with:
+
+```
+alter table akka.messages drop used;
+```  
+
 ### Migrations to 0.80 and later
 
 0.80 introduces a completely different way to manage tags for events. You can skip right ahead to 0.98 without going to

@@ -444,7 +444,7 @@ import scala.compat.java8.FutureConverters._
                     persistenceId,
                     expectedNextSeqNr,
                     partition)
-                  checkForGaps()
+                  checkForGaps(foundEmptyPartitionCount = 0)
                 } else if (refreshInterval.isEmpty) {
                   completeStage()
                 } else {
@@ -542,22 +542,26 @@ import scala.compat.java8.FutureConverters._
         }
       }
 
-      // The strategy is simple, if full partition was cleaned up we will find null-row
-      // i.e row: <persistence_id>, <partition_nr>, null, ...
-      // If such row exists, we have to switch partition and continue to fetching
-      def checkForGaps(): Unit = {
+      // See PR #509 for background
+      // Only used when gapFreeSequenceNumbers==false
+      // if full partition was cleaned up we look for two empty partitions before completing
+      def checkForGaps(foundEmptyPartitionCount: Int): Unit = {
         session.selectSingleRow(persistenceId, partition).onComplete {
           getAsyncCallback[Try[Option[Row]]] {
             case Success(mbRow) =>
-              val r = mbRow.map(row => (row.getBoolean("used"), row.getLong("sequence_nr")))
-              r match {
-                case Some((true, _)) =>
-                  //We increment partition nr manually, otherwise we will break `lookingForMissingSeqNr` logic
-                  partition = partition + 1
+              mbRow.map(_.getLong("sequence_nr")) match {
+                case None | Some(0) =>
+                  // Some(0) when old schema with static used column, everything deleted in this partition
+                  if (foundEmptyPartitionCount == 5)
+                    completeStage()
+                  else {
+                    partition = partition + 1
+                    checkForGaps(foundEmptyPartitionCount + 1)
+                  }
+                case Some(_) =>
+                  if (foundEmptyPartitionCount == 0)
+                    partition = partition + 1
                   query(switchPartition = false)
-                case _ =>
-                  //No data found, but at least we tried
-                  completeStage()
               }
             case Failure(_) =>
               throw new IllegalStateException("Should not be able to get here")
