@@ -104,6 +104,12 @@ import akka.persistence.cassandra.journal.CassandraIntegrationSpec._
 
 class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender with WordSpecLike with Matchers {
 
+  private def stopAndWaitUntilTerminated(ref: ActorRef) = {
+    watch(ref)
+    ref ! PoisonPill
+    expectTerminated(ref)
+  }
+
   def subscribeToRangeDeletion(probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[JournalProtocol.DeleteMessagesTo])
 
@@ -146,6 +152,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
         expectMsgAllOf(s"a-${i}", i, false)
       }
 
+      stopAndWaitUntilTerminated(processor1)
+
       val processor2 = system.actorOf(Props(classOf[ProcessorA], persistenceId, self), "p2")
       (1L to 16L).foreach { i =>
         expectMsgAllOf(s"a-${i}", i, true)
@@ -164,10 +172,14 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       val persistenceId = UUID.randomUUID().toString
       val processorAtomic = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
 
+      // more than 2 partitions not supported, will fail the write
+
       processorAtomic ! List("a-1", "a-2", "a-3", "a-4", "a-5", "a-6")
       (1L to 6L).foreach { i =>
         expectMsgAllOf(s"a-${i}", i, false)
       }
+
+      stopAndWaitUntilTerminated(processorAtomic)
 
       val testProbe = TestProbe()
       val processor2 = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, testProbe.ref))
@@ -191,6 +203,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
         expectMsgAllOf(s"a-${i}", i, false)
       }
 
+      stopAndWaitUntilTerminated(processorAtomic)
+
       val testProbe = TestProbe()
       val processor2 = system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, testProbe.ref))
       (1L to 6L).foreach { i =>
@@ -207,6 +221,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       (1L to 4L).foreach { i =>
         expectMsgAllOf(s"a-${i}", i, false)
       }
+
+      stopAndWaitUntilTerminated(processorAtomic)
 
       system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, self))
       (1L to 4L).foreach { i =>
@@ -227,6 +243,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       processorAtomic ! DeleteTo(5L)
       awaitRangeDeletion(deleteProbe)
 
+      stopAndWaitUntilTerminated(processorAtomic)
+
       val testProbe = TestProbe()
       system.actorOf(Props(classOf[ProcessorAtomic], persistenceId, testProbe.ref))
       testProbe.expectMsgAllOf(s"a-6", 6, true)
@@ -244,6 +262,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       processor1 ! "b"
       expectMsg("updated-b-2")
 
+      stopAndWaitUntilTerminated(processor1)
+
       system.actorOf(Props(classOf[ProcessorC], persistenceId, testActor))
       expectMsg("offered-a-1")
       expectMsg("updated-b-2")
@@ -259,6 +279,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
         processor1 ! "a"
         expectMsg(s"updated-a-${i}")
       }
+
+      stopAndWaitUntilTerminated(processor1)
 
       val processor2 =
         system.actorOf(Props(classOf[ProcessorCNoRecover], persistenceId, testActor, Recovery(toSequenceNr = 3L)))
@@ -276,6 +298,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       processor1 ! "snap"
       expectMsg("snapped-a-1")
 
+      stopAndWaitUntilTerminated(processor1)
+
       val processor2 = system.actorOf(Props(classOf[ProcessorC], persistenceId, testActor))
       expectMsg("offered-a-1")
       processor2 ! "b"
@@ -290,6 +314,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       }
       processor1 ! "snap"
       expectMsg("snapped-a-5")
+
+      stopAndWaitUntilTerminated(processor1)
 
       val processor2 = system.actorOf(Props(classOf[ProcessorC], persistenceId, testActor))
       expectMsg("offered-a-5")
@@ -315,6 +341,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
       processor1 ! DeleteTo(6L)
       awaitRangeDeletion(deleteProbe)
 
+      stopAndWaitUntilTerminated(processor1)
+
       val processor2 = system.actorOf(Props(classOf[ProcessorC], persistenceId, testActor))
       expectMsg("offered-a-5")
       processor2 ! "b"
@@ -332,6 +360,8 @@ class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender
 
       p ! DeleteTo(1L)
       awaitRangeDeletion(deleteProbe)
+
+      stopAndWaitUntilTerminated(p)
 
       val r = system.actorOf(Props(classOf[ProcessorA], persistenceId, self))
 
