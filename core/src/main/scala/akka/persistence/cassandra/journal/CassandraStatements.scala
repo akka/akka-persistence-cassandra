@@ -28,9 +28,10 @@ trait CassandraStatements {
   // PersistentRepr.manifest is used by the event adapters (in akka-persistence).
   // ser_manifest together with ser_id is used for the serialization of the event (payload).
   private[akka] def createTable =
+    (s"""
+      |CREATE TABLE IF NOT EXISTS ${tableName} (""" +
+    (if (config.writeStaticColumnCompat) "\n|  used boolean static," else "") +
     s"""
-      |CREATE TABLE IF NOT EXISTS ${tableName} (
-      |  used boolean static,
       |  persistence_id text,
       |  partition_nr bigint,
       |  sequence_nr bigint,
@@ -49,7 +50,7 @@ trait CassandraStatements {
       |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
       |  WITH gc_grace_seconds =${config.gcGraceSeconds}
       |  AND compaction = ${indent(config.tableCompactionStrategy.asCQL, "    ")}
-    """.stripMargin.trim
+    """).stripMargin.trim
 
   private[akka] def createTagsTable =
     s"""
@@ -107,8 +108,10 @@ trait CassandraStatements {
     s"""
       INSERT INTO $tableName (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
         ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
-        used, tags)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true, ?)
+        ${if (config.writeStaticColumnCompat) "used," else ""} tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""}${if (config.writeStaticColumnCompat)
+      " true,"
+    else ""} ?)
     """
 
   // could just use the write tags statement if we're going to update all the fields.

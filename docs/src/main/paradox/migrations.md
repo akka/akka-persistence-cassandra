@@ -1,19 +1,31 @@
 # Migration
 
-## Migrations to 0.101 and 0.102
+## Migrations to 0.101
 
-Version 0.101 and 0.102 removes the static column `used`. It is released in two versions to be able to
-support rolling update where an Akka Cluster is running a mix of versions 0.100 and 0.101 in the first update
-and then a mix of 0.101 and 0.102 in the second update.
+Version 0.101 makes it possible to drop the static column `used`. 
 
-If you can accept a full cluster shutdown you can update to 0.102 directly.
+The complete removal of the static column must be performed in two steps to support rolling update where an
+Akka Cluster is running a mix of versions 0.100 and 0.101.
+
+If you can accept a full cluster shutdown you can update to the second step directly.
+
+**Step 1**
 
 0.101 is not using the static column `used` in the reads but still populates it in the writes so that earlier
 versions can read it.
 
-0.102 is not using the static column `used` at all, but it can run with an old schema where the column exists. 
+**Step 2**
 
-After completed update to version 0.102 the column can be dropped with:
+After complete roll out of 0.101 in step 1 the configuration can be changed so that the static column isn't used
+at all.
+
+```
+cassandra-journal.write-static-column-compat = off
+```
+
+It can still run with an old schema where the column exists. 
+
+After completed update of the configuration change the column can be dropped with:
 
 ```
 alter table akka.messages drop used;

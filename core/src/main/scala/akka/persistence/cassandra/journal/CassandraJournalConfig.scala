@@ -60,6 +60,8 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
   // query what version of cassandra we're connected to and do the right thing
   val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
 
+  val writeStaticColumnCompat: Boolean = config.getBoolean("write-static-column-compat")
+
   val maxConcurrentDeletes: Int = config.getInt("max-concurrent-deletes")
 
   val supportDeletes: Boolean = config.getBoolean("support-deletes")

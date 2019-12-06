@@ -200,7 +200,8 @@ class CassandraJournal(cfg: Config)
       preparedWriteMessage
       preparedWriteMessageWithMeta
       preparedSelectMessages
-      preparedWriteInUse
+      if (config.writeStaticColumnCompat)
+        preparedWriteInUse
       preparedSelectHighestSequenceNr
       if (config.supportDeletes) {
         preparedDeleteMessages
@@ -402,7 +403,7 @@ class CassandraJournal(cfg: Config)
     }
     // in case we skip an entire partition we want to make sure the empty partition has in in-use flag so scans
     // keep going when they encounter it
-    if (partitionNew(firstSeq) && minPnr != maxPnr)
+    if (config.writeStaticColumnCompat && partitionNew(firstSeq) && minPnr != maxPnr)
       writes :+ preparedWriteInUse.map(_.bind(persistenceId, minPnr: JLong))
     else
       writes
