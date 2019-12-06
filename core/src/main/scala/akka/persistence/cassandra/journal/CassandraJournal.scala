@@ -154,6 +154,8 @@ class CassandraJournal(cfg: Config)
     session
       .prepare(selectMessages)
       .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+  def preparedWriteInUse =
+    session.prepare(writeInUse).map(_.setIdempotent(true))
 
   implicit val materializer: ActorMaterializer =
     ActorMaterializer()(context.system)
@@ -198,6 +200,8 @@ class CassandraJournal(cfg: Config)
       preparedWriteMessage
       preparedWriteMessageWithMeta
       preparedSelectMessages
+      if (config.writeStaticColumnCompat)
+        preparedWriteInUse
       preparedSelectHighestSequenceNr
       if (config.supportDeletes) {
         preparedDeleteMessages
@@ -397,8 +401,13 @@ class CassandraJournal(cfg: Config)
         bs
       }
     }
+    // in case we skip an entire partition we want to make sure the empty partition has in in-use flag so scans
+    // keep going when they encounter it
+    if (config.writeStaticColumnCompat && partitionNew(firstSeq) && minPnr != maxPnr)
+      writes :+ preparedWriteInUse.map(_.bind(persistenceId, minPnr: JLong))
+    else
+      writes
 
-    writes
   }
 
   /**
@@ -668,6 +677,9 @@ class CassandraJournal(cfg: Config)
     stmt.setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy)
     session.executeWrite(stmt).map(_ => ())
   }
+
+  private def partitionNew(sequenceNr: Long): Boolean =
+    (sequenceNr - 1L) % targetPartitionSize == 0L
 
 }
 

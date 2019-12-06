@@ -34,7 +34,7 @@ object EventsByTagStageSpec {
   val longWaitTime: FiniteDuration = waitTime * 2
   val newPersistenceIdTimeout = 3 * longWaitTime // Give time for 2-3 long waits before a new persitenceId search gives up
   val config = ConfigFactory.parseString(s"""
-        akka.loglevel = DEBUG
+        #akka.loglevel = DEBUG
 
         akka.actor.serialize-messages=on
 

@@ -10,6 +10,7 @@ import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.testkit._
+import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
@@ -20,8 +21,8 @@ object CassandraIntegrationSpec {
       |akka.persistence.publish-plugin-commands = on
       |cassandra-journal.target-partition-size = 5
       |cassandra-journal.max-result-size = 3
-      |cassandra-journal.keyspace=CassandraIntegrationSpec
-      |cassandra-snapshot-store.keyspace=CassandraIntegrationSpecSnapshot
+      |cassandra-journal.keyspace=CassandraIntegrationSpec-${UUID.randomUUID()}
+      |cassandra-snapshot-store.keyspace=CassandraIntegrationSpecSnapshot-${UUID.randomUUID()}
     """.stripMargin).withFallback(CassandraLifecycle.config)
 
   case class DeleteTo(snr: Long)
@@ -102,7 +103,19 @@ object CassandraIntegrationSpec {
 
 import akka.persistence.cassandra.journal.CassandraIntegrationSpec._
 
-class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender with WordSpecLike with Matchers {
+class CassandraIntegrationSpec extends AbstractCassandraIntegrationSpec(CassandraIntegrationSpec.config)
+
+class CassandraIntegrationNoStaticColumnSpec
+    extends AbstractCassandraIntegrationSpec(
+      ConfigFactory
+        .parseString("cassandra-journal.write-static-column-compat = off")
+        .withFallback(CassandraIntegrationSpec.config))
+
+abstract class AbstractCassandraIntegrationSpec(cfg: Config)
+    extends CassandraSpec(cfg)
+    with ImplicitSender
+    with WordSpecLike
+    with Matchers {
 
   private def stopAndWaitUntilTerminated(ref: ActorRef) = {
     watch(ref)
