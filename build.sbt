@@ -31,9 +31,7 @@ lazy val core = (project in file("core"))
     OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*"),
     OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
     OsgiKeys.privatePackage := Nil,
-    testOptions in Test ++= Seq(
-        Tests.Argument(TestFrameworks.ScalaTest, "-o"),
-        Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports")))
+    testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o")))
   .configs(MultiJvm)
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
