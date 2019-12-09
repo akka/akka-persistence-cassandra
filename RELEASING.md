@@ -5,6 +5,7 @@ From a direct clone (rather than a fork). You will need permission in sonatype t
 * run `core/test:runMain akka.persistence.cassandra.PrintCreateStatements` if keyspace/table statements or config have changed,
   paste into README.md
 * commit and push a new version number in the README.md
+* make sure to use JDK 8
 * sbt -Dpublish.maven.central=true
   * clean
   * release skip-tests

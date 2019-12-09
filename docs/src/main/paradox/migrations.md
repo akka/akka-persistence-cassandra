@@ -1,29 +1,54 @@
 # Migration
 
-### Migrations to 1.0
+## Migrations to 1.0
 
+* Rolling update to 1.0 requires update from 0.101 to 1.0. First update to 0.101.
 * After being deprecated, the DateTieredCompactionStrategy has been removed.
 
-## Migrations to 0.101 and 0.102
+### Drop static column
 
-Version 0.101 and 0.102 removes the static column `used`. It is released in two versions to be able to
-support rolling update where an Akka Cluster is running a mix of versions 0.100 and 0.101 in the first update
-and then a mix of 0.101 and 0.102 in the second update.
+See instructions for migrations to 0.101 below. To support rolling update if you are migrating from an
+earlier version to 1.0 you must first update to 0.101 but the second step can be skipped and will be part of the
+1.0 update instead.
 
-If you can accept a full cluster shutdown you can update to 0.102 directly.
+After completed update to 1.0 the static column `used` should be dropped with:
+
+```
+alter table akka.messages drop used;
+```
+
+## Migrations to 0.101
+
+Version 0.101 makes it possible to drop the static column `used`. 
+
+The complete removal of the static column must be performed in two steps to support rolling update where an
+Akka Cluster is running a mix of versions 0.100 and 0.101.
+
+If you can accept a full cluster shutdown you can update to the second step directly.
+
+**Step 1**
 
 0.101 is not using the static column `used` in the reads but still populates it in the writes so that earlier
 versions can read it.
 
-0.102 is not using the static column `used` at all, but it can run with an old schema where the column exists. 
+**Step 2**
 
-After completed update to version 0.102 the column can be dropped with:
+After complete roll out of 0.101 in step 1 the configuration can be changed so that the static column isn't used
+at all.
+
+```
+cassandra-journal.write-static-column-compat = off
+```
+
+It can still run with an old schema where the column exists. 
+
+After completed update of the configuration change the column can be dropped with:
 
 ```
 alter table akka.messages drop used;
 ```  
 
-### Migrations to 0.80 and later
+## Migrations to 0.80 and later
 
 0.80 introduces a completely different way to manage tags for events. You can skip right ahead to 0.98 without going to
 0.80.
@@ -101,7 +126,7 @@ events have to be tagged.
 * `first-time-bucket` format has changed to: `yyyyMMddTHH:mm` e.g. `20151120T00:00`
 * `eventual-consistency` has been removed. It may be re-added see [#263](https://github.com/akka/akka-persistence-cassandra/issues/263)
 
-### Migrations from 0.54 to 0.59
+## Migrations from 0.54 to 0.59
 
 In version 0.55 additional columns were added to be able to store meta data about an event without altering
 the actual domain event.
@@ -132,7 +157,7 @@ cassandra-journal.meta-in-events-by-tag-view = off
 When trying to create the materialized view (tables-autocreate=on) with the meta columns before corresponding columns have been added the messages table an exception "Undefined column name meta_ser_id" is raised, because Cassandra validates the ["CREATE MATERIALIZED VIEW IF NOT EXISTS"](https://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlCreateMaterializedView.html#cqlCreateMaterializedView__if-not-exists) even though the view already exists and will not be created. To work around that issue you can disable the meta columns in the materialized view by setting `meta-in-events-by-tag-view=off`.
 
 
-### Migrations from 0.51 to 0.52
+## Migrations from 0.51 to 0.52
 
 `CassandraLauncher` has been pulled out into its own artifact, and now bundles Cassandra into a single fat jar, which is bundled into the launcher artifact. This has allowed Cassandra to be launched without it being on the classpath, which prevents classpath conflicts, but it also means that Cassandra can't be configured by changing files on the classpath, for example, a custom `logback.xml` in `src/test/resources` is no longer sufficient to configure Cassandra's logging. To address this, `CassandraLauncher.start` now accepts a list of classpath elements that will be added to the classpath, and provides a utility for locating classpath elements based on resource name.
 
@@ -154,15 +179,15 @@ CassandraLauncher.start(
 )
 ```
 
-### Migrations from 0.23 to 0.50
+## Migrations from 0.23 to 0.50
 
 The Persistence Query API changed slightly, see @extref:[migration guide for Akka 2.5](akka:scala/project/migration-guide-2.4.x-2.5.x.html#persistence-query).
 
-### Migrations from 0.11 to 0.12
+## Migrations from 0.11 to 0.12
 
 Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
 
-### Migrations from 0.9 to 0.10
+## Migrations from 0.9 to 0.10
 
 The event data, snapshot data and meta data are stored in a separate columns instead of being wrapped in blob. Run the following statements in `cqlsh`:
 
@@ -178,11 +203,11 @@ The event data, snapshot data and meta data are stored in a separate columns ins
     alter table akka_snapshot.snapshots add ser_manifest text;
     alter table akka_snapshot.snapshots add snapshot_data blob;
 
-### Migrations from 0.6 to 0.7
+## Migrations from 0.6 to 0.7
 
 Schema changes mean that you can't upgrade from version 0.6 for Cassandra 2.x of the plugin to the 0.7 version and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.7/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala#L25).
 
-### Migrating from 0.3.x (Akka 2.3.x)
+## Migrating from 0.3.x (Akka 2.3.x)
 
 Schema and property changes mean that you can't currently upgrade from 0.3 to 0.4 SNAPSHOT and use existing data without schema migration. You should be able to export the data and load it to the [new table definition](https://github.com/akka/akka-persistence-cassandra/blob/v0.9/src/main/scala/akka/persistence/cassandra/journal/CassandraStatements.scala).
 
