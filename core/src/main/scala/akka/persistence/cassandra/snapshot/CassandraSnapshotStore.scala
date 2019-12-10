@@ -105,18 +105,12 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
       if (criteria.maxTimestamp == Long.MaxValue)
         preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
       else preparedSelectSnapshotMetadata
-    val result = for {
+
+    for {
       p <- snapshotMetaPs
       mds <- metadata(p, persistenceId, criteria, someMaxLoadAttempts)
       res <- loadNAsync(mds)
     } yield res
-
-    result.onComplete { result =>
-      log.debug("snapshot load complete {}", result)
-
-    }
-
-    result
   }
 
   private def loadNAsync(metadata: immutable.Seq[SnapshotMetadata]): Future[Option[SelectedSnapshot]] = metadata match {

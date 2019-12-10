@@ -13,6 +13,10 @@ import akka.actor.ActorSystem
 class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
   val writeProfile: String = config.getString("write-profile")
   val readProfile: String = config.getString("read-profile")
+
+  CassandraPluginConfig.checkProfile(system, readProfile)
+  CassandraPluginConfig.checkProfile(system, writeProfile)
+
   val maxLoadAttempts = config.getInt("max-load-attempts")
   val cassandra2xCompat = config.getBoolean("cassandra-2x-compat")
 

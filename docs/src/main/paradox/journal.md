@@ -16,6 +16,12 @@ To activate the journal plugin, add the following line to your Akka `application
 
 This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
 
+One important setting is to configure the database driver to retry the initial connection:
+
+`datastax-java-driver.advanced.reconnect-on-init = true`
+
+It can't be turned on by the plugin as it is in the driver's reference.conf and is not overridable in a profile.
+
 ### Caveats
 
 - Detailed tests under failure conditions are still missing.

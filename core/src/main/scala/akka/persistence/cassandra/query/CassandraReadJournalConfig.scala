@@ -9,6 +9,7 @@ import java.time.{ LocalDateTime, ZoneOffset }
 import akka.actor.{ ActorSystem, ExtendedActorSystem, NoSerializationVerificationNeeded }
 import akka.annotation.InternalApi
 import akka.cassandra.session.CqlSessionProvider
+import akka.persistence.cassandra.CassandraPluginConfig
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
 import com.typesafe.config.Config
 
@@ -24,6 +25,7 @@ import scala.concurrent.duration._
     extends NoSerializationVerificationNeeded {
 
   val readProfile = config.getString("read-profile")
+  CassandraPluginConfig.checkProfile(system, readProfile)
 
   val sessionProvider: CqlSessionProvider = CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
 

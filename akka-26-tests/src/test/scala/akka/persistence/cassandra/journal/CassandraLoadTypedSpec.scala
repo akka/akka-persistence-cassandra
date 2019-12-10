@@ -106,7 +106,7 @@ object CassandraLoadTypedSpec {
 
 }
 
-class CassandraLoadTypedSpec extends CassandraSpec() with WordSpecLike with Matchers {
+class CassandraLoadTypedSpec extends CassandraSpec with WordSpecLike with Matchers {
 
   import CassandraLoadTypedSpec._
 

@@ -7,7 +7,7 @@
 Version 4.x of the cassandra driver comes with a new way to configure it via [typesafe configuration](https://github.com/lightbend/config)
 which matches how Akka manages configuration.
 
-All driver related configuration related to driver connection, query consistency, query retries etc has been removed from this
+All driver related configuration e.g. query consistency, query retries etc has been removed from this
 project's `reference.conf` and now each part of the plugin (journal, snapshot and query) specify a read and write 
 [execution profile](https://docs.datastax.com/en/developer/java-driver/4.3/manual/core/configuration/#execution-profiles) that gives
 fine grained control over consistencies and retires for each are. By default all read/write profiles are the same and under

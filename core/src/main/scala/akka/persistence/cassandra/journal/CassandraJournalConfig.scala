@@ -54,6 +54,9 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
   val writeProfile: String = config.getString("write-profile")
   val readProfile: String = config.getString("read-profile")
 
+  CassandraPluginConfig.checkProfile(system, writeProfile)
+  CassandraPluginConfig.checkProfile(system, readProfile)
+
   val targetPartitionSize: Long =
     config.getLong(CassandraJournalConfig.TargetPartitionProperty)
   val maxMessageBatchSize: Int = config.getInt("max-message-batch-size")
