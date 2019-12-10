@@ -321,7 +321,7 @@ final class CassandraSession(
         def tryPushOne(): Unit =
           resultSet match {
             case Some(rs) if isAvailable(out) =>
-              if (rs.currentPage().iterator().hasNext) {
+              if (rs.remaining() > 0) {
                 push(out, rs.one())
               } else if (rs.hasMorePages) {
                 val next = rs.fetchNextPage()

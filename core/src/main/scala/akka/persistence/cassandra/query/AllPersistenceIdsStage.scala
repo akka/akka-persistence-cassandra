@@ -62,10 +62,9 @@ import scala.concurrent.duration._
             }
           }
           flush()
-          if (refreshInterval.isEmpty && buffer.isEmpty && rs.hasMorePages) {
+          if (refreshInterval.isEmpty && buffer.isEmpty && isExhausted(rs)) {
             complete(out)
           } else if (rs.hasMorePages) {
-            // don't check getAvailableWithoutFetching here as it may be > 0 as they can be fetched in the background
             rs.fetchNextPage().thenAccept(queryCallback.invoke)
           }
         }

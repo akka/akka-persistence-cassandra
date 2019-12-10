@@ -631,9 +631,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     def find(currentPnr: Long, currentSnr: Long, foundEmptyPartition: Boolean): Future[Long] = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
       val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(ps => {
-        log.debug("Binding {} {} to {}", persistenceId, currentPnr)
         val bound = ps.bind(persistenceId, currentPnr: JLong)
-        log.debug("Binding {} {}  = {}", persistenceId, currentPnr, bound)
         bound
 
       })
