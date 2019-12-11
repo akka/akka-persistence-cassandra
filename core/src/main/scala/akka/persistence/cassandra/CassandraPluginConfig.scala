@@ -5,24 +5,16 @@
 package akka.persistence.cassandra
 
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
-import com.datastax.driver.core._
 import com.typesafe.config.Config
-
-import akka.actor.ActorSystem
-import akka.actor.ExtendedActorSystem
-import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
-
-case class StorePathPasswordConfig(path: String, password: String)
+import akka.actor.{ ActorSystem, ExtendedActorSystem }
+import akka.cassandra.session.CqlSessionProvider
 
 class CassandraPluginConfig(system: ActorSystem, config: Config) {
 
   import akka.persistence.cassandra.CassandraPluginConfig._
 
-  val sessionProvider: SessionProvider =
-    SessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
-
-  val sessionSettings: CassandraSessionSettings =
-    CassandraSessionSettings(config)
+  val sessionProvider: CqlSessionProvider =
+    CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
 
   val keyspace: String = config.getString("keyspace")
   val table: String = config.getString("table")
@@ -39,18 +31,17 @@ class CassandraPluginConfig(system: ActorSystem, config: Config) {
     config.getInt("replication-factor"),
     getListFromConfig(config, "data-center-replication-factors"))
 
-  val readConsistency: ConsistencyLevel = sessionSettings.readConsistency
-  val writeConsistency: ConsistencyLevel = sessionSettings.writeConsistency
-
-  val deleteRetries: Int = config.getInt("delete-retries")
-  val writeRetries: Int = config.getInt("write-retries")
-  val readRetries: Int = config.getInt("read-retries")
-
   val gcGraceSeconds: Long = config.getLong("gc-grace-seconds")
 
 }
 
 object CassandraPluginConfig {
+
+  private[akka] def checkProfile(system: ActorSystem, profile: String) = {
+    require(
+      system.settings.config.hasPath(s"datastax-java-driver.profiles.$profile"),
+      s"profile $profile does not exist in `datastax-java-driver.profiles`")
+  }
 
   val keyspaceNameRegex =
     """^("[a-zA-Z]{1}[\w]{0,47}"|[a-zA-Z]{1}[\w]{0,47})$"""

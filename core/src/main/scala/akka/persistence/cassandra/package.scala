@@ -12,22 +12,22 @@ import java.util.UUID
 import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, SerializedMeta }
 import akka.serialization.Serialization
-import com.datastax.driver.core.utils.UUIDs
+
 import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.collection.JavaConverters._
 import com.typesafe.config.{ Config, ConfigValueType }
-
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
 import akka.serialization.AsyncSerializer
 import akka.serialization.Serializers
 import akka.annotation.InternalApi
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 package object cassandra {
   private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
   def formatOffset(uuid: UUID): String = {
-    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(UUIDs.unixTimestamp(uuid)), ZoneOffset.UTC)
+    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(Uuids.unixTimestamp(uuid)), ZoneOffset.UTC)
     s"$uuid (${timestampFormatter.format(time)})"
   }
 
@@ -46,7 +46,7 @@ package object cassandra {
       system: ActorSystem)(implicit executionContext: ExecutionContext): Future[Serialized] =
     try {
       // use same clock source as the UUID for the timeBucket
-      val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), bucketSize)
+      val timeBucket = TimeBucket(Uuids.unixTimestamp(uuid), bucketSize)
 
       def serializeMeta(): Option[SerializedMeta] =
         // meta data, if any

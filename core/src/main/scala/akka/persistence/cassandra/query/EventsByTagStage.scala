@@ -13,13 +13,12 @@ import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
 import akka.persistence.cassandra.query.EventsByTagStage._
 import akka.stream.stage.{ GraphStage, _ }
 import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
-import akka.cassandra.session._
 import akka.util.PrettyDuration._
 
 import scala.annotation.tailrec
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
+import scala.concurrent.{ ExecutionContextExecutor, Future }
 import scala.util.{ Failure, Success, Try }
 import java.lang.{ Long => JLong }
 
@@ -27,9 +26,13 @@ import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
 import akka.persistence.query.Offset
-import com.datastax.driver.core.{ ResultSet, Row, Session }
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet
+import com.datastax.oss.driver.api.core.cql.Row
+import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.github.ghik.silencer.silent
+
+import scala.compat.java8.FutureConverters._
 
 /**
  * Walks the tag_views table.
@@ -88,27 +91,21 @@ import com.github.ghik.silencer.silent
 
   private[akka] class TagStageSession(
       val tag: String,
-      session: Session,
-      statements: EventByTagStatements,
-      fetchSize: Int) {
-    def selectEventsForBucket(bucket: TimeBucket, from: UUID, to: UUID)(
-        implicit ec: ExecutionContext): Future[ResultSet] = {
+      readProfile: String,
+      session: CqlSession,
+      statements: EventByTagStatements) {
+    def selectEventsForBucket(bucket: TimeBucket, from: UUID, to: UUID): Future[AsyncResultSet] = {
       val bound =
-        statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setFetchSize(fetchSize)
+        statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setExecutionProfileName(readProfile)
 
-      session.executeAsync(bound).asScala
+      session.executeAsync(bound).toScala
     }
-  }
-
-  private[akka] object TagStageSession {
-    def apply(tag: String, session: Session, statements: EventByTagStatements, fetchSize: Int): TagStageSession =
-      new TagStageSession(tag, session, statements, fetchSize)
   }
 
   private sealed trait QueryState
   private case object QueryIdle extends QueryState
   private final case class QueryInProgress(startTime: Long = System.nanoTime()) extends QueryState
-  private final case class QueryResult(resultSet: ResultSet) extends QueryState
+  private final case class QueryResult(resultSet: AsyncResultSet) extends QueryState
   private final case class BufferedEvents(events: List[UUIDRow]) extends QueryState
 
   /**
@@ -199,7 +196,7 @@ import com.github.ghik.silencer.silent
 
       var stageState: StageState = _
       val toOffsetMillis =
-        toOffset.map(UUIDs.unixTimestamp).getOrElse(Long.MaxValue)
+        toOffset.map(Uuids.unixTimestamp).getOrElse(Long.MaxValue)
 
       lazy val system = materializer match {
         case a: ActorMaterializer => a.system
@@ -208,10 +205,10 @@ import com.github.ghik.silencer.silent
       }
 
       private def calculateToOffset(): UUID = {
-        val to: Long = UUIDs.unixTimestamp(UUIDs.timeBased()) - settings.eventsByTagEventualConsistency.toMillis
+        val to: Long = Uuids.unixTimestamp(Uuids.timeBased()) - settings.eventsByTagEventualConsistency.toMillis
         val tOff = if (to < toOffsetMillis) {
           // The eventual consistency delay is before the end of the query
-          val u = UUIDs.endOf(to)
+          val u = Uuids.endOf(to)
           if (log.isDebugEnabled) {
             log.debug("[{}]: New toOffset (EC): {}", stageUuid, formatOffset(u))
           }
@@ -236,7 +233,7 @@ import com.github.ghik.silencer.silent
 
       setHandler(out, this)
 
-      val newResultSetCb = getAsyncCallback[Try[ResultSet]] {
+      val newResultSetCb = getAsyncCallback[Try[AsyncResultSet]] {
         case Success(rs) =>
           if (!stageState.state.isInstanceOf[QueryInProgress]) {
             throw new IllegalStateException(s"New ResultSet when in unexpected state ${stageState.state}")
@@ -384,7 +381,7 @@ import com.github.ghik.silencer.silent
         }
       }
 
-      def checkResultSetForMissing(rs: ResultSet, m: LookingForMissing): Unit = {
+      def checkResultSetForMissing(rs: AsyncResultSet, m: LookingForMissing): Unit = {
         val row = rs.one()
         // we only extract the event if it is the missing one we've looking for
         val rowPersistenceId = row.getString("persistence_id")
@@ -451,7 +448,7 @@ import com.github.ghik.silencer.silent
               settings.eventsByTagNewPersistenceIdScanTimeout.pretty)
           }
           val previousBucketStart =
-            UUIDs.startOf(stageState.currentTimeBucket.previous(1).key)
+            Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
           val startingOffset: UUID =
             if (UUIDComparator.comparator.compare(previousBucketStart, fromOffset) < 0) {
               log.debug("[{}] Starting at fromOffset", stageUuid)
@@ -533,9 +530,9 @@ import com.github.ghik.silencer.silent
       @tailrec def tryPushOne(): Unit =
         stageState.state match {
           case QueryResult(rs) if isAvailable(out) =>
-            if (rs.isExhausted) {
+            if (isExhausted(rs)) {
               queryExhausted()
-            } else if (rs.getAvailableWithoutFetching == 0) {
+            } else if (rs.remaining() == 0) {
               log.debug("[{}] Fetching more", stageUuid)
               fetchMore(rs)
             } else if (stageState.isLookingForMissing) {
@@ -560,9 +557,9 @@ import com.github.ghik.silencer.silent
               }
             }
           case QueryResult(rs) =>
-            if (rs.isExhausted) {
+            if (isExhausted(rs)) {
               queryExhausted()
-            } else if (rs.getAvailableWithoutFetching == 0) {
+            } else if (rs.remaining() == 0) {
               log.debug("[{}] Fully fetched, getting more for next pull (not implemented yet)", stageUuid)
             }
           case BufferedEvents(events) if isAvailable(out) =>
@@ -667,9 +664,9 @@ import com.github.ghik.silencer.silent
             .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset)))
       }
 
-      private def fetchMore(rs: ResultSet): Unit = {
+      private def fetchMore(rs: AsyncResultSet): Unit = {
         log.debug("[{}] No more results without paging. Requesting more.", stageUuid)
-        val moreResults: Future[ResultSet] = rs.fetchMoreResults().asScala
+        val moreResults = rs.fetchNextPage().toScala
         updateQueryState(QueryInProgress())
         moreResults.onComplete(newResultSetCb.invoke)
       }
@@ -678,12 +675,12 @@ import com.github.ghik.silencer.silent
         UUIDRow(
           persistenceId = row.getString("persistence_id"),
           sequenceNr = row.getLong("sequence_nr"),
-          offset = row.getUUID("timestamp"),
+          offset = row.getUuid("timestamp"),
           tagPidSequenceNr = row.getLong("tag_pid_sequence_nr"),
           row)
 
       private def nextTimeBucket(): Unit = {
-        updateStageState(_.copy(fromOffset = UUIDs.startOf(stageState.currentTimeBucket.next().key)))
+        updateStageState(_.copy(fromOffset = Uuids.startOf(stageState.currentTimeBucket.next().key)))
         updateToOffset()
       }
     }

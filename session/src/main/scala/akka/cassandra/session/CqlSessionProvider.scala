@@ -5,16 +5,19 @@
 package akka.cassandra.session
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
-import com.datastax.driver.core.Session
+import akka.util.unused
 import com.typesafe.config.Config
 
 import scala.collection.immutable
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.Failure
+import scala.compat.java8.FutureConverters._
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.config.{ DefaultDriverOption, DriverConfigLoader }
 
 /**
  * The implementation of the `SessionProvider` is used for creating the
- * Cassandra Session. By default the [[ConfigSessionProvider]] is building
+ * Cassandra Session. By default the [[DefaultSessionProvider]] is building
  * the Cluster from configuration properties but it is possible to
  * replace the implementation of the SessionProvider to reuse another
  * session or override the Cluster builder with other settings.
@@ -23,13 +26,25 @@ import scala.util.Failure
  * It may optionally have a constructor with an ActorSystem and Config parameter.
  * The config parameter is the config section of the plugin.
  */
-trait SessionProvider {
-
-  def connect()(implicit ec: ExecutionContext): Future[Session]
-
+trait CqlSessionProvider {
+  def connect()(implicit ec: ExecutionContext): Future[CqlSession]
 }
 
-object SessionProvider {
+class DefaultSessionProvider(@unused system: ActorSystem, config: Config) extends CqlSessionProvider {
+  override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
+    val builder = CqlSession.builder()
+    val sessionName = config.getString("session-name")
+    (if (sessionName != null && sessionName.nonEmpty) {
+       val overload: DriverConfigLoader =
+         DriverConfigLoader.programmaticBuilder().withString(DefaultDriverOption.SESSION_NAME, sessionName).build()
+       builder.withConfigLoader(overload)
+     } else {
+       builder
+     }).buildAsync().toScala
+  }
+}
+
+object CqlSessionProvider {
 
   /**
    * Create a `SessionProvider` from configuration.
@@ -37,12 +52,12 @@ object SessionProvider {
    * class name of the SessionProvider implementation class. It may optionally
    * have a constructor with an `ActorSystem` and `Config` parameter.
    */
-  def apply(system: ExtendedActorSystem, config: Config): SessionProvider = {
+  def apply(system: ExtendedActorSystem, config: Config): CqlSessionProvider = {
     val className = config.getString("session-provider")
     val dynamicAccess = system.asInstanceOf[ExtendedActorSystem].dynamicAccess
-    val clazz = dynamicAccess.getClassFor[SessionProvider](className).get
+    val clazz = dynamicAccess.getClassFor[CqlSessionProvider](className).get
     def instantiate(args: immutable.Seq[(Class[_], AnyRef)]) =
-      dynamicAccess.createInstanceFor[SessionProvider](clazz, args)
+      dynamicAccess.createInstanceFor[CqlSessionProvider](clazz, args)
 
     val params = List((classOf[ActorSystem], system), (classOf[Config], config))
     instantiate(params)

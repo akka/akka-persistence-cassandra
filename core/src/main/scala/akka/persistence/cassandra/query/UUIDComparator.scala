@@ -30,7 +30,7 @@ class UUIDComparator extends Comparator[UUID] {
         } else
           diff2
       } else {
-        // note: java.util.UUIDs compares with sign extension, IMO that's wrong, so:
+        // note: java.util.Uuids compares with sign extension, IMO that's wrong, so:
         val diff2 = compareULongs(u1.getMostSignificantBits(), u2.getMostSignificantBits())
         if (diff2 == 0) {
           compareULongs(u1.getLeastSignificantBits(), u2.getLeastSignificantBits())

@@ -17,8 +17,8 @@ import akka.persistence.cassandra.journal.TagWriterSpec.{ EventWrite, ProgressWr
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
-import com.datastax.driver.core.utils.UUIDs
-import com.datastax.driver.core.{ PreparedStatement, Statement }
+import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Statement }
+import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.github.ghik.silencer.silent
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, WordSpecLike }
@@ -64,7 +64,7 @@ class TagWriterSpec
     shutdown()
 
   val fakePs: Future[PreparedStatement] = Future.successful(null)
-  val successfulWrite: Statement => Future[Done] = _ => Future.successful(Done)
+  val successfulWrite: Statement[_] => Future[Done] = _ => Future.successful(Done)
   val defaultSettings = TagWriterSettings(
     maxBatchSize = 10,
     flushInterval = 10.seconds,
@@ -295,7 +295,7 @@ class TagWriterSpec
         setup(
           writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
           settings = defaultSettings.copy(maxBatchSize = 2))
-      val now = UUIDs.timeBased()
+      val now = Uuids.timeBased()
       val bucketOne = TimeBucket(now, bucketSize)
       val bucketTwo = bucketOne.next()
       val bucketThree = bucketTwo.next()
@@ -426,15 +426,15 @@ class TagWriterSpec
     "handle timeuuids coming out of order" in {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 4))
       val currentBucket = (0 to 2).map { _ =>
-        val uuid = UUIDs.timeBased()
+        val uuid = Uuids.timeBased()
         (uuid, TimeBucket(uuid, bucketSize))
       }
 
-      val futureBucketMillis = UUIDs.unixTimestamp(currentBucket(0)._1) + bucketSize.durationMillis
+      val futureBucketMillis = Uuids.unixTimestamp(currentBucket(0)._1) + bucketSize.durationMillis
       val futureBucket = TimeBucket(futureBucketMillis, bucketSize)
 
       val p1e1 = event("p1", 1, "p1-e1", currentBucket(0)._2, uuid = currentBucket(0)._1)
-      val p2e1 = event("p2", 1, "p2-e1", futureBucket, uuid = UUIDs.startOf(futureBucketMillis))
+      val p2e1 = event("p2", 1, "p2-e1", futureBucket, uuid = Uuids.startOf(futureBucketMillis))
       val p1e2 = event("p1", 2, "p1-e2", currentBucket(1)._2, uuid = currentBucket(1)._1)
 
       system.log.debug("Persisting event in bucket: {} uuid: {}", p2e1.timeBucket, formatOffset(p2e1.timeUuid))
@@ -631,7 +631,7 @@ class TagWriterSpec
   }
 
   private def nowBucket(): TimeBucket = {
-    val now = UUIDs.timeBased()
+    val now = Uuids.timeBased()
     TimeBucket(now, Day)
   }
   private def toEw(s: Serialized, tagPidSequenceNr: Long): EventWrite =
@@ -646,29 +646,30 @@ class TagWriterSpec
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
-    val session = new TagWritersSession(() => fakePs, () => fakePs, successfulWrite, null, () => fakePs, () => fakePs) {
+    val session =
+      new TagWritersSession(null, "unused", "unused", () => fakePs, () => fakePs, () => fakePs, () => fakePs) {
 
-      override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
-        probe.ref ! events.map {
-          case (event, tagPidSequenceNr) => toEw(event, tagPidSequenceNr)
+        override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
+          probe.ref ! events.map {
+            case (event, tagPidSequenceNr) => toEw(event, tagPidSequenceNr)
+          }
+          val (result, tail) = (writeResponseStream.head, writeResponseStream.tail)
+          writeResponseStream = tail
+          result
         }
-        val (result, tail) = (writeResponseStream.head, writeResponseStream.tail)
-        writeResponseStream = tail
-        result
-      }
 
-      override def writeProgress(
-          tag: Tag,
-          pid: PersistenceId,
-          seqNr: SequenceNr,
-          tagPidSequenceNr: TagPidSequenceNr,
-          offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
-        val (head, tail) = (progressWriteResponseStream.head, progressWriteResponseStream.tail)
-        probe.ref ! ProgressWrite(pid, seqNr, tagPidSequenceNr, offset)
-        progressWriteResponseStream = tail
-        head
+        override def writeProgress(
+            tag: Tag,
+            pid: PersistenceId,
+            seqNr: SequenceNr,
+            tagPidSequenceNr: TagPidSequenceNr,
+            offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
+          val (head, tail) = (progressWriteResponseStream.head, progressWriteResponseStream.tail)
+          probe.ref ! ProgressWrite(pid, seqNr, tagPidSequenceNr, offset)
+          progressWriteResponseStream = tail
+          head
+        }
       }
-    }
 
     val ref = system.actorOf(TagWriter.props(settings, session, tag))
     (probe, ref)
@@ -680,7 +681,7 @@ class TagWriterSpec
       payload: String,
       bucket: TimeBucket,
       tags: Set[String] = Set(),
-      uuid: UUID = UUIDs.timeBased()): Serialized =
+      uuid: UUID = Uuids.timeBased()): Serialized =
     Serialized(pId, seqNr, ByteBuffer.wrap(payload.getBytes()), tags, "", "", 1, "", None, uuid, bucket)
 
 }

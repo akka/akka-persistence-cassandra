@@ -10,7 +10,6 @@ import com.typesafe.config.ConfigFactory
 
 object TagScanningSpec {
   val config = ConfigFactory.parseString(s"""
-      akka.loglevel = INFO
       cassandra-journal.events-by-tag.enabled = on
       cassandra-journal.events-by-tag.scanning-flush-interval = 2s
       cassandra-journal.replay-filter.mode = off
@@ -32,13 +31,13 @@ class TagScanningSpec extends CassandraSpec(TagScanningSpec.config) {
       awaitAssert {
         import scala.collection.JavaConverters._
         val expected = (0 until nrActors).map(n => (s"$n".toInt, 1L)).toList
-        val scanning = journalSession
-          .execute("select * from tag_scanning")
+        val scanning = cluster
+          .execute(s"select * from ${journalName}.tag_scanning")
           .all()
           .asScala
           .toList
           .map(row => (row.getString("persistence_id"), row.getLong("sequence_nr")))
-          .filterNot(_._1 == "persistenceInit")
+          .filterNot(_._1.startsWith("persistenceInit"))
           .map { case (pid, seqNr) => (pid.toInt, seqNr) } // sorting by pid makes the failure message easy to interpret
           .sortBy(_._1)
         scanning shouldEqual expected

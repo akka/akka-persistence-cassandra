@@ -8,7 +8,8 @@ import java.time.format.DateTimeFormatter
 import java.time.{ LocalDateTime, ZoneId, ZoneOffset }
 import java.util.UUID
 
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 package object query {
 
@@ -16,9 +17,13 @@ package object query {
   val firstBucketFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern(firstBucketFormat).withZone(ZoneOffset.UTC)
 
+  def isExhausted(rs: AsyncResultSet): Boolean = {
+    rs.remaining() == 0 && !rs.hasMorePages
+  }
+
   def uuid(timestamp: Long): UUID = {
     def makeMsb(time: Long): Long = {
-      // copied from UUIDs.makeMsb
+      // copied from Uuids.makeMsb
       // UUID v1 timestamp must be in 100-nanoseconds interval since 00:00:00.000 15 Oct 1582.
       val uuidEpoch = LocalDateTime.of(1582, 10, 15, 0, 0).atZone(ZoneId.of("GMT-0")).toInstant.toEpochMilli
       val timestamp = (time - uuidEpoch) * 10000
@@ -31,7 +36,7 @@ package object query {
       msb
     }
 
-    val now = UUIDs.timeBased()
+    val now = Uuids.timeBased()
     new UUID(makeMsb(timestamp), now.getLeastSignificantBits)
   }
 }

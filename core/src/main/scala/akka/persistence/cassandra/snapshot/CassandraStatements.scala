@@ -6,13 +6,12 @@ package akka.persistence.cassandra.snapshot
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.Done
 import akka.cassandra.session.FutureDone
-import akka.cassandra.session._
-import com.datastax.driver.core.Session
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.indent
+import com.datastax.oss.driver.api.core.CqlSession
+import scala.compat.java8.FutureConverters._
 
 trait CassandraStatements {
   def snapshotConfig: CassandraSnapshotStoreConfig
@@ -43,7 +42,7 @@ trait CassandraStatements {
     |  AND compaction = ${indent(snapshotConfig.tableCompactionStrategy.asCQL, "    ")}
     """.stripMargin.trim
 
-  def writeSnapshot(withMeta: Boolean) = s"""
+  def writeSnapshot(withMeta: Boolean): String = s"""
       INSERT INTO ${tableName} (persistence_id, sequence_nr, timestamp, ser_manifest, ser_id, snapshot_data
       ${if (withMeta) ", meta_ser_id, meta_ser_manifest, meta" else ""})
       VALUES (?, ?, ?, ?, ?, ? ${if (withMeta) ", ?, ?, ?" else ""})
@@ -90,17 +89,17 @@ trait CassandraStatements {
    * Those statements are retried, because that could happen across different
    * nodes also but serializing those statements gives a better "experience".
    */
-  def executeCreateKeyspaceAndTables(session: Session, config: CassandraSnapshotStoreConfig)(
+  def executeCreateKeyspaceAndTables(session: CqlSession, config: CassandraSnapshotStoreConfig)(
       implicit ec: ExecutionContext): Future[Done] = {
 
     def create(): Future[Done] = {
       val keyspace: Future[Done] =
         if (config.keyspaceAutoCreate)
-          session.executeAsync(createKeyspace).asScala.map(_ => Done)
+          session.executeAsync(createKeyspace).toScala.map(_ => Done)
         else FutureDone
 
       if (config.tablesAutoCreate)
-        keyspace.flatMap(_ => session.executeAsync(createTable).asScala).map(_ => Done)
+        keyspace.flatMap(_ => session.executeAsync(createTable).toScala).map(_ => Done)
       else keyspace
     }
 

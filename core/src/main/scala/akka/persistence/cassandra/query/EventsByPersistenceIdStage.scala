@@ -15,11 +15,8 @@ import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, Serialized }
 import akka.serialization.Serialization
 import akka.stream.{ Attributes, Outlet, SourceShape }
-import akka.cassandra.session._
 import akka.stream.stage._
-import com.datastax.driver.core._
-import com.datastax.driver.core.policies.RetryPolicy
-import com.datastax.driver.core.utils.Bytes
+import com.datastax.oss.driver.api.core.cql._
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -27,7 +24,11 @@ import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.concurrent.duration.{ FiniteDuration, _ }
 import scala.util.{ Failure, Success, Try }
 import akka.util.OptionVal
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.protocol.internal.util.Bytes
 import com.github.ghik.silencer.silent
+
+import scala.compat.java8.FutureConverters._
 
 /**
  * INTERNAL API
@@ -69,39 +70,33 @@ import com.github.ghik.silencer.silent
       selectEventsByPersistenceIdQuery: PreparedStatement,
       selectSingleRowQuery: PreparedStatement,
       selectDeletedToQuery: PreparedStatement,
-      session: Session,
-      customConsistencyLevel: Option[ConsistencyLevel],
-      customRetryPolicy: Option[RetryPolicy]) {
+      session: CqlSession,
+      profile: String) {
 
     def selectEventsByPersistenceId(
         persistenceId: String,
         partitionNr: Long,
         progress: Long,
-        toSeqNr: Long,
-        fetchSize: Int)(implicit ec: ExecutionContext): Future[ResultSet] = {
+        toSeqNr: Long): Future[AsyncResultSet] = {
       val boundStatement =
-        selectEventsByPersistenceIdQuery.bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
-      boundStatement.setFetchSize(fetchSize)
+        selectEventsByPersistenceIdQuery
+          .bind(persistenceId, partitionNr: JLong, progress: JLong, toSeqNr: JLong)
+          .setExecutionProfileName(profile)
       executeStatement(boundStatement)
     }
 
     def selectSingleRow(persistenceId: String, pnr: Long)(implicit ec: ExecutionContext): Future[Option[Row]] = {
-      val boundStatement = selectSingleRowQuery.bind(persistenceId, pnr: JLong)
-      session.executeAsync(boundStatement).asScala.map(rs => Option(rs.one()))
+      val boundStatement = selectSingleRowQuery.bind(persistenceId, pnr: JLong).setExecutionProfileName(profile)
+      session.executeAsync(boundStatement).toScala.map(rs => Option(rs.one()))
     }
 
     def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContext): Future[Long] =
-      executeStatement(selectDeletedToQuery.bind(persistenceId)).map(r =>
+      executeStatement(selectDeletedToQuery.bind(persistenceId).setExecutionProfileName(profile)).map(r =>
         Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
 
-    private def executeStatement(statement: Statement)(implicit ec: ExecutionContext): Future[ResultSet] =
-      session.executeAsync(withCustom(statement)).asScala
+    private def executeStatement(statement: Statement[_]): Future[AsyncResultSet] =
+      session.executeAsync(statement).toScala
 
-    private def withCustom(statement: Statement): Statement = {
-      customConsistencyLevel.foreach(statement.setConsistencyLevel)
-      customRetryPolicy.foreach(statement.setRetryPolicy)
-      statement
-    }
   }
 
   private case object Continue
@@ -113,7 +108,7 @@ import com.github.ghik.silencer.silent
   private case object QueryIdle extends QueryState
   private final case class QueryInProgress(switchPartition: Boolean, fetchMore: Boolean, startTime: Long)
       extends QueryState
-  private final case class QueryResult(resultSet: ResultSet, empty: Boolean, switchPartition: Boolean)
+  private final case class QueryResult(resultSet: AsyncResultSet, empty: Boolean, switchPartition: Boolean)
       extends QueryState {
     override def toString: String = s"QueryResult($switchPartition)"
   }
@@ -141,7 +136,7 @@ import com.github.ghik.silencer.silent
         override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[TaggedPersistentRepr] =
           extractPersistentRepr(row, ed, s, async).map { persistentRepr =>
             val tags = extractTags(row, ed)
-            TaggedPersistentRepr(persistentRepr, tags, row.getUUID("timestamp"))
+            TaggedPersistentRepr(persistentRepr, tags, row.getUuid("timestamp"))
           }
       }
 
@@ -155,7 +150,7 @@ import com.github.ghik.silencer.silent
             Future.successful(OptionalTagged(seqNr, OptionVal.None))
           } else {
             extractPersistentRepr(row, ed, s, async).map { persistentRepr =>
-              val tagged = TaggedPersistentRepr(persistentRepr, tags, row.getUUID("timestamp"))
+              val tagged = TaggedPersistentRepr(persistentRepr, tags, row.getUuid("timestamp"))
               OptionalTagged(seqNr, OptionVal.Some(tagged))
             }
           }
@@ -171,7 +166,7 @@ import com.github.ghik.silencer.silent
 
     private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization, async: Boolean)(
         implicit ec: ExecutionContext): Future[PersistentRepr] =
-      row.getBytes("message") match {
+      row.getByteBuffer("message") match {
         case null =>
           ed.deserializeEvent(row, async).map { payload =>
             PersistentRepr(
@@ -222,7 +217,6 @@ import com.github.ghik.silencer.silent
     fromSeqNr: Long,
     toSeqNr: Long,
     max: Long,
-    fetchSize: Int,
     refreshInterval: Option[FiniteDuration],
     session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
     config: CassandraReadJournalConfig,
@@ -241,7 +235,6 @@ import com.github.ghik.silencer.silent
         classOf[EventsByPersistenceIdStage]
 
       implicit def ec = materializer.executionContext
-      val fetchMoreThresholdRows = (fetchSize * config.fetchMoreThreshold).toInt
 
       val donePromise = Promise[Done]()
 
@@ -255,14 +248,14 @@ import com.github.ghik.silencer.silent
 
       var queryState: QueryState = QueryIdle
 
-      val newResultSetCb = getAsyncCallback[Try[ResultSet]] {
+      val newResultSetCb = getAsyncCallback[Try[AsyncResultSet]] {
         case Success(rs) =>
           val q = queryState match {
             case q: QueryInProgress => q
             case _ =>
               throw new IllegalStateException(s"New ResultSet when in unexpected state $queryState")
           }
-          val empty = rs.isExhausted() && !q.fetchMore
+          val empty = isExhausted(rs) && !q.fetchMore
           if (log.isDebugEnabled)
             log.debug(
               "EventsByPersistenceId [{}] Query took [{}] ms {}",
@@ -405,7 +398,7 @@ import com.github.ghik.silencer.silent
           case _: QueryInProgress =>
             throw new IllegalStateException("Query already in progress")
           case QueryResult(rs, _, _) =>
-            if (!rs.isExhausted)
+            if (!isExhausted(rs))
               throw new IllegalStateException("Previous query was not exhausted")
         }
         val pnr = if (switchPartition) partition + 1 else partition
@@ -428,7 +421,7 @@ import com.github.ghik.silencer.silent
             toSeqNr
         }
         session
-          .selectEventsByPersistenceId(persistenceId, pnr, expectedNextSeqNr, endNr, fetchSize)
+          .selectEventsByPersistenceId(persistenceId, pnr, expectedNextSeqNr, endNr)
           .onComplete(newResultSetCb.invoke)
       }
 
@@ -474,7 +467,7 @@ import com.github.ghik.silencer.silent
 
             if (reachedEndCondition())
               completeStage()
-            else if (rs.isExhausted) {
+            else if (isExhausted(rs)) {
               (lookingForMissingSeqNr, pendingFastForward) match {
                 case (Some(MissingSeqNr(_, sawSeqNr)), Some(fastForwardTo)) if fastForwardTo >= sawSeqNr =>
                   log.debug(
@@ -491,10 +484,10 @@ import com.github.ghik.silencer.silent
                 case _ =>
                   afterExhausted()
               }
-            } else if (rs.getAvailableWithoutFetching == 0) {
+            } else if (rs.remaining() == 0) {
               log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]", persistenceId, expectedNextSeqNr)
               queryState = QueryInProgress(switchPartition, fetchMore = true, System.nanoTime())
-              val rsFut = rs.fetchMoreResults().asScala
+              val rsFut = rs.fetchNextPage().toScala
               rsFut.onComplete(newResultSetCb.invoke)
             } else {
               val row = rs.one()
@@ -537,10 +530,9 @@ import com.github.ghik.silencer.silent
                   if (refreshInterval.isEmpty) query(false)
                   else afterExhausted()
 
-                } else if (rs.isExhausted)
+                } else if (isExhausted(rs)) {
                   afterExhausted()
-                else if (rs.getAvailableWithoutFetching == fetchMoreThresholdRows)
-                  rs.fetchMoreResults() // trigger early async fetch of more rows
+                }
 
               }
             }
@@ -571,7 +563,7 @@ import com.github.ghik.silencer.silent
                     partition = partition + 1
                   query(switchPartition = false)
               }
-            case Failure(exception) =>
+            case Failure(_) =>
               throw new IllegalStateException("Should not be able to get here")
           }.invoke
         }
@@ -599,7 +591,7 @@ import com.github.ghik.silencer.silent
 
         try fastForwardCb.invoke(nextSeqNr)
         catch {
-          case e: IllegalStateException =>
+          case _: IllegalStateException =>
           // not initialized, see Akka issue #20503, but that is ok since this
           // is just best effort
         }

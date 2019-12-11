@@ -6,10 +6,11 @@ package akka.persistence.cassandra.query
 
 import java.time.{ LocalDateTime, ZoneOffset }
 
-import akka.actor.NoSerializationVerificationNeeded
+import akka.actor.{ ActorSystem, ExtendedActorSystem, NoSerializationVerificationNeeded }
 import akka.annotation.InternalApi
+import akka.cassandra.session.CqlSessionProvider
+import akka.persistence.cassandra.CassandraPluginConfig
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
-import com.datastax.driver.core.ConsistencyLevel
 import com.typesafe.config.Config
 
 import scala.concurrent.duration._
@@ -17,30 +18,29 @@ import scala.concurrent.duration._
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraReadJournalConfig(config: Config, writePluginConfig: CassandraJournalConfig)
+@InternalApi private[akka] class CassandraReadJournalConfig(
+    system: ActorSystem,
+    config: Config,
+    writePluginConfig: CassandraJournalConfig)
     extends NoSerializationVerificationNeeded {
+
+  val readProfile = config.getString("read-profile")
+  CassandraPluginConfig.checkProfile(system, readProfile)
+
+  val sessionProvider: CqlSessionProvider = CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
 
   val refreshInterval: FiniteDuration =
     config.getDuration("refresh-interval", MILLISECONDS).millis
+
   val gapFreeSequenceNumbers: Boolean =
     config.getBoolean("gap-free-sequence-numbers")
   val maxBufferSize: Int = config.getInt("max-buffer-size")
-  val fetchSize: Int = config.getInt("max-result-size-query")
-
-  // TODO use for the events by tag query too
-  val fetchMoreThreshold: Double = config.getDouble("fetch-more-threshold")
-  require(
-    0.0 <= fetchMoreThreshold && fetchMoreThreshold <= 1.0,
-    s"fetch-more-threshold must be between 0.0 and 1.0, was $fetchMoreThreshold")
-  val readConsistency: ConsistencyLevel =
-    ConsistencyLevel.valueOf(config.getString("read-consistency"))
-  val readRetries: Int = config.getInt("read-retries")
 
   val firstTimeBucket: TimeBucket = {
     val firstBucket = config.getString("first-time-bucket")
     val firstBucketPadded = (writePluginConfig.bucketSize, firstBucket) match {
       case (_, fb) if fb.length == 14    => fb
-      case (Hour, fb) if fb.length == 11 => s"${fb}:00"
+      case (Hour, fb) if fb.length == 11 => s"$fb:00"
       case (Day, fb) if fb.length == 8   => s"${fb}T00:00"
       case _ =>
         throw new IllegalArgumentException("Invalid first-time-bucket format. Use: " + firstBucketFormat)

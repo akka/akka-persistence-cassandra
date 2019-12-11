@@ -11,13 +11,10 @@ import akka.actor.ActorRef
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
-import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterEach
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.util.Try
 
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
@@ -33,22 +30,6 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
   val cfg = system.settings.config.getConfig("cassandra-journal")
   val pluginConfig = new CassandraPluginConfig(system, cfg)
 
-  var session: Session = _
-
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    import system.dispatcher
-    session = Await.result(pluginConfig.sessionProvider.connect(), 5.seconds)
-  }
-
-  override protected def afterAll(): Unit = {
-    Try {
-      session.close()
-      session.getCluster.close()
-    }
-    super.afterAll()
-  }
-
   override protected def beforeEach() = {
     super.beforeEach()
     deleteAllEvents()
@@ -59,7 +40,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
   def current(): Source[String, NotUsed] = queries.currentPersistenceIds().filterNot(_ == "persistenceInit")
 
   private[this] def deleteAllEvents(): Unit =
-    session.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.table}")
+    cluster.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.table}")
 
   private[this] def setup(persistenceId: String, n: Int): ActorRef = {
     val ref = system.actorOf(TestActor.props(persistenceId))

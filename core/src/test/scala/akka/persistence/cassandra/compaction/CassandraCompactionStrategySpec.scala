@@ -7,13 +7,8 @@ package akka.persistence.cassandra.compaction
 import java.util.concurrent.TimeUnit
 
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
-import com.datastax.driver.core.Session
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.util.Try
 
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(s"""
@@ -24,27 +19,14 @@ object CassandraCompactionStrategySpec {
 
 class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionStrategySpec.config) with WordSpecLike {
 
-  import system.dispatcher
-
   val defaultConfigs = system.settings.config.getConfig("cassandra-journal")
 
   val cassandraPluginConfig = new CassandraPluginConfig(system, defaultConfigs)
 
-  var session: Session = _
-
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    session = Await.result(cassandraPluginConfig.sessionProvider.connect(), 5.seconds)
-    session.execute(
+    cluster.execute(
       "CREATE KEYSPACE IF NOT EXISTS testKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
-  }
-
-  override protected def afterAll(): Unit = {
-    Try {
-      session.close()
-      session.getCluster.close()
-    }
-    super.afterAll()
   }
 
   "A CassandraCompactionStrategy" must {
@@ -77,7 +59,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
           twConfig.getConfig("table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
-        session.execute(cqlExpression)
+        cluster.execute(cqlExpression)
       }
     }
 
@@ -132,7 +114,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
           uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
-        session.execute(cqlExpression)
+        cluster.execute(cqlExpression)
       }
     }
 
@@ -185,7 +167,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
           uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
-        session.execute(cqlExpression)
+        cluster.execute(cqlExpression)
       }
     }
   }

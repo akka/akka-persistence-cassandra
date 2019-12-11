@@ -18,9 +18,10 @@ import akka.persistence.cassandra.journal.TagWriters.{
   TagWrite
 }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
+import akka.stream.Materializer
+import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 
-import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 
@@ -34,13 +35,15 @@ trait CassandraTagRecovery {
   // No other writes for this pid should be taking place during recovery
   // The result set size will be the number of distinct tags that this pid has used, expecting
   // that to be small (<10) so call to all should be safe
-  private[akka] def lookupTagProgress(persistenceId: String)(
-      implicit ec: ExecutionContext): Future[Map[Tag, TagProgress]] =
+  private[akka] def lookupTagProgress(
+      persistenceId: String)(implicit ec: ExecutionContext, mat: Materializer): Future[Map[Tag, TagProgress]] =
     preparedSelectTagProgressForPersistenceId
-      .map(_.bind(persistenceId))
-      .flatMap(session.selectResultSet)
+      .map(_.bind(persistenceId).setExecutionProfileName(config.readProfile))
+      .flatMap(stmt => {
+        session.select(stmt).runWith(Sink.seq)
+      })
       .map(rs =>
-        rs.all().asScala.foldLeft(Map.empty[String, TagProgress]) { (acc, row) =>
+        rs.foldLeft(Map.empty[String, TagProgress]) { (acc, row) =>
           acc + (row.getString("tag") -> TagProgress(
             persistenceId,
             row.getLong("sequence_nr"),
@@ -51,15 +54,16 @@ trait CassandraTagRecovery {
   // or min tag scanning sequence number, and fix any tags. This recovers any tag writes that
   // happened before the latest snapshot
   private[akka] def tagScanningStartingSequenceNr(persistenceId: String): Future[SequenceNr] =
-    preparedSelectTagScanningForPersistenceId.map(_.bind(persistenceId)).flatMap(session.selectOne).map {
-      case Some(row) => row.getLong("sequence_nr")
-      case None      => 1L
-    }
+    preparedSelectTagScanningForPersistenceId
+      .map(_.bind(persistenceId).setExecutionProfileName(config.readProfile))
+      .flatMap(session.selectOne)
+      .map {
+        case Some(row) => row.getLong("sequence_nr")
+        case None      => 1L
+      }
 
   private[akka] def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], to: ActorRef, actorRunning: Boolean = true)(
       rawEvent: RawEvent): RawEvent = {
-    // FIXME logging once stable
-    log.debug("Processing tag write for event {} tags {}", rawEvent.sequenceNr, rawEvent.serialized.tags)
     rawEvent.serialized.tags.foreach(tag => {
       tp.get(tag) match {
         case None =>

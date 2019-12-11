@@ -50,9 +50,15 @@ case class TableSettings(
 class CassandraJournalConfig(system: ActorSystem, config: Config)
     extends CassandraPluginConfig(system, config)
     with NoSerializationVerificationNeeded {
+
+  val writeProfile: String = config.getString("write-profile")
+  val readProfile: String = config.getString("read-profile")
+
+  CassandraPluginConfig.checkProfile(system, writeProfile)
+  CassandraPluginConfig.checkProfile(system, readProfile)
+
   val targetPartitionSize: Long =
     config.getLong(CassandraJournalConfig.TargetPartitionProperty)
-  val replayMaxResultSize: Int = config.getInt("max-result-size-replay")
   val maxMessageBatchSize: Int = config.getInt("max-message-batch-size")
 
   // TODO this is now only used when deciding how to delete, remove this config and just
@@ -91,7 +97,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
   val coordinatedShutdownOnError: Boolean = config.getBoolean("coordinated-shutdown-on-error")
 
   /**
-   * The Cassandra statement that can be used to create the configured keyspace.
+   * The Cassandra Statement that can be used to create the configured keyspace.
    *
    * This can be queried in for example a startup script without accessing the actual
    * Cassandra plugin actor.

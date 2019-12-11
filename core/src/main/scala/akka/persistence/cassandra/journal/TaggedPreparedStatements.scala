@@ -5,7 +5,7 @@
 package akka.persistence.cassandra.journal
 
 import akka.cassandra.session.scaladsl.CassandraSession
-import com.datastax.driver.core.PreparedStatement
+import com.datastax.oss.driver.api.core.cql.PreparedStatement
 
 import scala.concurrent.{ ExecutionContext, Future }
 
@@ -13,18 +13,13 @@ trait TaggedPreparedStatements extends CassandraStatements {
   private[akka] val session: CassandraSession
   private[akka] implicit val ec: ExecutionContext
 
-  def preparedWriteToTagViewWithoutMeta: Future[PreparedStatement] =
-    session.prepare(writeTags(false)).map(_.setIdempotent(true))
-  def preparedWriteToTagViewWithMeta: Future[PreparedStatement] =
-    session.prepare(writeTags(true)).map(_.setIdempotent(true))
-  def preparedWriteToTagProgress: Future[PreparedStatement] =
-    session.prepare(writeTagProgress).map(_.setIdempotent(true))
-  def preparedSelectTagProgress: Future[PreparedStatement] =
-    session.prepare(selectTagProgress).map(_.setIdempotent(true))
+  def preparedWriteToTagViewWithoutMeta: Future[PreparedStatement] = session.prepare(writeTags(false))
+  def preparedWriteToTagViewWithMeta: Future[PreparedStatement] = session.prepare(writeTags(true))
+  def preparedWriteToTagProgress: Future[PreparedStatement] = session.prepare(writeTagProgress)
+  def preparedSelectTagProgress: Future[PreparedStatement] = session.prepare(selectTagProgress)
   def preparedSelectTagProgressForPersistenceId: Future[PreparedStatement] =
-    session.prepare(selectTagProgressForPersistenceId).map(_.setIdempotent(true))
-  def preparedWriteTagScanning: Future[PreparedStatement] =
-    session.prepare(writeTagScanning).map(_.setIdempotent(true))
+    session.prepare(selectTagProgressForPersistenceId)
+  def preparedWriteTagScanning: Future[PreparedStatement] = session.prepare(writeTagScanning)
   def preparedSelectTagScanningForPersistenceId: Future[PreparedStatement] =
-    session.prepare(selectTagScanningForPersistenceId).map(_.setIdempotent(true))
+    session.prepare(selectTagScanningForPersistenceId)
 }

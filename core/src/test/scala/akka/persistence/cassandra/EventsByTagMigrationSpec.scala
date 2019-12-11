@@ -21,14 +21,14 @@ import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import akka.{ Done, NotUsed }
-import com.datastax.driver.core.utils.UUIDs
 import com.typesafe.config.ConfigFactory
-
 import org.scalatest.BeforeAndAfterAll
+
 import scala.concurrent.duration._
 import scala.util.Try
-
 import akka.serialization.Serializers
+import com.datastax.oss.driver.api.core.cql.SimpleStatement
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 /**
  */
@@ -238,12 +238,12 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     // rolling back to the old version
     "allow dropping of the materialized view" in {
       system.log.info("Dropping old materialzied view")
-      session.execute(s"DROP MATERIALIZED VIEW $eventsByTagViewName")
+      cluster.execute(SimpleStatement.newInstance(s"DROP MATERIALIZED VIEW $eventsByTagViewName"))
       system.log.info("Dropped old materialzied view")
     }
 
     "have a peek in the messages table" in {
-      val row = session.execute(s"select * from ${messagesTableName} limit 1").one()
+      val row = cluster.execute(SimpleStatement.newInstance(s"select * from ${messagesTableName} limit 1")).one()
       system.log.debug("New messages table looks like: {}", row)
       system.log.debug("{}", row.getColumnDefinitions)
     }
@@ -278,9 +278,9 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     // Again a manual step, leaving them is only wasting disk space
     // the new version will work with these columns still there
     "allow dropping of tag columns" in {
-      session.execute(s"ALTER TABLE ${messagesTableName} DROP tag1")
-      session.execute(s"ALTER TABLE ${messagesTableName} DROP tag2")
-      session.execute(s"ALTER TABLE ${messagesTableName} DROP tag3")
+      cluster.execute(s"ALTER TABLE ${messagesTableName} DROP tag1")
+      cluster.execute(s"ALTER TABLE ${messagesTableName} DROP tag2")
+      cluster.execute(s"ALTER TABLE ${messagesTableName} DROP tag3")
     }
 
     "still work after dropping the tag columns" in {
@@ -358,7 +358,6 @@ abstract class AbstractEventsByTagMigrationSpec
       new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
   }
 
-  lazy val session = cluster.connect()
   implicit val materialiser = ActorMaterializer()(system)
   val waitTime = 100.millis
 
@@ -384,9 +383,9 @@ abstract class AbstractEventsByTagMigrationSpec
     super.beforeAll()
     system.log.debug("Creating old tables, first dropping {}", messagesTableName)
     // Drop the messages table as we want to start with the old one
-    session.execute(s"drop table $messagesTableName")
-    session.execute(oldMessagesTable)
-    session.execute(oldMateterializedView)
+    cluster.execute(s"drop table $messagesTableName")
+    cluster.execute(oldMessagesTable)
+    cluster.execute(oldMateterializedView)
     system.log.debug("Old tables created")
   }
 
@@ -395,8 +394,7 @@ abstract class AbstractEventsByTagMigrationSpec
   override protected def afterAll(): Unit = {
     Try {
       externalCassandraCleanup()
-      session.close()
-      session.getCluster.close()
+      cluster.close()
     }
     super.afterAll()
     shutdown(systemTwo)
@@ -412,11 +410,11 @@ abstract class AbstractEventsByTagMigrationSpec
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${if (withMeta) "?, ?, ?, " else ""} true)
     """
 
-  private lazy val preparedWriteMessageWithMeta = session.prepare(writeMessage(true))
+  private lazy val preparedWriteMessageWithMeta = cluster.prepare(writeMessage(true))
 
-  private lazy val preparedWriteMessageWithoutMeta = session.prepare(writeMessage(false))
+  private lazy val preparedWriteMessageWithoutMeta = cluster.prepare(writeMessage(false))
 
-  private lazy val preapredWriteDeletedTo = session.prepare(statements.insertDeletedTo)
+  private lazy val preparedWriteDeletedTo = cluster.prepare(statements.insertDeletedTo)
 
   private val writeMessageVersion0p7 =
     s"""
@@ -425,29 +423,31 @@ abstract class AbstractEventsByTagMigrationSpec
 
     """
 
-  private lazy val preparedWriteVersion0p7 = session.prepare(writeMessageVersion0p7)
+  private lazy val preparedWriteVersion0p7 = cluster.prepare(writeMessageVersion0p7)
 
   def writeOldTestEventInMessagesColumn(pr: PersistentRepr, tags: Set[String]): Unit = {
     require(tags.size <= 3)
-    val bound = preparedWriteVersion0p7.bind()
-    bound.setString("persistence_id", pr.persistenceId)
-    bound.setLong("partition_nr", 0L)
-    bound.setLong("sequence_nr", pr.sequenceNr)
-    val nowUuid = UUIDs.timeBased()
-    val now = UUIDs.unixTimestamp(nowUuid)
-    bound.setUUID("timestamp", nowUuid)
-    bound.setString("timebucket", TimeBucket(now, Hour).key.toString)
+    val nowUuid = Uuids.timeBased()
+    val now = Uuids.unixTimestamp(nowUuid)
     val bytes: Array[Byte] = serialization.serialize(pr).get
-    bound.setBytes("message", ByteBuffer.wrap(bytes))
-    tags.zipWithIndex.foreach {
-      case (tag, index) =>
-        bound.setString(s"tag${index + 1}", tag)
-    }
-    session.execute(bound)
+
+    val bound = tags.zipWithIndex
+      .foldLeft(preparedWriteVersion0p7.bind()) {
+        case (acc, (tag, index)) =>
+          acc.setString(s"tag${index + 1}", tag)
+      }
+      .setString("persistence_id", pr.persistenceId)
+      .setLong("partition_nr", 0L)
+      .setLong("sequence_nr", pr.sequenceNr)
+      .setUuid("timestamp", nowUuid)
+      .setString("timebucket", TimeBucket(now, Hour).key.toString)
+      .setByteBuffer("message", ByteBuffer.wrap(bytes))
+
+    cluster.execute(bound)
   }
 
   def writeToDeletedTo(persistenceId: String, deletedTo: Long): Unit =
-    session.execute(preapredWriteDeletedTo.bind(persistenceId, deletedTo: JLong))
+    cluster.execute(preparedWriteDeletedTo.bind(persistenceId, deletedTo: JLong))
 
   def writeOldTestEventWithTags(
       persistent: PersistentRepr,
@@ -461,34 +461,38 @@ abstract class AbstractEventsByTagMigrationSpec
     val serManifest = Serializers.manifestFor(serializer, persistent)
 
     val ps = if (metadata.isDefined) preparedWriteMessageWithMeta else preparedWriteMessageWithoutMeta
-    val bs = ps.bind()
-    tags.zipWithIndex.foreach {
-      case (tag, index) =>
-        bs.setString(s"tag${index + 1}", tag)
-    }
-    bs.setString("persistence_id", persistent.persistenceId)
-    bs.setLong("partition_nr", 0L)
-    bs.setLong("sequence_nr", persistent.sequenceNr)
-    val nowUuid = UUIDs.timeBased()
-    val now = UUIDs.unixTimestamp(nowUuid)
-    bs.setUUID("timestamp", nowUuid)
-    bs.setString("timebucket", TimeBucket(now, Hour).key.toString)
-    bs.setInt("ser_id", serializer.identifier)
-    bs.setString("ser_manifest", serManifest)
-    bs.setString("event_manifest", persistent.manifest)
-    bs.setBytes("event", serialized)
+    val nowUuid = Uuids.timeBased()
+    val now = Uuids.unixTimestamp(nowUuid)
+    val bound = tags.zipWithIndex
+      .foldLeft(ps.bind()) {
+        case (acc, (tag, index)) =>
+          acc.setString(s"tag${index + 1}", tag)
+      }
+      .setString("persistence_id", persistent.persistenceId)
+      .setLong("partition_nr", 0L)
+      .setLong("sequence_nr", persistent.sequenceNr)
+      .setUuid("timestamp", nowUuid)
+      .setString("timebucket", TimeBucket(now, Hour).key.toString)
+      .setInt("ser_id", serializer.identifier)
+      .setString("ser_manifest", serManifest)
+      .setString("event_manifest", persistent.manifest)
+      .setByteBuffer("event", serialized)
 
-    metadata.foreach { m =>
-      val meta = m.asInstanceOf[AnyRef]
-      val metaSerialiser = serialization.findSerializerFor(meta)
-      val metaSerialised = ByteBuffer.wrap(serialization.serialize(meta).get)
-      bs.setBytes("meta", metaSerialised)
-      bs.setInt("meta_ser_id", metaSerialiser.identifier)
-      val serManifest = Serializers.manifestFor(serializer, meta)
-      bs.setString("meta_ser_manifest", serManifest)
-    }
+    val finished = metadata match {
+      case Some(m) =>
+        val meta = m.asInstanceOf[AnyRef]
+        val metaSerialiser = serialization.findSerializerFor(meta)
+        val metaSerialised = ByteBuffer.wrap(serialization.serialize(meta).get)
+        val serManifest = Serializers.manifestFor(serializer, meta)
+        bound
+          .setByteBuffer("meta", metaSerialised)
+          .setInt("meta_ser_id", metaSerialiser.identifier)
+          .setString("meta_ser_manifest", serManifest)
+      case None =>
+        bound
 
-    session.execute(bs)
+    }
+    cluster.execute(finished)
     system.log.debug("Directly wrote payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
   }
 

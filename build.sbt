@@ -31,9 +31,7 @@ lazy val core = (project in file("core"))
     OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*"),
     OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
     OsgiKeys.privatePackage := Nil,
-    testOptions in Test ++= Seq(
-        Tests.Argument(TestFrameworks.ScalaTest, "-o"),
-        Tests.Argument(TestFrameworks.ScalaTest, "-h", "target/test-reports")))
+    testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o")))
   .configs(MultiJvm)
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
@@ -56,6 +54,15 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     dependencyOverrides += "com.github.jbellis" % "jamm" % "0.3.3", // See jamm comment in https://issues.apache.org/jira/browse/CASSANDRA-9608
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assemblyJarName in assembly := "cassandra-bundle.jar")
+
+lazy val dseTest =
+  (project in file("dse-test"))
+    .dependsOn(core % "test->test")
+    .settings(libraryDependencies ++= Dependencies.dseTestDependencies)
+
+lazy val akka26Tests = (project in file("akka-26-tests"))
+  .dependsOn(core % "test->test")
+  .settings(libraryDependencies ++= Dependencies.akka26TestDependencies)
 
 lazy val docs = project
   .enablePlugins(Common, AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)

@@ -9,8 +9,7 @@ import java.lang.{ Long => JLong }
 import akka.Done
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.SnapshotMetadata
-import akka.persistence.cassandra.journal.FixedRetryPolicy
-import com.datastax.driver.core.policies.LoggingRetryPolicy
+import com.datastax.oss.driver.api.core.cql.PreparedStatement
 
 import scala.concurrent.{ ExecutionContext, Future }
 
@@ -20,22 +19,14 @@ trait CassandraSnapshotCleanup extends CassandraStatements {
   def session: CassandraSession
   private[akka] implicit val ec: ExecutionContext
 
-  private lazy val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(snapshotConfig.deleteRetries))
+  def preparedDeleteSnapshot: Future[PreparedStatement] =
+    session.prepare(deleteSnapshot)
 
-  def preparedDeleteSnapshot =
-    session
-      .prepare(deleteSnapshot)
-      .map(_.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy))
+  def preparedDeleteAllSnapshotsForPid: Future[PreparedStatement] =
+    session.prepare(deleteAllSnapshotForPersistenceId)
 
-  def preparedDeleteAllSnapshotsForPid =
-    session
-      .prepare(deleteAllSnapshotForPersistenceId)
-      .map(_.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy))
-
-  def preparedDeleteAllSnapshotsForPidAndSequenceNrBetween =
-    session
-      .prepare(deleteAllSnapshotForPersistenceIdAndSequenceNrBetween)
-      .map(_.setConsistencyLevel(snapshotConfig.writeConsistency).setIdempotent(true).setRetryPolicy(deleteRetryPolicy))
+  def preparedDeleteAllSnapshotsForPidAndSequenceNrBetween: Future[PreparedStatement] =
+    session.prepare(deleteAllSnapshotForPersistenceIdAndSequenceNrBetween)
 
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
     val boundDeleteSnapshot = preparedDeleteSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))

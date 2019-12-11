@@ -14,16 +14,17 @@ import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.formatOffset
 import akka.stream.ActorMaterializer
-import com.datastax.driver.core.PreparedStatement
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.cql.PreparedStatement
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 import scala.concurrent.duration.{ Deadline, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
 
 @InternalApi
-private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: Future[PreparedStatement])(
-    implicit materializer: ActorMaterializer,
-    ec: ExecutionContext) {
+private[akka] class TagViewSequenceNumberScanner(
+    session: CassandraSession,
+    profile: String,
+    ps: Future[PreparedStatement])(implicit materializer: ActorMaterializer, ec: ExecutionContext) {
   private val log = Logging(materializer.system, getClass)
 
   /**
@@ -37,10 +38,10 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
       scanningPeriod: FiniteDuration): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] =
     ps.flatMap(ps => {
       val deadline: Deadline = Deadline.now + scanningPeriod
-      val to = UUIDs.endOf(System.currentTimeMillis() + scanningPeriod.toMillis)
+      val to = Uuids.endOf(System.currentTimeMillis() + scanningPeriod.toMillis)
 
       def doIt(): Future[Map[Tag, (TagPidSequenceNr, UUID)]] = {
-        val bound = ps.bind(tag, bucket.key: JLong, offset, to)
+        val bound = ps.bind(tag, bucket.key: JLong, offset, to).setExecutionProfileName(profile)
         log.debug(
           "Scanning tag: {} bucket: {}, from: {}, to: {}",
           tag,
@@ -49,7 +50,7 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
           formatOffset(to))
         val source = session.select(bound)
         val doneIt = source
-          .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUUID("timestamp")))
+          .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUuid("timestamp")))
           .runFold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) {
             case (acc, (pid, tagPidSequenceNr, timestamp)) =>
               val (newTagPidSequenceNr, newTimestamp) = acc.get(pid) match {
@@ -76,9 +77,9 @@ private[akka] class TagViewSequenceNumberScanner(session: CassandraSession, ps: 
       // event that the stage can't find the event found during this scan
       doIt().map { progress =>
         progress.map {
-          case (key, ((tagPidSequenceNr, uuid))) =>
-            val unixTime = UUIDs.unixTimestamp(uuid)
-            (key, (tagPidSequenceNr - 1, UUIDs.startOf(unixTime - 1)))
+          case (key, (tagPidSequenceNr, uuid)) =>
+            val unixTime = Uuids.unixTimestamp(uuid)
+            (key, (tagPidSequenceNr - 1, Uuids.startOf(unixTime - 1)))
         }
       }
     })

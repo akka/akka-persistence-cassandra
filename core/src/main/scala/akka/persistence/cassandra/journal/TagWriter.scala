@@ -127,7 +127,7 @@ import scala.concurrent.duration._
       }
     case Flush =>
       if (buffer.nonEmpty) {
-        // FIXME, this should br broken into batches https://github.com/akka/akka-persistence-cassandra/issues/405
+        // TODO this should br broken into batches https://github.com/akka/akka-persistence-cassandra/issues/405
         log.debug("External flush request from [{}]. Flushing.", sender())
         write(buffer, Vector.empty[(Serialized, TagPidSequenceNr)], tagPidSequenceNrs, Some(sender()))
       } else {
@@ -135,7 +135,7 @@ import scala.concurrent.duration._
         sender() ! FlushComplete
       }
     case TagWrite(_, payload, _) =>
-      // FIXME, keeping this sorted is over kill. We only need to know if a new timebucket is
+      // TODO keeping this sorted is over kill. We only need to know if a new timebucket is
       // reached to force a flush or that the batch size is met
       val (newTagPidSequenceNrs, events) =
         assignTagPidSequenceNumbers(payload.toVector, tagPidSequenceNrs)
@@ -204,7 +204,7 @@ import scala.concurrent.duration._
         case Some(replyTo) =>
           log.debug("External flush request")
           if (sortedBuffer.nonEmpty) {
-            // FIXME, break into batches
+            // TODO break into batches
             write(sortedBuffer, Vector.empty[(Serialized, TagPidSequenceNr)], tagPidSequenceNrs, awaitingFlush)
           } else {
             replyTo ! FlushComplete

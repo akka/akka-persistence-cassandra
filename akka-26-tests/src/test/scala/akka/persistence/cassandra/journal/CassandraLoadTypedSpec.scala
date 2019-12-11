@@ -2,7 +2,6 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-/* FIXME enable again when branch for Akka 2.6.x
 package akka.persistence.cassandra.journal
 
 import akka.actor.testkit.typed.scaladsl.ActorTestKit
@@ -20,17 +19,6 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 object CassandraLoadTypedSpec {
-  val config = ConfigFactory
-    .parseString(if (CassandraLifecycle.isExternal) {
-      "akka.actor.serialize-messages=off"
-    } else {
-      s"""
-      cassandra-journal.replication-strategy = NetworkTopologyStrategy
-      cassandra-journal.data-center-replication-factors = ["dc1:1"]
-      akka.actor.serialize-messages=off
-     """
-    })
-    .withFallback(CassandraLifecycle.config)
 
   class Measure {
     private val NanoToSecond = 1000.0 * 1000 * 1000
@@ -73,7 +61,7 @@ object CassandraLoadTypedSpec {
         probe: ActorRef[String],
         notifyProbeInEventHandler: Boolean): Behavior[Command] = {
 
-      Behaviors.setup[Command] { context =>
+      Behaviors.setup[Command] { _ =>
         val measure = new Measure
 
         def onStart(state: State): Effect[Event, State] = {
@@ -82,7 +70,7 @@ object CassandraLoadTypedSpec {
           Effect.none
         }
 
-        def onStop(state: State): Effect[Event, State] = {
+        def onStats(state: State): Effect[Event, State] = {
           val throughput = measure.stopMeasure(state.sequenceNr)
           probe ! f"throughput = $throughput%.2f persistent events per second"
           Effect.none
@@ -98,7 +86,8 @@ object CassandraLoadTypedSpec {
           commandHandler = { (state, cmd) =>
             cmd match {
               case "start" => onStart(state)
-              case "stop"  => onStop(state)
+              case "stats" => onStats(state)
+              case "stop"  => Effect.stop()
               case _       => onCommand(cmd)
             }
           },
@@ -117,12 +106,9 @@ object CassandraLoadTypedSpec {
 
 }
 
-class CassandraLoadTypedSpec extends CassandraSpec(CassandraLoadTypedSpec.config) with WordSpecLike with Matchers {
+class CassandraLoadTypedSpec extends CassandraSpec with WordSpecLike with Matchers {
 
   import CassandraLoadTypedSpec._
-
-  // use PropertyFileSnitch with cassandra-topology.properties
-  override def cassandraConfigResource: String = "test-embedded-cassandra-net.yaml"
 
   private val testKit = ActorTestKit("CassandraLoadTypedSpec")
 
@@ -144,7 +130,7 @@ class CassandraLoadTypedSpec extends CassandraSpec(CassandraLoadTypedSpec.config
       processor ! "a"
     }
 
-    processor ! "stop"
+    processor ! "stats"
     val throughput = probe.expectMessageType[String]
     println(throughput)
   }
@@ -161,6 +147,9 @@ class CassandraLoadTypedSpec extends CassandraSpec(CassandraLoadTypedSpec.config
     (1L to cycles).foreach { i =>
       probe.expectMessage(s"a-$i")
     }
+
+    processor ! "stop"
+    probe.expectTerminated(processor)
 
     val processor2 = startAgain()
     (1L to cycles).foreach { i =>
@@ -196,4 +185,3 @@ class CassandraLoadTypedSpec extends CassandraSpec(CassandraLoadTypedSpec.config
 
   }
 }
- */

@@ -4,18 +4,13 @@
 
 package akka.cassandra.session.scaladsl
 
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
-import java.util.function.{ Function => JFunction }
 
-import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
-import scala.util.Failure
 import scala.util.Success
-import scala.util.control.NonFatal
 import akka.Done
 import akka.NotUsed
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
@@ -30,17 +25,18 @@ import akka.stream.stage.AsyncCallback
 import akka.stream.stage.GraphStage
 import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.OutHandler
-import com.datastax.driver.core.BatchStatement
-import com.datastax.driver.core.BoundStatement
-import com.datastax.driver.core.PreparedStatement
-import com.datastax.driver.core.ProtocolVersion
-import com.datastax.driver.core.ResultSet
-import com.datastax.driver.core.Row
-import com.datastax.driver.core.Session
-import com.datastax.driver.core.Statement
+import com.datastax.oss.driver.api.core.cql.BatchStatement
+import com.datastax.oss.driver.api.core.cql.BoundStatement
+import com.datastax.oss.driver.api.core.cql.PreparedStatement
+import com.datastax.oss.driver.api.core.ProtocolVersion
+import com.datastax.oss.driver.api.core.cql.Row
+import com.datastax.oss.driver.api.core.cql.Statement
 import akka.annotation.InternalApi
-import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider }
 import akka.cassandra.session._
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet
+
+import scala.compat.java8.FutureConverters._
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
@@ -54,35 +50,22 @@ import akka.cassandra.session._
  */
 final class CassandraSession(
     system: ActorSystem,
-    sessionProvider: SessionProvider,
-    settings: CassandraSessionSettings,
+    sessionProvider: CqlSessionProvider,
     executionContext: ExecutionContext,
     log: LoggingAdapter,
     metricsCategory: String,
-    init: Session => Future[Done])
+    init: CqlSession => Future[Done])
     extends NoSerializationVerificationNeeded {
-  import settings._
 
   implicit private[akka] val ec = executionContext
   private lazy implicit val materializer = ActorMaterializer()(system)
 
-  // cache of PreparedStatement (PreparedStatement should only be prepared once)
-  private val preparedStatements =
-    new ConcurrentHashMap[String, Future[PreparedStatement]]
-  private val computePreparedStatement =
-    new JFunction[String, Future[PreparedStatement]] {
-      override def apply(key: String): Future[PreparedStatement] =
-        underlying().flatMap { s =>
-          val prepared = s.prepareAsync(key).asScala
-          prepared.failed.foreach(
-            _ =>
-              // this is async, i.e. we are not updating the map from the compute function
-              preparedStatements.remove(key))
-          prepared
-        }
-    }
-
-  private val _underlyingSession = new AtomicReference[Future[Session]]()
+  private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
+    session.getMetrics.ifPresent(metrics => {
+      CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)
+    })
+    init(session).map(_ => session)
+  }
 
   /**
    * The `Session` of the underlying
@@ -90,97 +73,9 @@ final class CassandraSession(
    * Can be used in case you need to do something that is not provided by the
    * API exposed by this class. Be careful to not use blocking calls.
    */
-  def underlying(): Future[Session] = {
+  def underlying(): Future[CqlSession] = _underlyingSession
 
-    def initialize(session: Future[Session]): Future[Session] =
-      session.flatMap { s =>
-        val result = init(s)
-        result.failed.foreach(_ => close(s))
-        result.map(_ => s)
-      }
-
-    @tailrec def setup(): Future[Session] = {
-      val existing = _underlyingSession.get
-      if (existing == null) {
-        val s = initialize(sessionProvider.connect())
-        if (_underlyingSession.compareAndSet(null, s)) {
-          s.foreach { ses =>
-            try {
-              if (!ses.getCluster.isClosed())
-                CassandraMetricsRegistry(system).addMetrics(metricsCategory, ses.getCluster.getMetrics.getRegistry)
-            } catch {
-              case NonFatal(e) =>
-                log.debug("Couldn't register metrics {}, due to {}", metricsCategory, e.getMessage)
-            }
-
-          }
-          s.failed.foreach(_ => _underlyingSession.compareAndSet(s, null))
-          system.registerOnTermination {
-            s.foreach(close)
-          }
-          s
-        } else {
-          s.foreach(close)
-          setup() // recursive
-        }
-      } else {
-        existing
-      }
-    }
-
-    val existing = _underlyingSession.get
-    if (existing == null) {
-      val result = retry(() => setup())
-      result.failed.foreach { e =>
-        log.warning(
-          "Failed to connect to Cassandra and initialize. It will be retried on demand. Caused by: {}",
-          e.getMessage)
-      }
-      result
-    } else
-      existing
-  }
-
-  private def retry(setup: () => Future[Session]): Future[Session] = {
-    val promise = Promise[Session]
-
-    def tryAgain(count: Int, cause: Throwable): Unit =
-      if (count == 0)
-        promise.failure(cause)
-      else {
-        system.scheduler.scheduleOnce(settings.connectionRetryDelay) {
-          trySetup(count)
-        }
-      }
-
-    def trySetup(count: Int): Unit =
-      try {
-        setup().onComplete {
-          case Success(session) => promise.success(session)
-          case Failure(cause)   => tryAgain(count - 1, cause)
-        }
-      } catch {
-        case NonFatal(e) =>
-          // this is only in case the direct calls, such as sessionProvider, throws
-          promise.failure(e)
-      }
-
-    trySetup(settings.connectionRetries)
-
-    promise.future
-  }
-
-  private def close(s: Session): Unit = {
-    s.closeAsync()
-    s.getCluster().closeAsync()
-    CassandraMetricsRegistry(system).removeMetrics(metricsCategory)
-  }
-
-  def close(): Unit =
-    _underlyingSession.getAndSet(null) match {
-      case null     =>
-      case existing => existing.foreach(close)
-    }
+  def close(): Unit = _underlyingSession.foreach(_.close())
 
   /**
    * This can only be used after successful initialization,
@@ -189,7 +84,7 @@ final class CassandraSession(
   def protocolVersion: ProtocolVersion =
     underlying().value match {
       case Some(Success(s)) =>
-        s.getCluster.getConfiguration.getProtocolOptions.getProtocolVersion
+        s.getContext.getProtocolVersion
       case _ =>
         throw new IllegalStateException("protocolVersion can only be accessed after successful init")
     }
@@ -203,7 +98,7 @@ final class CassandraSession(
   def executeDDL(stmt: String): Future[Done] =
     for {
       s <- underlying()
-      _ <- s.executeAsync(stmt).asScala
+      _ <- s.executeAsync(stmt).toScala
     } yield Done
 
   /**
@@ -220,8 +115,8 @@ final class CassandraSession(
    * `executeWrite` or `select` multiple times.
    */
   def prepare(stmt: String): Future[PreparedStatement] =
-    underlying().flatMap { _ =>
-      preparedStatements.computeIfAbsent(stmt, computePreparedStatement)
+    underlying().map { session =>
+      session.prepare(stmt)
     }
 
   /**
@@ -251,11 +146,9 @@ final class CassandraSession(
    * The returned `Future` is completed when the statement has been
    * successfully executed, or if it fails.
    */
-  def executeWrite(stmt: Statement): Future[Done] = {
-    if (stmt.getConsistencyLevel == null)
-      stmt.setConsistencyLevel(writeConsistency)
+  def executeWrite(stmt: Statement[_]): Future[Done] = {
     underlying().flatMap { s =>
-      s.executeAsync(stmt).asScala.map(_ => Done)
+      s.executeAsync(stmt).toScala.map(_ => Done)
     }
   }
 
@@ -282,11 +175,9 @@ final class CassandraSession(
   /**
    * INTERNAL API
    */
-  @InternalApi private[akka] def selectResultSet(stmt: Statement): Future[ResultSet] = {
-    if (stmt.getConsistencyLevel == null)
-      stmt.setConsistencyLevel(settings.readConsistency)
+  @InternalApi private[akka] def selectResultSet(stmt: Statement[_]): Future[AsyncResultSet] = {
     underlying().flatMap { s =>
-      s.executeAsync(stmt).asScala
+      s.executeAsync(stmt).toScala
     }
   }
 
@@ -302,9 +193,7 @@ final class CassandraSession(
    * Note that you have to connect a `Sink` that consumes the messages from
    * this `Source` and then `run` the stream.
    */
-  def select(stmt: Statement): Source[Row, NotUsed] = {
-    if (stmt.getConsistencyLevel == null)
-      stmt.setConsistencyLevel(readConsistency)
+  def select(stmt: Statement[_]): Source[Row, NotUsed] = {
     Source.fromGraph(new SelectSource(Future.successful(stmt)))
   }
 
@@ -319,12 +208,9 @@ final class CassandraSession(
    * this `Source` and then `run` the stream.
    */
   def select(stmt: String, bindValues: AnyRef*): Source[Row, NotUsed] = {
-    val bound: Future[BoundStatement] = prepare(stmt).map { ps =>
-      val bs =
-        if (bindValues.isEmpty) ps.bind()
-        else ps.bind(bindValues: _*)
-      bs.setConsistencyLevel(readConsistency)
-      bs
+    val bound = prepare(stmt).map { ps =>
+      if (bindValues.isEmpty) ps.bind()
+      else ps.bind(bindValues: _*)
     }
     Source.fromGraph(new SelectSource(bound))
   }
@@ -340,9 +226,7 @@ final class CassandraSession(
    *
    * The returned `Future` is completed with the found rows.
    */
-  def selectAll(stmt: Statement): Future[immutable.Seq[Row]] = {
-    if (stmt.getConsistencyLevel == null)
-      stmt.setConsistencyLevel(readConsistency)
+  def selectAll(stmt: Statement[_]): Future[immutable.Seq[Row]] = {
     Source
       .fromGraph(new SelectSource(Future.successful(stmt)))
       .runWith(Sink.seq)
@@ -376,9 +260,7 @@ final class CassandraSession(
    * The returned `Future` is completed with the first row,
    * if any.
    */
-  def selectOne(stmt: Statement): Future[Option[Row]] = {
-    if (stmt.getConsistencyLevel == null)
-      stmt.setConsistencyLevel(readConsistency)
+  def selectOne(stmt: Statement[_]): Future[Option[Row]] = {
 
     selectResultSet(stmt).map { rs =>
       Option(rs.one()) // rs.one returns null if exhausted
@@ -401,7 +283,7 @@ final class CassandraSession(
     bound.flatMap(bs => selectOne(bs))
   }
 
-  private class SelectSource(stmt: Future[Statement]) extends GraphStage[SourceShape[Row]] {
+  private class SelectSource(stmt: Future[Statement[_]]) extends GraphStage[SourceShape[Row]] {
 
     private val out: Outlet[Row] = Outlet("rows")
     override val shape: SourceShape[Row] = SourceShape(out)
@@ -409,12 +291,12 @@ final class CassandraSession(
     override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
       new GraphStageLogic(shape) {
 
-        var asyncResult: AsyncCallback[ResultSet] = _
+        var asyncResult: AsyncCallback[AsyncResultSet] = _
         var asyncFailure: AsyncCallback[Throwable] = _
-        var resultSet: Option[ResultSet] = None
+        var resultSet: Option[AsyncResultSet] = None
 
         override def preStart(): Unit = {
-          asyncResult = getAsyncCallback[ResultSet] { rs =>
+          asyncResult = getAsyncCallback[AsyncResultSet] { rs =>
             resultSet = Some(rs)
             tryPushOne()
           }
@@ -423,7 +305,7 @@ final class CassandraSession(
           }
           stmt.failed.foreach(e => asyncFailure.invoke(e))
           stmt.foreach { s =>
-            val rsFut = underlying().flatMap(_.executeAsync(s).asScala)
+            val rsFut = underlying().flatMap(_.executeAsync(s).toScala)
             rsFut.failed.foreach { e =>
               asyncFailure.invoke(e)
             }
@@ -439,19 +321,20 @@ final class CassandraSession(
         def tryPushOne(): Unit =
           resultSet match {
             case Some(rs) if isAvailable(out) =>
-              if (rs.isExhausted())
-                complete(out)
-              else if (rs.getAvailableWithoutFetching() > 0)
+              if (rs.remaining() > 0) {
                 push(out, rs.one())
-              else {
-                resultSet = None
-                val rsFut = rs.fetchMoreResults().asScala
-                rsFut.failed.foreach { e =>
-                  asyncFailure.invoke(e)
+              } else if (rs.hasMorePages) {
+                val next = rs.fetchNextPage()
+                next.whenComplete { (result, throwable) =>
+                  if (result != null) {
+                    asyncResult.invoke(result)
+                  } else {
+                    asyncFailure.invoke(throwable)
+                  }
                 }
-                rsFut.foreach(asyncResult.invoke)
+              } else {
+                complete(out)
               }
-
             case _ =>
           }
       }

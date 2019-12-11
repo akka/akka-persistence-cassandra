@@ -32,13 +32,13 @@ import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtensi
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
-import com.datastax.driver.core._
-import com.datastax.driver.core.exceptions.DriverException
-import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
-import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
-import com.datastax.driver.core.utils.{ Bytes, UUIDs }
+import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
-import akka.cassandra.session._
+import com.datastax.oss.driver.api.core.ConsistencyLevel
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.retry.RetryPolicy
+import com.datastax.oss.driver.api.core.uuid.Uuids
+import com.datastax.oss.protocol.internal.util.Bytes
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -47,6 +47,7 @@ import scala.collection.immutable.Seq
 import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
+import scala.compat.java8.FutureConverters._
 
 /**
  * Journal implementation of the cassandra plugin.
@@ -65,17 +66,14 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
   // For TagWriters/TagWriter children
   override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
-    case e: Exception => {
+    case e: Exception =>
       log.error(e, "Cassandra Journal has experienced an unexpected error and requires an ActorSystem restart.")
       if (config.coordinatedShutdownOnError) {
         CoordinatedShutdown(context.system).run(CassandraJournalUnexpectedError)
       }
       context.stop(context.self)
       Stop
-    }
   }
-
-  private lazy val deleteRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.deleteRetries))
 
   import CassandraJournal._
   import config._
@@ -96,17 +94,17 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   val session = new CassandraSession(
     context.system,
     config.sessionProvider,
-    config.sessionSettings,
     context.dispatcher,
     log,
     metricsCategory = cfgPath,
-    init = (session: Session) => executeCreateKeyspaceAndTables(session, config))
+    init = (session: CqlSession) => executeCreateKeyspaceAndTables(session, config))
 
   private val tagWriterSession = TagWritersSession(
+    session,
+    writeProfile,
+    readProfile,
     () => preparedWriteToTagViewWithoutMeta,
     () => preparedWriteToTagViewWithMeta,
-    session.executeWrite,
-    session.selectResultSet,
     () => preparedWriteToTagProgress,
     () => preparedWriteTagScanning)
 
@@ -119,43 +117,36 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     else None
 
   def preparedWriteMessage =
-    session.prepare(writeMessage(withMeta = false)).map(_.setIdempotent(true))
+    session.prepare(writeMessage(withMeta = false))
   def preparedSelectDeletedTo: Option[Future[PreparedStatement]] = {
     if (config.supportDeletes)
-      Some(
-        session
-          .prepare(selectDeletedTo)
-          .map(_.setConsistencyLevel(config.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy)))
+      Some(session.prepare(selectDeletedTo))
     else
       None
   }
-  def preparedSelectHighestSequenceNr =
-    session
-      .prepare(selectHighestSequenceNr)
-      .map(_.setConsistencyLevel(config.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+  def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
+    session.prepare(selectHighestSequenceNr)
 
   private def deletesNotSupportedException: Future[PreparedStatement] =
     Future.failed(new IllegalArgumentException(s"Deletes not supported because config support-deletes=off"))
 
   def preparedInsertDeletedTo: Future[PreparedStatement] = {
     if (config.supportDeletes)
-      session.prepare(insertDeletedTo).map(_.setConsistencyLevel(config.writeConsistency).setIdempotent(true))
+      session.prepare(insertDeletedTo)
     else
       deletesNotSupportedException
   }
   def preparedDeleteMessages: Future[PreparedStatement] = {
     if (config.supportDeletes)
-      session.prepare(deleteMessages).map(_.setIdempotent(true))
+      session.prepare(deleteMessages)
     else
       deletesNotSupportedException
   }
 
   def preparedWriteMessageWithMeta =
-    session.prepare(writeMessage(withMeta = true)).map(_.setIdempotent(true))
+    session.prepare(writeMessage(withMeta = true))
   def preparedSelectMessages =
-    session
-      .prepare(selectMessages)
-      .map(_.setConsistencyLevel(readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(selectMessages)
 
   implicit val materializer: ActorMaterializer =
     ActorMaterializer()(context.system)
@@ -217,11 +208,6 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         preparedWriteTagScanning
       }
   }
-
-  private[akka] val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
-  private[akka] val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.readRetries))
-  private[akka] val someReadRetryPolicy = Some(readRetryPolicy)
-  private[akka] val someReadConsistency = Some(config.readConsistency)
 
   override def postStop(): Unit = {
     session.close()
@@ -319,7 +305,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
    * UUID generation is deliberately externalized to allow subclasses to customize the time based uuid for special cases.
    * see https://discuss.lightbend.com/t/akka-persistence-cassandra-events-by-tags-bucket-size-based-on-time-vs-burst-load/1411 and make sure you understand the risk of doing this wrong.
    */
-  protected def generateUUID(pr: PersistentRepr): UUID = UUIDs.timeBased()
+  protected def generateUUID(pr: PersistentRepr): UUID = Uuids.timeBased()
 
   private def extractTagWrites(serialized: Seq[SerializedAtomicWrite]): BulkTagWrite = {
     if (serialized.isEmpty) BulkTagWrite(Nil, Nil)
@@ -350,14 +336,14 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   }
 
   private def writeMessages(atomicWrites: Seq[SerializedAtomicWrite]): Future[Unit] = {
-    val boundStatements = statementGroup(atomicWrites)
+    val boundStatements: Seq[Future[BoundStatement]] = statementGroup(atomicWrites)
     boundStatements.size match {
       case 1 =>
-        boundStatements.head.flatMap(execute(_, writeRetryPolicy))
+        boundStatements.head.flatMap(execute(_))
       case 0 => Future.successful(())
       case _ =>
         Future.sequence(boundStatements).flatMap { stmts =>
-          executeBatch(batch => stmts.foreach(batch.add), writeRetryPolicy)
+          executeBatch(batch => stmts.foldLeft(batch) { case (acc, next) => acc.add(next) })
         }
     }
   }
@@ -384,27 +370,29 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         else preparedWriteMessage
 
       stmt.map { stmt =>
-        val bs = stmt.bind()
-        bs.setString("persistence_id", persistenceId)
-        bs.setLong("partition_nr", maxPnr)
-        bs.setLong("sequence_nr", m.sequenceNr)
-        bs.setUUID("timestamp", m.timeUuid)
-        // Keeping as text for backward compatibility
-        bs.setString("timebucket", m.timeBucket.key.toString)
-        bs.setString("writer_uuid", m.writerUuid)
-        bs.setInt("ser_id", m.serId)
-        bs.setString("ser_manifest", m.serManifest)
-        bs.setString("event_manifest", m.eventAdapterManifest)
-        bs.setBytes("event", m.serialized)
-        bs.setSet("tags", m.tags.asJava, classOf[String])
+        val bs = stmt
+          .bind()
+          .setString("persistence_id", persistenceId)
+          .setLong("partition_nr", maxPnr)
+          .setLong("sequence_nr", m.sequenceNr)
+          .setUuid("timestamp", m.timeUuid)
+          // Keeping as text for backward compatibility
+          .setString("timebucket", m.timeBucket.key.toString)
+          .setString("writer_uuid", m.writerUuid)
+          .setInt("ser_id", m.serId)
+          .setString("ser_manifest", m.serManifest)
+          .setString("event_manifest", m.eventAdapterManifest)
+          .setByteBuffer("event", m.serialized)
+          .setSet("tags", m.tags.asJava, classOf[String])
 
         // meta data, if any
-        m.meta.foreach(meta => {
-          bs.setInt("meta_ser_id", meta.serId)
-          bs.setString("meta_ser_manifest", meta.serManifest)
-          bs.setBytes("meta", meta.serialized)
-        })
-        bs
+        m.meta
+          .map(meta => {
+            bs.setInt("meta_ser_id", meta.serId)
+              .setString("meta_ser_manifest", meta.serManifest)
+              .setByteBuffer("meta", meta.serialized)
+          })
+          .getOrElse(bs)
       }
     }
 
@@ -425,7 +413,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         f.flatMap(_ => asyncReadHighestSequenceNrInternal(persistenceId, fromSequenceNr))
     }
 
-    if (config.eventsByTagEnabled) {
+    val toReturn = if (config.eventsByTagEnabled) {
 
       // This relies on asyncReadHighestSequenceNr having the correct sender()
       // No other calls into the async journal have this as they are called from Future callbacks
@@ -453,6 +441,12 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     } else {
       highestSequenceNr
     }
+
+    toReturn.onComplete { highestSeq =>
+      log.debug("asyncReadHighestSequenceNr {} returning {}", persistenceId, highestSeq)
+    }
+
+    toReturn
   }
 
   /**
@@ -496,7 +490,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
           val boundStatements = messageIds.map(mid =>
             preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
           Future.sequence(boundStatements).flatMap { stmts =>
-            executeBatch(batch => stmts.foreach(batch.add), deleteRetryPolicy)
+            executeBatch(batch => stmts.foldLeft(batch) { case (acc, next) => acc.add(next) })
           }
         }
 
@@ -528,7 +522,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
           Future.sequence((lowestPartition to highestPartition).map { partitionNr =>
             val boundDeleteMessages =
               preparedDeleteMessages.map(_.bind(persistenceId, partitionNr: JLong, toSeqNr: JLong))
-            boundDeleteMessages.flatMap(execute(_, deleteRetryPolicy))
+            boundDeleteMessages.flatMap(execute(_))
           })
         deleteResult.failed.foreach { e =>
           log.warning(
@@ -560,7 +554,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         } else {
           val boundInsertDeletedTo =
             preparedInsertDeletedTo.map(_.bind(persistenceId, toSeqNr: JLong))
-          boundInsertDeletedTo.flatMap(session.executeWrite)
+          boundInsertDeletedTo.flatMap(execute)
         }
       logicalDelete.flatMap(_ => physicalDelete(lowestPartition, highestPartition, toSeqNr))
     }
@@ -588,7 +582,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
     val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, partitionNr: JLong))
     boundSelectHighestSequenceNr
-      .flatMap(session.selectOne)
+      .flatMap(selectOne)
       .map(
         row =>
           row
@@ -601,9 +595,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     preparedSelectDeletedTo match {
       case Some(pstmt) =>
         val boundSelectDeletedTo = pstmt.map(_.bind(persistenceId))
-        boundSelectDeletedTo
-          .flatMap(session.selectOne)
-          .map(rowOption => rowOption.map(_.getLong("deleted_to")).getOrElse(0))
+        boundSelectDeletedTo.flatMap(selectOne).map(rowOption => rowOption.map(_.getLong("deleted_to")).getOrElse(0))
       case None =>
         Future.successful(0L)
     }
@@ -621,11 +613,8 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         fromSequenceNr,
         highestDeletedSequenceNumber,
         1,
-        1,
         None,
         "asyncReadLowestSequenceNr",
-        readConsistency,
-        retryPolicy,
         extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
       .map(_.sequenceNr)
       .runWith(Sink.headOption)
@@ -641,9 +630,13 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       partitionSize: Long): Future[Long] = {
     def find(currentPnr: Long, currentSnr: Long, foundEmptyPartition: Boolean): Future[Long] = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
-      val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, currentPnr: JLong))
+      val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(ps => {
+        val bound = ps.bind(persistenceId, currentPnr: JLong)
+        bound
+
+      })
       boundSelectHighestSequenceNr
-        .flatMap(session.selectOne)
+        .flatMap(selectOne)
         .map { rowOption =>
           rowOption.map(_.getLong("sequence_nr"))
         }
@@ -662,21 +655,21 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     find(partitionNr(fromSequenceNr, partitionSize), fromSequenceNr, foundEmptyPartition = false)
   }
 
-  private def executeBatch(body: BatchStatement => Unit, retryPolicy: RetryPolicy): Future[Unit] = {
-    val batch = new BatchStatement()
-      .setConsistencyLevel(writeConsistency)
-      .setRetryPolicy(retryPolicy)
-      .asInstanceOf[BatchStatement]
-    body(batch)
-    session.underlying().flatMap(_.executeAsync(batch).asScala).map(_ => ())
+  private def executeBatch(body: BatchStatement => BatchStatement): Future[Unit] = {
+    var batch = new BatchStatementBuilder(BatchType.UNLOGGED).build().setExecutionProfileName(config.writeProfile)
+    batch = body(batch)
+    session.underlying().flatMap(_.executeAsync(batch).toScala).map(_ => ())
+  }
+
+  def selectOne[T <: Statement[T]](stmt: Statement[T]): Future[Option[Row]] = {
+    session.selectOne(stmt.setExecutionProfileName(readProfile))
   }
 
   private def minSequenceNr(partitionNr: Long): Long =
     partitionNr * config.targetPartitionSize + 1
 
-  private def execute(stmt: Statement, retryPolicy: RetryPolicy): Future[Unit] = {
-    stmt.setConsistencyLevel(writeConsistency).setRetryPolicy(retryPolicy)
-    session.executeWrite(stmt).map(_ => ())
+  private def execute[T <: Statement[T]](stmt: Statement[T]): Future[Unit] = {
+    session.executeWrite(stmt.setExecutionProfileName(config.writeProfile)).map(_ => ())
   }
 
 }
@@ -754,7 +747,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
         def meta: OptionVal[AnyRef] = {
           if (hasMetaColumns(row)) {
-            row.getBytes("meta") match {
+            row.getByteBuffer("meta") match {
               case null =>
                 OptionVal.None // no meta data
               case metaBytes =>
@@ -776,7 +769,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
           }
         }
 
-        val bytes = Bytes.getArray(row.getBytes("event"))
+        val bytes = Bytes.getArray(row.getByteBuffer("event"))
         val serId = row.getInt("ser_id")
         val manifest = row.getString("ser_manifest")
 
@@ -809,68 +802,4 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         case NonFatal(e) => Future.failed(e)
       }
   }
-}
-
-/**
- * The retry policy that is used for reads, writes and deletes with
- * configured number of retries before giving up.
- * See http://docs.datastax.com/en/developer/java-driver/3.1/manual/retries/
- */
-class FixedRetryPolicy(number: Int) extends RetryPolicy {
-  override def onUnavailable(
-      statement: Statement,
-      cl: ConsistencyLevel,
-      requiredReplica: Int,
-      aliveReplica: Int,
-      nbRetry: Int): RetryDecision = {
-    // Same implementation as in DefaultRetryPolicy
-    // If this is the first retry it triggers a retry on the next host.
-    // The rationale is that the first coordinator might have been network-isolated from all other nodes (thinking
-    // they're down), but still able to communicate with the client; in that case, retrying on the same host has almost
-    // no chance of success, but moving to the next host might solve the issue.
-    if (nbRetry == 0)
-      tryNextHost(cl, nbRetry) // see DefaultRetryPolicy
-    else
-      retry(cl, nbRetry)
-  }
-
-  override def onWriteTimeout(
-      statement: Statement,
-      cl: ConsistencyLevel,
-      writeType: WriteType,
-      requiredAcks: Int,
-      receivedAcks: Int,
-      nbRetry: Int): RetryDecision = {
-    retry(cl, nbRetry)
-  }
-
-  override def onReadTimeout(
-      statement: Statement,
-      cl: ConsistencyLevel,
-      requiredResponses: Int,
-      receivedResponses: Int,
-      dataRetrieved: Boolean,
-      nbRetry: Int): RetryDecision = {
-    retry(cl, nbRetry)
-  }
-  override def onRequestError(
-      statement: Statement,
-      cl: ConsistencyLevel,
-      cause: DriverException,
-      nbRetry: Int): RetryDecision = {
-    tryNextHost(cl, nbRetry)
-  }
-
-  private def retry(cl: ConsistencyLevel, nbRetry: Int): RetryDecision = {
-    if (nbRetry < number) RetryDecision.retry(cl) else RetryDecision.rethrow()
-  }
-
-  private def tryNextHost(cl: ConsistencyLevel, nbRetry: Int): RetryDecision = {
-    if (nbRetry < number) RetryDecision.tryNextHost(cl)
-    else RetryDecision.rethrow()
-  }
-
-  override def init(c: Cluster): Unit = ()
-  override def close(): Unit = ()
-
 }

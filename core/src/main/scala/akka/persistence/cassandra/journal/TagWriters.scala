@@ -22,31 +22,45 @@ import akka.actor.Props
 import akka.actor.SupervisorStrategy
 import akka.actor.Timers
 import akka.annotation.InternalApi
+import akka.cassandra.session.scaladsl.CassandraSession
+import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.Timeout
-import com.datastax.driver.core.{ BatchStatement, BoundStatement, PreparedStatement, ResultSet, Statement }
+import com.datastax.oss.driver.api.core.cql.{
+  BatchStatementBuilder,
+  BatchType,
+  BoundStatement,
+  PreparedStatement,
+  Statement
+}
+
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-
 import akka.util.ByteString
 
 @InternalApi private[akka] object TagWriters {
 
   private[akka] case class TagWritersSession(
+      session: CassandraSession,
+      writeProfile: String,
+      readProfile: String,
       tagWritePs: () => Future[PreparedStatement],
       tagWriteWithMetaPs: () => Future[PreparedStatement],
-      executeStatement: Statement => Future[Done],
-      selectStatement: Statement => Future[ResultSet],
       tagProgressPs: () => Future[PreparedStatement],
       tagScanningPs: () => Future[PreparedStatement]) {
 
+    def executeWrite[T <: Statement[T]](stmt: Statement[T]): Future[Done] = {
+      session.executeWrite(stmt.setExecutionProfileName(writeProfile))
+    }
+
     def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext): Future[Done] = {
-      val batch = new BatchStatement(BatchStatement.Type.UNLOGGED)
+      val batch = new BatchStatementBuilder(BatchType.UNLOGGED)
+      batch.setExecutionProfileName(writeProfile)
       val tagWritePSs = for {
         withMeta <- tagWriteWithMetaPs()
         withoutMeta <- tagWritePs()
@@ -56,7 +70,7 @@ import akka.util.ByteString
         .map {
           case (withMeta, withoutMeta) =>
             events.foreach {
-              case (event, pidTagSequenceNr) => {
+              case (event, pidTagSequenceNr) =>
                 val ps = if (event.meta.isDefined) withMeta else withoutMeta
                 val bound = ps.bind(
                   tag,
@@ -70,24 +84,33 @@ import akka.util.ByteString
                   event.serId: JInt,
                   event.serManifest,
                   event.writerUuid)
-                event.meta.foreach { m =>
-                  bound.setBytes("meta", m.serialized)
-                  bound.setString("meta_ser_manifest", m.serManifest)
-                  bound.setInt("meta_ser_id", m.serId)
+
+                val finished = event.meta match {
+                  case Some(m) =>
+                    bound
+                      .setByteBuffer("meta", m.serialized)
+                      .setString("meta_ser_manifest", m.serManifest)
+                      .setInt("meta_ser_id", m.serId)
+                  case None =>
+                    bound
                 }
-                batch.add(bound)
-              }
+
+                // this is a mutable builder
+                batch.addStatement(finished)
             }
-            batch
+            batch.build()
         }
-        .flatMap(executeStatement)
+        .flatMap(executeWrite)
     }
 
     def writeProgress(tag: Tag, persistenceId: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)(
         implicit ec: ExecutionContext): Future[Done] = {
       tagProgressPs()
-        .map(ps => ps.bind(persistenceId, tag, seqNr: JLong, tagPidSequenceNr: JLong, offset))
-        .flatMap(executeStatement)
+        .map(
+          ps =>
+            ps.bind(persistenceId, tag, seqNr: JLong, tagPidSequenceNr: JLong, offset)
+              .setExecutionProfileName(writeProfile))
+        .flatMap(executeWrite)
     }
 
   }
@@ -142,7 +165,7 @@ import akka.util.ByteString
   import context.dispatcher
 
   // eager init and val because used from Future callbacks
-  override val log = super.log
+  override val log: LoggingAdapter = super.log
 
   // Escalate to the journal so it can stop
   override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
@@ -151,7 +174,7 @@ import akka.util.ByteString
 
   private var tagActors = Map.empty[String, ActorRef]
   // just used for local actor asks
-  private implicit val timeout = Timeout(10.seconds)
+  private implicit val timeout: Timeout = Timeout(10.seconds)
 
   private var toBeWrittenScanning: Map[PersistenceId, SequenceNr] = Map.empty
   private var pendingScanning: Map[PersistenceId, SequenceNr] = Map.empty
@@ -324,7 +347,7 @@ import akka.util.ByteString
           val statements: Seq[BoundStatement] = group.map {
             case (pid, seqNr) => ps.bind(pid, seqNr: JLong)
           }
-          Future.traverse(statements)(tagWriterSession.executeStatement).map(_ => Done)
+          Future.traverse(statements)(tagWriterSession.executeWrite).map(_ => Done)
         }
 
         // Execute 10 async statements at a time to not introduce too much load see issue #408.

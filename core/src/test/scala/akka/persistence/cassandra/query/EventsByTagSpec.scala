@@ -6,6 +6,7 @@ package akka.persistence.cassandra.query
 
 import java.time.temporal.ChronoUnit
 import java.time.{ LocalDateTime, ZoneOffset }
+import java.util.Optional
 import java.util.UUID
 
 import akka.actor.{ PoisonPill, Props }
@@ -21,12 +22,11 @@ import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 import EventsByTagSpec._
 import akka.testkit.TestProbe
+import com.datastax.oss.driver.api.core.CqlIdentifier
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.BeforeAndAfterEach
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.util.Try
 
 object EventsByTagSpec {
   def withProbe[T](probe: TestSubscriber.Probe[Any], f: TestSubscriber.Probe[Any] => T): T = {
@@ -134,22 +134,11 @@ abstract class AbstractEventsByTagSpec(config: Config, checkLogMessages: Boolean
   val serialization = SerializationExtension(system)
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
 
-  lazy val session = {
-    import system.dispatcher
-    Await.result(writePluginConfig.sessionProvider.connect(), 5.seconds)
-  }
-
   lazy val preparedWriteMessage = {
     val writeStatements: CassandraStatements = new CassandraStatements {
       def config: CassandraJournalConfig = writePluginConfig
     }
-    session.prepare(writeStatements.writeMessage(withMeta = false))
-  }
-
-  override protected def afterAll(): Unit = {
-    Try(session.close())
-    Try(session.getCluster.close())
-    super.afterAll()
+    cluster.prepare(writeStatements.writeMessage(withMeta = false))
   }
 
   val logProbe = TestProbe()
@@ -172,11 +161,9 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
   "Cassandra query currentEventsByTag" must {
     "set ttl on table" in {
-      session.getCluster.getMetadata
-        .getKeyspace(journalName)
-        .getTable("tag_views")
-        .getOptions
-        .getDefaultTimeToLive shouldEqual 86400
+      val options = cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_views").get().getOptions
+
+      options.get(CqlIdentifier.fromCql("default_time_to_live")) shouldEqual 86400
     }
 
     "implement standard CurrentEventsByTagQuery" in {
@@ -1055,11 +1042,11 @@ class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.di
 
   "Events by tag disabled" must {
     "stop tag_views being created" in {
-      session.getCluster.getMetadata.getKeyspace(journalName).getTable("tag_views") shouldEqual null
+      cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_views") shouldEqual Optional.empty()
     }
 
     "stop tag_progress being created" in {
-      session.getCluster.getMetadata.getKeyspace(journalName).getTable("tag_write_progress") shouldEqual null
+      cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_write_progress") shouldEqual Optional.empty()
     }
 
     "fail current events by tag queries" in {
@@ -1077,14 +1064,15 @@ class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.di
     }
 
     "allow recovery" in {
+      val probe = TestProbe()
       val a = system.actorOf(EventsByTagDisabledSpec.props("a"))
-      a ! 2
-      expectMsg(20.seconds, 2)
+      a.tell(2, probe.ref)
+      probe.expectMsg(20.seconds, 2)
       a ! PoisonPill
 
       val aMk2 = system.actorOf(EventsByTagDisabledSpec.props("a"))
-      aMk2 ! 4
-      expectMsg(20.seconds, 6)
+      aMk2.tell(4, probe.ref)
+      probe.expectMsg(20.seconds, 6)
     }
   }
 }

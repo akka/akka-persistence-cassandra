@@ -12,19 +12,13 @@ import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import akka.util.Timeout
-import com.datastax.driver.core.utils.UUIDs
-import com.typesafe.config.ConfigFactory
+import com.datastax.oss.driver.api.core.uuid.Uuids
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 
 import scala.concurrent.duration._
 
 class TagWritersSpec
-    extends TestKit(
-      ActorSystem(
-        "TagWriterSpec",
-        ConfigFactory.parseString("""
-        akka.loglevel = INFO
-      """)))
+    extends TestKit(ActorSystem("TagWriterSpec"))
     with WordSpecLike
     with BeforeAndAfterAll
     with ImplicitSender
@@ -46,7 +40,7 @@ class TagWritersSpec
   val pid = "pid"
 
   def dummySerialized(tag: String) = {
-    val uuid = UUIDs.timeBased()
+    val uuid = Uuids.timeBased()
     Serialized(pid, 1L, ByteBuffer.wrap(Array()), Set(tag), "", "", 1, "", None, uuid, TimeBucket(uuid, Hour))
   }
 

@@ -26,8 +26,7 @@ import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
 import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.util.ByteString
-import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 
 import scala.collection.immutable
@@ -36,7 +35,8 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
 import akka.serialization.SerializationExtension
-import com.datastax.driver.core.{ ConsistencyLevel, PreparedStatement, Session }
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 object CassandraReadJournal {
 
@@ -90,7 +90,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   private val writePluginId = cfg.getString("write-plugin")
   private val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig(writePluginId))
   private val queryPluginConfig =
-    new CassandraReadJournalConfig(cfg, writePluginConfig)
+    new CassandraReadJournalConfig(system, cfg, writePluginConfig)
 
   if (queryPluginConfig.eventsByTagEventualConsistency < 1.seconds) {
     log.warning(
@@ -127,7 +127,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   val session: CassandraSession = new CassandraSession(
     system,
     writePluginConfig.sessionProvider,
-    writePluginConfig.sessionSettings,
     ec,
     log,
     metricsCategory = cfgPath,
@@ -150,37 +149,23 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
           preparedSelectTagSequenceNrs))
       .map(_ => Done)
 
-  private val readRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(queryPluginConfig.readRetries))
-
   private def preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
-    session
-      .prepare(selectMessages)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(selectMessages)
 
   private def preparedSelectDeletedTo: Future[PreparedStatement] =
-    session
-      .prepare(selectDeletedTo)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(selectDeletedTo)
 
   private def preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
-    session
-      .prepare(queryStatements.selectDistinctPersistenceIds)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(queryStatements.selectDistinctPersistenceIds)
 
   private def preparedSelectFromTagViewWithUpperBound: Future[PreparedStatement] =
-    session
-      .prepare(queryStatements.selectEventsFromTagViewWithUpperBound)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(queryStatements.selectEventsFromTagViewWithUpperBound)
 
   private def preparedSelectTagSequenceNrs: Future[PreparedStatement] =
-    session
-      .prepare(queryStatements.selectTagSequenceNrs)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(queryStatements.selectTagSequenceNrs)
 
   private def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
-    session
-      .prepare(selectHighestSequenceNr)
-      .map(_.setConsistencyLevel(queryPluginConfig.readConsistency).setIdempotent(true).setRetryPolicy(readRetryPolicy))
+    session.prepare(selectHighestSequenceNr)
 
   /**
    * INTERNAL API
@@ -206,10 +191,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    * events from the beginning of time.
    */
   val firstOffset: UUID = {
-    // FIXME perhaps we can do something smarter, such as caching the highest offset retrieved
-    // from queries
     val timestamp = queryPluginConfig.firstTimeBucket.key
-    UUIDs.startOf(timestamp)
+    Uuids.startOf(timestamp)
   }
 
   /**
@@ -218,7 +201,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    * `System#currentTimeMillis`.
    */
   def offsetUuid(timestamp: Long): UUID =
-    if (timestamp == 0L) firstOffset else UUIDs.startOf(timestamp)
+    if (timestamp == 0L) firstOffset else Uuids.startOf(timestamp)
 
   /**
    * Create a time based UUID that can be used as offset in `eventsByTag`
@@ -234,7 +217,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    * `System#currentTimeMillis`.
    */
   def timestampFrom(offset: TimeBasedUUID): Long =
-    UUIDs.unixTimestamp(offset.value)
+    Uuids.unixTimestamp(offset.value)
 
   /**
    * `eventsByTag` is used for retrieving events that were marked with
@@ -294,7 +277,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
         createFutureSource(prereqs) { (s, prereqs) =>
           val session =
-            TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
+            new TagStageSession(tag, queryPluginConfig.readProfile, s, prereqs._1)
           Source.fromGraph(
             EventsByTagStage(
               session,
@@ -357,7 +340,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       tag: String,
       fromOffset: UUID): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
     val scanner =
-      new TagViewSequenceNumberScanner(session, preparedSelectTagSequenceNrs)
+      new TagViewSequenceNumberScanner(session, queryPluginConfig.readProfile, preparedSelectTagSequenceNrs)
     val bucket = TimeBucket(fromOffset, writePluginConfig.bucketSize)
     scanner.scan(tag, fromOffset, bucket, queryPluginConfig.eventsByTagOffsetScanning)
   }
@@ -367,10 +350,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    */
   @InternalApi private[akka] def createSource[T, P](
       prepStmt: Future[P],
-      source: (Session, P) => Source[T, NotUsed]): Source[T, NotUsed] = {
+      source: (CqlSession, P) => Source[T, NotUsed]): Source[T, NotUsed] = {
     // when we get the PreparedStatement we know that the session is initialized,
     // i.e.the get is safe
-    def getSession: Session = session.underlying().value.get.get
+    def getSession: CqlSession = session.underlying().value.get.get
 
     prepStmt.value match {
       case Some(Success(ps)) => source(getSession, ps)
@@ -388,16 +371,14 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
 
   }
 
-  // FIXME perhaps use createFutureSource in all places
-
   /**
    * INTERNAL API
    */
   @InternalApi private[akka] def createFutureSource[T, P, M](prepStmt: Future[P])(
-      source: (Session, P) => Source[T, M]): Source[T, Future[M]] = {
+      source: (CqlSession, P) => Source[T, M]): Source[T, Future[M]] = {
     // when we get the PreparedStatement we know that the session is initialized,
     // i.e.the get is safe
-    def getSession: Session = session.underlying().value.get.get
+    def getSession: CqlSession = session.underlying().value.get.get
 
     prepStmt.value match {
       case Some(Success(ps)) =>
@@ -433,11 +414,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
         val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
         // pick up all the events written this millisecond
-        val toOffset = Some(UUIDs.endOf(System.currentTimeMillis()))
+        val toOffset = Some(Uuids.endOf(System.currentTimeMillis()))
 
         createFutureSource(prereqs) { (s, prereqs) =>
           val session =
-            TagStageSession(tag, s, prereqs._1, queryPluginConfig.fetchSize)
+            new TagStageSession(tag, queryPluginConfig.readProfile, s, prereqs._1)
           Source.fromGraph(
             EventsByTagStage(
               session,
@@ -490,7 +471,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       fromSequenceNr,
       toSequenceNr,
       Long.MaxValue,
-      queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
@@ -512,7 +492,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       fromSequenceNr,
       toSequenceNr,
       Long.MaxValue,
-      queryPluginConfig.fetchSize,
       None,
       s"currentEventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
@@ -534,7 +513,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       fromSequenceNr,
       toSequenceNr,
       Long.MaxValue,
-      queryPluginConfig.fetchSize,
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization),
@@ -552,11 +530,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       fromSequenceNr: Long,
       toSequenceNr: Long,
       max: Long,
-      fetchSize: Int,
       refreshInterval: Option[FiniteDuration],
       name: String,
-      customConsistencyLevel: Option[ConsistencyLevel] = None,
-      customRetryPolicy: Option[RetryPolicy] = None,
       extractor: Extractor[T],
       fastForwardEnabled: Boolean = false): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
 
@@ -571,15 +546,13 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
             fromSequenceNr,
             toSequenceNr,
             max,
-            fetchSize,
             refreshInterval,
             EventsByPersistenceIdStage.EventsByPersistenceIdSession(
               c.preparedSelectEventsByPersistenceId,
               c.prepareSelectHighestNr,
               c.preparedSelectDeletedTo,
               s,
-              customConsistencyLevel,
-              customRetryPolicy),
+              queryPluginConfig.readProfile),
             queryPluginConfig,
             fastForwardEnabled))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
@@ -657,7 +630,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       preparedSelectDistinctPersistenceIds,
       (s, ps) =>
         Source
-          .fromGraph(new AllPersistenceIdsStage(refreshInterval, queryPluginConfig.fetchSize, ps, s))
+          .fromGraph(new AllPersistenceIdsStage(refreshInterval, ps, s, queryPluginConfig.readProfile))
           .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
           .named(name))

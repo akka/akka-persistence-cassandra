@@ -8,12 +8,12 @@ import java.util.UUID
 
 import akka.annotation.InternalApi
 import akka.util.HashCode
-import com.datastax.driver.core.utils.UUIDs
+import com.datastax.oss.driver.api.core.uuid.Uuids
 
 @InternalApi private[akka] object TimeBucket {
 
   def apply(timeuuid: UUID, bucketSize: BucketSize): TimeBucket =
-    apply(UUIDs.unixTimestamp(timeuuid), bucketSize)
+    apply(Uuids.unixTimestamp(timeuuid), bucketSize)
 
   def apply(epochTimestamp: Long, bucketSize: BucketSize): TimeBucket =
     // round down to bucket size so the times are deterministic
@@ -35,7 +35,7 @@ import com.datastax.driver.core.utils.UUIDs
   }
 
   def within(uuid: UUID): Boolean = {
-    val when = UUIDs.unixTimestamp(uuid)
+    val when = Uuids.unixTimestamp(uuid)
     when >= key && when < (key + bucketSize.durationMillis)
   }
 

@@ -26,7 +26,7 @@ class CassandraReadJournalConfigSpec
           |cassandra-query-journal.first-time-bucket = "20151120"
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
-      val readConfig = new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)
+      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-query-journal"), writeConfig)
 
       readConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
     }
@@ -37,7 +37,7 @@ class CassandraReadJournalConfigSpec
           |cassandra-query-journal.first-time-bucket = "20151120T12:20"
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
-      val readConfig = new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)
+      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-query-journal"), writeConfig)
 
       // Rounded down
       readConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
@@ -49,7 +49,7 @@ class CassandraReadJournalConfigSpec
           |cassandra-query-journal.first-time-bucket = "20151120T00"
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
-      val readConfig = new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)
+      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-query-journal"), writeConfig)
 
       readConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
     }
@@ -60,7 +60,7 @@ class CassandraReadJournalConfigSpec
           |cassandra-query-journal.first-time-bucket = "20151120T00:20"
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
-      val readConfig = new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)
+      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-query-journal"), writeConfig)
 
       readConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
     }
@@ -72,7 +72,7 @@ class CassandraReadJournalConfigSpec
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
       val e = intercept[IllegalArgumentException] {
-        new CassandraReadJournalConfig(config.getConfig("cassandra-query-journal"), writeConfig)
+        new CassandraReadJournalConfig(system, config.getConfig("cassandra-query-journal"), writeConfig)
       }
       e.getMessage shouldEqual "Invalid first-time-bucket format. Use: yyyyMMdd'T'HH:mm"
     }

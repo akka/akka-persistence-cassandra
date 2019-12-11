@@ -5,16 +5,17 @@
 package akka.persistence.cassandra.session.javadsl
 
 import java.util.Optional
-import java.util.concurrent.CompletionStage
 
 import akka.Done
-import akka.actor.ExtendedActorSystem
 import akka.cassandra.session.javadsl.CassandraSession
-import akka.cassandra.session.{ CassandraSessionSettings, SessionProvider, _ }
+import akka.cassandra.session.DefaultSessionProvider
 import akka.event.Logging
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.stream.testkit.scaladsl.TestSink
-import com.datastax.driver.core.{ BatchStatement, Session, SimpleStatement }
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder
+import com.datastax.oss.driver.api.core.cql.BatchType
+import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.typesafe.config.ConfigFactory
 
 import scala.collection.JavaConverters._
@@ -27,10 +28,6 @@ object CassandraSessionSpec {
 
   lazy val config = ConfigFactory.parseString(s"""
       cassandra-journal.keyspace=CassandraSessionSpec
-
-      test-cassandra-session-config {
-        max-result-size = 2
-      }
     """).withFallback(CassandraLifecycle.config)
 
 }
@@ -41,23 +38,17 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
   val log = Logging.getLogger(system, this.getClass)
 
   lazy val session: CassandraSession = {
-    val cfg = system.settings.config
-      .getConfig("test-cassandra-session-config")
-      .withFallback(system.settings.config.getConfig("cassandra-journal"))
+    val cfg = system.settings.config.withFallback(system.settings.config.getConfig("cassandra-journal"))
     new CassandraSession(
       system,
-      SessionProvider(system.asInstanceOf[ExtendedActorSystem], cfg),
-      CassandraSessionSettings(cfg),
+      new DefaultSessionProvider(system, cfg),
       system.dispatcher,
       log,
       "CassandraSessionSpec-metrics",
-      new java.util.function.Function[Session, CompletionStage[Done]] {
-        override def apply(s: Session): CompletionStage[Done] =
-          s.executeAsync(s"USE ${cfg.getString("keyspace")};").asScala.map(_ => Done.getInstance).toJava
-      })
+      (s: CqlSession) => s.executeAsync(s"USE ${cfg.getString("keyspace")};").toScala.map(_ => Done.getInstance).toJava)
   }
 
-  override def beforeAll: Unit = {
+  override def beforeAll(): Unit = {
     super.beforeAll()
     createTable()
     insertTestData()
@@ -75,19 +66,25 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
       15.seconds)
 
   def insertTestData(): Unit = {
-    val batch = new BatchStatement
-    batch.add(new SimpleStatement("INSERT INTO testcounts (partition, key, count) VALUES ('A', 'a', 1);"))
-    batch.add(new SimpleStatement("INSERT INTO testcounts (partition, key, count) VALUES ('A', 'b', 2);"))
-    batch.add(new SimpleStatement("INSERT INTO testcounts (partition, key, count) VALUES ('A', 'c', 3);"))
-    batch.add(new SimpleStatement("INSERT INTO testcounts (partition, key, count) VALUES ('A', 'd', 4);"))
-    batch.add(new SimpleStatement("INSERT INTO testcounts (partition, key, count) VALUES ('B', 'e', 5);"))
-    batch.add(new SimpleStatement("INSERT INTO testcounts (partition, key, count) VALUES ('B', 'f', 6);"))
-    Await.ready(session.executeWriteBatch(batch).toScala, 10.seconds)
+    val batch = new BatchStatementBuilder(BatchType.UNLOGGED)
+    batch.addStatement(
+      SimpleStatement.newInstance("INSERT INTO testcounts (partition, key, count) VALUES ('A', 'a', 1);"))
+    batch.addStatement(
+      SimpleStatement.newInstance("INSERT INTO testcounts (partition, key, count) VALUES ('A', 'b', 2);"))
+    batch.addStatement(
+      SimpleStatement.newInstance("INSERT INTO testcounts (partition, key, count) VALUES ('A', 'c', 3);"))
+    batch.addStatement(
+      SimpleStatement.newInstance("INSERT INTO testcounts (partition, key, count) VALUES ('A', 'd', 4);"))
+    batch.addStatement(
+      SimpleStatement.newInstance("INSERT INTO testcounts (partition, key, count) VALUES ('B', 'e', 5);"))
+    batch.addStatement(
+      SimpleStatement.newInstance("INSERT INTO testcounts (partition, key, count) VALUES ('B', 'f', 6);"))
+    Await.ready(session.executeWriteBatch(batch.build()).toScala, 10.seconds)
   }
 
   "CassandraSession" must {
 
-    "select prepared statement as Source" in {
+    "select prepared Statement[_]as Source" in {
       val stmt = Await.result(session.prepare("SELECT count FROM testcounts WHERE partition = ?").toScala, 5.seconds)
       val bound = stmt.bind("A")
       val rows = session.select(bound).asScala

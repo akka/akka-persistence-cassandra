@@ -11,7 +11,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.event.Logging.{ LogEvent, StdOutLogger }
-import akka.persistence.cassandra.CassandraLifecycle.{ Embedded, External }
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
@@ -31,9 +30,8 @@ import scala.collection.immutable
 import scala.concurrent.duration._
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
-import com.datastax.driver.core.Cluster
 
-import scala.util.Try
+import scala.util.control.NonFatal
 
 object CassandraSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
@@ -52,19 +50,32 @@ object CassandraSpec {
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
     ConfigFactory.parseString(s"""
       cassandra-journal {
+        session-name = $journalKeyspace
         keyspace = $journalKeyspace
         port = $port
       }
 
       cassandra-snapshot-store {
+        session-name = ${snapshotStoreKeyspace}Snapshot
         keyspace = $snapshotStoreKeyspace
         port = $port
       }
+    
+      cassandra-query-plugin { 
+        session-name = ${journalKeyspace}Query
+      }     
     """)
 
   val fallbackConfig = ConfigFactory.parseString(s"""
-        akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
-        akka.loglevel = DEBUG
+      akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
+      akka.loglevel = DEBUG
+
+      datastax-java-driver {
+        basic.request {
+          timeout = 10s # drop keyspaces 
+        }
+      }
+  
         cassandra-query-journal {
           first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
           events-by-tag {
@@ -81,7 +92,8 @@ object CassandraSpec {
 abstract class CassandraSpec(
     config: Config,
     val journalName: String = getCallerName(getClass),
-    val snapshotName: String = getCallerName(getClass))
+    val snapshotName: String = getCallerName(getClass),
+    dumpRowsOnFailure: Boolean = false)
     extends TestKitBase
     with Suite
     with ImplicitSender
@@ -99,14 +111,6 @@ abstract class CassandraSpec(
   val shortWait = 10.millis
 
   lazy val queryJournal = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
-
-  // cluster is shutdown by cassandra lifecycle
-  lazy val journalSession = cluster.connect(journalName)
-
-  override def port(): Int = CassandraLifecycle.mode match {
-    case External => 9042
-    case Embedded => randomPort
-  }
 
   def keyspaces(): Set[String] = Set(journalName, snapshotName)
 
@@ -160,25 +164,40 @@ abstract class CassandraSpec(
   }
 
   override protected def externalCassandraCleanup(): Unit = {
-    Try {
-      val c = cluster.connect(journalName)
-      if (failed) {
+    try {
+      if (failed && dumpRowsOnFailure) {
         println("RowDump::")
         import scala.collection.JavaConverters._
-        c.execute("select * from tag_views")
+        if (system.settings.config.getBoolean("cassandra-journal.events-by-tag.enabled")) {
+          println("tag_views")
+          cluster
+            .execute(s"select * from ${journalName}.tag_views")
+            .asScala
+            .foreach(row => {
+              println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(
+                row.getUuid("timestamp"))},${row.getString("persistence_id")},${row
+                .getLong("tag_pid_sequence_nr")},${row.getLong("sequence_nr")}""")
+
+            })
+        }
+        println("messages")
+        cluster
+          .execute(s"select * from ${journalName}.messages")
           .asScala
           .foreach(row => {
-            println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(
-              row.getUUID("timestamp"))},${row.getString("persistence_id")},${row.getLong("tag_pid_sequence_nr")},${row
-              .getLong("sequence_nr")}""")
-
+            println(s"""Row:${row.getBoolean("used")}, ${row.getLong("partition_nr")}, ${row
+              .getString("persistence_id")}, ${row.getLong("sequence_nr")}""")
           })
       }
-      system.log.info("Dropping keyspaces: {}", keyspaces())
+      println(s"Dropping keyspaces: ${keyspaces()}")
       keyspaces().foreach { keyspace =>
-        c.execute(s"drop keyspace if exists $keyspace")
+        cluster.execute(s"drop keyspace if exists $keyspace")
       }
-      c.close()
+      cluster.close()
+    } catch {
+      case NonFatal(t) =>
+        println("Exception during cleanup")
+        t.printStackTrace(System.out)
     }
   }
 
@@ -196,8 +215,6 @@ abstract class CassandraSpec(
     as.log.info("Using key spaces: {} {}", journalName, snapshotName)
     as
   }
-
-  final override lazy val cluster = Cluster.builder().addContactPoint("localhost").withPort(port()).build()
 
   final override def systemName = system.name
 
@@ -227,7 +244,6 @@ abstract class CassandraSpec(
         pid,
         0,
         Long.MaxValue,
-        Long.MaxValue,
         100,
         None,
         "test",
@@ -241,7 +257,6 @@ abstract class CassandraSpec(
       .eventsByPersistenceId(
         pid,
         0,
-        Long.MaxValue,
         Long.MaxValue,
         100,
         None,

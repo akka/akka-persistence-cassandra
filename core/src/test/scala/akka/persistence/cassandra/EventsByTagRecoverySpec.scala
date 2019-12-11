@@ -15,7 +15,6 @@ import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
-import scala.util.Try
 
 object EventsByTagRecoverySpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
@@ -43,20 +42,6 @@ object EventsByTagRecoverySpec {
 }
 
 class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.config) {
-
-  import EventsByTagRecoverySpec._
-
-  lazy val session = {
-    cluster.connect(keyspaceName)
-  }
-
-  override protected def afterAll(): Unit = {
-    super.afterAll()
-    Try {
-      session.close()
-      cluster.close()
-    }
-  }
 
   val waitTime = 100.milliseconds
 
@@ -125,8 +110,8 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
 
         Thread.sleep(500)
         systemTwo.terminate().futureValue
-        session.execute(s"truncate tag_views")
-        session.execute(s"truncate tag_write_progress")
+        cluster.execute(s"truncate ${journalName}.tag_views")
+        cluster.execute(s"truncate ${journalName}.tag_write_progress")
 
         val tProbe = TestProbe()(system)
         val p2take2 = system.actorOf(TestTaggingActor.props("p2", Set("red", "orange")))
@@ -171,8 +156,8 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
         Thread.sleep(500)
 
         systemTwo.terminate().futureValue
-        session.execute(s"truncate tag_views")
-        session.execute(s"truncate tag_write_progress")
+        cluster.execute(s"truncate ${journalName}.tag_views")
+        cluster.execute(s"truncate ${journalName}.tag_write_progress")
 
         val tProbe = TestProbe()(system)
         val p3take2 = system.actorOf(TestTaggingActor.props("p3", Set("red", "orange")))
