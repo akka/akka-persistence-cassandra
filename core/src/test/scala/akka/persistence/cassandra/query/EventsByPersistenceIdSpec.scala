@@ -466,5 +466,12 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       probe.expectComplete()
     }
 
+    "not complete when empty" in {
+      val src = queries.eventsByPersistenceId("r", 0L, Long.MaxValue)
+      val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(5)
+
+      probe.expectNoMessage(100.millis)
+      probe.cancel()
+    }
   }
 }
