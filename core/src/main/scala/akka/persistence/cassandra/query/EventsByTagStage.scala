@@ -136,6 +136,8 @@ import scala.compat.java8.FutureConverters._
   private case object QueryPoll
   private case object TagNotification
 
+  type LastUpdated = Long
+
   private case class StageState(
       state: QueryState,
       // updated each time a new row is read, may skip delayed events with lower offsets
@@ -145,7 +147,7 @@ import scala.compat.java8.FutureConverters._
       // upper limit for next. Always kept at least the eventual consistency in the past
       toOffset: UUID,
       // for each persistence id what is the latest tag pid sequenceNr number and offset
-      tagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID)],
+      tagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID, LastUpdated)],
       missingLookup: Option[LookingForMissing],
       bucketSize: BucketSize) {
 
@@ -161,7 +163,9 @@ import scala.compat.java8.FutureConverters._
     def shouldMoveBucket(): Boolean =
       currentTimeBucket.inPast && !currentTimeBucket.within(toOffset)
 
-    def tagPidSequenceNumberUpdate(pid: PersistenceId, tagPidSequenceNr: (TagPidSequenceNr, UUID)): StageState =
+    def tagPidSequenceNumberUpdate(
+        pid: PersistenceId,
+        tagPidSequenceNr: (TagPidSequenceNr, UUID, LastUpdated)): StageState =
       copy(tagPidSequenceNrs = tagPidSequenceNrs + (pid -> tagPidSequenceNr))
 
     // override to give nice offset formatting
@@ -246,7 +250,9 @@ import scala.compat.java8.FutureConverters._
       }
 
       override def preStart(): Unit = {
-        stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs, None, bucketSize)
+        stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs.mapValues {
+          case (tagPidSequenceNr, offset) => (tagPidSequenceNr, offset, System.currentTimeMillis())
+        }, None, bucketSize)
         if (log.isInfoEnabled) {
           log.info(
             s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset [{}] toOffset [{}]",
@@ -421,7 +427,8 @@ import scala.compat.java8.FutureConverters._
         val expectedSequenceNr = 1L
         if (repr.tagPidSequenceNr == expectedSequenceNr) {
           updateStageState(
-            _.copy(fromOffset = repr.offset).tagPidSequenceNumberUpdate(repr.persistenceId, (1, repr.offset)))
+            _.copy(fromOffset = repr.offset)
+              .tagPidSequenceNumberUpdate(repr.persistenceId, (1, repr.offset, System.currentTimeMillis())))
           push(out, repr)
           false
         } else if (usingOffset && (stageState.currentTimeBucket.inPast || settings.eventsByTagNewPersistenceIdScanTimeout == Duration.Zero)) {
@@ -434,8 +441,9 @@ import scala.compat.java8.FutureConverters._
             stageState.currentTimeBucket,
             repr.tagPidSequenceNr)
           updateStageState(
-            _.copy(fromOffset = repr.offset)
-              .tagPidSequenceNumberUpdate(repr.persistenceId, (repr.tagPidSequenceNr, repr.offset)))
+            _.copy(fromOffset = repr.offset).tagPidSequenceNumberUpdate(
+              repr.persistenceId,
+              (repr.tagPidSequenceNr, repr.offset, System.currentTimeMillis())))
           push(out, repr)
           false
         } else {
@@ -520,8 +528,9 @@ import scala.compat.java8.FutureConverters._
               repr.tagPidSequenceNr)
 
           updateStageState(
-            _.copy(fromOffset = repr.offset)
-              .tagPidSequenceNumberUpdate(repr.persistenceId, (expectedSequenceNr, repr.offset)))
+            _.copy(fromOffset = repr.offset).tagPidSequenceNumberUpdate(
+              repr.persistenceId,
+              (expectedSequenceNr, repr.offset, System.currentTimeMillis())))
           push(out, repr)
           false
         }
@@ -546,7 +555,7 @@ import scala.compat.java8.FutureConverters._
               val missing = stageState.tagPidSequenceNrs.get(pid) match {
                 case None =>
                   handleFirstTimePersistenceId(repr)
-                case Some((lastSequenceNr, lastUUID)) =>
+                case Some((lastSequenceNr, lastUUID, _)) =>
                   handleExistingPersistenceId(repr, lastSequenceNr, lastUUID)
               }
 
@@ -661,7 +670,7 @@ import scala.compat.java8.FutureConverters._
         log.debug("[{}] Search over. Sending buffered events. {}", stageUuid, stageState.state)
         updateStageState(
           _.copy(fromOffset = m.maxOffset, missingLookup = None)
-            .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset)))
+            .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset, System.currentTimeMillis())))
       }
 
       private def fetchMore(rs: AsyncResultSet): Unit = {
