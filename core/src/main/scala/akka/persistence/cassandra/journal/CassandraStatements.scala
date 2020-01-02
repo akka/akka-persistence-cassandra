@@ -306,8 +306,6 @@ trait CassandraStatements {
           } yield Done
         } else FutureDone
 
-      val startTime = System.nanoTime()
-
       def keyspace: Future[Done] =
         if (config.keyspaceAutoCreate)
           session.executeAsync(createKeyspace).toScala.map(_ => Done)
@@ -323,11 +321,8 @@ trait CassandraStatements {
         } yield done
       } else keyspace
 
-      import scala.concurrent.duration._
-      import akka.util.PrettyDuration._
-      done.onComplete { result =>
+      done.onComplete { _ =>
         session.setSchemaMetadataEnabled(null)
-        println("Schema update took " + (System.nanoTime() - startTime).nanos.pretty)
       }
 
       done
