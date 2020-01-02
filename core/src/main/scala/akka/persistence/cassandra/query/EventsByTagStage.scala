@@ -133,7 +133,9 @@ import scala.compat.java8.FutureConverters._
       s"missing=$missing deadline=$deadline gapDetected=$gapDetected"
   }
 
-  private case object QueryPoll
+  private sealed trait QueryPoll
+  private case object PeriodicQueryPoll extends QueryPoll
+  private case object OneOffQueryPoll extends QueryPoll
   private case object TagNotification
 
   private case class StageState(
@@ -178,7 +180,7 @@ import scala.compat.java8.FutureConverters._
     refreshInterval: Option[FiniteDuration],
     bucketSize: BucketSize,
     usingOffset: Boolean,
-    initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)])
+    initialTagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID)])
     extends GraphStage[SourceShape[UUIDRow]] {
 
   private val out: Outlet[UUIDRow] = Outlet("event.out")
@@ -293,11 +295,11 @@ import scala.compat.java8.FutureConverters._
 
       @silent("deprecated")
       private def scheduleQueryPoll(initial: FiniteDuration, interval: FiniteDuration): Unit = {
-        schedulePeriodicallyWithInitialDelay(QueryPoll, initial, interval)
+        schedulePeriodicallyWithInitialDelay(PeriodicQueryPoll, initial, interval)
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
-        case QueryPoll | TagNotification =>
+        case _: QueryPoll | TagNotification =>
           continue()
       }
 
@@ -622,10 +624,12 @@ import scala.compat.java8.FutureConverters._
               // the new persistence-id scan time is typically much smaller than the refresh interval
               // so do not wait for the next refresh to look again
               if (timeLeft < settings.refreshInterval) {
-                scheduleOnce(QueryPoll, timeLeft)
+                log.debug("Scheduling one off poll in {}", timeLeft.pretty)
+                scheduleOnce(OneOffQueryPoll, timeLeft)
               } else if (!isLiveQuery()) {
                 // a current query doesn't have a poll schedule one
-                scheduleOnce(QueryPoll, settings.refreshInterval)
+                log.debug("Scheduling one off poll in {}", settings.refreshInterval)
+                scheduleOnce(OneOffQueryPoll, settings.refreshInterval)
               }
             }
 
@@ -646,7 +650,7 @@ import scala.compat.java8.FutureConverters._
                 "[{}] Scheduling poll for eventual consistency delay: {}",
                 stageUuid,
                 settings.eventsByTagEventualConsistency)
-              scheduleOnce(QueryPoll, settings.eventsByTagEventualConsistency)
+              scheduleOnce(OneOffQueryPoll, settings.eventsByTagEventualConsistency)
             }
           }
         }
