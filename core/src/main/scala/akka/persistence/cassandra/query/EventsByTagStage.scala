@@ -322,9 +322,10 @@ import scala.compat.java8.FutureConverters._
       }
 
       private def cleanup(): Unit = {
+        val now = System.currentTimeMillis()
         val garbageCollected = stageState.tagPidSequenceNrs.filterNot {
           case (_, (_, _, lastUpdated)) =>
-            (System.currentTimeMillis() - lastUpdated) > settings.eventsByTagNewPersistenceIdScanTimeout.toMillis
+            (now - lastUpdated) > settings.eventsByTagNewPersistenceIdScanTimeout.toMillis
         }
         updateStageState(_.copy(tagPidSequenceNrs = garbageCollected))
       }
@@ -468,7 +469,9 @@ import scala.compat.java8.FutureConverters._
         } else {
           if (log.isDebugEnabled) {
             log.debug(
-              s"[${stageUuid}] " + " [{}]: New persistence id: [{}] does not start at tag pid sequence nr 1. This could either be that the events are before the offset or that they are missing. Tag pid sequence nr found: [{}]. Looking for lower tag pid sequence nrs for [{}]",
+              s"[${stageUuid}] " + " [{}]: Persistence Id not in metadata: [{}] does not start at tag pid sequence nr 1. " +
+              "This could either be that the events are before the offset, that the metadata has been dropped or that they are delayed. " +
+              "Tag pid sequence nr found: [{}]. Looking for lower tag pid sequence nrs for [{}] in the current and previous buckets.",
               session.tag,
               repr.persistenceId,
               repr.tagPidSequenceNr,

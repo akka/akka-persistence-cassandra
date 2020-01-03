@@ -38,27 +38,30 @@ object CassandraLifecycle {
     val t0 = System.nanoTime()
     var n = 0
     probe.within(45.seconds) {
-      probe.awaitAssert {
-        n += 1
-        val a =
-          system.actorOf(
-            Props(classOf[AwaitPersistenceInit], "persistenceInit" + n, journalPluginId, snapshotPluginId),
-            "persistenceInit" + n)
-        a.tell("hello", probe.ref)
-        try {
-          probe.expectMsg(5.seconds, "hello")
-        } catch {
-          case t: Throwable =>
-            probe.watch(a)
-            a ! PoisonPill
-            probe.expectTerminated(a, 10.seconds)
-            throw t
-        }
-        system.log.debug(
-          "awaitPersistenceInit took {} ms {}",
-          TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0),
-          system.name)
-      }
+      probe.awaitAssert(
+        {
+          n += 1
+          val a =
+            system.actorOf(
+              Props(classOf[AwaitPersistenceInit], "persistenceInit" + n, journalPluginId, snapshotPluginId),
+              "persistenceInit" + n)
+          a.tell("hello", probe.ref)
+          try {
+            probe.expectMsg(5.seconds, "hello")
+          } catch {
+            case t: Throwable =>
+              probe.watch(a)
+              a ! PoisonPill
+              probe.expectTerminated(a, 10.seconds)
+              throw t
+          }
+          system.log.debug(
+            "awaitPersistenceInit took {} ms {}",
+            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0),
+            system.name)
+        },
+        probe.remainingOrDefault,
+        2.seconds)
     }
   }
 
