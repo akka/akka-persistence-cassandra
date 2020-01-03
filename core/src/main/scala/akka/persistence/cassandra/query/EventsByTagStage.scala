@@ -135,6 +135,7 @@ import scala.compat.java8.FutureConverters._
 
   private case object QueryPoll
   private case object TagNotification
+  private case object PersistenceIdsCleanup
 
   type LastUpdated = Long
 
@@ -295,6 +296,13 @@ import scala.compat.java8.FutureConverters._
           case None =>
             log.debug("[{}] CurrentQuery: No query polling", stageUuid)
         }
+
+        settings.eventsByTagCleanUpPersistenceIds match {
+          case duration: FiniteDuration =>
+            log.debug("Dropping metadata for persistence ids every {}", duration.pretty)
+            schedulePeriodically(PersistenceIdsCleanup, duration)
+          case _ =>
+        }
       }
 
       @silent("deprecated")
@@ -305,10 +313,21 @@ import scala.compat.java8.FutureConverters._
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
         case QueryPoll | TagNotification =>
           continue()
+        case PersistenceIdsCleanup =>
+          cleanup()
       }
 
-      override def onPull(): Unit =
+      override def onPull(): Unit = {
         tryPushOne()
+      }
+
+      private def cleanup(): Unit = {
+        val garbageCollected = stageState.tagPidSequenceNrs.filterNot {
+          case (_, (_, _, lastUpdated)) =>
+            (System.currentTimeMillis() - lastUpdated) > settings.eventsByTagNewPersistenceIdScanTimeout.toMillis
+        }
+        updateStageState(_.copy(tagPidSequenceNrs = garbageCollected))
+      }
 
       private def continue(): Unit =
         stageState.state match {

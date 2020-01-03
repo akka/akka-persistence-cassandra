@@ -23,6 +23,7 @@ import akka.stream.testkit.scaladsl.TestSink
 import EventsByTagSpec._
 import akka.testkit.TestProbe
 import com.datastax.oss.driver.api.core.CqlIdentifier
+import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.BeforeAndAfterEach
 
@@ -90,6 +91,15 @@ object EventsByTagSpec {
     cassandra-query-journal.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
     """).withFallback(strictConfig)
 
+  val persistenceIdCleanupConfig =
+    ConfigFactory.parseString("""
+       cassandra-query-journal.events-by-tag {
+          # will test by requiring a new persistence-id search every 2s
+          new-persistence-id-scan-timeout = 500ms
+          cleanup-old-persistence-ids = 1s
+       }
+      """)
+
   val disabledConfig = ConfigFactory.parseString("""
       cassandra-journal {
         keyspace=EventsByTagDisabled
@@ -108,7 +118,7 @@ class EventWithMetaDataTagger extends WriteEventAdapter {
 }
 
 class ColorFruitTagger extends WriteEventAdapter {
-  val colors = Set("green", "black", "blue", "yellow")
+  val colors = Set("green", "black", "blue", "yellow", "orange")
   val fruits = Set("apple", "banana")
   override def toJournal(event: Any): Any = event match {
     case s: String =>
@@ -1036,6 +1046,23 @@ object EventsByTagDisabledSpec {
   }
 
   def props(pid: String): Props = Props(new CounterActor(pid))
+}
+
+class EventsByTagPersistenceIfCleanupSpec extends AbstractEventsByTagSpec(EventsByTagSpec.persistenceIdCleanupConfig) {
+
+  "PersistenceId cleanup" must {
+    "drop state and trigger new persistence id lookup peridodically" in {
+      val a = system.actorOf(TestActor.props("cleanup"))
+      val query = queries.eventsByTag("orange", TimeBasedUUID.apply(Uuids.timeBased()))
+      val probe = query.runWith(TestSink.probe[Any])
+      probe.request(10)
+      a ! "orange chair"
+      expectMsg(s"orange chair-done")
+      probe.expectNext("orange chair")
+
+    }
+  }
+
 }
 
 class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.disabledConfig) {

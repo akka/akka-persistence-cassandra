@@ -73,5 +73,8 @@ import scala.concurrent.duration._
     config.getDuration("events-by-tag.new-persistence-id-scan-timeout", MILLISECONDS).millis
   val eventsByTagOffsetScanning: FiniteDuration =
     config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis
-
+  val eventsByTagCleanUpPersistenceIds: Duration = config.getString("cleanup-old-persistence-ids") match {
+    case "off" => Duration.Inf
+    case _     => config.getDuration("cleanup-old-persistence-ids", MILLISECONDS).millis
+  }
 }
