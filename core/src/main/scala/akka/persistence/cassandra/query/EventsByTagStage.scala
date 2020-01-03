@@ -253,7 +253,7 @@ import scala.compat.java8.FutureConverters._
       override def preStart(): Unit = {
         stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs.mapValues {
           case (tagPidSequenceNr, offset) => (tagPidSequenceNr, offset, System.currentTimeMillis())
-        }, None, bucketSize)
+        }.toMap, None, bucketSize)
         if (log.isInfoEnabled) {
           log.info(
             s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset [{}] toOffset [{}]",

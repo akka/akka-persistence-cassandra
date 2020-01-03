@@ -81,7 +81,7 @@ import scala.concurrent.duration._
     case _     => config.getDuration("events-by-tag.cleanup-old-persistence-ids", MILLISECONDS).millis
   }
 
-  if (eventsByTagCleanUpPersistenceIds.toMillis < (writePluginConfig.bucketSize.durationMillis * 2)) {
+  if (eventsByTagCleanUpPersistenceIds != Duration.Inf && eventsByTagCleanUpPersistenceIds.toMillis < (writePluginConfig.bucketSize.durationMillis * 2)) {
     log.warning(
       "cleanup-old-persistence-ids has been set to less than 2 x the bucket size. If a tagged event for a persistence id " +
       "is not received for the cleanup period but then received before 2 x the bucket size then old events could re-delivered.")
