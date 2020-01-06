@@ -30,6 +30,10 @@ private[akka] trait TestTagWriter {
     (cluster.prepare(writeStatements.writeTags(false)), cluster.prepare(writeStatements.writeTags(true)))
   }
 
+  def clearAllEvents(): Unit = {
+    cluster.execute(s"truncate ${writePluginConfig.keyspace}.${writePluginConfig.tagTable.name}")
+  }
+
   def writeTaggedEvent(
       time: LocalDateTime,
       pr: PersistentRepr,

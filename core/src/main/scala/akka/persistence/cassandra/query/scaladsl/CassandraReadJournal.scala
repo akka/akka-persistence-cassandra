@@ -275,19 +275,21 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       try {
         val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
-        createFutureSource(prereqs) { (s, prereqs) =>
-          val session =
-            new TagStageSession(tag, queryPluginConfig.readProfile, s, prereqs._1)
-          Source.fromGraph(
-            EventsByTagStage(
-              session,
-              fromOffset,
-              None,
-              queryPluginConfig,
-              Some(queryPluginConfig.refreshInterval),
-              writePluginConfig.bucketSize,
-              usingOffset,
-              prereqs._2))
+        createFutureSource(prereqs) {
+          case (s, (statements, initialTagPidSequenceNrs, scanner)) =>
+            val session =
+              new TagStageSession(tag, queryPluginConfig.readProfile, s, statements)
+            Source.fromGraph(
+              EventsByTagStage(
+                session,
+                fromOffset,
+                None,
+                queryPluginConfig,
+                Some(queryPluginConfig.refreshInterval),
+                writePluginConfig.bucketSize,
+                usingOffset,
+                initialTagPidSequenceNrs,
+                scanner))
         }.via(deserializeEventsByTagRow).mapMaterializedValue(_ => NotUsed)
 
       } catch {
@@ -318,31 +320,58 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
   }
 
-  private def eventsByTagPrereqs(
-      tag: String,
-      usingOffset: Boolean,
-      fromOffset: UUID): Future[(EventByTagStatements, Map[Tag, (TagPidSequenceNr, UUID)])] = {
+  private def eventsByTagPrereqs(tag: String, usingOffset: Boolean, fromOffset: UUID)
+      : Future[(EventByTagStatements, Map[Tag, (TagPidSequenceNr, UUID)], TagViewSequenceNumberScanner)] = {
     val currentBucket =
       TimeBucket(System.currentTimeMillis(), writePluginConfig.bucketSize)
     val initialTagPidSequenceNrs =
       if (usingOffset && currentBucket.within(fromOffset) && queryPluginConfig.eventsByTagOffsetScanning > Duration.Zero)
-        scanTagSequenceNrs(tag, fromOffset)
+        calculateStartingTagPidSequenceNrs(tag, fromOffset)
       else
         Future.successful(Map.empty[Tag, (TagPidSequenceNr, UUID)])
 
     for {
       statements <- combinedEventsByTagStmts
       tagSequenceNrs <- initialTagPidSequenceNrs
-    } yield (statements, tagSequenceNrs)
+      tagViewScanner <- tagViewScanner
+    } yield (statements, tagSequenceNrs, tagViewScanner)
   }
 
-  private[akka] def scanTagSequenceNrs(
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] val tagViewScanner: Future[TagViewSequenceNumberScanner] = preparedSelectTagSequenceNrs.map { ps =>
+    new TagViewSequenceNumberScanner(TagViewSequenceNumberScanner.Session(session, ps, queryPluginConfig.readProfile))
+  }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def calculateStartingTagPidSequenceNrs(
       tag: String,
       fromOffset: UUID): Future[Map[PersistenceId, (TagPidSequenceNr, UUID)]] = {
-    val scanner =
-      new TagViewSequenceNumberScanner(session, queryPluginConfig.readProfile, preparedSelectTagSequenceNrs)
-    val bucket = TimeBucket(fromOffset, writePluginConfig.bucketSize)
-    scanner.scan(tag, fromOffset, bucket, queryPluginConfig.eventsByTagOffsetScanning)
+    tagViewScanner.flatMap { scanner =>
+      // Subtract 1 so events by tag looks for the lowest tagPidSequenceNumber that was found during initial scanning
+      // Make a fake UUID for this tagPidSequenceNr that will be used to search for this tagPidSequenceNr in the unlikely
+      // event that the stage can't find the event found during this scan
+      scanner
+        .scan(
+          tag,
+          fromOffset,
+          Uuids.endOf(System.currentTimeMillis() + queryPluginConfig.eventsByTagOffsetScanning.toMillis),
+          writePluginConfig.bucketSize,
+          queryPluginConfig.eventsByTagOffsetScanning,
+          math.min)
+        .map { progress =>
+          progress.map {
+            case (key, (tagPidSequenceNr, uuid)) =>
+              val unixTime = Uuids.unixTimestamp(uuid)
+              (key, (tagPidSequenceNr - 1, Uuids.startOf(unixTime - 1)))
+          }
+        }
+    }
   }
 
   /**
@@ -416,19 +445,21 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
         // pick up all the events written this millisecond
         val toOffset = Some(Uuids.endOf(System.currentTimeMillis()))
 
-        createFutureSource(prereqs) { (s, prereqs) =>
-          val session =
-            new TagStageSession(tag, queryPluginConfig.readProfile, s, prereqs._1)
-          Source.fromGraph(
-            EventsByTagStage(
-              session,
-              fromOffset,
-              toOffset,
-              queryPluginConfig,
-              None,
-              writePluginConfig.bucketSize,
-              usingOffset,
-              prereqs._2))
+        createFutureSource(prereqs) {
+          case (s, (statements, initialTagPidSequenceNrs, scanner)) =>
+            val session =
+              new TagStageSession(tag, queryPluginConfig.readProfile, s, statements)
+            Source.fromGraph(
+              EventsByTagStage(
+                session,
+                fromOffset,
+                toOffset,
+                queryPluginConfig,
+                None,
+                writePluginConfig.bucketSize,
+                usingOffset,
+                initialTagPidSequenceNrs,
+                scanner))
         }.via(deserializeEventsByTagRow).mapMaterializedValue(_ => NotUsed)
 
       } catch {

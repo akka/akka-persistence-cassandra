@@ -25,7 +25,6 @@ import java.lang.{ Long => JLong }
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
-import akka.persistence.query.Offset
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
 import com.datastax.oss.driver.api.core.cql.Row
@@ -50,14 +49,11 @@ import scala.compat.java8.FutureConverters._
  */
 @InternalApi private[akka] object EventsByTagStage {
 
-  final class MissingTaggedEventException(
-      val tag: Tag,
-      val persistenceId: PersistenceId,
-      missingTagPidSequenceNrs: Set[Long],
-      val lastKnownOffset: Offset)
+  // FIXME, make this a public API that users can use to handle missing events
+  final class MissingTaggedEventException(val tag: Tag, missing: Map[PersistenceId, MissingData])
       extends RuntimeException(
-        s"Unable to find missing tagged event: PersistenceId: $persistenceId. " +
-        s"Tag: $tag. MissingTagPidSequenceNrs: $missingTagPidSequenceNrs. Previous offset: $lastKnownOffset")
+        s"Unable to find missing tagged events: ${missing}" +
+        s"Tag: $tag")
 
   final case class UUIDRow(
       persistenceId: PersistenceId,
@@ -78,7 +74,8 @@ import scala.compat.java8.FutureConverters._
       refreshInterval: Option[FiniteDuration],
       bucketSize: BucketSize,
       usingOffset: Boolean,
-      initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)]): EventsByTagStage =
+      initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)],
+      scanner: TagViewSequenceNumberScanner): EventsByTagStage =
     new EventsByTagStage(
       session,
       fromOffset,
@@ -87,7 +84,8 @@ import scala.compat.java8.FutureConverters._
       refreshInterval,
       bucketSize,
       usingOffset,
-      initialTagPidSequenceNrs)
+      initialTagPidSequenceNrs,
+      scanner)
 
   private[akka] class TagStageSession(
       val tag: String,
@@ -108,34 +106,41 @@ import scala.compat.java8.FutureConverters._
   private final case class QueryResult(resultSet: AsyncResultSet) extends QueryState
   private final case class BufferedEvents(events: List[UUIDRow]) extends QueryState
 
+  type Offset = UUID
+  type MaxSequenceNr = Long
+
+  case class MissingData(maxOffset: UUID, maxSequenceNr: TagPidSequenceNr, missingSequenceNrs: Set[Long]) {
+    override def toString: String =
+      s"MissingData(maxOffset=${formatOffset(maxOffset)}, missingSequenceNrs: ${missingSequenceNrs.mkString("[", ",", "]")})"
+  }
+
   /**
-   * @param gapDetected Whether an explicit gap has been detected e.g. events 1-4 have been seen then the next event isn not 5.
+   * @param gapDetected Whether an explicit gap has been detected e.g. events 1-4 have been seen then the next event is not 5.
    *                    The other scenario is that the first event for a persistence id is not 1, which when starting from an offset
    *                    won't fail the stream as this is normal. However due to the eventual consistency of C* the stream still looks for earlier
    *                    events for a short time.
    */
   private final case class LookingForMissing(
-      buffered: List[UUIDRow],
-      previousOffset: UUID,
+      buffered: List[UUIDRow], // TODO, set a max on this
+      minOffset: UUID,
+      maxOffset: UUID,
       bucket: TimeBucket,
       queryPrevious: Boolean,
-      maxOffset: UUID,
-      persistenceId: String,
-      maxSequenceNr: Long,
-      missing: Set[Long],
+      missing: Map[PersistenceId, MissingData],
       deadline: Deadline,
       gapDetected: Boolean) {
 
     // don't include buffered in the toString
     override def toString =
-      s"LookingForMissing{previousOffset=$previousOffset bucket=$bucket " +
-      s"queryPrevious=$queryPrevious maxOffset=$maxOffset persistenceId=$persistenceId maxSequenceNr=$maxSequenceNr " +
+      s"LookingForMissing{min=$minOffset maxOffset=$maxOffset bucket=$bucket " +
+      s"queryPrevious=$queryPrevious searchingFor=${missing} " +
       s"missing=$missing deadline=$deadline gapDetected=$gapDetected"
   }
 
   private case object QueryPoll
   private case object TagNotification
   private case object PersistenceIdsCleanup
+  private case object ScanForDelayedEvents
 
   type LastUpdated = Long
 
@@ -145,10 +150,11 @@ import scala.compat.java8.FutureConverters._
       // these gaps will be detected for the same pid, for cross pid delayed events it
       // relies on the eventual consistency delay
       fromOffset: UUID,
-      // upper limit for next. Always kept at least the eventual consistency in the past
+      // upper limit for next query. Always kept at least the eventual consistency in the past
       toOffset: UUID,
       // for each persistence id what is the latest tag pid sequenceNr number and offset
       tagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID, LastUpdated)],
+      delayedScanInProgress: Boolean,
       missingLookup: Option[LookingForMissing],
       bucketSize: BucketSize) {
 
@@ -183,7 +189,8 @@ import scala.compat.java8.FutureConverters._
     refreshInterval: Option[FiniteDuration],
     bucketSize: BucketSize,
     usingOffset: Boolean,
-    initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)])
+    initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)],
+    scanner: TagViewSequenceNumberScanner)
     extends GraphStage[SourceShape[UUIDRow]] {
 
   private val out: Outlet[UUIDRow] = Outlet("event.out")
@@ -214,13 +221,13 @@ import scala.compat.java8.FutureConverters._
         val tOff = if (to < toOffsetMillis) {
           // The eventual consistency delay is before the end of the query
           val u = Uuids.endOf(to)
-          if (log.isDebugEnabled) {
+          if (verboseDebug && log.isDebugEnabled) {
             log.debug("[{}]: New toOffset (EC): {}", stageUuid, formatOffset(u))
           }
           u
         } else {
           // The eventual consistency delay is after the end of the query
-          if (log.isDebugEnabled) {
+          if (verboseDebug && log.isDebugEnabled) {
             log.debug("{}: New toOffset (End): {}", stageUuid, formatOffset(toOffset.get))
           }
           toOffset.get
@@ -250,10 +257,36 @@ import scala.compat.java8.FutureConverters._
           fail(out, e)
       }
 
+      val backTrackCb = getAsyncCallback[Try[Map[PersistenceId, (TagPidSequenceNr, UUID)]]] {
+        case Failure(e) =>
+          log.warning("Backtrack failed, this will retried", e)
+        case Success(sequenceNrs) =>
+          log.info("Current sequence nrs: {} from back tracking: {}", stageState.tagPidSequenceNrs, sequenceNrs)
+
+          // check all the sequence numbers are correct
+
+          sequenceNrs.filter {
+            case (pid, (tagPidSequenceNr, offset)) =>
+              stageState.tagPidSequenceNrs.get(pid) match {
+                case Some((currentTagPidSequenceNr, currentOffest, _))
+                   
+                case None =>
+                  // TODO, write test for this
+                  false
+                case _ =>
+                  false
+              }
+          }
+
+
+          // a new persistence id we've never seen
+
+      }
+
       override def preStart(): Unit = {
         stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs.mapValues {
           case (tagPidSequenceNr, offset) => (tagPidSequenceNr, offset, System.currentTimeMillis())
-        }.toMap, None, bucketSize)
+        }.toMap, delayedScanInProgress = false, None, bucketSize)
         if (log.isInfoEnabled) {
           log.info(
             s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset [{}] toOffset [{}]",
@@ -303,6 +336,14 @@ import scala.compat.java8.FutureConverters._
             schedulePeriodically(PersistenceIdsCleanup, duration)
           case _ =>
         }
+
+        settings.eventsByTagBacktrackInterval match {
+          case duration: FiniteDuration =>
+            log.debug("Back tracking for delayed events every {}", duration.pretty)
+            schedulePeriodically(ScanForDelayedEvents, duration)
+          case _ =>
+        }
+
       }
 
       @silent("deprecated")
@@ -315,10 +356,30 @@ import scala.compat.java8.FutureConverters._
           continue()
         case PersistenceIdsCleanup =>
           cleanup()
+        case ScanForDelayedEvents =>
+          scanForDelayedEvents()
       }
 
       override def onPull(): Unit = {
         tryPushOne()
+      }
+
+      private def scanForDelayedEvents(): Unit = {
+        if (!stageState.delayedScanInProgress) {
+          // TODO validate the exclusivity of these
+          // how far back should this look? The missing search only looks back one bucket so start with that for now
+          // but the missing search could be made to go back more buckets
+          val scanFrom = Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
+          // to the current from offset to avoid any events being found that will be found by this stage during its querying
+          val scanTo = stageState.fromOffset
+
+          // find the max sequence nr for each persistence id up until the current offset, if any of these are
+          // higher than the current sequence nr for each persistence id they have been missed due to a delay with
+          // eventual consistency set too low
+          scanner
+            .scan(session.tag, scanFrom, scanTo, bucketSize, Duration.Zero, math.max)
+            .onComplete(backTrackCb.invoke)
+        }
       }
 
       private def cleanup(): Unit = {
@@ -345,7 +406,7 @@ import scala.compat.java8.FutureConverters._
 
       private def query(): Unit = {
         updateToOffset()
-        if (log.isDebugEnabled) {
+        if (verboseDebug && log.isDebugEnabled) {
           log.debug(
             "[{}] Executing query: timeBucket: {} from offset: {} to offset: {}",
             stageUuid,
@@ -377,31 +438,24 @@ import scala.compat.java8.FutureConverters._
               s"[${stageUuid}] " + s"${session.tag}: Executing query to look for {}. Timebucket: {}. From: {}. To: {}",
               if (missing.gapDetected) "missing" else "previous events",
               missing.bucket,
-              formatOffset(missing.previousOffset),
+              formatOffset(missing.minOffset),
               formatOffset(missing.maxOffset))
           }
           session
-            .selectEventsForBucket(missing.bucket, missing.previousOffset, missing.maxOffset)
+            .selectEventsForBucket(missing.bucket, missing.minOffset, missing.maxOffset)
             .onComplete(newResultSetCb.invoke)
         }
       }
 
       private def abortMissingSearch(missing: LookingForMissing): Unit = {
         if (missing.gapDetected) {
-          fail(
-            out,
-            new MissingTaggedEventException(
-              session.tag,
-              missing.persistenceId,
-              missing.missing,
-              Offset.timeBasedUUID(missing.previousOffset)))
+          fail(out, new MissingTaggedEventException(session.tag, missing.missing))
         } else {
           log.debug(
-            "[{}] [{}]: Finished scanning for older events for persistence id [{}]. Max pid sequence nr found [{}]",
+            "[{}] [{}]: Finished scanning for older events for persistence ids [{}]",
             stageUuid,
             session.tag,
-            missing.persistenceId,
-            missing.maxSequenceNr)
+            missing.missing.keys.mkString(","))
           stopLookingForMissing(missing, missing.buffered)
           tryPushOne()
         }
@@ -412,23 +466,33 @@ import scala.compat.java8.FutureConverters._
         // we only extract the event if it is the missing one we've looking for
         val rowPersistenceId = row.getString("persistence_id")
         val rowTagPidSequenceNr = row.getLong("tag_pid_sequence_nr")
-        if (rowPersistenceId == m.persistenceId && m.missing.contains(rowTagPidSequenceNr)) {
-          val uuidRow = extractUuidRow(row)
-          val remainingEvents = m.missing - uuidRow.tagPidSequenceNr
-          log.debug(
-            "[{}] {}: Found a missing event, sequence nr {}. Remaining missing: {}",
-            stageUuid,
-            session.tag,
-            uuidRow.tagPidSequenceNr,
-            remainingEvents)
-          if (remainingEvents.isEmpty) {
-            stopLookingForMissing(m, uuidRow :: m.buffered)
-          } else {
-            log.debug("[{}] [{}]: There are more missing events. [{}]", stageUuid, session.tag, remainingEvents)
-            stageState = stageState.copy(missingLookup = stageState.missingLookup.map(m =>
-              m.copy(missing = remainingEvents, buffered = uuidRow :: m.buffered)))
-          }
+
+        m.missing.get(rowPersistenceId) match {
+          case Some(missingData) if missingData.missingSequenceNrs.contains(rowTagPidSequenceNr) =>
+            val uuidRow = extractUuidRow(row)
+            val remainingMissingSequenceNrs
+                : Set[TagPidSequenceNr] = missingData.missingSequenceNrs - uuidRow.tagPidSequenceNr
+            val remainingEvents =
+              if (remainingMissingSequenceNrs.isEmpty)
+                m.missing - rowPersistenceId
+              else
+                m.missing.updated(rowPersistenceId, missingData.copy(missingSequenceNrs = remainingMissingSequenceNrs))
+            log.debug(
+              "[{}] {}: Found a missing event, sequence nr {}. Remaining missing: {}",
+              stageUuid,
+              session.tag,
+              uuidRow.tagPidSequenceNr,
+              remainingEvents)
+            if (remainingEvents.isEmpty) {
+              stopLookingForMissing(m, uuidRow :: m.buffered)
+            } else {
+              log.debug("[{}] [{}]: There are more missing events. [{}]", stageUuid, session.tag, remainingEvents)
+              stageState = stageState.copy(missingLookup = stageState.missingLookup.map(m =>
+                m.copy(missing = remainingEvents, buffered = uuidRow :: m.buffered)))
+            }
+          case _ =>
         }
+
       }
 
       private def updateStageState(f: StageState => StageState): Unit =
@@ -493,12 +557,13 @@ import scala.compat.java8.FutureConverters._
             _.copy(missingLookup = Some(LookingForMissing(
               repr :: Nil,
               startingOffset,
+              repr.offset,
               bucket,
               lookInPrevious,
-              repr.offset,
-              repr.persistenceId,
-              repr.tagPidSequenceNr,
-              (1L until repr.tagPidSequenceNr).toSet,
+              Map(repr.persistenceId -> MissingData(
+                startingOffset,
+                repr.tagPidSequenceNr,
+                (1L until repr.tagPidSequenceNr).toSet)),
               gapDetected = false,
               deadline = Deadline.now + settings.eventsByTagNewPersistenceIdScanTimeout))))
           true
@@ -530,12 +595,13 @@ import scala.compat.java8.FutureConverters._
             _.copy(missingLookup = Some(LookingForMissing(
               repr :: Nil,
               lastUUID,
+              repr.offset,
               bucket,
               lookInPrevious,
-              repr.offset,
-              repr.persistenceId,
-              repr.tagPidSequenceNr,
-              (expectedSequenceNr until repr.tagPidSequenceNr).toSet,
+              Map(repr.persistenceId -> MissingData(
+                lastUUID,
+                repr.tagPidSequenceNr,
+                (expectedSequenceNr until repr.tagPidSequenceNr).toSet)),
               gapDetected = true,
               deadline = Deadline.now + settings.eventsByTagGapTimeout))))
           true
@@ -619,7 +685,7 @@ import scala.compat.java8.FutureConverters._
       private def queryExhausted(): Unit = {
         updateQueryState(QueryIdle)
 
-        if (log.isDebugEnabled) {
+        if (verboseDebug && log.isDebugEnabled) {
           log.debug(
             "[{}] Query exhausted, next query: from: {} to: {}",
             stageUuid,
@@ -647,7 +713,7 @@ import scala.compat.java8.FutureConverters._
                 timeLeft.pretty)
               updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => {
                 val newBucket = TimeBucket(m.maxOffset, bucketSize)
-                m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.previousOffset))
+                m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.minOffset))
               })))
 
               // the new persistence-id scan time is typically much smaller than the refresh interval
@@ -670,7 +736,8 @@ import scala.compat.java8.FutureConverters._
             log.debug("[{}] Current query finished and has passed the eventual consistency delay, ending.", stageUuid)
             completeStage()
           } else {
-            log.debug("[{}] Nothing todo, waiting for next poll", stageUuid)
+            if (verboseDebug)
+              log.debug("[{}] Nothing todo, waiting for next poll", stageUuid)
             if (!isLiveQuery()) {
               // As this isn't a live query schedule a poll for now
               log.debug(
@@ -690,9 +757,17 @@ import scala.compat.java8.FutureConverters._
           BufferedEvents(buffered.sortBy(_.tagPidSequenceNr))
         })
         log.debug("[{}] Search over. Sending buffered events. {}", stageUuid, stageState.state)
-        updateStageState(
-          _.copy(fromOffset = m.maxOffset, missingLookup = None)
-            .tagPidSequenceNumberUpdate(m.persistenceId, (m.maxSequenceNr, m.maxOffset, System.currentTimeMillis())))
+
+        // set all the tag pid sequence nrs back to the old value
+        // TODO, why had they been updated? check this is needed
+        updateStageState(oldState => {
+          m.missing.foldLeft(oldState.copy(fromOffset = m.maxOffset, missingLookup = None)) {
+            case (acc, (pid, missingData)) =>
+              acc.tagPidSequenceNumberUpdate(
+                pid,
+                (missingData.maxSequenceNr, missingData.maxOffset, System.currentTimeMillis()))
+          }
+        })
       }
 
       private def fetchMore(rs: AsyncResultSet): Unit = {

@@ -81,6 +81,11 @@ import scala.concurrent.duration._
     case _     => config.getDuration("events-by-tag.cleanup-old-persistence-ids", MILLISECONDS).millis
   }
 
+  val eventsByTagBacktrackInterval: Duration = config.getString("events-by-tag.back-track-interval") match {
+    case "off" => Duration.Inf
+    case _     => config.getDuration("events-by-tag.back-track-interval", MILLISECONDS).millis
+  }
+
   if (eventsByTagCleanUpPersistenceIds != Duration.Inf && eventsByTagCleanUpPersistenceIds.toMillis < (writePluginConfig.bucketSize.durationMillis * 2)) {
     log.warning(
       "cleanup-old-persistence-ids has been set to less than 2 x the bucket size. If a tagged event for a persistence id " +
