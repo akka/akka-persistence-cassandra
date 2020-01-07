@@ -390,20 +390,14 @@ import scala.compat.java8.FutureConverters._
             log.debug("[{}] CurrentQuery: No query polling", stageUuid)
         }
 
-        settings.eventsByTagCleanUpPersistenceIds match {
+        def optionallySchedule(key: Any, duration: Duration): Unit = {
           case duration: FiniteDuration =>
-            log.debug("Dropping metadata for persistence ids every {}", duration.pretty)
             schedulePeriodically(PersistenceIdsCleanup, duration)
           case _ =>
         }
 
-        settings.eventsByTagBacktrackInterval match {
-          case duration: FiniteDuration =>
-            log.debug("Back tracking for delayed events every {}", duration.pretty)
-            schedulePeriodically(ScanForDelayedEvents, duration)
-          case _ =>
-        }
-
+        optionallySchedule(PersistenceIdsCleanup, settings.eventsByTagCleanUpPersistenceIds)
+        optionallySchedule(ScanForDelayedEvents, settings.eventsByTagBacktrackInterval)
       }
 
       @silent("deprecated")
@@ -429,7 +423,10 @@ import scala.compat.java8.FutureConverters._
           updateStageState(_.copy(delayedScanInProgress = true))
           // how far back should this look? The missing search only looks back one bucket so start with that for now
           // but the missing search could be made to go back more buckets
-          val scanFrom = Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
+          val startOfPreviousBucket = Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
+          val scanFrom =
+            if (UUIDComparator.comparator.compare(startOfPreviousBucket, fromOffset) < 0) fromOffset
+            else startOfPreviousBucket
           // to the current from offset to avoid any events being found that will be found by this stage during its querying
           val scanTo = stageState.fromOffset
           // find the max sequence nr for each persistence id up until the current offset, if any of these are

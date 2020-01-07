@@ -47,7 +47,8 @@ private[akka] class TagViewSequenceNumberScanner(session: Session)(
   /**
    * This could be its own stage and return half way through a query to better meet the deadline
    * but this is a quick and simple way to do it given we're scanning a small segment
-   *
+   * @param fromOffset Exclusive
+   * @param toOffset Inclusive
    * @param whichToKeep if multiple tag pid sequence nrs are found for the same tag/pid which to keep
    */
   private[akka] def scan(
