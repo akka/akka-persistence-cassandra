@@ -102,9 +102,12 @@ import scala.compat.java8.FutureConverters._
 
   private sealed trait QueryState
   private case object QueryIdle extends QueryState
-  private final case class QueryInProgress(startTime: Long = System.nanoTime()) extends QueryState
+  private final case class QueryInProgress(abortForMissingSearch: Boolean, startTime: Long = System.nanoTime())
+      extends QueryState
   private final case class QueryResult(resultSet: AsyncResultSet) extends QueryState
-  private final case class BufferedEvents(events: List[UUIDRow]) extends QueryState
+  private final case class BufferedEvents(events: List[UUIDRow]) extends QueryState {
+    override def toString: String = s"BufferedEvents(${events.size})"
+  }
 
   type Offset = UUID
   type MaxSequenceNr = Long
@@ -247,11 +250,17 @@ import scala.compat.java8.FutureConverters._
 
       val newResultSetCb = getAsyncCallback[Try[AsyncResultSet]] {
         case Success(rs) =>
-          if (!stageState.state.isInstanceOf[QueryInProgress]) {
-            throw new IllegalStateException(s"New ResultSet when in unexpected state ${stageState.state}")
+          val queryState = stageState.state match {
+            case qip: QueryInProgress => qip
+            case _ =>
+              throw new IllegalStateException(s"New ResultSet when in unexpected state ${stageState.state}")
           }
-          updateStageState(_.copy(state = QueryResult(rs)))
-          tryPushOne()
+          if (queryState.abortForMissingSearch) {
+            lookForMissing()
+          } else {
+            updateStageState(_.copy(state = QueryResult(rs)))
+            tryPushOne()
+          }
         case Failure(e) =>
           log.warning("Cassandra query failed: {}", e)
           fail(out, e)
@@ -323,6 +332,7 @@ import scala.compat.java8.FutureConverters._
 
                 log.debug("Starting search for: {}", missingPersistenceIdSearch)
 
+                // FIXME test for previous
                 val queryPrevious: Boolean = false
                 updateStageState(
                   state =>
@@ -336,8 +346,13 @@ import scala.compat.java8.FutureConverters._
                       Deadline.now + settings.eventsByTagGapTimeout,
                       gapDetected = true))))
 
-                lookForMissing()
-
+                state.state match {
+                  case qip @ QueryInProgress(_, _) =>
+                    // let the current query finish and then look for missing
+                    updateStageState(_.copy(state = qip.copy(abortForMissingSearch = true)))
+                  case _ =>
+                    lookForMissing()
+                }
               }
             }
           }
@@ -390,9 +405,9 @@ import scala.compat.java8.FutureConverters._
             log.debug("[{}] CurrentQuery: No query polling", stageUuid)
         }
 
-        def optionallySchedule(key: Any, duration: Duration): Unit = {
+        def optionallySchedule(key: Any, duration: Duration): Unit = duration match {
           case duration: FiniteDuration =>
-            schedulePeriodically(PersistenceIdsCleanup, duration)
+            schedulePeriodically(key, duration)
           case _ =>
         }
 
@@ -470,7 +485,7 @@ import scala.compat.java8.FutureConverters._
             formatOffset(stageState.fromOffset),
             formatOffset(stageState.toOffset))
         }
-        updateStageState(_.copy(state = QueryInProgress()))
+        updateStageState(_.copy(state = QueryInProgress(abortForMissingSearch = false)))
         session
           .selectEventsForBucket(stageState.currentTimeBucket, stageState.fromOffset, stageState.toOffset)
           .onComplete(newResultSetCb.invoke)
@@ -488,7 +503,7 @@ import scala.compat.java8.FutureConverters._
         if (missing.deadline.isOverdue()) {
           abortMissingSearch(missing)
         } else {
-          updateQueryState(QueryInProgress())
+          updateQueryState(QueryInProgress(abortForMissingSearch = false))
           if (log.isDebugEnabled) {
             log.debug(
               s"[${stageUuid}] " + s"${session.tag}: Executing query to look for {}. Timebucket: {}. From: {}. To: {}",
@@ -839,7 +854,7 @@ import scala.compat.java8.FutureConverters._
       private def fetchMore(rs: AsyncResultSet): Unit = {
         log.debug("[{}] No more results without paging. Requesting more.", stageUuid)
         val moreResults = rs.fetchNextPage().toScala
-        updateQueryState(QueryInProgress())
+        updateQueryState(QueryInProgress(abortForMissingSearch = false))
         moreResults.onComplete(newResultSetCb.invoke)
       }
 

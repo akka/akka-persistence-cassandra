@@ -1084,16 +1084,23 @@ class EventsByTagSpecBackTracking
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
 
       // bring the offset forward with an event for a new persistence id
-      writeTaggedEvent(today, PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
+      writeTaggedEvent(PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "e1") => e }
 
       // now a delayed events for p1 in the previous bucket
-      writeTaggedEvent(today.minusDays(1), PersistentRepr("e3", 3L, "p1", ""), Set(tagName), 3, bucketSize)
+      writeTaggedEvent(
+        today.minusDays(1).minusHours(1),
+        PersistentRepr("e3", 3L, "p1", ""),
+        Set(tagName),
+        3,
+        bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "e3") => e }
 
       // normal delivery should restart
       writeTaggedEvent(PersistentRepr("e2", 2L, "p2", ""), Set(tagName), 2, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p2", 2L, "e2") => e }
+
+      1 shouldEqual 2
     }
 
     "find new persistence ids that were missed" in {
@@ -1144,8 +1151,34 @@ class EventsByTagSpecBackTracking
       system.log.error("oh dear")
     }
 
-    "work for many delayed events for different persistence ids" in {
-      pending
+    "work for many delayed events for different persistence ids" ignore {
+      val tagName = "back-track-many-persistence-ids"
+      val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(1005)
+      val start = today.minusHours(12)
+      writeTaggedEvent(PersistentRepr("e1", 1L, "not-delayed", ""), Set(tagName), 1, bucketSize)
+      probe.expectNextPF { case e @ EventEnvelope(_, "not-delayed", 1L, "e1") => e }
+
+      (1 until 10).foreach { pid =>
+        (1 until 100).foreach { event =>
+          writeTaggedEvent(
+            start.plusSeconds(event),
+            PersistentRepr(s"e$event", event, s"p$pid", ""),
+            Set(tagName),
+            event,
+            bucketSize)
+        }
+      }
+
+      probe.expectNextN(1000)
+
+      // TODO finish this test
+
+      // normal delivery should restart
+      writeTaggedEvent(PersistentRepr("e2", 2L, "not-delayed", ""), Set(tagName), 2, bucketSize)
+      probe.expectNextPF { case e @ EventEnvelope(_, "not-delayed", 2L, "e2") => e }
+
     }
   }
 
