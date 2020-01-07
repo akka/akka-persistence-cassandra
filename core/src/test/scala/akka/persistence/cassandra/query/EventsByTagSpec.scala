@@ -1099,8 +1099,6 @@ class EventsByTagSpecBackTracking
       // normal delivery should restart
       writeTaggedEvent(PersistentRepr("e2", 2L, "p2", ""), Set(tagName), 2, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p2", 2L, "e2") => e }
-
-      1 shouldEqual 2
     }
 
     "find new persistence ids that were missed" in {
@@ -1147,8 +1145,6 @@ class EventsByTagSpecBackTracking
       // normal delivery should restart
       writeTaggedEvent(PersistentRepr("e2", 2L, "p1", ""), Set(tagName), 2, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
-
-      system.log.error("oh dear")
     }
 
     "work for many delayed events for different persistence ids" ignore {

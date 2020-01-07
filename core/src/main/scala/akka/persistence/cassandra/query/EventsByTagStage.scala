@@ -118,6 +118,9 @@ import scala.compat.java8.FutureConverters._
   }
 
   /**
+   *
+   * @param queryPrevious Should the previous bucket be queries right away. Searches go back one bucket, first the current bucket then
+   *                      the previous bucket. This is repeated every refresh interval.
    * @param gapDetected Whether an explicit gap has been detected e.g. events 1-4 have been seen then the next event is not 5.
    *                    The other scenario is that the first event for a persistence id is not 1, which when starting from an offset
    *                    won't fail the stream as this is normal. However due to the eventual consistency of C* the stream still looks for earlier
@@ -331,21 +334,13 @@ import scala.compat.java8.FutureConverters._
                   })
 
                 log.debug("Starting search for: {}", missingPersistenceIdSearch)
-
-                // FIXME test for previous
-                val queryPrevious: Boolean = false
-                updateStageState(
-                  state =>
-                    state.copy(missingLookup = Some(LookingForMissing(
-                      buffered = existingBufferedEvents,
-                      minOffset, // this is the min of all the missing pids
-                      state.toOffset, // don't go above the current offset
-                      state.currentTimeBucket,
-                      queryPrevious,
-                      missingPersistenceIdSearch,
-                      Deadline.now + settings.eventsByTagGapTimeout,
-                      gapDetected = true))))
-
+                setLookingForMissingState(
+                  existingBufferedEvents,
+                  minOffset,
+                  state.toOffset,
+                  missingPersistenceIdSearch,
+                  true,
+                  settings.eventsByTagGapTimeout)
                 state.state match {
                   case qip @ QueryInProgress(_, _) =>
                     // let the current query finish and then look for missing
@@ -622,21 +617,18 @@ import scala.compat.java8.FutureConverters._
               log.debug("[{}] Starting at startOfBucket", stageUuid)
               previousBucketStart
             }
-          val bucket = TimeBucket(startingOffset, bucketSize)
-          val lookInPrevious = !bucket.within(startingOffset)
-          updateStageState(
-            _.copy(missingLookup = Some(LookingForMissing(
-              repr :: Nil,
+          val missing = Map(
+            repr.persistenceId -> MissingData(
               startingOffset,
-              repr.offset,
-              bucket,
-              lookInPrevious,
-              Map(repr.persistenceId -> MissingData(
-                startingOffset,
-                repr.tagPidSequenceNr,
-                (1L until repr.tagPidSequenceNr).toSet)),
-              gapDetected = false,
-              deadline = Deadline.now + settings.eventsByTagNewPersistenceIdScanTimeout))))
+              repr.tagPidSequenceNr,
+              (1L until repr.tagPidSequenceNr).toSet))
+          setLookingForMissingState(
+            repr :: Nil,
+            startingOffset,
+            repr.offset,
+            missing,
+            explicitGapDetected = false,
+            settings.eventsByTagNewPersistenceIdScanTimeout)
           true
         }
       }
@@ -660,21 +652,18 @@ import scala.compat.java8.FutureConverters._
             pid,
             expectedSequenceNr,
             repr.tagPidSequenceNr)
-          val bucket = TimeBucket(repr.offset, bucketSize)
-          val lookInPrevious = !bucket.within(lastUUID)
-          updateStageState(
-            _.copy(missingLookup = Some(LookingForMissing(
-              repr :: Nil,
+          val missing = Map(
+            repr.persistenceId -> MissingData(
               lastUUID,
-              repr.offset,
-              bucket,
-              lookInPrevious,
-              Map(repr.persistenceId -> MissingData(
-                lastUUID,
-                repr.tagPidSequenceNr,
-                (expectedSequenceNr until repr.tagPidSequenceNr).toSet)),
-              gapDetected = true,
-              deadline = Deadline.now + settings.eventsByTagGapTimeout))))
+              repr.tagPidSequenceNr,
+              (expectedSequenceNr until repr.tagPidSequenceNr).toSet))
+          setLookingForMissingState(
+            repr :: Nil,
+            lastUUID,
+            repr.offset,
+            missing,
+            explicitGapDetected = true,
+            settings.eventsByTagGapTimeout)
           true
         } else {
           // this is per row so put behind a flag. Per query logging is on at debug without this flag
@@ -685,7 +674,6 @@ import scala.compat.java8.FutureConverters._
               pid,
               repr.sequenceNr,
               repr.tagPidSequenceNr)
-
           updateStageState(
             _.copy(fromOffset = repr.offset).tagPidSequenceNumberUpdate(
               repr.persistenceId,
@@ -693,6 +681,32 @@ import scala.compat.java8.FutureConverters._
           push(out, repr)
           false
         }
+      }
+
+      private def setLookingForMissingState(
+          events: List[UUIDRow],
+          fromOffset: UUID,
+          toOffset: UUID,
+          missing: Map[PersistenceId, MissingData],
+          explicitGapDetected: Boolean,
+          timeout: FiniteDuration): Unit = {
+        // Start in the toOffsetBucket as it is considered more likely an event has been missed due to an event
+        // being delayed slightly rather than by a full bucket
+        val bucket = TimeBucket(toOffset, bucketSize)
+        // Could the event be in the previous bucket?
+        val lookInPrevious = !bucket.within(toOffset)
+        updateStageState(
+          _.copy(
+            missingLookup = Some(
+              LookingForMissing(
+                events,
+                fromOffset,
+                toOffset,
+                bucket,
+                lookInPrevious,
+                missing,
+                Deadline.now + timeout,
+                explicitGapDetected))))
       }
 
       @tailrec def tryPushOne(): Unit =
