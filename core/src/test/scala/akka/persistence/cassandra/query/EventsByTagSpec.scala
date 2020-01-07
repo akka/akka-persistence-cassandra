@@ -1069,6 +1069,8 @@ class EventsByTagSpecBackTracking
       // normal delivery should restart
       writeTaggedEvent(PersistentRepr("e2", 2L, "p2", ""), Set("back-track"), 2, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p2", 2L, "e2") => e }
+      writeTaggedEvent(PersistentRepr("e6", 6L, "p1", ""), Set("back-track"), 6, bucketSize)
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 6L, "e6") => e }
     }
 
     "work for for delayed events in the previous bucket" in {
@@ -1147,7 +1149,7 @@ class EventsByTagSpecBackTracking
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
     }
 
-    "work for many delayed events for different persistence ids" ignore {
+    "work for many delayed events for different persistence ids" in {
       val tagName = "back-track-many-persistence-ids"
       val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
@@ -1156,8 +1158,14 @@ class EventsByTagSpecBackTracking
       writeTaggedEvent(PersistentRepr("e1", 1L, "not-delayed", ""), Set(tagName), 1, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "not-delayed", 1L, "e1") => e }
 
-      (1 until 10).foreach { pid =>
-        (1 until 100).foreach { event =>
+      val nrPids = 10
+      val nrEvents = 5
+      // all events for the same persistence id should come in order, but no deterministic order
+      // between persistence ids as they may be found in different searches
+      var currentSequenceNrs: Map[String, Long] = (1 to nrPids).map(i => (s"p$i", 0L)).toMap
+
+      (1 to nrPids).foreach { pid =>
+        (1 to nrEvents).foreach { event =>
           writeTaggedEvent(
             start.plusSeconds(event),
             PersistentRepr(s"e$event", event, s"p$pid", ""),
@@ -1167,14 +1175,44 @@ class EventsByTagSpecBackTracking
         }
       }
 
-      probe.expectNextN(1000)
-
-      // TODO finish this test
+      (1 to (nrPids * nrEvents)).foreach { _ =>
+        val next = probe.expectNextPF { case e @ EventEnvelope(_, _, _, _) => e }
+        val expectedSequenceNr = currentSequenceNrs(next.persistenceId) + 1
+        withClue(
+          s"Expected sequence nr ${expectedSequenceNr} got ${next.sequenceNr} for persistence id ${next.persistenceId}") {
+          expectedSequenceNr shouldEqual next.sequenceNr
+          currentSequenceNrs = currentSequenceNrs.updated(next.persistenceId, next.sequenceNr)
+        }
+      }
 
       // normal delivery should restart
       writeTaggedEvent(PersistentRepr("e2", 2L, "not-delayed", ""), Set(tagName), 2, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "not-delayed", 2L, "e2") => e }
 
+      // do it all again
+      (1 to nrPids).foreach { pid =>
+        ((nrEvents + 1) to (nrEvents * 2)).foreach { event =>
+          writeTaggedEvent(
+            start.plusSeconds(event),
+            PersistentRepr(s"e$event", event, s"p$pid", ""),
+            Set(tagName),
+            event,
+            bucketSize)
+        }
+      }
+      (1 to (nrPids * nrEvents)).foreach { _ =>
+        val next = probe.expectNextPF { case e @ EventEnvelope(_, _, _, _) => e }
+        val expectedSequenceNr = currentSequenceNrs(next.persistenceId) + 1
+        withClue(
+          s"Expected sequence nr ${expectedSequenceNr} got ${next.sequenceNr} for persistence id ${next.persistenceId}") {
+          expectedSequenceNr shouldEqual next.sequenceNr
+          currentSequenceNrs = currentSequenceNrs.updated(next.persistenceId, next.sequenceNr)
+        }
+      }
+
+      // normal delivery should restart
+      writeTaggedEvent(PersistentRepr("e3", 3L, "not-delayed", ""), Set(tagName), 3, bucketSize)
+      probe.expectNextPF { case e @ EventEnvelope(_, "not-delayed", 3L, "e3") => e }
     }
   }
 

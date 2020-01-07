@@ -112,10 +112,7 @@ import scala.compat.java8.FutureConverters._
   type Offset = UUID
   type MaxSequenceNr = Long
 
-  case class MissingData(maxOffset: UUID, maxSequenceNr: TagPidSequenceNr, missingSequenceNrs: Set[Long]) {
-    override def toString: String =
-      s"MissingData(maxOffset=${formatOffset(maxOffset)}, missingSequenceNrs: ${missingSequenceNrs.mkString("[", ",", "]")})"
-  }
+  case class MissingData(maxOffset: UUID, maxSequenceNr: TagPidSequenceNr)
 
   /**
    *
@@ -127,20 +124,21 @@ import scala.compat.java8.FutureConverters._
    *                    events for a short time.
    */
   private final case class LookingForMissing(
-      buffered: List[UUIDRow], // TODO, set a max on this
+      buffered: List[UUIDRow],
       minOffset: UUID,
       maxOffset: UUID,
       bucket: TimeBucket,
       queryPrevious: Boolean,
-      missing: Map[PersistenceId, MissingData],
+      missingData: Map[PersistenceId, MissingData],
+      remainingMissing: Map[PersistenceId, Set[Long]],
       deadline: Deadline,
       gapDetected: Boolean) {
 
     // don't include buffered in the toString
     override def toString =
       s"LookingForMissing{min=$minOffset maxOffset=$maxOffset bucket=$bucket " +
-      s"queryPrevious=$queryPrevious searchingFor=${missing} " +
-      s"missing=$missing deadline=$deadline gapDetected=$gapDetected"
+      s"queryPrevious=$queryPrevious searchingFor=${remainingMissing} " +
+      s"missing=$remainingMissing deadline=$deadline gapDetected=$gapDetected"
   }
 
   private case object QueryPoll
@@ -265,7 +263,7 @@ import scala.compat.java8.FutureConverters._
             tryPushOne()
           }
         case Failure(e) =>
-          log.warning("Cassandra query failed: {}", e)
+          log.warning("Cassandra query failed: {}", e.getMessage)
           fail(out, e)
       }
 
@@ -278,7 +276,7 @@ import scala.compat.java8.FutureConverters._
           log.debug("Current sequence nrs: {} from back tracking: {}", stageState.tagPidSequenceNrs, sequenceNrs)
 
           val withDelayedEvents: Map[PersistenceId, (TagPidSequenceNr, Offset)] = sequenceNrs.filter {
-            case (pid, (tagPidSequenceNr, offset)) =>
+            case (pid, (tagPidSequenceNr, _)) =>
               stageState.tagPidSequenceNrs.get(pid) match {
                 case Some((currentTagPidSequenceNr, _, _)) if currentTagPidSequenceNr < tagPidSequenceNr =>
                   // the current can be bigger than the scanned sequence nrs as the stage continues quiering
@@ -311,17 +309,19 @@ import scala.compat.java8.FutureConverters._
                   case _                      => Nil
                 }
 
-                val missingPersistenceIdSearch = withDelayedEvents.transform {
-                  case (delayedPid, (delayedMaxTagPidSequenceNr, delayedMaxOffset)) =>
+                val missingData = withDelayedEvents.transform {
+                  case (_, (delayedMaxTagPidSequenceNr, delayedMaxOffset)) =>
+                    MissingData(delayedMaxOffset, delayedMaxTagPidSequenceNr)
+                }
+
+                val missingSequenceNrs = withDelayedEvents.transform {
+                  case (delayedPid, (delayedMaxTagPidSequenceNr, _)) =>
                     val fromSeqNr: Long = stageState.tagPidSequenceNrs.get(delayedPid).map(_._1).getOrElse(0L) + 1L
-                    MissingData(
-                      delayedMaxOffset,
-                      delayedMaxTagPidSequenceNr,
-                      (fromSeqNr to delayedMaxTagPidSequenceNr).toSet)
+                    (fromSeqNr to delayedMaxTagPidSequenceNr).toSet
                 }
 
                 val minOffset =
-                  Uuids.startOf(missingPersistenceIdSearch.keys.foldLeft(Uuids.unixTimestamp(state.toOffset)) {
+                  Uuids.startOf(missingData.keys.foldLeft(Uuids.unixTimestamp(state.toOffset)) {
                     case (acc, pid) =>
                       math.min(
                         state.tagPidSequenceNrs
@@ -333,13 +333,14 @@ import scala.compat.java8.FutureConverters._
                         acc)
                   })
 
-                log.debug("Starting search for: {}", missingPersistenceIdSearch)
+                log.debug("Starting search for: {}", missingSequenceNrs)
                 setLookingForMissingState(
                   existingBufferedEvents,
                   minOffset,
                   state.toOffset,
-                  missingPersistenceIdSearch,
-                  true,
+                  missingData,
+                  missingSequenceNrs,
+                  explicitGapDetected = true,
                   settings.eventsByTagGapTimeout)
                 state.state match {
                   case qip @ QueryInProgress(_, _) =>
@@ -354,9 +355,9 @@ import scala.compat.java8.FutureConverters._
       }
 
       override def preStart(): Unit = {
-        stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs.mapValues {
-          case (tagPidSequenceNr, offset) => (tagPidSequenceNr, offset, System.currentTimeMillis())
-        }.toMap, delayedScanInProgress = false, None, bucketSize)
+        stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs.transform {
+          case (_, (tagPidSequenceNr, offset)) => (tagPidSequenceNr, offset, System.currentTimeMillis())
+        }, delayedScanInProgress = false, None, bucketSize)
         if (log.isInfoEnabled) {
           log.info(
             s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset [{}] toOffset [{}]",
@@ -515,13 +516,13 @@ import scala.compat.java8.FutureConverters._
 
       private def abortMissingSearch(missing: LookingForMissing): Unit = {
         if (missing.gapDetected) {
-          fail(out, new MissingTaggedEventException(session.tag, missing.missing))
+          fail(out, new MissingTaggedEventException(session.tag, missing.missingData))
         } else {
           log.debug(
             "[{}] [{}]: Finished scanning for older events for persistence ids [{}]",
             stageUuid,
             session.tag,
-            missing.missing.keys.mkString(","))
+            missing.remainingMissing.keys.mkString(","))
           stopLookingForMissing(missing, missing.buffered)
           tryPushOne()
         }
@@ -533,28 +534,29 @@ import scala.compat.java8.FutureConverters._
         val rowPersistenceId = row.getString("persistence_id")
         val rowTagPidSequenceNr = row.getLong("tag_pid_sequence_nr")
 
-        m.missing.get(rowPersistenceId) match {
-          case Some(missingData) if missingData.missingSequenceNrs.contains(rowTagPidSequenceNr) =>
+        m.remainingMissing.get(rowPersistenceId) match {
+          case Some(remainingMissing) if remainingMissing.contains(rowTagPidSequenceNr) =>
             val uuidRow = extractUuidRow(row)
-            val remainingMissingSequenceNrs
-                : Set[TagPidSequenceNr] = missingData.missingSequenceNrs - uuidRow.tagPidSequenceNr
+            val remainingMissingSequenceNrs = remainingMissing - uuidRow.tagPidSequenceNr
             val remainingEvents =
               if (remainingMissingSequenceNrs.isEmpty)
-                m.missing - rowPersistenceId
+                m.remainingMissing - rowPersistenceId
               else
-                m.missing.updated(rowPersistenceId, missingData.copy(missingSequenceNrs = remainingMissingSequenceNrs))
-            log.debug(
-              "[{}] {}: Found a missing event, sequence nr {}. Remaining missing: {}",
-              stageUuid,
-              session.tag,
-              uuidRow.tagPidSequenceNr,
-              remainingEvents)
+                m.remainingMissing.updated(rowPersistenceId, remainingMissingSequenceNrs)
+            if (verboseDebug) {
+              log.debug(
+                "[{}] {}: Found a missing event, sequence nr {}. Remaining missing: {}",
+                stageUuid,
+                session.tag,
+                uuidRow.tagPidSequenceNr,
+                remainingEvents)
+            }
             if (remainingEvents.isEmpty) {
               stopLookingForMissing(m, uuidRow :: m.buffered)
             } else {
               log.debug("[{}] [{}]: There are more missing events. [{}]", stageUuid, session.tag, remainingEvents)
               stageState = stageState.copy(missingLookup = stageState.missingLookup.map(m =>
-                m.copy(missing = remainingEvents, buffered = uuidRow :: m.buffered)))
+                m.copy(remainingMissing = remainingEvents, buffered = uuidRow :: m.buffered)))
             }
           case _ =>
         }
@@ -617,16 +619,14 @@ import scala.compat.java8.FutureConverters._
               log.debug("[{}] Starting at startOfBucket", stageUuid)
               previousBucketStart
             }
-          val missing = Map(
-            repr.persistenceId -> MissingData(
-              startingOffset,
-              repr.tagPidSequenceNr,
-              (1L until repr.tagPidSequenceNr).toSet))
+          val missinfData = Map(repr.persistenceId -> MissingData(repr.offset, repr.tagPidSequenceNr))
+
           setLookingForMissingState(
             repr :: Nil,
             startingOffset,
             repr.offset,
-            missing,
+            missinfData,
+            Map(repr.persistenceId -> (1L until repr.tagPidSequenceNr).toSet),
             explicitGapDetected = false,
             settings.eventsByTagNewPersistenceIdScanTimeout)
           true
@@ -652,16 +652,13 @@ import scala.compat.java8.FutureConverters._
             pid,
             expectedSequenceNr,
             repr.tagPidSequenceNr)
-          val missing = Map(
-            repr.persistenceId -> MissingData(
-              lastUUID,
-              repr.tagPidSequenceNr,
-              (expectedSequenceNr until repr.tagPidSequenceNr).toSet))
+          val missingData = Map(repr.persistenceId -> MissingData(repr.offset, repr.tagPidSequenceNr))
           setLookingForMissingState(
             repr :: Nil,
             lastUUID,
             repr.offset,
-            missing,
+            missingData,
+            Map(repr.persistenceId -> (expectedSequenceNr until repr.tagPidSequenceNr).toSet),
             explicitGapDetected = true,
             settings.eventsByTagGapTimeout)
           true
@@ -687,7 +684,8 @@ import scala.compat.java8.FutureConverters._
           events: List[UUIDRow],
           fromOffset: UUID,
           toOffset: UUID,
-          missing: Map[PersistenceId, MissingData],
+          missingOffsets: Map[PersistenceId, MissingData],
+          missingSequenceNrs: Map[PersistenceId, Set[Long]],
           explicitGapDetected: Boolean,
           timeout: FiniteDuration): Unit = {
         // Start in the toOffsetBucket as it is considered more likely an event has been missed due to an event
@@ -704,7 +702,8 @@ import scala.compat.java8.FutureConverters._
                 toOffset,
                 bucket,
                 lookInPrevious,
-                missing,
+                missingOffsets,
+                missingSequenceNrs,
                 Deadline.now + timeout,
                 explicitGapDetected))))
       }
@@ -745,7 +744,8 @@ import scala.compat.java8.FutureConverters._
               log.debug("[{}] Fully fetched, getting more for next pull (not implemented yet)", stageUuid)
             }
           case BufferedEvents(events) if isAvailable(out) =>
-            log.debug("[{}] Pushing buffered event", stageUuid)
+            if (verboseDebug)
+              log.debug("[{}] Pushing buffered event", stageUuid)
             events match {
               case Nil =>
                 continue()
@@ -760,11 +760,12 @@ import scala.compat.java8.FutureConverters._
             }
 
           case _ =>
-            log.debug(
-              "[{}] Trying to push one but no query results currently {} or demand {}",
-              stageUuid,
-              stageState.state,
-              isAvailable(out))
+            if (verboseDebug)
+              log.debug(
+                "[{}] Trying to push one but no query results currently {} or demand {}",
+                stageUuid,
+                stageState.state,
+                isAvailable(out))
         }
 
       private def queryExhausted(): Unit = {
@@ -851,13 +852,14 @@ import scala.compat.java8.FutureConverters._
         } else {
           BufferedEvents(buffered.sorted(uuidRowOrdering))
         })
-        log.debug("[{}] Search over. Sending buffered events. {}", stageUuid, stageState.state)
+        log.debug("[{}] Search over. Buffered events ready for delivery: {}", stageUuid, stageState.state)
 
-        // set all the tag pid sequence nrs back to the old value
-        // TODO, why had they been updated? check this is needed
+        // set all the tag pid sequence nrs to the offset of the events found in the missing search. This is important
+        // if another delayed event scan happens before all the events are delivered
         updateStageState(oldState => {
-          m.missing.foldLeft(oldState.copy(fromOffset = m.maxOffset, missingLookup = None)) {
+          m.missingData.foldLeft(oldState.copy(fromOffset = m.maxOffset, missingLookup = None)) {
             case (acc, (pid, missingData)) =>
+              log.debug("Updating tag pid sequence nr for pid {} to {}", pid, missingData.maxSequenceNr)
               acc.tagPidSequenceNumberUpdate(
                 pid,
                 (missingData.maxSequenceNr, missingData.maxOffset, System.currentTimeMillis()))
