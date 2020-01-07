@@ -21,6 +21,7 @@ import akka.serialization.SerializationExtension
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 import EventsByTagSpec._
+import akka.event.Logging
 import akka.testkit.TestProbe
 import com.datastax.oss.driver.api.core.CqlIdentifier
 import com.datastax.oss.driver.api.core.uuid.Uuids
@@ -134,7 +135,7 @@ class ColorFruitTagger extends WriteEventAdapter {
   override def manifest(event: Any): String = ""
 }
 
-abstract class AbstractEventsByTagSpec(config: Config, checkLogMessages: Boolean = true)
+abstract class AbstractEventsByTagSpec(config: Config)
     extends CassandraSpec(config)
     with BeforeAndAfterEach
     with TestTagWriter {
@@ -153,15 +154,20 @@ abstract class AbstractEventsByTagSpec(config: Config, checkLogMessages: Boolean
   }
 
   val logProbe = TestProbe()
-  if (checkLogMessages) {
-    system.eventStream.subscribe(logProbe.ref, classOf[Warning])
-    system.eventStream.subscribe(logProbe.ref, classOf[Error])
+  system.eventStream.subscribe(logProbe.ref, classOf[Warning])
+  system.eventStream.subscribe(logProbe.ref, classOf[Logging.Error])
+
+  /**
+   * By default all warnings and errors are considered a failure
+   */
+  protected val logCheck: PartialFunction[Any, Any] = {
+    case msg => msg
   }
 
   override protected def afterEach(): Unit = {
     // check for the buffer exceeded log (and other issues)
-    if (checkLogMessages)
-      logProbe.expectNoMessage(waitTime)
+    val messages = logProbe.receiveWhile(waitTime)(logCheck)
+    messages shouldEqual Nil
     super.afterEach()
   }
 }
@@ -424,9 +430,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       })
     }
 
-    // note that the test below works if another event from p2 to come
-    // then we go back and look for e1 from p1
-    "sort events by timestamp" ignore {
+    "sort events by timestamp" in {
       val t1 = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10)
       val w1 = UUID.randomUUID().toString
       val w2 = UUID.randomUUID().toString
@@ -789,9 +793,7 @@ class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
 
 class EventsByTagLongRefreshIntervalSpec
     extends AbstractEventsByTagSpec(
-      ConfigFactory
-        .parseString(
-          """
+      ConfigFactory.parseString("""
      akka.loglevel = INFO 
      cassandra-query-journal {
       refresh-interval = 10s # set large enough so that it will fail the test if a refresh is required to continue the stream
@@ -801,10 +803,12 @@ class EventsByTagLongRefreshIntervalSpec
         eventual-consistency-delay = 0ms  # speed up the test
       }
     } 
-     """)
-        .withFallback(config),
-      // warnings about EC being set too low
-      checkLogMessages = false) {
+     """).withFallback(config)) {
+
+  override protected val logCheck: PartialFunction[Any, Any] = {
+    case m: Warning if !m.message.toString.contains("eventual consistency set below 1 second") => m
+    case m: Logging.Error                                                                      => m
+  }
 
   "only look for new-persistence-id timeout for previous events for new persistence ids" in {
     val pid = "test-new-pid"
@@ -1030,14 +1034,13 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
 }
 
 class EventsByTagSpecBackTracking
-    extends AbstractEventsByTagSpec(
-      ConfigFactory.parseString("""
+    extends AbstractEventsByTagSpec(ConfigFactory.parseString("""
     cassandra-query-journal.events-by-tag {
       back-track-interval = 3s
       eventual-consistency-delay = 100ms
     }
-    """).withFallback(config),
-      false) {
+    """).withFallback(config)) {
+
   "Delayed events" must {
     "be found even if there are no more events for that persistence id" in {
 
@@ -1112,17 +1115,43 @@ class EventsByTagSpecBackTracking
       // normal delivery should restart
       writeTaggedEvent(PersistentRepr("e3", 3L, "p1", ""), Set(tagName), 3, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "e3") => e }
-
-      1 shouldEqual 2
     }
 
     "sort delayed events by timeuuid" in {
-      pending
+      val tagName = "back-track-sort-delayed-events"
+      val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+      writeTaggedEvent(PersistentRepr("e1", 1L, "p1", ""), Set(tagName), 1, bucketSize)
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
+
+      // now a delayed events for p2 in the previous bucket and the current bucket
+      writeTaggedEvent(today.minusHours(4), PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
+      writeTaggedEvent(today.minusHours(2), PersistentRepr("e2", 2L, "p2", ""), Set(tagName), 2, bucketSize)
+
+      writeTaggedEvent(today.minusHours(3), PersistentRepr("e1", 1L, "p3", ""), Set(tagName), 1, bucketSize)
+      writeTaggedEvent(today.minusHours(1), PersistentRepr("e2", 2L, "p3", ""), Set(tagName), 2, bucketSize)
+
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p3", 1L, "e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 2L, "e2") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p3", 2L, "e2") => e }
+
+      // normal delivery should restart
+      writeTaggedEvent(PersistentRepr("e2", 2L, "p1", ""), Set(tagName), 2, bucketSize)
+      probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
+
+      system.log.error("oh dear")
     }
 
     "work for many delayed events for different persistence ids" in {
       pending
     }
+  }
+
+  override protected val logCheck: PartialFunction[Any, Any] = {
+    case m: Warning if !m.message.toString.contains("eventual consistency set below 1 second") => m
+    case m: Logging.Error                                                                      => m
   }
 }
 
@@ -1146,11 +1175,17 @@ object EventsByTagDisabledSpec {
   def props(pid: String): Props = Props(new CounterActor(pid))
 }
 
-class EventsByTagPersistenceIfCleanupSpec
-    extends AbstractEventsByTagSpec(EventsByTagSpec.persistenceIdCleanupConfig, false) {
+class EventsByTagPersistenceIfCleanupSpec extends AbstractEventsByTagSpec(EventsByTagSpec.persistenceIdCleanupConfig) {
 
   val newPersistenceIdScan: FiniteDuration = 500.millis
   val cleanupPeriod: FiniteDuration = 1.second
+
+  val logFilters = Set("cleanup-old-persistence-ids has been set")
+
+  override protected val logCheck: PartialFunction[Any, Any] = {
+    case m: Warning if !logFilters.exists(exclude => m.message.toString.contains(exclude)) => m
+    case m: Logging.Error                                                                  => m
+  }
 
   "PersistenceId cleanup" must {
     "drop state and trigger new persistence id lookup peridodically" in {

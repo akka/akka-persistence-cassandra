@@ -494,7 +494,7 @@ class EventsByTagStageSpec
       val tag = "LiveMissingEventsInPreviousBucket"
       val nowTime = LocalDateTime.now(ZoneOffset.UTC)
       val twoBucketsAgo = nowTime.minusMinutes(2)
-      val lastBucket = nowTime.minusMinutes(1)
+      val lastBucket: LocalDateTime = nowTime.minusMinutes(1)
       val thisBucket = nowTime
 
       writeTaggedEvent(twoBucketsAgo, PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, bucketSize)

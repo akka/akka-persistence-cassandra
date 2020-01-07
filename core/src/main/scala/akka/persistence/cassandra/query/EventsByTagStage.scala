@@ -259,11 +259,11 @@ import scala.compat.java8.FutureConverters._
 
       val backTrackCb = getAsyncCallback[Try[Map[PersistenceId, (TagPidSequenceNr, UUID)]]] {
         case Failure(e) =>
+          updateStageState(_.copy(delayedScanInProgress = false))
           log.warning("Backtrack failed, this will retried", e)
         case Success(sequenceNrs) =>
-          log.info("Current sequence nrs: {} from back tracking: {}", stageState.tagPidSequenceNrs, sequenceNrs)
-
-          // check all the sequence numbers are correct
+          updateStageState(_.copy(delayedScanInProgress = false))
+          log.debug("Current sequence nrs: {} from back tracking: {}", stageState.tagPidSequenceNrs, sequenceNrs)
 
           val withDelayedEvents: Map[PersistenceId, (TagPidSequenceNr, Offset)] = sequenceNrs.filter {
             case (pid, (tagPidSequenceNr, offset)) =>
@@ -280,6 +280,11 @@ import scala.compat.java8.FutureConverters._
               }
           }
 
+          // TODO: the looking for missing currently tries to find all the events that are missing. What if there is
+          // a large number? Could either fail or change the missing search to find them in chunks and deliver them,
+          // this would mean changing the missing search to find them in order, right now all missing events are found
+          // and then sorted then delivered.
+
           if (withDelayedEvents.nonEmpty) {
             log.info(
               "The following persistence ids have delayed events: {}. Initiating search for the events.",
@@ -289,61 +294,53 @@ import scala.compat.java8.FutureConverters._
               case state if state.isLookingForMissing =>
                 log.debug("Missing search already triggered by new events")
               case state => {
-                state.state match {
-                  case QueryIdle =>
-                    // TODO test for when it is in the previous bucket
-
-                    val missingPersistenceIdSearch = withDelayedEvents.transform {
-                      case (delayedPid, (delayedMaxTagPidSequenceNr, delayedMaxOffset)) =>
-                        val fromSeqNr: Long = stageState.tagPidSequenceNrs.get(delayedPid).map(_._1).getOrElse(0L) + 1L
-                        MissingData(
-                          delayedMaxOffset,
-                          delayedMaxTagPidSequenceNr,
-                          (fromSeqNr to delayedMaxTagPidSequenceNr).toSet)
-                    }
-
-                    val minOffset =
-                      Uuids.startOf(missingPersistenceIdSearch.keys.foldLeft(Uuids.unixTimestamp(state.toOffset)) {
-                        case (acc, pid) =>
-                          math.min(
-                            state.tagPidSequenceNrs
-                              .get(pid)
-                              .map(t => Uuids.unixTimestamp(t._2))
-                              .getOrElse(
-                                // for new persistence ids look all the way back to the start of the previous bucket
-                                state.currentTimeBucket.previous(1).key),
-                            acc)
-                      })
-
-                    log.info("Caluclated missing search: {}", missingPersistenceIdSearch)
-
-                    val queryPrevious: Boolean = false
-                    updateStageState(
-                      state =>
-                        state.copy(missingLookup = Some(LookingForMissing(
-                          buffered = Nil,
-                          minOffset, // this will be the min of all the missing pids
-                          state.toOffset, // don't go above the current offset
-                          state.currentTimeBucket,
-                          queryPrevious,
-                          missingPersistenceIdSearch,
-                          Deadline.now + settings.eventsByTagGapTimeout,
-                          gapDetected = true))))
-
-                    lookForMissing()
-
-                  case QueryInProgress(startTime) =>
-                  // ignore the result of that query and do to search
-                  case QueryResult(resultSet) =>
-                  // drop the existing result set and go do a search
-                  case BufferedEvents(events) =>
-                  // buffered events from a previous search for missing, should we drop them or keep them and add them
-                  // to the new list? Should we still deliver events
+                val existingBufferedEvents = state.state match {
+                  case BufferedEvents(events) => events
+                  case _                      => Nil
                 }
+
+                val missingPersistenceIdSearch = withDelayedEvents.transform {
+                  case (delayedPid, (delayedMaxTagPidSequenceNr, delayedMaxOffset)) =>
+                    val fromSeqNr: Long = stageState.tagPidSequenceNrs.get(delayedPid).map(_._1).getOrElse(0L) + 1L
+                    MissingData(
+                      delayedMaxOffset,
+                      delayedMaxTagPidSequenceNr,
+                      (fromSeqNr to delayedMaxTagPidSequenceNr).toSet)
+                }
+
+                val minOffset =
+                  Uuids.startOf(missingPersistenceIdSearch.keys.foldLeft(Uuids.unixTimestamp(state.toOffset)) {
+                    case (acc, pid) =>
+                      math.min(
+                        state.tagPidSequenceNrs
+                          .get(pid)
+                          .map(t => Uuids.unixTimestamp(t._2))
+                          .getOrElse(
+                            // for new persistence ids look all the way back to the start of the previous bucket
+                            state.currentTimeBucket.previous(1).key),
+                        acc)
+                  })
+
+                log.debug("Starting search for: {}", missingPersistenceIdSearch)
+
+                val queryPrevious: Boolean = false
+                updateStageState(
+                  state =>
+                    state.copy(missingLookup = Some(LookingForMissing(
+                      buffered = existingBufferedEvents,
+                      minOffset, // this is the min of all the missing pids
+                      state.toOffset, // don't go above the current offset
+                      state.currentTimeBucket,
+                      queryPrevious,
+                      missingPersistenceIdSearch,
+                      Deadline.now + settings.eventsByTagGapTimeout,
+                      gapDetected = true))))
+
+                lookForMissing()
+
               }
             }
           }
-        // a new persistence id we've never seen
       }
 
       override def preStart(): Unit = {
@@ -429,16 +426,15 @@ import scala.compat.java8.FutureConverters._
 
       private def scanForDelayedEvents(): Unit = {
         if (!stageState.delayedScanInProgress) {
-          // TODO validate the exclusivity of these
+          updateStageState(_.copy(delayedScanInProgress = true))
           // how far back should this look? The missing search only looks back one bucket so start with that for now
           // but the missing search could be made to go back more buckets
           val scanFrom = Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
           // to the current from offset to avoid any events being found that will be found by this stage during its querying
           val scanTo = stageState.fromOffset
-
           // find the max sequence nr for each persistence id up until the current offset, if any of these are
           // higher than the current sequence nr for each persistence id they have been missed due to a delay with
-          // eventual consistency set too low
+          // eventual consistency set too low or events being delayed significantly
           scanner
             .scan(session.tag, scanFrom, scanTo, bucketSize, Duration.Zero, math.max)
             .onComplete(backTrackCb.invoke)
@@ -813,12 +809,21 @@ import scala.compat.java8.FutureConverters._
         }
       }
 
+      private val uuidRowOrdering = new Ordering[UUIDRow] {
+        override def compare(x: UUIDRow, y: UUIDRow): Int = {
+          val offsetCompare = UUIDComparator.comparator.compare(x.offset, y.offset)
+          if (offsetCompare == 0)
+            Ordering.Long.compare(x.tagPidSequenceNr, y.tagPidSequenceNr)
+          else
+            offsetCompare
+        }
+      }
+
       private def stopLookingForMissing(m: LookingForMissing, buffered: List[UUIDRow]): Unit = {
         updateQueryState(if (buffered.isEmpty) {
           QueryIdle
         } else {
-          // FIXME, this is no longer valid as they aren't for the same persistence id
-          BufferedEvents(buffered.sortBy(_.tagPidSequenceNr))
+          BufferedEvents(buffered.sorted(uuidRowOrdering))
         })
         log.debug("[{}] Search over. Sending buffered events. {}", stageUuid, stageState.state)
 
