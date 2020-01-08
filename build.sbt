@@ -18,10 +18,8 @@ lazy val core = (project in file("core"))
     val silencerVersion = "1.4.4"
     Seq(
       libraryDependencies ++= Seq(
-          compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
-          "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided),
-      // Hack because 'provided' dependencies by default are not picked up by the multi-jvm plugin:
-      managedClasspath in MultiJvm ++= (managedClasspath in Compile).value.filter(_.data.name.contains("silencer-lib")))
+          compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
+          ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).cross(CrossVersion.patch)))
   })
   .settings(
     name := "akka-persistence-cassandra",
