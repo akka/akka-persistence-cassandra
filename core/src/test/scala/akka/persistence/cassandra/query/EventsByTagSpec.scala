@@ -1036,7 +1036,9 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
 class EventsByTagSpecBackTracking
     extends AbstractEventsByTagSpec(ConfigFactory.parseString("""
     cassandra-query-journal.events-by-tag {
-      back-track-interval = 3s
+      back-track {
+        period = 2d
+      }
       eventual-consistency-delay = 100ms
     }
     """).withFallback(config)) {

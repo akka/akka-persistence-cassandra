@@ -12,9 +12,19 @@ import akka.cassandra.session.CqlSessionProvider
 import akka.event.Logging
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.{ BackTrackConfig, Fixed, Max }
 import com.typesafe.config.Config
 
 import scala.concurrent.duration._
+
+object CassandraReadJournalConfig {
+
+  sealed trait Period
+  case object Max extends Period
+  case class Fixed(duration: Duration) extends Period
+
+  case class BackTrackConfig(interval: Duration, period: Period)
+}
 
 /**
  * INTERNAL API
@@ -35,8 +45,8 @@ import scala.concurrent.duration._
   val refreshInterval: FiniteDuration =
     config.getDuration("refresh-interval", MILLISECONDS).millis
 
-  val gapFreeSequenceNumbers: Boolean =
-    config.getBoolean("gap-free-sequence-numbers")
+  val gapFreeSequenceNumbers: Boolean = config.getBoolean("gap-free-sequence-numbers")
+
   val maxBufferSize: Int = config.getInt("max-buffer-size")
 
   val firstTimeBucket: TimeBucket = {
@@ -53,8 +63,7 @@ import scala.concurrent.duration._
     TimeBucket(date.toInstant(ZoneOffset.UTC).toEpochMilli, writePluginConfig.bucketSize)
   }
 
-  val deserializationParallelism: Int =
-    config.getInt("deserialization-parallelism")
+  val deserializationParallelism: Int = config.getInt("deserialization-parallelism")
 
   val pluginDispatcher: String = config.getString("plugin-dispatcher")
 
@@ -81,10 +90,13 @@ import scala.concurrent.duration._
     case _     => config.getDuration("events-by-tag.cleanup-old-persistence-ids", MILLISECONDS).millis
   }
 
-  val eventsByTagBacktrackInterval: Duration = config.getString("events-by-tag.back-track-interval") match {
+  val eventsByTagBacktrack = BackTrackConfig(config.getString("events-by-tag.back-track.interval") match {
     case "off" => Duration.Inf
-    case _     => config.getDuration("events-by-tag.back-track-interval", MILLISECONDS).millis
-  }
+    case _     => config.getDuration("events-by-tag.back-track.interval", MILLISECONDS).millis
+  }, config.getString("events-by-tag.back-track.period") match {
+    case "max" => Max
+    case _     => Fixed(config.getDuration("events-by-tag.back-track.period", MILLISECONDS).millis)
+  })
 
   if (eventsByTagCleanUpPersistenceIds != Duration.Inf && eventsByTagCleanUpPersistenceIds.toMillis < (writePluginConfig.bucketSize.durationMillis * 2)) {
     log.warning(

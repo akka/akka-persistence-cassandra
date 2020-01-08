@@ -24,6 +24,7 @@ import java.lang.{ Long => JLong }
 
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.journal.CassandraJournal._
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.{ Fixed, Max }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
@@ -187,7 +188,7 @@ import scala.compat.java8.FutureConverters._
 
 @InternalApi private[akka] class EventsByTagStage(
     session: TagStageSession,
-    fromOffset: UUID,
+    initialQueryOffset: UUID,
     toOffset: Option[UUID],
     settings: CassandraReadJournalConfig,
     refreshInterval: Option[FiniteDuration],
@@ -355,7 +356,7 @@ import scala.compat.java8.FutureConverters._
       }
 
       override def preStart(): Unit = {
-        stageState = StageState(QueryIdle, fromOffset, calculateToOffset(), initialTagPidSequenceNrs.transform {
+        stageState = StageState(QueryIdle, initialQueryOffset, calculateToOffset(), initialTagPidSequenceNrs.transform {
           case (_, (tagPidSequenceNr, offset)) => (tagPidSequenceNr, offset, System.currentTimeMillis())
         }, delayedScanInProgress = false, None, bucketSize)
         if (log.isInfoEnabled) {
@@ -363,7 +364,7 @@ import scala.compat.java8.FutureConverters._
             s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset [{}] toOffset [{}]",
             stageUuid,
             settings.eventsByTagEventualConsistency.toMillis,
-            formatOffset(fromOffset),
+            formatOffset(initialQueryOffset),
             toOffset.map(formatOffset))
         }
         log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs)
@@ -408,7 +409,7 @@ import scala.compat.java8.FutureConverters._
         }
 
         optionallySchedule(PersistenceIdsCleanup, settings.eventsByTagCleanUpPersistenceIds)
-        optionallySchedule(ScanForDelayedEvents, settings.eventsByTagBacktrackInterval)
+        optionallySchedule(ScanForDelayedEvents, settings.eventsByTagBacktrack.interval)
       }
 
       @silent("deprecated")
@@ -432,12 +433,15 @@ import scala.compat.java8.FutureConverters._
       private def scanForDelayedEvents(): Unit = {
         if (!stageState.delayedScanInProgress) {
           updateStageState(_.copy(delayedScanInProgress = true))
-          // how far back should this look? The missing search only looks back one bucket so start with that for now
-          // but the missing search could be made to go back more buckets
-          val startOfPreviousBucket = Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
+          val startOfScan = settings.eventsByTagBacktrack.period match {
+            case Max             => Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
+            case Fixed(duration) => Uuids.startOf((Uuids.unixTimestamp(stageState.fromOffset) - duration.toMillis))
+          }
+
+          // don't scan from before the query fromOffset
           val scanFrom =
-            if (UUIDComparator.comparator.compare(startOfPreviousBucket, fromOffset) < 0) fromOffset
-            else startOfPreviousBucket
+            if (UUIDComparator.comparator.compare(startOfScan, initialQueryOffset) < 0) initialQueryOffset
+            else startOfScan
           // to the current from offset to avoid any events being found that will be found by this stage during its querying
           val scanTo = stageState.fromOffset
           // find the max sequence nr for each persistence id up until the current offset, if any of these are
@@ -611,10 +615,11 @@ import scala.compat.java8.FutureConverters._
           }
           val previousBucketStart =
             Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
+
           val startingOffset: UUID =
-            if (UUIDComparator.comparator.compare(previousBucketStart, fromOffset) < 0) {
+            if (UUIDComparator.comparator.compare(previousBucketStart, initialQueryOffset) < 0) {
               log.debug("[{}] Starting at fromOffset", stageUuid)
-              fromOffset
+              initialQueryOffset
             } else {
               log.debug("[{}] Starting at startOfBucket", stageUuid)
               previousBucketStart
