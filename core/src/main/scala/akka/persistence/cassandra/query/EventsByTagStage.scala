@@ -124,7 +124,9 @@ import com.datastax.driver.core.utils.UUIDs
       s"missing=$missing deadline=$deadline gapDetected=$gapDetected"
   }
 
-  private case object QueryPoll
+  private sealed trait QueryPoll
+  private case object PeriodicQueryPoll extends QueryPoll
+  private case object OneOffQueryPoll extends QueryPoll
   private case object TagNotification
 
   private case class StageState(
@@ -169,7 +171,7 @@ import com.datastax.driver.core.utils.UUIDs
     refreshInterval: Option[FiniteDuration],
     bucketSize: BucketSize,
     usingOffset: Boolean,
-    initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)])
+    initialTagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID)])
     extends GraphStage[SourceShape[UUIDRow]] {
 
   private val out: Outlet[UUIDRow] = Outlet("event.out")
@@ -275,7 +277,7 @@ import com.datastax.driver.core.utils.UUIDs
               if (interval >= 2.seconds)
                 (interval / 2) + ThreadLocalRandom.current().nextLong(interval.toMillis / 2).millis
               else interval
-            schedulePeriodicallyWithInitialDelay(QueryPoll, initial, interval)
+            schedulePeriodicallyWithInitialDelay(PeriodicQueryPoll, initial, interval)
             log.debug("[{}] Scheduling query poll at: {} ms", stageUuid, interval.toMillis)
           case None =>
             log.debug("[{}] CurrentQuery: No query polling", stageUuid)
@@ -283,7 +285,7 @@ import com.datastax.driver.core.utils.UUIDs
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
-        case QueryPoll | TagNotification =>
+        case _: QueryPoll | TagNotification =>
           continue()
       }
 
@@ -605,10 +607,12 @@ import com.datastax.driver.core.utils.UUIDs
               // the new persistence-id scan time is typically much smaller than the refresh interval
               // so do not wait for the next refresh to look again
               if (timeLeft < settings.refreshInterval) {
-                scheduleOnce(QueryPoll, timeLeft)
+                log.debug("Scheduling one off poll in {}", timeLeft.pretty)
+                scheduleOnce(OneOffQueryPoll, timeLeft)
               } else if (!isLiveQuery()) {
                 // a current query doesn't have a poll schedule one
-                scheduleOnce(QueryPoll, settings.refreshInterval)
+                log.debug("Scheduling one off poll in {}", settings.refreshInterval)
+                scheduleOnce(OneOffQueryPoll, settings.refreshInterval)
               }
             }
 
@@ -629,7 +633,7 @@ import com.datastax.driver.core.utils.UUIDs
                 "[{}] Scheduling poll for eventual consistency delay: {}",
                 stageUuid,
                 settings.eventsByTagEventualConsistency)
-              scheduleOnce(QueryPoll, settings.eventsByTagEventualConsistency)
+              scheduleOnce(OneOffQueryPoll, settings.eventsByTagEventualConsistency)
             }
           }
         }
