@@ -500,6 +500,12 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       })
     }
 
+    "not complete for empty query" in {
+      val probe = queries.eventsByTag(tag = "empty", offset = NoOffset).runWith(TestSink.probe[Any])
+      probe.request(2)
+      probe.expectNoMessage(waitTime)
+      probe.cancel()
+    }
   }
 }
 

@@ -142,7 +142,9 @@ import scala.compat.java8.FutureConverters._
       s"missing=$remainingMissing deadline=$deadline gapDetected=$gapDetected"
   }
 
-  private case object QueryPoll
+  private sealed trait QueryPoll
+  private case object PeriodicQueryPoll extends QueryPoll
+  private case object OneOffQueryPoll extends QueryPoll
   private case object TagNotification
   private case object PersistenceIdsCleanup
   private case object ScanForDelayedEvents
@@ -194,7 +196,7 @@ import scala.compat.java8.FutureConverters._
     refreshInterval: Option[FiniteDuration],
     bucketSize: BucketSize,
     usingOffset: Boolean,
-    initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)],
+    initialTagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID)],
     scanner: TagViewSequenceNumberScanner)
     extends GraphStage[SourceShape[UUIDRow]] {
 
@@ -414,11 +416,11 @@ import scala.compat.java8.FutureConverters._
 
       @silent("deprecated")
       private def scheduleQueryPoll(initial: FiniteDuration, interval: FiniteDuration): Unit = {
-        schedulePeriodicallyWithInitialDelay(QueryPoll, initial, interval)
+        schedulePeriodicallyWithInitialDelay(PeriodicQueryPoll, initial, interval)
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
-        case QueryPoll | TagNotification =>
+        case _: QueryPoll | TagNotification =>
           continue()
         case PersistenceIdsCleanup =>
           cleanup()
@@ -455,11 +457,11 @@ import scala.compat.java8.FutureConverters._
 
       private def cleanup(): Unit = {
         val now = System.currentTimeMillis()
-        val garbageCollected = stageState.tagPidSequenceNrs.filterNot {
+        val remaining = stageState.tagPidSequenceNrs.filterNot {
           case (_, (_, _, lastUpdated)) =>
-            (now - lastUpdated) > settings.eventsByTagNewPersistenceIdScanTimeout.toMillis
+            (now - lastUpdated) > settings.eventsByTagCleanUpPersistenceIds.toMillis
         }
-        updateStageState(_.copy(tagPidSequenceNrs = garbageCollected))
+        updateStageState(_.copy(tagPidSequenceNrs = remaining))
       }
 
       private def continue(): Unit =
@@ -810,10 +812,12 @@ import scala.compat.java8.FutureConverters._
               // the new persistence-id scan time is typically much smaller than the refresh interval
               // so do not wait for the next refresh to look again
               if (timeLeft < settings.refreshInterval) {
-                scheduleOnce(QueryPoll, timeLeft)
+                log.debug("Scheduling one off poll in {}", timeLeft.pretty)
+                scheduleOnce(OneOffQueryPoll, timeLeft)
               } else if (!isLiveQuery()) {
                 // a current query doesn't have a poll schedule one
-                scheduleOnce(QueryPoll, settings.refreshInterval)
+                log.debug("Scheduling one off poll in {}", settings.refreshInterval)
+                scheduleOnce(OneOffQueryPoll, settings.refreshInterval)
               }
             }
 
@@ -835,7 +839,7 @@ import scala.compat.java8.FutureConverters._
                 "[{}] Scheduling poll for eventual consistency delay: {}",
                 stageUuid,
                 settings.eventsByTagEventualConsistency)
-              scheduleOnce(QueryPoll, settings.eventsByTagEventualConsistency)
+              scheduleOnce(OneOffQueryPoll, settings.eventsByTagEventualConsistency)
             }
           }
         }
