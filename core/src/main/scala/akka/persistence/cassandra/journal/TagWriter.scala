@@ -42,7 +42,7 @@ import scala.concurrent.duration._
       maxBatchSize: Int,
       flushInterval: FiniteDuration,
       scanningFlushInterval: FiniteDuration,
-      pubsubNotification: Boolean)
+      pubsubNotification: Duration)
 
   private[akka] case class TagProgress(
       persistenceId: PersistenceId,
@@ -94,14 +94,16 @@ import scala.concurrent.duration._
   // eager init and val because used from Future callbacks
   override val log = super.log
 
-  private val pubsub: Option[DistributedPubSub] =
-    if (settings.pubsubNotification) {
-      Try {
-        DistributedPubSub(context.system)
-      }.toOption
-    } else {
-      None
+  private val pubsub: Option[ActorRef] = {
+    settings.pubsubNotification match {
+      case interval: FiniteDuration =>
+        Try {
+          context.actorOf(PubSubThrottler.props(DistributedPubSub(context.system).mediator, interval))
+        }.toOption
+      case _ =>
+        None
     }
+  }
 
   private val parent = context.parent
 
@@ -199,7 +201,6 @@ import scala.concurrent.duration._
               parent ! TagWriters.TagWriteFailed(t)
           }
       }
-      log.debug(s"Tag write complete. {}", summary)
       awaitingFlush match {
         case Some(replyTo) =>
           log.debug("External flush request")
@@ -213,9 +214,7 @@ import scala.concurrent.duration._
         case None =>
           flushIfRequired(sortedBuffer, tagPidSequenceNrs)
       }
-      pubsub.foreach {
-        _.mediator ! DistributedPubSubMediator.Publish("akka.persistence.cassandra.journal.tag", tag)
-      }
+      sendPubsubNotification()
       doneNotify.foreach(_ ! FlushComplete)
 
     case TagWriteFailed(t, events) =>
@@ -235,6 +234,12 @@ import scala.concurrent.duration._
           tagPidSequenceNrs + (pid -> tp.pidTagSequenceNr),
           awaitingFlush))
       sender() ! ResetPersistenceIdComplete
+  }
+
+  private def sendPubsubNotification(): Unit = {
+    pubsub.foreach {
+      _ ! DistributedPubSubMediator.Publish("akka.persistence.cassandra.journal.tag", tag)
+    }
   }
 
   private def flushIfRequired(buffer: Vector[(Serialized, TagPidSequenceNr)], tagSequenceNrs: Map[String, Long]): Unit =

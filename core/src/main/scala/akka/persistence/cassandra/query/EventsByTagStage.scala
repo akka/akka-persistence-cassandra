@@ -259,7 +259,7 @@ import scala.compat.java8.FutureConverters._
         }
         log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs)
 
-        if (settings.pubsubNotification) {
+        if (settings.pubsubNotification.isFinite) {
           Try {
             getStageActor {
               case (_, publishedTag) =>
