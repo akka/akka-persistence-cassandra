@@ -15,7 +15,7 @@ lazy val core = (project in file("core"))
   .dependsOn(cassandraLauncher % Test, session)
   .settings(osgiSettings: _*)
   .settings({
-    val silencerVersion = "1.4.1"
+    val silencerVersion = "1.4.4"
     Seq(
       libraryDependencies ++= Seq(
           compilerPlugin("com.github.ghik" %% "silencer-plugin" % silencerVersion),
