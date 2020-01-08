@@ -327,7 +327,7 @@ import scala.compat.java8.FutureConverters._
         val now = System.currentTimeMillis()
         val remaining = stageState.tagPidSequenceNrs.filterNot {
           case (_, (_, _, lastUpdated)) =>
-            (now - lastUpdated) > settings.eventsByTagNewPersistenceIdScanTimeout.toMillis
+            (now - lastUpdated) > settings.eventsByTagCleanUpPersistenceIds.toMillis
         }
         updateStageState(_.copy(tagPidSequenceNrs = remaining))
       }
