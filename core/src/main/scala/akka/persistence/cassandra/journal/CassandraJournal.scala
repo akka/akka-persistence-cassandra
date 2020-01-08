@@ -661,7 +661,7 @@ class CassandraJournal(cfg: Config)
     find(partitionNr(fromSequenceNr, partitionSize), fromSequenceNr, foundEmptyPartition = false)
   }
 
-  private def executeBatch(body: BatchStatement ⇒ Unit, retryPolicy: RetryPolicy): Future[Unit] = {
+  private def executeBatch(body: BatchStatement => Unit, retryPolicy: RetryPolicy): Future[Unit] = {
     val batch = new BatchStatement()
       .setConsistencyLevel(writeConsistency)
       .setRetryPolicy(retryPolicy)
