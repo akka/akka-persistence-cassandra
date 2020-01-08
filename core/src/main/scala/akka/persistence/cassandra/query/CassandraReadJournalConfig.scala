@@ -17,7 +17,10 @@ import com.typesafe.config.Config
 
 import scala.concurrent.duration._
 
-object CassandraReadJournalConfig {
+/**
+ * INTERNAL API
+ */
+@InternalApi object CassandraReadJournalConfig {
 
   sealed trait Period
   case object Max extends Period

@@ -53,7 +53,7 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
     key < other.key
 
   def <=(other: TimeBucket): Boolean =
-    key == other.key || key < other.key
+    key <= other.key
 
   override def equals(other: Any): Boolean = other match {
     case that: TimeBucket =>
