@@ -1,5 +1,5 @@
 addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.0.0")
-addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.0.0-RC5")
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.0.6")
 addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.7")
 addSbtPlugin("com.jsuereth" % "sbt-pgp" % "1.1.0")
 addSbtPlugin("com.typesafe.sbt" % "sbt-osgi" % "0.9.4")

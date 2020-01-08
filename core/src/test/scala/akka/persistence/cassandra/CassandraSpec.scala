@@ -40,8 +40,8 @@ object CassandraSpec {
       .dropWhile(
         _.matches("(java.lang.Thread|.*Abstract.*|akka.persistence.cassandra.CassandraSpec\\$|.*CassandraSpec)"))
     val reduced = s.lastIndexWhere(_ == clazz.getName) match {
-      case -1 ⇒ s
-      case z ⇒ s.drop(z + 1)
+      case -1 => s
+      case z  => s.drop(z + 1)
     }
     reduced.head.replaceFirst(""".*\.""", "").replaceAll("[^a-zA-Z_0-9]", "_").take(48) // Max length of a c* keyspace
   }
