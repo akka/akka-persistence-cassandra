@@ -1,64 +1,9 @@
 # Events by tag
 
-This documents how EventsByTag works from version 0.80, older versions use Cassandra Materialized
-views which have been reported to unstable. See [here](https://github.com/akka/akka-persistence-cassandra/issues/247)
+The events by tag query is implemented by writing the events to another table in Cassandra partitioned by tag as well
+as a timebucket to prevent partitions becoming to big.
 
-Events by tag is a hard query to execute efficiently in Cassandra. This page documents
-how it works and what are the consistency guarantees.
-
-## How it works
-
-A separate table is maintained for events by tag queries to that is written to in batches.
-
-The table is partitioned via tag and a time bucket. 
-This allows events for the same tag can be queried and the time bucket prevents all events
-for the same tag being in a single partition.
- 
-The timebucket causes a hot spot for writes but
-this is kept to a minimum by making the bucket small enough and by batching the writes into
-unlogged batches.
-
-Each events by tag query starts at the provided offset and queries the events. 
-The stream will initially do a query per time bucket to get up to the current 
-(many of these could be empty so very little over head, some may bring back many events). For example
-if you set the offset to be 30 days ago and a day time bucket, it will require 30 * nr queries to get each stream up to date. 
-If a particular partition contains many events then it is paged back from Cassandra based on demand.
-
-When no offset is provided EventsByTag queries start at the configured `first-time-bucket`. For new applications
-increase this to the day your application is initially deployed to speed up `NoOffset` queries.
-
-## Bucket sizes 
-
-Events by tag partitions are grouped into buckets to avoid a single partition for a tag
-getting to large. 
-
-* 1000s of events per day per tag -- DAY
-* 100,000s  of events per day per tag -- HOUR
-* 1,000,000s of events per day per tag -- MINUTE
- 
-This setting can not be changed after data has been written.
- 
-More billion per day per tag? You probably need a specialised schema rather than a general library like this.
-
-If a cassandra partition gets too large it will perform badly (and has a hard limit of 2 billion cells, a cell being similar to a column). 
-Given there is ~10 columns in the table there was a hard limit previously of 200million but performance would degrade before reaching this. 
-
-The support for `Minute` bucket size means that there are 1440 partitions per day. 
-Given a large C* cluster this should work until you have in the order of 10s of millions per minute
-when the write rate to that partition would likely become the bottleneck rather than partition size.
-
-The increased scalability comes at the cost of having to query more partitions on the read side so don't 
-use `Minute` unless necessary.
-
-## Write batch size
-
-The size of the of the batch is controlled via `max-message-batch-size`. Cassandra imposes a limit on the serialized size
-of a batch, currently 50kb by default. The larger this value the more efficient the tag writes will be but care must 
-be taken not to have batches that will be rejected by Cassandra. Two other cases cause the batch to be written before the batch size is reached:
-
-* Periodically: By default 250ms. To prevent eventsByTag queries being too out of date.
-* When a starting a new timebucket, which translates to a new partition in Cassandra, the events for the old timebucket are written.
-
+Due to it being a separate table and events are written from multiple nodes the events by tag is eventually consistent.
 
 ## Consistency
 
@@ -67,10 +12,41 @@ is does not guarantee that it will be visible in an events by tag query, but it 
 
 Order of the events is maintained per persistence id per tag by maintaining a sequence number for tagged events per persistence id.
 This is in addition to the normal sequence nr kept per persistence id.
-This additional sequence number is used to detect missing events and trigger searching back. However this only works if
-a new event for the same persistenceId is encountered. If your usecase involves many persistenceIds with only a small 
-number of events per persistenceId then the `eventual-consistency-delay` is essential to mitigate the risk of missing
-delayed events in live queries.
+
+Events from different persistent IDs are ordered by a [type 2 UUID a.k.a TimeUUID](https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_2_(date-time_and_MAC_address,_DCE_security_version)).
+As events come from multiple nodes to deliver events in the correct order there is an `eventual-consistency-delay` to give
+events time to arrive in Cassandra and to the query in their final order. Without this events could be missed due to:
+
+* The repeated query to Cassandra is updated with the latest TimeUUID offset, meaning delayed events with an older TimeUUID won't be picked up
+* The query is restarted with the latest offset but there were delayed events time lower TimeUUIDs that hadn't been delivered yet
+
+This is mitigated by an additional sequence number per persistence id/tag combination that is used to detect if an event
+has been missed. Upon detection the query will search back in time for the missed events.
+
+
+To detect missed events without receiving another event for the same persistence id a periodic back track is done
+to find events. This is configured with:  
+
+```
+cassandra-query-journal.events-by-tag.back-track {
+      # Interval at which events by tag stages trigger a query to look for delayed events from before the
+      # current offset. Delayed events are also searched for when a subsequent event for the same persistence id
+      # is received. The purpose of this back track is to find delayed events for persistence ids that are no
+      # longer receiving events. Depending on the size of the period of the back track this can be expensive.
+      interval = 1s
+
+      # How far back to go in time for the scan. This is the maxinum amount of time an event can be delayed
+      # and be found without receiving a new event for the same persistence id. Set to a duration or "max" to search back
+      # to the start of the previous bucket which is the furthest a search can go back.
+      period = 5s
+}
+```
+
+
+The default `eventual-consistency-delay` is set to `5s` which is high as it is the safest. This can be set much lower 
+for latency sensitive applications and missed events will be detected via the above mechanisms. The downside is that
+the search for missing events is an expensive operation and with a high eventual consistency delay it won't happen without exceptional delays, 
+with a low value it will happen frequently.
 
 ### Gap detection
 
@@ -116,6 +92,61 @@ Setting this to a small value can lead to:
 * Receiving events out of TimeUUID (offset) order for different persistenceIds, meaning if the offset is saved for restart/resume then delayed events can be missed on restart 
 * Increased likelihood of receiving events for the same persistenceId out of order. This is detected but the stream is temporarily paused to search for the missing events which is less efficient then reading them initially in order.
 * Missing events for persistence ids the query instance sees for the first time (unless it is tag pid sequence number 1) due to the query not knowing which tag pid sequence nr to expect.
+
+## Setting a bucket size
+
+Events by tag partitions are grouped into buckets to avoid a single partition for a tag
+getting to large. 
+
+* 1000s of events per day per tag -- DAY
+* 100,000s  of events per day per tag -- HOUR
+* 1,000,000s of events per day per tag -- MINUTE
+ 
+This setting can not be changed after data has been written.
+ 
+More billion per day per tag? You probably need a specialised schema rather than a general library like this.
+
+If a cassandra partition gets too large it will perform badly (and has a hard limit of 2 billion cells, a cell being similar to a column). 
+Given there is ~10 columns in the table there was a hard limit previously of 200million but performance would degrade before reaching this. 
+
+The support for `Minute` bucket size means that there are 1440 partitions per day. 
+Given a large C* cluster this should work until you have in the order of 10s of millions per minute
+when the write rate to that partition would likely become the bottleneck rather than partition size.
+
+The increased scalability comes at the cost of having to query more partitions on the read side so don't 
+use `Minute` unless necessary.
+
+## Setting a write batch size
+
+The size of the of the batch is controlled via `max-message-batch-size`. Cassandra imposes a limit on the serialized size
+of a batch, currently 50kb by default. The larger this value the more efficient the tag writes will be but care must 
+be taken not to have batches that will be rejected by Cassandra. Two other cases cause the batch to be written before the batch size is reached:
+
+* Periodically: By default 250ms. To prevent eventsByTag queries being too out of date.
+* When a starting a new timebucket, which translates to a new partition in Cassandra, the events for the old timebucket are written.
+
+
+
+## How it works
+
+A separate table is maintained for events by tag queries to that is written to in batches.
+
+The table is partitioned via tag and a time bucket. 
+This allows events for the same tag can be queried and the time bucket prevents all events
+for the same tag being in a single partition.
+ 
+The timebucket causes a hot spot for writes but
+this is kept to a minimum by making the bucket small enough and by batching the writes into
+unlogged batches.
+
+Each events by tag query starts at the provided offset and queries the events. 
+The stream will initially do a query per time bucket to get up to the current 
+(many of these could be empty so very little over head, some may bring back many events). For example
+if you set the offset to be 30 days ago and a day time bucket, it will require 30 * nr queries to get each stream up to date. 
+If a particular partition contains many events then it is paged back from Cassandra based on demand.
+
+When no offset is provided EventsByTag queries start at the configured `first-time-bucket`. For new applications
+increase this to the day your application is initially deployed to speed up `NoOffset` queries.
 
 ## Implementation
 
