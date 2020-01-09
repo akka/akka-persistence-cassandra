@@ -23,6 +23,7 @@ import akka.stream.testkit.scaladsl.TestSink
 import EventsByTagSpec._
 import akka.testkit.TestProbe
 import com.datastax.oss.driver.api.core.CqlIdentifier
+import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.BeforeAndAfterEach
 
@@ -90,6 +91,16 @@ object EventsByTagSpec {
     cassandra-query-journal.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
     """).withFallback(strictConfig)
 
+  val persistenceIdCleanupConfig =
+    ConfigFactory.parseString("""
+       cassandra-query-journal.events-by-tag {
+          eventual-consistency-delay = 0s
+          # will test by requiring a new persistence-id search every 2s
+          new-persistence-id-scan-timeout = 500ms
+          cleanup-old-persistence-ids = 1s
+       }
+      """).withFallback(config)
+
   val disabledConfig = ConfigFactory.parseString("""
       cassandra-journal {
         keyspace=EventsByTagDisabled
@@ -108,7 +119,7 @@ class EventWithMetaDataTagger extends WriteEventAdapter {
 }
 
 class ColorFruitTagger extends WriteEventAdapter {
-  val colors = Set("green", "black", "blue", "yellow")
+  val colors = Set("green", "black", "blue", "yellow", "orange")
   val fruits = Set("apple", "banana")
   override def toJournal(event: Any): Any = event match {
     case s: String =>
@@ -1042,6 +1053,37 @@ object EventsByTagDisabledSpec {
   }
 
   def props(pid: String): Props = Props(new CounterActor(pid))
+}
+
+class EventsByTagPersistenceIfCleanupSpec
+    extends AbstractEventsByTagSpec(EventsByTagSpec.persistenceIdCleanupConfig, false) {
+
+  val newPersistenceIdScan: FiniteDuration = 500.millis
+  val cleanupPeriod: FiniteDuration = 1.second
+
+  "PersistenceId cleanup" must {
+    "drop state and trigger new persistence id lookup peridodically" in {
+      val t1: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC).minusDays(2)
+      val event1 = PersistentRepr(s"cleanup-1", 1, "cleanup")
+      writeTaggedEvent(t1, event1, Set("cleanup-tag"), 1, bucketSize)
+
+      val query =
+        queries.eventsByTag("cleanup-tag", TimeBasedUUID(Uuids.startOf(t1.toInstant(ZoneOffset.UTC).toEpochMilli - 1L)))
+      val probe = query.runWith(TestSink.probe[Any])
+      probe.request(10)
+      probe.expectNextPF { case e @ EventEnvelope(_, "cleanup", 1L, "cleanup-1") => e }
+      probe.expectNoMessage(cleanupPeriod + 250.millis)
+
+      // the metadata for pid cleanup should have been removed meaning the next event will be delayed
+      val event2 = PersistentRepr(s"cleanup-2", 2, "cleanup")
+      writeTaggedEvent(event2, Set("cleanup-tag"), 2, bucketSize)
+
+      probe.expectNoMessage(newPersistenceIdScan - 50.millis)
+      probe.expectNextPF { case e @ EventEnvelope(_, "cleanup", 2L, "cleanup-2") => e }
+
+    }
+  }
+
 }
 
 class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.disabledConfig) {

@@ -20,6 +20,19 @@ class CassandraReadJournalConfigSpec
   override protected def afterAll(): Unit = shutdown()
 
   "Cassandra read journal config" must {
+
+    "default persistence id cleanup to 2x bucket" in {
+      import scala.concurrent.duration._
+      val config = ConfigFactory.parseString("""
+         cassandra-journal.events-by-tag.bucket-size = Hour
+        """).withFallback(system.settings.config)
+
+      val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
+      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-query-journal"), writeConfig)
+
+      readConfig.eventsByTagCleanUpPersistenceIds shouldEqual 2.hours
+    }
+
     "support Day with just day format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-journal.events-by-tag.bucket-size = Day

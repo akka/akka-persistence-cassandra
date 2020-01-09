@@ -141,7 +141,7 @@ import scala.concurrent.duration._
       // reached to force a flush or that the batch size is met
       val (newTagPidSequenceNrs, events) =
         assignTagPidSequenceNumbers(payload.toVector, tagPidSequenceNrs)
-      log.debug("Assigned tag pid sequence nrs: {}", events)
+      log.debug("Assigned tag pid sequence nrs: {}", newTagPidSequenceNrs)
       val newBuffer = (buffer ++ events).sortBy(_._1.timeUuid)(timeUuidOrdering)
       flushIfRequired(newBuffer, newTagPidSequenceNrs)
     case twd: TagWriteDone =>
@@ -265,11 +265,11 @@ import scala.concurrent.duration._
       log.debug("Batch size reached. Writing to Cassandra.")
       write(buffer.take(settings.maxBatchSize), buffer.drop(settings.maxBatchSize), tagSequenceNrs, None)
     } else if (settings.flushInterval == Duration.Zero) {
-      log.debug("Flushing right away as interval is zero")
       // Should always be a buffer of 1
       write(buffer, Vector.empty[(Serialized, TagPidSequenceNr)], tagSequenceNrs, None)
     } else {
-      timers.startSingleTimer(FlushKey, InternalFlush, settings.flushInterval)
+      if (!timers.isTimerActive(FlushKey))
+        timers.startSingleTimer(FlushKey, InternalFlush, settings.flushInterval)
       context.become(idle(buffer, tagSequenceNrs))
     }
 
