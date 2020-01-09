@@ -8,7 +8,15 @@ lazy val session = (project in file("session"))
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi)
   .dependsOn(cassandraLauncher % Test)
   .settings(osgiSettings: _*)
-  .settings(name := "akka-cassandra-session", libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies)
+  .settings(
+    name := "akka-cassandra-session",
+    libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies,
+    Compile / packageBin / packageOptions += Package.ManifestAttributes(
+        "Automatic-Module-Name" -> "akka.cassandra.session"),
+    OsgiKeys.exportPackage := Seq("akka.cassandra.session.*"),
+    OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
+    OsgiKeys.privatePackage := Nil
+  )
 
 lazy val core = (project in file("core"))
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
