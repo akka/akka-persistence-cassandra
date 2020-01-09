@@ -225,6 +225,38 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 2, 2, e2.timeUuid))
     }
 
+    "flush after interval when new events are written" in {
+      val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 100, flushInterval = 500.millis))
+      val bucket = nowBucket()
+
+      val allEvents =
+        (1 to 6).foldLeft(Vector.empty[Serialized]) {
+          case (acc, n) =>
+            val evt = event("p1", n, s"e-$n", bucket)
+            val events = acc :+ evt
+            ref ! TagWrite(tagName, Vector(evt))
+            Thread.sleep(200)
+            if (n == 3) {
+              probe.within(200.millis) {
+                probe.expectMsg(events.map(evt => toEw(evt, evt.sequenceNr)).toVector)
+                probe.expectMsg(
+                  ProgressWrite("p1", events.last.sequenceNr, events.last.sequenceNr, events.last.timeUuid))
+              }
+            }
+            events
+        }
+
+      val remainingFlushedEvents = allEvents.drop(3)
+      probe.expectMsg(remainingFlushedEvents.map(evt => toEw(evt, evt.sequenceNr)).toVector)
+      probe.expectMsg(
+        ProgressWrite(
+          "p1",
+          remainingFlushedEvents.last.sequenceNr,
+          remainingFlushedEvents.last.sequenceNr,
+          remainingFlushedEvents.last.timeUuid))
+
+    }
+
     "flush when time bucket changes" in {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 3))
       val bucket = nowBucket()
