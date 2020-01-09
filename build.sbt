@@ -1,3 +1,7 @@
+// While maven is throttling travis builds
+ThisBuild / resolvers := ("Google Maven Central Mirror".at(
+  "https://maven-central.storage-download.googleapis.com/maven2/")) +: resolvers.value
+
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
