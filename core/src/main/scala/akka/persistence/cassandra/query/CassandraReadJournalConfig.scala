@@ -76,11 +76,12 @@ import scala.concurrent.duration._
     config.getDuration("events-by-tag.new-persistence-id-scan-timeout", MILLISECONDS).millis
   val eventsByTagOffsetScanning: FiniteDuration =
     config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis
-  val eventsByTagCleanUpPersistenceIds: Duration = config.getString("events-by-tag.cleanup-old-persistence-ids") match {
-    case "off"       => Duration.Inf
-    case "<default>" => (writePluginConfig.bucketSize.durationMillis * 2).millis
-    case _           => config.getDuration("events-by-tag.cleanup-old-persistence-ids", MILLISECONDS).millis
-  }
+  val eventsByTagCleanUpPersistenceIds: Duration =
+    config.getString("events-by-tag.cleanup-old-persistence-ids").toLowerCase match {
+      case "off" | "false" => Duration.Inf
+      case "<default>"     => (writePluginConfig.bucketSize.durationMillis * 2).millis
+      case _               => config.getDuration("events-by-tag.cleanup-old-persistence-ids", MILLISECONDS).millis
+    }
 
   if (eventsByTagCleanUpPersistenceIds != Duration.Inf && eventsByTagCleanUpPersistenceIds.toMillis < (writePluginConfig.bucketSize.durationMillis * 2)) {
     log.warning(
