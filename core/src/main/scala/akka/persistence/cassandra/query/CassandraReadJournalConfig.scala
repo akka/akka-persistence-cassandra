@@ -9,6 +9,7 @@ import java.time.{ LocalDateTime, ZoneOffset }
 import akka.actor.{ ActorSystem, ExtendedActorSystem, NoSerializationVerificationNeeded }
 import akka.annotation.InternalApi
 import akka.cassandra.session.CqlSessionProvider
+import akka.event.Logging
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
 import com.typesafe.config.Config
@@ -23,6 +24,8 @@ import scala.concurrent.duration._
     config: Config,
     writePluginConfig: CassandraJournalConfig)
     extends NoSerializationVerificationNeeded {
+
+  val log = Logging(system, classOf[CassandraReadJournalConfig])
 
   val readProfile = config.getString("read-profile")
   CassandraPluginConfig.checkProfile(system, readProfile)
@@ -73,5 +76,16 @@ import scala.concurrent.duration._
     config.getDuration("events-by-tag.new-persistence-id-scan-timeout", MILLISECONDS).millis
   val eventsByTagOffsetScanning: FiniteDuration =
     config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis
+  val eventsByTagCleanUpPersistenceIds: Duration =
+    config.getString("events-by-tag.cleanup-old-persistence-ids").toLowerCase match {
+      case "off" | "false" => Duration.Inf
+      case "<default>"     => (writePluginConfig.bucketSize.durationMillis * 2).millis
+      case _               => config.getDuration("events-by-tag.cleanup-old-persistence-ids", MILLISECONDS).millis
+    }
 
+  if (eventsByTagCleanUpPersistenceIds != Duration.Inf && eventsByTagCleanUpPersistenceIds.toMillis < (writePluginConfig.bucketSize.durationMillis * 2)) {
+    log.warning(
+      "cleanup-old-persistence-ids has been set to less than 2 x the bucket size. If a tagged event for a persistence id " +
+      "is not received for the cleanup period but then received before 2 x the bucket size then old events could re-delivered.")
+  }
 }
