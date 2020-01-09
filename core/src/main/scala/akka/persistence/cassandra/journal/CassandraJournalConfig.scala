@@ -85,11 +85,17 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
       Some(config.getDuration("events-by-tag.time-to-live", TimeUnit.MILLISECONDS).millis)
     else None)
 
+  private val pubsubNotificationInterval: Duration = config.getString("pubsub-notification").toLowerCase match {
+    case "on" | "true"   => 100.millis
+    case "off" | "false" => Duration.Undefined
+    case _               => config.getDuration("pubsub-notification", TimeUnit.MILLISECONDS).millis
+  }
+
   val tagWriterSettings = TagWriterSettings(
     config.getInt("events-by-tag.max-message-batch-size"),
     config.getDuration("events-by-tag.flush-interval", TimeUnit.MILLISECONDS).millis,
     config.getDuration("events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
-    config.getBoolean("pubsub-notification"))
+    pubsubNotificationInterval)
 
   val coordinatedShutdownOnError: Boolean = config.getBoolean("coordinated-shutdown-on-error")
 

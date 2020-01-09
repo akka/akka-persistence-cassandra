@@ -70,7 +70,7 @@ class TagWriterSpec
     maxBatchSize = 10,
     flushInterval = 10.seconds,
     scanningFlushInterval = 20.seconds,
-    pubsubNotification = false)
+    pubsubNotification = Duration.Undefined)
   val waitDuration = 100.millis
   val shortDuration = 50.millis
   val tagName = "tag-1"
