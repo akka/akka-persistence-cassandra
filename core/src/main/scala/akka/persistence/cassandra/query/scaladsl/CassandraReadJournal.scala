@@ -93,7 +93,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
   private val writePluginId = cfg.getString("write-plugin")
   private val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig(writePluginId))
   private val queryPluginConfig =
-    new CassandraReadJournalConfig(cfg, writePluginConfig)
+    new CassandraReadJournalConfig(system, cfg, writePluginConfig)
 
   if (queryPluginConfig.eventsByTagEventualConsistency < 1.seconds) {
     log.warning(

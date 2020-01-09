@@ -7,7 +7,7 @@ package akka.persistence.cassandra
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ ActorSystem, Props }
+import akka.actor.{ ActorSystem, PoisonPill, Props }
 import akka.persistence.PersistentActor
 import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.testkit.{ TestKitBase, TestProbe }
@@ -65,23 +65,38 @@ object CassandraLifecycle {
     val t0 = System.nanoTime()
     var n = 0
     probe.within(45.seconds) {
-      probe.awaitAssert {
-        n += 1
-        system
-          .actorOf(Props(classOf[AwaitPersistenceInit], journalPluginId, snapshotPluginId), "persistenceInit" + n)
-          .tell("hello", probe.ref)
-        probe.expectMsg(5.seconds, "hello")
-        system.log.debug(
-          "awaitPersistenceInit took {} ms {}",
-          TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0),
-          system.name)
-      }
+      probe.awaitAssert(
+        {
+          n += 1
+          val a =
+            system.actorOf(
+              Props(classOf[AwaitPersistenceInit], "persistenceInit" + n, journalPluginId, snapshotPluginId),
+              "persistenceInit" + n)
+          a.tell("hello", probe.ref)
+          try {
+            probe.expectMsg(5.seconds, "hello")
+          } catch {
+            case t: Throwable =>
+              probe.watch(a)
+              a ! PoisonPill
+              probe.expectTerminated(a, 10.seconds)
+              throw t
+          }
+          system.log.debug(
+            "awaitPersistenceInit took {} ms {}",
+            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0),
+            system.name)
+        },
+        probe.remainingOrDefault,
+        2.seconds)
     }
   }
 
-  class AwaitPersistenceInit(override val journalPluginId: String, override val snapshotPluginId: String)
+  class AwaitPersistenceInit(
+      override val persistenceId: String,
+      override val journalPluginId: String,
+      override val snapshotPluginId: String)
       extends PersistentActor {
-    def persistenceId: String = "persistenceInit"
 
     def receiveRecover: Receive = {
       case _ =>

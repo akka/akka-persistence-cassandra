@@ -38,7 +38,7 @@ class TagScanningSpec extends CassandraSpec(TagScanningSpec.config) {
           .asScala
           .toList
           .map(row => (row.getString("persistence_id"), row.getLong("sequence_nr")))
-          .filterNot(_._1 == "persistenceInit")
+          .filterNot(_._1.startsWith("persistenceInit"))
           .map { case (pid, seqNr) => (pid.toInt, seqNr) } // sorting by pid makes the failure message easy to interpret
           .sortBy(_._1)
         scanning shouldEqual expected
