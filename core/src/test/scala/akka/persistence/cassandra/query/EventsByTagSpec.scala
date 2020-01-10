@@ -99,6 +99,11 @@ object EventsByTagSpec {
           # will test by requiring a new persistence-id search every 2s
           new-persistence-id-scan-timeout = 500ms
           cleanup-old-persistence-ids = 1s
+          back-track {
+            // need to be smaller than the cleanup old persistence ids
+            period = 900ms  
+            long-period = 950ms
+          }
        }
       """).withFallback(config)
 

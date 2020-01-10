@@ -34,7 +34,7 @@ class CassandraReadJournalConfigSpec
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
       val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-query-journal"), writeConfig)
 
-      readConfig.eventsByTagCleanUpPersistenceIds shouldEqual 2.hours
+      readConfig.eventsByTagCleanUpPersistenceIds.get shouldEqual 2.hours
     }
 
     "support Day with just day format" in {
