@@ -8,100 +8,112 @@ Due to it being a separate table and events are written from multiple nodes the 
 ## Consistency
 
 Event by tag queries are eventually consistent, i.e. if a persist for an event has completed
-is does not guarantee that it will be visible in an events by tag query, but it will eventually.
+is does not guarantee that it will be visible immediately but it will eventually.
 
 Order of the events is maintained per persistence id per tag by maintaining a sequence number for tagged events per persistence id.
-This is in addition to the normal sequence nr kept per persistence id.
+This is in addition to the normal sequence nr kept per persistence id. Events for the same persistence id will never be delivered out
+of order.
 
-Events from different persistent IDs are ordered by a [type 2 UUID a.k.a TimeUUID](https://en.wikipedia.org/wiki/Universally_unique_identifier#Version_2_(date-time_and_MAC_address,_DCE_security_version)).
-As events come from multiple nodes to deliver events in the correct order there is an `eventual-consistency-delay` to give
-events time to arrive in Cassandra and to the query in their final order. Without this events could be missed due to:
+Events from different persistent IDs are ordered by a 
+[type 2 UUID a.k.a TimeUUID](https://en.wikipedia.org/wiki/Universally_unique_identifier),
+esposed in the `EventEnvelope` as a `TimeBasedUUID` offset.
 
-* The repeated query to Cassandra is updated with the latest TimeUUID offset, meaning delayed events with an older TimeUUID won't be picked up
-* The query is restarted with the latest offset but there were delayed events time lower TimeUUIDs that hadn't been delivered yet
+As events come from multiple nodes to deliver events in `TimeUUID` order there is an `eventual-consistency-delay` to give
+events time to arrive in Cassandra and for the query to deliver them in their final order. The `eventual-consistency-delay` keeps the query a configurable 
+amount of time in the past.
 
-This is mitigated by an additional sequence number per persistence id/tag combination that is used to detect if an event
-has been missed. Upon detection the query will search back in time for the missed events.
+The events by tag stream updates the Cassandra query it uses to start from the latest offset to avoid reading events it has already delivered. 
+If events are delayed and the query progresses past an event's offset it will be detected either when the next event for that 
+persistence id is received or if no more events are received for the persistence id then it will be detected via [back tracking](#back-tracking). 
 
+In both cases the query will go back and search for the delayed events. The search for missing events is an expensive operation
+so it is advised not to set the `eventual-consistency-delay` too low as it increased the liklihood of missed events.
 
-To detect missed events without receiving another event for the same persistence id a periodic back track is done
-to find events. This is configured with:  
+## Back tracking
 
-```
-cassandra-query-journal.events-by-tag.back-track {
-      # Interval at which events by tag stages trigger a query to look for delayed events from before the
-      # current offset. Delayed events are also searched for when a subsequent event for the same persistence id
-      # is received. The purpose of this back track is to find delayed events for persistence ids that are no
-      # longer receiving events. Depending on the size of the period of the back track this can be expensive.
-      interval = 1s
+If another event for the same persistence id is received the sequence number is used to detect that an event has been missed.
+To detect missed events without receiving another event for the same persistence id a periodic backtrack is done
+to find events. Queries are run in the background to detect delayed events. A high frequency short back track is done
+for finding events delayed a small amount and a low frequency backtrack that scans further back. 
 
-      # How far back to go in time for the scan. This is the maxinum amount of time an event can be delayed
-      # and be found without receiving a new event for the same persistence id. Set to a duration or "max" to search back
-      # to the start of the previous bucket which is the furthest a search can go back.
-      period = 5s
-}
-```
+These are configured with:
 
+@@snip [refernce.conf](/core/src/main/resources/reference.conf) { #backtrack }                                                                                                                                
+
+### Tuning for lower latency
 
 The default `eventual-consistency-delay` is set to `5s` which is high as it is the safest. This can be set much lower 
 for latency sensitive applications and missed events will be detected via the above mechanisms. The downside is that
-the search for missing events is an expensive operation and with a high eventual consistency delay it won't happen without exceptional delays, 
-with a low value it will happen frequently.
+the search for missing events is an expensive operation and with a high eventual consistency delay it won't happen without exceptional delays.
+With a low value it will happen frequently.
 
-### Gap detection
+Like with any tuning testing should be done to see what works for your environment. The values below may be too low
+depending on the load and performance of your Cassandra cluster.
+
+#### Settings
+
+Flush the tag writes right away. By default they are batched and written as an unlogged back which increases throughput. To write each individually
+without delay use:
+```
+cassandra-journal.events-by-tag.flush-interval = 0s
+```
+
+Alaternatively set a very small value e.g. `25ms` so some batching is done. If your applicaion has a large number of tagged events per second
+it is highly advised to set this to a value above 0.
+
+Enable pub sub notifications so events by tag queries can execute a query right away rather than waiting for the next
+`refresh-interval`. Lower the `refresh-interval` for cases where the pub sub messages take a long time to arrive at the
+query.
+```
+cassandra-journal.pubsub-notification = on
+cassandra-query-journal.refresh-interval = 2s
+```
+
+Reduce `eventual-consistency-delay`. You must test this has positive results for your use case. Setting this too low
+can decrease throughput and latency as more events will be missed initially and expensive searches carried out.
+
+```
+cassandra-query-journal.events-by-tag.eventual-consistency-delay = 50ms
+```
+
+### Missing searches and gap detection
 
 If a gap is detected then the event is held back and the stream goes into a searching mode for the missing
 events. The search only looks in the current bucket and the previous one. If the event is older then it won't be found in this search.
 
 If the missing event is not found then the stream is failed unless it is the first time the persistence id
-has been encountered by the query (see below).
-
-The stream is failed with a `MissingTaggedEventException` which has a field `lastKnownOffset`. The query can be restarted
-from this offset to search further back than one bucket for the missing event. However, previously delivered events with an offset
-greater than the `lastKnownOffset` will be re-delivered so downstream processing must be idempotent.
+has been encountered by the query.
 
 ### Gap detection when encountering a persistence id for the first time
 
-When receiving the first event for a given persistenceId in an offset query it is not known 
+When receiving the first event for a given persistence id in an offset query it is not known 
 if that is actually the first event. If the offset query starts in a time bucket in the past then
 it is assumed to be the first. 
 
 If the query is started with an offset in the current time bucket then
-the query starts with a scanning mode to look for the lowest sequence number per persistenceId
+the query starts with a search to look for the lowest sequence number per persistenceId
 before delivering any events.
  
-The above scanning only looks in the current time bucket. For persistenceIds that aren't found in this initial scan because they 
+The above scanning only looks in the current time bucket. For persistence ids that aren't found in this initial scan because they 
 don't have any events in the current time bucket then the expected tag pid sequence number is not known. 
-In this case the eventsByTag query looks for the `new-persistence-id-scan-timeout`. This adds a delay each time a new persistenceId
-is found by an offset query when the first event doesn't have a sequenceNr of `1`. 
-If this is an issue it can be set to 0s. If events are found out of order due to this
-the stage will fail.  
+In this case the eventsByTag query searches for `new-persistence-id-scan-timeout` before assuming this is the first
+event for that persistence id. 
 
-### Delayed events and out of sync clocks
+This adds a delay each time a new persistence id is found by an offset query when the first event doesn't have a sequenceNr of `1`. 
+If this is an issue it can be set to 0s. If events are found out of order due to this the stage will fail.  
 
-Events for a tag are globally ordered using a TimeUUID.
-However events for the same tag but for a difference persistenceIds can come from different nodes in a cluster meaning that
-events enter Cassandra out of TimeUUID order. 
+## Other tuning
 
-If a live eventsByTag query is currently running it can see newer events before the older delayed events. For
-that reason an `eventual-consistency-delay` is used to keep eventsByTag a configurable amount of time in the past to give a time
-for events from all nodes to settle to their final order.
-
-Setting this to a small value can lead to:
-
-* Receiving events out of TimeUUID (offset) order for different persistenceIds, meaning if the offset is saved for restart/resume then delayed events can be missed on restart 
-* Increased likelihood of receiving events for the same persistenceId out of order. This is detected but the stream is temporarily paused to search for the missing events which is less efficient then reading them initially in order.
-* Missing events for persistence ids the query instance sees for the first time (unless it is tag pid sequence number 1) due to the query not knowing which tag pid sequence nr to expect.
-
-## Setting a bucket size
+### Setting a bucket size
 
 Events by tag partitions are grouped into buckets to avoid a single partition for a tag
 getting to large. 
 
-* 1000s of events per day per tag -- DAY
-* 100,000s  of events per day per tag -- HOUR
-* 1,000,000s of events per day per tag -- MINUTE
+* 1000s of events per day per tag -- Day
+* 100,000s  of events per day per tag -- Hour
+* 1,000,000s of events per day per tag -- Minute
  
+The default is `Hour` and can be overridden by setting `cassandra-journal.events-by-tag.bucket-size`.
 This setting can not be changed after data has been written.
  
 More billion per day per tag? You probably need a specialised schema rather than a general library like this.
@@ -116,7 +128,7 @@ when the write rate to that partition would likely become the bottleneck rather 
 The increased scalability comes at the cost of having to query more partitions on the read side so don't 
 use `Minute` unless necessary.
 
-## Setting a write batch size
+### Setting a write batch size
 
 The size of the of the batch is controlled via `max-message-batch-size`. Cassandra imposes a limit on the serialized size
 of a batch, currently 50kb by default. The larger this value the more efficient the tag writes will be but care must 
@@ -125,9 +137,10 @@ be taken not to have batches that will be rejected by Cassandra. Two other cases
 * Periodically: By default 250ms. To prevent eventsByTag queries being too out of date.
 * When a starting a new timebucket, which translates to a new partition in Cassandra, the events for the old timebucket are written.
 
-
-
 ## How it works
+
+The following section describes more about how the events by tag query work, it is not required knowledge
+for using it.
 
 A separate table is maintained for events by tag queries to that is written to in batches.
 
@@ -148,7 +161,7 @@ If a particular partition contains many events then it is paged back from Cassan
 When no offset is provided EventsByTag queries start at the configured `first-time-bucket`. For new applications
 increase this to the day your application is initially deployed to speed up `NoOffset` queries.
 
-## Implementation
+### Implementation
 
 A `TagWriter` actor is created, on demand, per tag that batches (unlogged batch grouped by the partition key)
 up writes to a separate table partitioned by tag name and a time bucket.
