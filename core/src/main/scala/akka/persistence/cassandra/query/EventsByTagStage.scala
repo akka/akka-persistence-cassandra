@@ -146,7 +146,7 @@ import scala.compat.java8.FutureConverters._
   private sealed trait QueryPoll
   private case object PeriodicQueryPoll extends QueryPoll
   private case object OneOffQueryPoll extends QueryPoll
-  private case object TagNotification
+  private final case class TagNotification(resolution: Long)
   private case object PersistenceIdsCleanup
   private case object ScanForDelayedEvents
 
@@ -366,7 +366,7 @@ import scala.compat.java8.FutureConverters._
         }
         log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs)
 
-        if (settings.pubsubNotification) {
+        if (settings.pubsubNotification.isFinite) {
           Try {
             getStageActor {
               case (_, publishedTag) =>
@@ -376,7 +376,10 @@ import scala.compat.java8.FutureConverters._
                     continue()
                   } else if (settings.eventsByTagEventualConsistency < settings.refreshInterval) {
                     // No point scheduling for EC if the QueryPoll will come in beforehand
-                    scheduleOnce(TagNotification, settings.eventsByTagEventualConsistency)
+                    // No point in scheduling more frequently than once every 10 ms
+                    scheduleOnce(
+                      TagNotification(System.currentTimeMillis() / 10),
+                      settings.eventsByTagEventualConsistency)
                   }
 
                 }
@@ -415,7 +418,7 @@ import scala.compat.java8.FutureConverters._
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
-        case _: QueryPoll | TagNotification =>
+        case _: QueryPoll | _: TagNotification =>
           continue()
         case PersistenceIdsCleanup =>
           cleanup()

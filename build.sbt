@@ -15,8 +15,7 @@ lazy val session = (project in file("session"))
         "Automatic-Module-Name" -> "akka.cassandra.session"),
     OsgiKeys.exportPackage := Seq("akka.cassandra.session.*"),
     OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
-    OsgiKeys.privatePackage := Nil
-  )
+    OsgiKeys.privatePackage := Nil)
 
 lazy val core = (project in file("core"))
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
