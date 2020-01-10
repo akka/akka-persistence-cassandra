@@ -32,7 +32,7 @@ class TagWritersSpec
     maxBatchSize = 10,
     flushInterval = 10.seconds,
     scanningFlushInterval = 20.seconds,
-    pubsubNotification = false)
+    pubsubNotification = Duration.Undefined)
 
   private def testProps(settings: TagWriterSettings, tagWriterCreator: String => ActorRef): Props =
     Props(new TagWriters(settings, tagWriterSession = null) {

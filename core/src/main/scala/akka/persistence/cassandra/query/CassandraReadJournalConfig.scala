@@ -58,7 +58,7 @@ import scala.concurrent.duration._
   val keyspace: String = writePluginConfig.keyspace
   val targetPartitionSize: Long = writePluginConfig.targetPartitionSize
   val table: String = writePluginConfig.table
-  val pubsubNotification: Boolean =
+  val pubsubNotification: Duration =
     writePluginConfig.tagWriterSettings.pubsubNotification
   val eventsByPersistenceIdEventTimeout: FiniteDuration =
     config.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
