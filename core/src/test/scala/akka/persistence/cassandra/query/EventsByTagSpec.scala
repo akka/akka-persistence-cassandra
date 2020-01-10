@@ -1043,7 +1043,10 @@ class EventsByTagSpecBackTracking
     extends AbstractEventsByTagSpec(ConfigFactory.parseString("""
     cassandra-query-journal.events-by-tag {
       back-track {
-        period = 2d
+        interval = 1s
+        period = 10m
+        long-interval = 4s
+        long-period = max
       }
       eventual-consistency-delay = 100ms
     }
@@ -1052,9 +1055,9 @@ class EventsByTagSpecBackTracking
   "Delayed events" must {
     "be found even if there are no more events for that persistence id" in {
 
-      val t1 = today.minusDays(5)
+      val t1 = today.minusMinutes(5)
       writeTaggedEvent(t1, PersistentRepr("e1", 1L, "p1", ""), Set("back-track"), 1, bucketSize)
-      writeTaggedEvent(t1.plusHours(1), PersistentRepr("e2", 2L, "p1", ""), Set("back-track"), 2, bucketSize)
+      writeTaggedEvent(t1.plusMinutes(1), PersistentRepr("e2", 2L, "p1", ""), Set("back-track"), 2, bucketSize)
 
       val src = queries.eventsByTag(tag = "back-track", offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
@@ -1067,9 +1070,9 @@ class EventsByTagSpecBackTracking
       probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "e1") => e }
 
       // now write some delayed events for p1, back tracking should find it
-      writeTaggedEvent(today.minusHours(1), PersistentRepr("e3", 3L, "p1", ""), Set("back-track"), 3, bucketSize)
-      writeTaggedEvent(today.minusHours(1), PersistentRepr("e4", 4L, "p1", ""), Set("back-track"), 4, bucketSize)
-      writeTaggedEvent(today.minusHours(1), PersistentRepr("e5", 5L, "p1", ""), Set("back-track"), 5, bucketSize)
+      writeTaggedEvent(today.minusMinutes(1), PersistentRepr("e3", 3L, "p1", ""), Set("back-track"), 3, bucketSize)
+      writeTaggedEvent(today.minusMinutes(1), PersistentRepr("e4", 4L, "p1", ""), Set("back-track"), 4, bucketSize)
+      writeTaggedEvent(today.minusMinutes(1), PersistentRepr("e5", 5L, "p1", ""), Set("back-track"), 5, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "e3") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 4L, "e4") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 5L, "e5") => e }
@@ -1081,7 +1084,7 @@ class EventsByTagSpecBackTracking
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 6L, "e6") => e }
     }
 
-    "work for for delayed events in the previous bucket" in {
+    "work for for delayed events in the previous bucket via long period" in {
       val t1 = today.minusDays(5)
       val tagName = "back-track-previous-bucket"
       writeTaggedEvent(t1, PersistentRepr("e1", 1L, "p1", ""), Set(tagName), 1, bucketSize)
@@ -1097,13 +1100,15 @@ class EventsByTagSpecBackTracking
       writeTaggedEvent(PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "e1") => e }
 
-      // now a delayed events for p1 in the previous bucket
+      // now a delayed events for p1 in the previous bucket, further back than the short period
       writeTaggedEvent(
         today.minusDays(1).minusHours(1),
         PersistentRepr("e3", 3L, "p1", ""),
         Set(tagName),
         3,
         bucketSize)
+      // short interval should not pick it up
+      probe.expectNoMessage(2.second)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 3L, "e3") => e }
 
       // normal delivery should restart
@@ -1122,10 +1127,8 @@ class EventsByTagSpecBackTracking
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
 
       // now a delayed events for p2 in the previous bucket and the current bucket
-      writeTaggedEvent(today.minusDays(1), PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
-      writeTaggedEvent(today.minusHours(1), PersistentRepr("e2", 2L, "p2", ""), Set(tagName), 2, bucketSize)
-      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "e1") => e }
-      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 2L, "e2") => e }
+      writeTaggedEvent(today.minusMinutes(2), PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
+      writeTaggedEvent(today.minusMinutes(1), PersistentRepr("e2", 2L, "p2", ""), Set(tagName), 2, bucketSize)
 
       // normal delivery should restart
       writeTaggedEvent(PersistentRepr("e3", 3L, "p1", ""), Set(tagName), 3, bucketSize)
@@ -1141,11 +1144,11 @@ class EventsByTagSpecBackTracking
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
 
       // now a delayed events for p2 in the previous bucket and the current bucket
-      writeTaggedEvent(today.minusHours(4), PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
-      writeTaggedEvent(today.minusHours(2), PersistentRepr("e2", 2L, "p2", ""), Set(tagName), 2, bucketSize)
+      writeTaggedEvent(today.minusMinutes(4), PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
+      writeTaggedEvent(today.minusMinutes(2), PersistentRepr("e2", 2L, "p2", ""), Set(tagName), 2, bucketSize)
 
-      writeTaggedEvent(today.minusHours(3), PersistentRepr("e1", 1L, "p3", ""), Set(tagName), 1, bucketSize)
-      writeTaggedEvent(today.minusHours(1), PersistentRepr("e2", 2L, "p3", ""), Set(tagName), 2, bucketSize)
+      writeTaggedEvent(today.minusMinutes(3), PersistentRepr("e1", 1L, "p3", ""), Set(tagName), 1, bucketSize)
+      writeTaggedEvent(today.minusMinutes(1), PersistentRepr("e2", 2L, "p3", ""), Set(tagName), 2, bucketSize)
 
       probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "e1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p3", 1L, "e1") => e }
@@ -1162,7 +1165,8 @@ class EventsByTagSpecBackTracking
       val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
       val probe = src.runWith(TestSink.probe[Any])
       probe.request(1005)
-      val start = today.minusHours(12)
+      // short period is 10m
+      val start = today.minusMinutes(9)
       writeTaggedEvent(PersistentRepr("e1", 1L, "not-delayed", ""), Set(tagName), 1, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "not-delayed", 1L, "e1") => e }
 

@@ -24,7 +24,6 @@ import java.lang.{ Long => JLong }
 
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.journal.CassandraJournal._
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.{ Fixed, Max }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
@@ -163,6 +162,7 @@ import scala.compat.java8.FutureConverters._
       // for each persistence id what is the latest tag pid sequenceNr number and offset
       tagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID, LastUpdated)],
       delayedScanInProgress: Boolean,
+      previousLongDelayedScan: Long,
       missingLookup: Option[LookingForMissing],
       bucketSize: BucketSize) {
 
@@ -203,6 +203,7 @@ import scala.compat.java8.FutureConverters._
 
   private val out: Outlet[UUIDRow] = Outlet("event.out")
   private val verboseDebug = settings.eventsByTagDebug
+  private val backtracking = settings.eventsByTagBacktrack
 
   override def shape = SourceShape(out)
 
@@ -355,7 +356,7 @@ import scala.compat.java8.FutureConverters._
       override def preStart(): Unit = {
         stageState = StageState(QueryIdle, initialQueryOffset, calculateToOffset(), initialTagPidSequenceNrs.transform {
           case (_, (tagPidSequenceNr, offset)) => (tagPidSequenceNr, offset, System.currentTimeMillis())
-        }, delayedScanInProgress = false, None, bucketSize)
+        }, delayedScanInProgress = false, System.currentTimeMillis(), None, bucketSize)
         if (log.isInfoEnabled) {
           log.info(
             s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset [{}] toOffset [{}]",
@@ -402,10 +403,8 @@ import scala.compat.java8.FutureConverters._
             log.debug("[{}] CurrentQuery: No query polling", stageUuid)
         }
 
-        def optionallySchedule(key: Any, duration: Duration): Unit = duration match {
-          case duration: FiniteDuration =>
-            schedulePeriodically(key, duration)
-          case _ =>
+        def optionallySchedule(key: Any, duration: Option[FiniteDuration]): Unit = {
+          duration.foreach(fd => schedulePeriodically(key, fd))
         }
 
         optionallySchedule(PersistenceIdsCleanup, settings.eventsByTagCleanUpPersistenceIds)
@@ -433,10 +432,21 @@ import scala.compat.java8.FutureConverters._
       private def scanForDelayedEvents(): Unit = {
         if (!stageState.delayedScanInProgress) {
           updateStageState(_.copy(delayedScanInProgress = true))
-          val startOfScan = settings.eventsByTagBacktrack.period match {
-            case Max             => Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
-            case Fixed(duration) => Uuids.startOf((Uuids.unixTimestamp(stageState.fromOffset) - duration.toMillis))
-          }
+
+          val startOfPreviousBucket = stageState.currentTimeBucket.previous(1).key
+          val currentTime = Uuids.unixTimestamp(stageState.fromOffset)
+          val (startOfScan) =
+            if (System.currentTimeMillis() - stageState.previousLongDelayedScan > backtracking.longIntervalMillis()) {
+              val from = Uuids.startOf(backtracking.longPeriodMillis(currentTime, startOfPreviousBucket))
+              log.debug("Intialiting long period back track from {}", formatOffset(from))
+              updateStageState(_.copy(previousLongDelayedScan = System.currentTimeMillis()))
+              from
+            } else {
+              val from = Uuids.startOf(backtracking.periodMillis(currentTime, startOfPreviousBucket))
+              if (verboseDebug)
+                log.debug("Intialiting period back track from {}", formatOffset(from))
+              from
+            }
 
           // don't scan from before the query fromOffset
           val scanFrom =
@@ -453,11 +463,13 @@ import scala.compat.java8.FutureConverters._
         }
       }
 
+      private val cleanupPersistenceIdsMills =
+        settings.eventsByTagCleanUpPersistenceIds.map(_.toMillis).getOrElse(Long.MaxValue)
       private def cleanup(): Unit = {
         val now = System.currentTimeMillis()
         val remaining = stageState.tagPidSequenceNrs.filterNot {
           case (_, (_, _, lastUpdated)) =>
-            (now - lastUpdated) > settings.eventsByTagCleanUpPersistenceIds.toMillis
+            (now - lastUpdated) > cleanupPersistenceIdsMills
         }
         updateStageState(_.copy(tagPidSequenceNrs = remaining))
       }

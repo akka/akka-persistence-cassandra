@@ -12,6 +12,7 @@ import akka.cassandra.session.CqlSessionProvider
 import akka.event.Logging
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.Period
 import akka.persistence.cassandra.query.CassandraReadJournalConfig.{ BackTrackConfig, Fixed, Max }
 import com.typesafe.config.Config
 
@@ -24,9 +25,82 @@ import scala.concurrent.duration._
 
   sealed trait Period
   case object Max extends Period
-  case class Fixed(duration: Duration) extends Period
+  case class Fixed(duration: FiniteDuration) extends Period
 
-  case class BackTrackConfig(interval: Duration, period: Period)
+  /**
+   * Stores and validates the back track configuration.
+   *
+   * Back tacking can not go further back and the persistence id clean up timeout as it would deliver
+   * previously delivered events for which the metadata has been dropped.
+   * This is validated at start up.
+   *
+   * Back tracking can not go further back than the start of the previous bucket as missing searches do not
+   * go back any further than that. The duration to the start of the previous bucket is constantly changing
+   * with time so it is passed into the period methods by the events by tag stage.
+   *
+   * @param metadataCleanupInterval How often metadata about persistence ids is cleanled up
+   * @param interval How often to back track
+   * @param period How far to back track
+   * @param longInterval A less frequent back track and can be used to go back further
+   * @param longPeriod How far to back track for the long interval
+   */
+  case class BackTrackConfig(
+      metadataCleanupInterval: Option[FiniteDuration],
+      interval: Option[FiniteDuration],
+      period: Period,
+      longInterval: Option[FiniteDuration],
+      longPeriod: Period) {
+
+    validatePeriodLengths()
+    validateIntervals()
+
+    private def validateIntervals() = {
+      (interval, longInterval) match {
+        case (None, Some(_)) =>
+          throw new IllegalArgumentException(
+            "interval must be enabled to use long-interval. If you want a single interval just set interval, not long-interval")
+        case (Some(i), Some(li)) => require(i < li, "interval must be smaller than long-interval")
+        case _                   =>
+      }
+    }
+    private def validatePeriodLengths() = {
+      def cleanUpGreaterThanPeriod(period: Period, name: String): Unit = {
+        (metadataCleanupInterval, period) match {
+          case (Some(cleanup), Fixed(p)) =>
+            require(cleanup > p, s"$name can not be greater than cleanup-old-persistence-ids")
+          case _ =>
+        }
+      }
+      cleanUpGreaterThanPeriod(period, "period")
+      cleanUpGreaterThanPeriod(longPeriod, "long-period")
+    }
+
+    private def intervalToMillis(interval: Option[FiniteDuration]): Long = {
+      interval match {
+        case None           => Long.MaxValue
+        case Some(interval) => interval.toMillis
+      }
+    }
+
+    private def caluclatePeriod(from: Long, period: Period, startOfPreviousBucket: Long): Long = {
+      period match {
+        case Max =>
+          metadataCleanupInterval match {
+            case None                  => startOfPreviousBucket
+            case Some(cleanupInterval) => math.max(from - cleanupInterval.toMillis, startOfPreviousBucket)
+          }
+        case Fixed(period) => math.max(from - period.toMillis, startOfPreviousBucket)
+      }
+    }
+
+    def intervalMillis(): Long = intervalToMillis(interval)
+    def longIntervalMillis(): Long = intervalToMillis(longInterval)
+
+    def periodMillis(from: Long, startOfPreviousBucket: Long): Long =
+      caluclatePeriod(from, period, startOfPreviousBucket)
+    def longPeriodMillis(from: Long, startOfPreviousBucket: Long): Long =
+      caluclatePeriod(from, longPeriod, startOfPreviousBucket)
+  }
 }
 
 /**
@@ -88,24 +162,38 @@ import scala.concurrent.duration._
     config.getDuration("events-by-tag.new-persistence-id-scan-timeout", MILLISECONDS).millis
   val eventsByTagOffsetScanning: FiniteDuration =
     config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis
-  val eventsByTagCleanUpPersistenceIds: Duration =
+  val eventsByTagCleanUpPersistenceIds: Option[FiniteDuration] =
     config.getString("events-by-tag.cleanup-old-persistence-ids").toLowerCase match {
-      case "off" | "false" => Duration.Inf
-      case "<default>"     => (writePluginConfig.bucketSize.durationMillis * 2).millis
-      case _               => config.getDuration("events-by-tag.cleanup-old-persistence-ids", MILLISECONDS).millis
+      case "off" | "false" => None
+      case "<default>"     => Some((writePluginConfig.bucketSize.durationMillis * 2).millis)
+      case _               => Some(config.getDuration("events-by-tag.cleanup-old-persistence-ids", MILLISECONDS).millis)
     }
 
-  val eventsByTagBacktrack = BackTrackConfig(config.getString("events-by-tag.back-track.interval").toLowerCase match {
-    case "off" | "false" => Duration.Inf
-    case _               => config.getDuration("events-by-tag.back-track.interval", MILLISECONDS).millis
-  }, config.getString("events-by-tag.back-track.period") match {
-    case "max" => Max
-    case _     => Fixed(config.getDuration("events-by-tag.back-track.period", MILLISECONDS).millis)
-  })
-
-  if (eventsByTagCleanUpPersistenceIds != Duration.Inf && eventsByTagCleanUpPersistenceIds.toMillis < (writePluginConfig.bucketSize.durationMillis * 2)) {
+  if (eventsByTagCleanUpPersistenceIds.exists(_.toMillis < (writePluginConfig.bucketSize.durationMillis * 2))) {
     log.warning(
       "cleanup-old-persistence-ids has been set to less than 2 x the bucket size. If a tagged event for a persistence id " +
       "is not received for the cleanup period but then received before 2 x the bucket size then old events could re-delivered.")
   }
+
+  val eventsByTagBacktrack = BackTrackConfig(
+    eventsByTagCleanUpPersistenceIds,
+    optionalDuration("events-by-tag.back-track.interval"),
+    period("events-by-tag.back-track.period"),
+    optionalDuration("events-by-tag.back-track.long-interval"),
+    period("events-by-tag.back-track.long-period"))
+
+  private def optionalDuration(path: String): Option[FiniteDuration] = {
+    config.getString(path).toLowerCase match {
+      case "off" | "false" => None
+      case _               => Some(config.getDuration(path, MILLISECONDS).millis)
+    }
+  }
+
+  private def period(path: String): Period = {
+    config.getString(path).toLowerCase match {
+      case "max" => Max
+      case _     => Fixed(config.getDuration(path, MILLISECONDS).millis)
+    }
+  }
+
 }
