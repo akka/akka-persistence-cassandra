@@ -1045,15 +1045,21 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
 }
 
 class EventsByTagSpecBackTracking
-    extends AbstractEventsByTagSpec(ConfigFactory.parseString("""
+    extends AbstractEventsByTagSpec(
+      ConfigFactory.parseString("""
+// this slows down the test too much for all the expectNexts
+//  cassandra-query-journal.refresh-interval = 4s
     cassandra-query-journal.events-by-tag {
-      back-track {
+     back-track {
         interval = 1s
         period = 10m
         long-interval = 4s
         long-period = max
       }
       eventual-consistency-delay = 100ms
+      // stops the looking for missing query from happening again too frequently so
+      // ensure we do a query in both buckets each time
+      gap-timeout = 10s
     }
     """).withFallback(config)) {
 

@@ -30,7 +30,7 @@ import scala.concurrent.duration._
   /**
    * Stores and validates the back track configuration.
    *
-   * Back tacking can not go further back and the persistence id clean up timeout as it would deliver
+   * Back tacking can not go further back than the persistence id clean up timeout as it would deliver
    * previously delivered events for which the metadata has been dropped.
    * This is validated at start up.
    *
@@ -44,7 +44,7 @@ import scala.concurrent.duration._
    * @param longInterval A less frequent back track and can be used to go back further
    * @param longPeriod How far to back track for the long interval
    */
-  case class BackTrackConfig(
+  final case class BackTrackConfig(
       metadataCleanupInterval: Option[FiniteDuration],
       interval: Option[FiniteDuration],
       period: Period,
@@ -67,7 +67,8 @@ import scala.concurrent.duration._
       def cleanUpGreaterThanPeriod(period: Period, name: String): Unit = {
         (metadataCleanupInterval, period) match {
           case (Some(cleanup), Fixed(p)) =>
-            require(cleanup > p, s"$name can not be greater than cleanup-old-persistence-ids")
+            println("comparing " + cleanup + " and " + (p * 0.9) + p)
+            require(cleanup > (p * 1.1), s"$name has to be at least 10% lower than cleanup-old-persistence-ids")
           case _ =>
         }
       }
@@ -82,14 +83,14 @@ import scala.concurrent.duration._
       }
     }
 
-    private def caluclatePeriod(from: Long, period: Period, startOfPreviousBucket: Long): Long = {
+    private def calculatePeriod(from: Long, period: Period, startOfPreviousBucket: Long): Long = {
       period match {
         case Max =>
           metadataCleanupInterval match {
             case None                  => startOfPreviousBucket
             case Some(cleanupInterval) => math.max(from - cleanupInterval.toMillis, startOfPreviousBucket)
           }
-        case Fixed(period) => math.max(from - period.toMillis, startOfPreviousBucket)
+        case Fixed(p) => math.max(from - p.toMillis, startOfPreviousBucket)
       }
     }
 
@@ -97,9 +98,9 @@ import scala.concurrent.duration._
     def longIntervalMillis(): Long = intervalToMillis(longInterval)
 
     def periodMillis(from: Long, startOfPreviousBucket: Long): Long =
-      caluclatePeriod(from, period, startOfPreviousBucket)
+      calculatePeriod(from, period, startOfPreviousBucket)
     def longPeriodMillis(from: Long, startOfPreviousBucket: Long): Long =
-      caluclatePeriod(from, longPeriod, startOfPreviousBucket)
+      calculatePeriod(from, longPeriod, startOfPreviousBucket)
   }
 }
 

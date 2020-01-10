@@ -187,6 +187,17 @@ import scala.compat.java8.FutureConverters._
     override def toString: String =
       s"""StageState(state: $state, fromOffset: ${formatOffset(fromOffset)}, toOffset: ${formatOffset(toOffset)}, tagPidSequenceNrs: $tagPidSequenceNrs, missingLookup: $missingLookup, bucketSize: $bucketSize)"""
   }
+
+  private val uuidRowOrdering = new Ordering[UUIDRow] {
+    override def compare(x: UUIDRow, y: UUIDRow): Int = {
+      val offsetCompare = UUIDComparator.comparator.compare(x.offset, y.offset)
+      if (offsetCompare == 0)
+        Ordering.Long.compare(x.tagPidSequenceNr, y.tagPidSequenceNr)
+      else
+        offsetCompare
+    }
+  }
+
 }
 
 @InternalApi private[akka] class EventsByTagStage(
@@ -434,17 +445,17 @@ import scala.compat.java8.FutureConverters._
           updateStageState(_.copy(delayedScanInProgress = true))
 
           val startOfPreviousBucket = stageState.currentTimeBucket.previous(1).key
-          val currentTime = Uuids.unixTimestamp(stageState.fromOffset)
-          val (startOfScan) =
+          val fromOffsetTime = Uuids.unixTimestamp(stageState.fromOffset)
+          val startOfScan =
             if (System.currentTimeMillis() - stageState.previousLongDelayedScan > backtracking.longIntervalMillis()) {
-              val from = Uuids.startOf(backtracking.longPeriodMillis(currentTime, startOfPreviousBucket))
-              log.debug("Intialiting long period back track from {}", formatOffset(from))
+              val from = Uuids.startOf(backtracking.longPeriodMillis(fromOffsetTime, startOfPreviousBucket))
+              log.debug("Initialising long period back track from {}", formatOffset(from))
               updateStageState(_.copy(previousLongDelayedScan = System.currentTimeMillis()))
               from
             } else {
-              val from = Uuids.startOf(backtracking.periodMillis(currentTime, startOfPreviousBucket))
+              val from = Uuids.startOf(backtracking.periodMillis(fromOffsetTime, startOfPreviousBucket))
               if (verboseDebug)
-                log.debug("Intialiting period back track from {}", formatOffset(from))
+                log.debug("Initialising period back track from {}", formatOffset(from))
               from
             }
 
@@ -474,7 +485,7 @@ import scala.compat.java8.FutureConverters._
         updateStageState(_.copy(tagPidSequenceNrs = remaining))
       }
 
-      private def continue(): Unit =
+      private def continue(): Unit = {
         stageState.state match {
           case QueryIdle =>
             if (stageState.isLookingForMissing)
@@ -486,6 +497,7 @@ import scala.compat.java8.FutureConverters._
             tryPushOne()
           case _: QueryInProgress =>
         }
+      }
 
       private def query(): Unit = {
         updateToOffset()
@@ -709,7 +721,7 @@ import scala.compat.java8.FutureConverters._
         // being delayed slightly rather than by a full bucket
         val bucket = TimeBucket(toOffset, bucketSize)
         // Could the event be in the previous bucket?
-        val lookInPrevious = !bucket.within(toOffset)
+        val lookInPrevious = shouldSearchInPreviousBucket(bucket, fromOffset)
         updateStageState(
           _.copy(
             missingLookup = Some(
@@ -785,6 +797,9 @@ import scala.compat.java8.FutureConverters._
                 isAvailable(out))
         }
 
+      private def shouldSearchInPreviousBucket(bucket: TimeBucket, fromOffset: UUID): Boolean =
+        !bucket.within(fromOffset)
+
       private def queryExhausted(): Unit = {
         updateQueryState(QueryIdle)
 
@@ -816,7 +831,7 @@ import scala.compat.java8.FutureConverters._
                 timeLeft.pretty)
               updateStageState(_.copy(missingLookup = stageState.missingLookup.map(m => {
                 val newBucket = TimeBucket(m.maxOffset, bucketSize)
-                m.copy(bucket = newBucket, queryPrevious = !newBucket.within(m.minOffset))
+                m.copy(bucket = newBucket, queryPrevious = shouldSearchInPreviousBucket(newBucket, m.minOffset))
               })))
 
               // the new persistence-id scan time is typically much smaller than the refresh interval
@@ -852,16 +867,6 @@ import scala.compat.java8.FutureConverters._
               scheduleOnce(OneOffQueryPoll, settings.eventsByTagEventualConsistency)
             }
           }
-        }
-      }
-
-      private val uuidRowOrdering = new Ordering[UUIDRow] {
-        override def compare(x: UUIDRow, y: UUIDRow): Int = {
-          val offsetCompare = UUIDComparator.comparator.compare(x.offset, y.offset)
-          if (offsetCompare == 0)
-            Ordering.Long.compare(x.tagPidSequenceNr, y.tagPidSequenceNr)
-          else
-            offsetCompare
         }
       }
 

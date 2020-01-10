@@ -177,14 +177,14 @@ class BackTrackConfigSpec extends WordSpec with Matchers {
         BackTrackConfig(None, Some(11.seconds), Max, Some(10.seconds), Max)
       }.getMessage should include("interval must be smaller than long-interval")
     }
-    "disallow periods being longer than metadataCleanupInterval" in {
+    "disallow periods being within 10% of metadataCleanupInterval" in {
       intercept[IllegalArgumentException] {
-        BackTrackConfig(Some(10.seconds), None, Fixed(11.seconds), None, Max)
-      }.getMessage should include("period can not be greater than cleanup-old-persistence-ids")
+        BackTrackConfig(Some(10.seconds), None, Fixed(9500.millis), None, Max)
+      }.getMessage should include("period has to be at least 10% lower than cleanup-old-persistence-ids")
 
       intercept[IllegalArgumentException] {
-        BackTrackConfig(Some(10.seconds), None, Max, None, Fixed(11.seconds))
-      }.getMessage should include("long-period can not be greater than cleanup-old-persistence-ids")
+        BackTrackConfig(Some(10.seconds), None, Max, None, Fixed(9500.millis))
+      }.getMessage should include("long-period has to be at least 10% lower than cleanup-old-persistence-ids")
     }
   }
 }
