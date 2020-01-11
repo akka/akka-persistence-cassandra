@@ -136,7 +136,7 @@ import scala.compat.java8.FutureConverters._
   private sealed trait QueryPoll
   private case object PeriodicQueryPoll extends QueryPoll
   private case object OneOffQueryPoll extends QueryPoll
-  private final case class TagNotification(resolution: Long)
+  private final case class TagNotification(resolution: Long) extends QueryPoll
   private case object PersistenceIdsCleanup
 
   type LastUpdated = Long
@@ -316,7 +316,7 @@ import scala.compat.java8.FutureConverters._
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
-        case _: QueryPoll | _: TagNotification =>
+        case _: QueryPoll =>
           continue()
         case PersistenceIdsCleanup =>
           cleanup()
