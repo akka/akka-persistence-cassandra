@@ -101,8 +101,8 @@ object EventsByTagSpec {
           cleanup-old-persistence-ids = 1s
           back-track {
             // need to be smaller than the cleanup old persistence ids
-            period = 900ms  
-            long-period = 950ms
+            period = 800ms  
+            long-period = 850ms
           }
        }
       """).withFallback(config)
@@ -1042,6 +1042,49 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
       probe.expectComplete
     }
   }
+}
+class EventsByTagSpecBackTrackingLongRefreshInterval
+    extends AbstractEventsByTagSpec(
+      ConfigFactory.parseString("""
+    cassandra-query-journal.refresh-interval = 10s
+    cassandra-query-journal.events-by-tag {
+     back-track {
+        interval = 500ms
+        period = max
+      }
+      eventual-consistency-delay = 100ms
+      // stops the looking for missing query from happening again too frequently so
+      // ensure we do a query in both buckets each time
+      gap-timeout = 10s
+    }
+    """).withFallback(config)) {
+
+  override protected val logCheck: PartialFunction[Any, Any] = {
+    case m: Warning if !m.message.toString.contains("eventual consistency set below 1 second") => m
+    case m: Logging.Error                                                                      => m
+  }
+
+  "Backtracking" must {
+    "find in the previous bucket without needing a refresh" in {
+      val tagName = "back-track-previous-bucket-no-refresh"
+      writeTaggedEvent(PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
+      val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
+      val probe = src.runWith(TestSink.probe[Any])
+      probe.request(10)
+      // bring the offset forward with an event for a new persistence id
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "e1") => e }
+      // now a delayed events for p1 in the previous bucket, should be found by the short back track
+      writeTaggedEvent(
+        today.minusDays(1).minusHours(1),
+        PersistentRepr("e1", 1L, "p1", ""),
+        Set(tagName),
+        1,
+        bucketSize)
+      // much smaller than the refresh interval
+      probe.expectNextWithTimeoutPF(3.seconds, { case e @ EventEnvelope(_, "p1", 1L, "e1") => e })
+    }
+  }
+
 }
 
 class EventsByTagSpecBackTracking

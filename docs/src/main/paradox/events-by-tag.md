@@ -36,7 +36,7 @@ To detect missed events without receiving another event for the same persistence
 to find events. Queries are run in the background to detect delayed events. A high frequency short back track is done
 for finding events delayed a small amount and a low frequency backtrack that scans further back. 
 
-These are configured with:
+These are configured with `cassandra-query-journal.events-by-tag.back-track`:
 
 @@snip [refernce.conf](/core/src/main/resources/reference.conf) { #backtrack }                                                                                                                                
 
@@ -58,7 +58,7 @@ without delay use:
 cassandra-journal.events-by-tag.flush-interval = 0s
 ```
 
-Alaternatively set a very small value e.g. `25ms` so some batching is done. If your applicaion has a large number of tagged events per second
+Alternatively set a very small value e.g. `25ms` so some batching is done. If your applicaion has a large number of tagged events per second
 it is highly advised to set this to a value above 0.
 
 Enable pub sub notifications so events by tag queries can execute a query right away rather than waiting for the next
