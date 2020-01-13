@@ -30,7 +30,7 @@ import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
 import com.datastax.driver.core.Cluster
 
-import scala.util.Try
+import scala.util.control.NonFatal
 
 object CassandraSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
@@ -76,7 +76,8 @@ object CassandraSpec {
 abstract class CassandraSpec(
     config: Config,
     val journalName: String = getCallerName(getClass),
-    val snapshotName: String = getCallerName(getClass))
+    val snapshotName: String = getCallerName(getClass),
+    dumpRowsOnFailure: Boolean = true)
     extends TestKitBase
     with Suite
     with ImplicitSender
@@ -112,27 +113,41 @@ abstract class CassandraSpec(
 
     out
   }
-  override protected def externalCassandraCleanup(): Unit =
-    Try {
+  override protected def externalCassandraCleanup(): Unit = {
+    try {
       val c = cluster.connect(journalName)
-      if (failed) {
+      if (failed && dumpRowsOnFailure) {
         println("RowDump::")
         import scala.collection.JavaConverters._
-        c.execute("select * from tag_views")
+        if (system.settings.config.getBoolean("cassandra-journal.events-by-tag.enabled")) {
+          println("tag_views")
+          c.execute(s"select * from ${journalName}.tag_views")
+            .asScala
+            .foreach(row => {
+              println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(
+                row.getUUID("timestamp"))},${row.getString("persistence_id")},${row
+                .getLong("tag_pid_sequence_nr")},${row.getLong("sequence_nr")}""")
+
+            })
+        }
+        println("messages")
+        c.execute(s"select * from ${journalName}.messages")
           .asScala
           .foreach(row => {
-            println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(
-              row.getUUID("timestamp"))},${row.getString("persistence_id")},${row.getLong("tag_pid_sequence_nr")},${row
-              .getLong("sequence_nr")}""")
-
+            println(s"""Row:${row.getLong("partition_nr")}, ${row.getString("persistence_id")}, ${row.getLong(
+              "sequence_nr")}""")
           })
       }
-      system.log.info("Dropping keyspaces: {}", keyspaces())
       keyspaces().foreach { keyspace =>
         c.execute(s"drop keyspace if exists $keyspace")
       }
       c.close()
+    } catch {
+      case NonFatal(t) =>
+        println("Exception during cleanup")
+        t.printStackTrace(System.out)
     }
+  }
 
   final implicit lazy val system: ActorSystem = {
     // always use this port and keyspace generated here, then test config, then the lifecycle config

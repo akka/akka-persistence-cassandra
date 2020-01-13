@@ -247,9 +247,7 @@ class EventsByTagStageSpec
       sub.expectNextPF { case EventEnvelope(_, "p-2", 1, "p2e1") => }
       sub.expectNoMessage(longWaitTime)
 
-      sub.expectError().getMessage should equal(
-        s"Unable to find missing tagged event: " +
-        s"PersistenceId: p-1. Tag: $tag. TagPidSequenceNr: Set(3). Previous offset: ${times(1)}")
+      sub.expectError().getMessage should startWith("Unable to find missing tagged event")
     }
 
     "find multiple missing messages that span time buckets" in {
@@ -506,7 +504,7 @@ class EventsByTagStageSpec
       val tag = "LiveMissingEventsInPreviousBucket"
       val nowTime = LocalDateTime.now(ZoneOffset.UTC)
       val twoBucketsAgo = nowTime.minusMinutes(2)
-      val lastBucket = nowTime.minusMinutes(1)
+      val lastBucket: LocalDateTime = nowTime.minusMinutes(1)
       val thisBucket = nowTime
 
       writeTaggedEvent(twoBucketsAgo, PersistentRepr("p1e1", 1, "p-1"), Set(tag), 1, bucketSize)
