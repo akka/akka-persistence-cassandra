@@ -30,6 +30,10 @@ private[akka] trait TestTagWriter {
     (session.prepare(writeStatements.writeTags(false)), session.prepare(writeStatements.writeTags(true)))
   }
 
+  def clearAllEvents(): Unit = {
+    session.execute(s"truncate ${writePluginConfig.keyspace}.${writePluginConfig.tagTable.name}")
+  }
+
   def writeTaggedEvent(
       time: LocalDateTime,
       pr: PersistentRepr,
@@ -66,7 +70,6 @@ private[akka] trait TestTagWriter {
     val event = pr.payload.asInstanceOf[AnyRef]
     val serializer = serialization.findSerializerFor(event)
     val serialized = ByteBuffer.wrap(serialization.serialize(event).get)
-
     val serManifest = Serializers.manifestFor(serializer, pr)
 
     val timeBucket = TimeBucket(UUIDs.unixTimestamp(uuid), bucketSize)
@@ -88,6 +91,11 @@ private[akka] trait TestTagWriter {
       session.execute(bs)
     })
 
-    system.log.debug("Written event: {} Uuid: {} Timebucket: {}", pr.payload, formatOffset(uuid), timeBucket)
+    system.log.debug(
+      "Written event: {} Uuid: {} Timebucket: {} TagPidSeqNr: {}",
+      pr.payload,
+      formatOffset(uuid),
+      timeBucket,
+      tagPidSequenceNr)
   }
 }

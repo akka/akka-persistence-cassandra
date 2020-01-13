@@ -187,5 +187,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
    * Only called if using an external cassandra. Override to clean up
    * keyspace etc. Defaults to dropping the keyspaces.
    */
-  protected def externalCassandraCleanup(): Unit = dropKeyspaces()
+  protected def externalCassandraCleanup(): Unit = {
+    dropKeyspaces()
+  }
 }
