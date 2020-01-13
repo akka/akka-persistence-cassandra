@@ -1180,9 +1180,11 @@ class EventsByTagSpecBackTracking
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
 
-      // now a delayed events for p2 in the previous bucket and the current bucket
+      // now a delayed events for p2
       writeTaggedEvent(today.minusMinutes(2), PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
       writeTaggedEvent(today.minusMinutes(1), PersistentRepr("e2", 2L, "p2", ""), Set(tagName), 2, bucketSize)
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "e1") => e }
+      probe.expectNextPF { case e @ EventEnvelope(_, "p2", 2L, "e2") => e }
 
       // normal delivery should restart
       writeTaggedEvent(PersistentRepr("e3", 3L, "p1", ""), Set(tagName), 3, bucketSize)
