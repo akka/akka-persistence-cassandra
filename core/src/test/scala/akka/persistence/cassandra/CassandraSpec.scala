@@ -93,7 +93,7 @@ abstract class CassandraSpec(
     config: Config,
     val journalName: String = getCallerName(getClass),
     val snapshotName: String = getCallerName(getClass),
-    dumpRowsOnFailure: Boolean = false)
+    dumpRowsOnFailure: Boolean = true)
     extends TestKitBase
     with Suite
     with ImplicitSender
@@ -185,11 +185,10 @@ abstract class CassandraSpec(
           .execute(s"select * from ${journalName}.messages")
           .asScala
           .foreach(row => {
-            println(s"""Row:${row.getBoolean("used")}, ${row.getLong("partition_nr")}, ${row
-              .getString("persistence_id")}, ${row.getLong("sequence_nr")}""")
+            println(s"""Row:${row.getLong("partition_nr")}, ${row.getString("persistence_id")}, ${row.getLong(
+              "sequence_nr")}""")
           })
       }
-      println(s"Dropping keyspaces: ${keyspaces()}")
       keyspaces().foreach { keyspace =>
         cluster.execute(s"drop keyspace if exists $keyspace")
       }
