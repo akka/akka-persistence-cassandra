@@ -1310,7 +1310,7 @@ object EventsByTagDisabledSpec {
   def props(pid: String): Props = Props(new CounterActor(pid))
 }
 
-class EventsByTagPersistenceIfCleanupSpec extends AbstractEventsByTagSpec(EventsByTagSpec.persistenceIdCleanupConfig) {
+class EventsByTagPersistenceIdCleanupSpec extends AbstractEventsByTagSpec(EventsByTagSpec.persistenceIdCleanupConfig) {
 
   val newPersistenceIdScan: FiniteDuration = 500.millis
   val cleanupPeriod: FiniteDuration = 1.second

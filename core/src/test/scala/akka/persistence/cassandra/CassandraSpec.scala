@@ -189,7 +189,6 @@ abstract class CassandraSpec(
               "sequence_nr")}""")
           })
       }
-      println(s"Dropping keyspaces: ${keyspaces()}")
       keyspaces().foreach { keyspace =>
         cluster.execute(s"drop keyspace if exists $keyspace")
       }

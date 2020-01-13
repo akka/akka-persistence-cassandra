@@ -67,8 +67,7 @@ import scala.concurrent.duration._
       def cleanUpGreaterThanPeriod(period: Period, name: String): Unit = {
         (metadataCleanupInterval, period) match {
           case (Some(cleanup), Fixed(p)) =>
-            println("comparing " + cleanup + " and " + (p * 0.9) + p)
-            require(cleanup > (p * 1.1), s"$name has to be at least 10% lower than cleanup-old-persistence-ids")
+            require((cleanup * 0.9) > p, s"$name has to be at least 10% lower than cleanup-old-persistence-ids")
           case _ =>
         }
       }
