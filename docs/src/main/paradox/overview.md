@@ -14,7 +14,9 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
   version=$project.version$
 }
 
-This plugin depends on Akka 2.5.x and note that it is important that all `akka-*` dependencies are in the same version, so it is recommended to depend on them explicitly to avoid problems with transient dependencies causing an unlucky mix of versions.
+This plugin build depends on Akka 2.5.x but the plugin will also work with Akka 2.6 (since Akka is [binary backwards compatible](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html#binary-compatibility-rules-explained)). 
+
+Note that it is important that all `akka-*` dependencies are in the same version, so it is recommended to depend on them explicitly to avoid problems with transient dependencies causing an unlucky mix of versions.
 
 The table below shows Akka Persistence Cassandra’s direct dependencies and the second tab shows all libraries it depends on transitively.
 
