@@ -301,6 +301,19 @@ import scala.compat.java8.FutureConverters._
         }
       }
 
+      val highestDeletedSequenceNrCb = getAsyncCallback[Try[Long]] {
+        case Success(delSeqNr) =>
+          // lowest possible seqNr is 1
+          expectedNextSeqNr = math.max(delSeqNr + 1, math.max(fromSeqNr, 1))
+          partition = partitionNr(expectedNextSeqNr)
+          // initial query
+          queryState = QueryIdle
+          query(switchPartition = false)
+
+        case Failure(e) => onFailure(e)
+
+      }
+
       private def internalFastForward(nextSeqNr: Long): Unit = {
         log.debug(
           "EventsByPersistenceId [{}] External fast-forward to seqNr [{}] from current [{}]",
@@ -318,20 +331,7 @@ import scala.compat.java8.FutureConverters._
 
       override def preStart(): Unit = {
         queryState = QueryInProgress(switchPartition = false, fetchMore = false, System.nanoTime())
-        session.highestDeletedSequenceNumber(persistenceId).onComplete {
-          getAsyncCallback[Try[Long]] {
-            case Success(delSeqNr) =>
-              // lowest possible seqNr is 1
-              expectedNextSeqNr = math.max(delSeqNr + 1, math.max(fromSeqNr, 1))
-              partition = partitionNr(expectedNextSeqNr)
-              // initial query
-              queryState = QueryIdle
-              query(switchPartition = false)
-
-            case Failure(e) => onFailure(e)
-
-          }.invoke
-        }
+        session.highestDeletedSequenceNumber(persistenceId).onComplete(highestDeletedSequenceNrCb.invoke)
 
         refreshInterval match {
           case Some(interval) =>
