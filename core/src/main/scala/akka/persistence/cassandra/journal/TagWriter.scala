@@ -15,11 +15,12 @@ import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
 import akka.persistence.cassandra.query.UUIDComparator
-
 import scala.concurrent.duration.{ Duration, FiniteDuration }
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.concurrent.duration._
+
+import akka.actor.ReceiveTimeout
 
 /*
  * Groups writes into un-logged batches for the same partition.
@@ -35,13 +36,14 @@ import scala.concurrent.duration._
  */
 @InternalApi private[akka] object TagWriter {
 
-  private[akka] def props(settings: TagWriterSettings, session: TagWritersSession, tag: Tag): Props =
-    Props(new TagWriter(settings, session, tag))
+  private[akka] def props(settings: TagWriterSettings, session: TagWritersSession, tag: Tag, parent: ActorRef): Props =
+    Props(new TagWriter(settings, session, tag, parent))
 
   private[akka] case class TagWriterSettings(
       maxBatchSize: Int,
       flushInterval: FiniteDuration,
       scanningFlushInterval: FiniteDuration,
+      stopTagWriterWhenIdle: FiniteDuration,
       pubsubNotification: Duration)
 
   private[akka] case class TagProgress(
@@ -63,6 +65,16 @@ import scala.concurrent.duration._
   private[akka] case object Flush
   private[akka] case object FlushComplete
 
+  // The "passivate pattern" is used to avoid loosing messages between TagWriters (parent)
+  // and TagWriter when the TagWriter is stopped due to inactivity.
+  // When idle for longer than configured stopTagWriterWhenIdle the TagWriter sends `PassivateTagWriter` to parent,
+  // which replies with `StopTagWriter` and starts buffering incoming messages for the tag.
+  // The TagWriter stops when receiving StopTagWriter if it is still ok to passivate (no state, nothing in progress).
+  // TagWriters (parent) sends buffered messages if any when the TagWriter has been terminated.
+  private[akka] final case class PassivateTagWriter(tag: String)
+  private[akka] final case class CancelPassivateTagWriter(tag: String)
+  private[akka] case object StopTagWriter
+
   type TagWriteSummary = Map[PersistenceId, PidProgress]
   case class PidProgress(seqNrFrom: SequenceNr, seqNrTo: SequenceNr, tagPidSequenceNr: TagPidSequenceNr, offset: UUID)
   private case object InternalFlush
@@ -80,7 +92,11 @@ import scala.concurrent.duration._
   }
 }
 
-@InternalApi private[akka] class TagWriter(settings: TagWriterSettings, session: TagWritersSession, tag: String)
+@InternalApi private[akka] class TagWriter(
+    settings: TagWriterSettings,
+    session: TagWritersSession,
+    tag: String,
+    parent: ActorRef)
     extends Actor
     with Timers
     with ActorLogging
@@ -105,13 +121,14 @@ import scala.concurrent.duration._
     }
   }
 
-  private val parent = context.parent
-
   var lastLoggedBufferNs: Long = -1
   val bufferWarningMinDurationNs: Long = 5.seconds.toNanos
 
-  override def preStart(): Unit =
+  override def preStart(): Unit = {
     log.debug("Running TagWriter for [{}] with settings {}", tag, settings)
+    if (settings.stopTagWriterWhenIdle > Duration.Zero)
+      context.setReceiveTimeout(settings.stopTagWriterWhenIdle)
+  }
 
   override def receive: Receive =
     idle(Vector.empty[(Serialized, TagPidSequenceNr)], Map.empty[String, Long])
@@ -150,6 +167,16 @@ import scala.concurrent.duration._
       log.debug("Resetting pid {}. TagProgress {}", pid, tp)
       become(idle(buffer.filterNot(_._1.persistenceId == pid), tagPidSequenceNrs + (pid -> tagPidSequenceNr)))
       sender() ! ResetPersistenceIdComplete
+
+    case ReceiveTimeout =>
+      if (buffer.isEmpty && tagPidSequenceNrs.isEmpty)
+        parent ! PassivateTagWriter(tag)
+
+    case StopTagWriter =>
+      if (buffer.isEmpty && tagPidSequenceNrs.isEmpty)
+        context.stop(self)
+      else
+        parent ! CancelPassivateTagWriter(tag)
   }
 
   private def writeInProgress(
@@ -234,6 +261,13 @@ import scala.concurrent.duration._
           tagPidSequenceNrs + (pid -> tp.pidTagSequenceNr),
           awaitingFlush))
       sender() ! ResetPersistenceIdComplete
+
+    case ReceiveTimeout =>
+    // not idle
+
+    case StopTagWriter =>
+      // not idle any more
+      parent ! CancelPassivateTagWriter(tag)
   }
 
   private def sendPubsubNotification(): Unit = {
