@@ -301,6 +301,42 @@ import scala.compat.java8.FutureConverters._
         }
       }
 
+      val highestDeletedSequenceNrCb = getAsyncCallback[Try[Long]] {
+        case Success(delSeqNr) =>
+          // lowest possible seqNr is 1
+          expectedNextSeqNr = math.max(delSeqNr + 1, math.max(fromSeqNr, 1))
+          partition = partitionNr(expectedNextSeqNr)
+          // initial query
+          queryState = QueryIdle
+          query(switchPartition = false)
+
+        case Failure(e) => onFailure(e)
+
+      }
+
+      val checkForGapsCb: AsyncCallback[(Int, Try[Option[Row]])] = getAsyncCallback {
+        case (foundEmptyPartitionCount, result) =>
+          result match {
+            case Success(mbRow) =>
+              mbRow.map(_.getLong("sequence_nr")) match {
+                case None | Some(0) =>
+                  // Some(0) when old schema with static used column, everything deleted in this partition
+                  if (foundEmptyPartitionCount == 5)
+                    completeStage()
+                  else {
+                    partition = partition + 1
+                    checkForGaps(foundEmptyPartitionCount + 1)
+                  }
+                case Some(_) =>
+                  if (foundEmptyPartitionCount == 0)
+                    partition = partition + 1
+                  query(switchPartition = false)
+              }
+            case Failure(_) =>
+              throw new IllegalStateException("Should not be able to get here")
+          }
+      }
+
       private def internalFastForward(nextSeqNr: Long): Unit = {
         log.debug(
           "EventsByPersistenceId [{}] External fast-forward to seqNr [{}] from current [{}]",
@@ -318,20 +354,7 @@ import scala.compat.java8.FutureConverters._
 
       override def preStart(): Unit = {
         queryState = QueryInProgress(switchPartition = false, fetchMore = false, System.nanoTime())
-        session.highestDeletedSequenceNumber(persistenceId).onComplete {
-          getAsyncCallback[Try[Long]] {
-            case Success(delSeqNr) =>
-              // lowest possible seqNr is 1
-              expectedNextSeqNr = math.max(delSeqNr + 1, math.max(fromSeqNr, 1))
-              partition = partitionNr(expectedNextSeqNr)
-              // initial query
-              queryState = QueryIdle
-              query(switchPartition = false)
-
-            case Failure(e) => onFailure(e)
-
-          }.invoke
-        }
+        session.highestDeletedSequenceNumber(persistenceId).onComplete(highestDeletedSequenceNrCb.invoke)
 
         refreshInterval match {
           case Some(interval) =>
@@ -546,27 +569,9 @@ import scala.compat.java8.FutureConverters._
       // Only used when gapFreeSequenceNumbers==false
       // if full partition was cleaned up we look for two empty partitions before completing
       def checkForGaps(foundEmptyPartitionCount: Int): Unit = {
-        session.selectSingleRow(persistenceId, partition).onComplete {
-          getAsyncCallback[Try[Option[Row]]] {
-            case Success(mbRow) =>
-              mbRow.map(_.getLong("sequence_nr")) match {
-                case None | Some(0) =>
-                  // Some(0) when old schema with static used column, everything deleted in this partition
-                  if (foundEmptyPartitionCount == 5)
-                    completeStage()
-                  else {
-                    partition = partition + 1
-                    checkForGaps(foundEmptyPartitionCount + 1)
-                  }
-                case Some(_) =>
-                  if (foundEmptyPartitionCount == 0)
-                    partition = partition + 1
-                  query(switchPartition = false)
-              }
-            case Failure(_) =>
-              throw new IllegalStateException("Should not be able to get here")
-          }.invoke
-        }
+        session
+          .selectSingleRow(persistenceId, partition)
+          .onComplete(result => checkForGapsCb.invoke((foundEmptyPartitionCount, result)))
       }
 
       def extractSeqNr(row: Row): Long = row.getLong("sequence_nr")
