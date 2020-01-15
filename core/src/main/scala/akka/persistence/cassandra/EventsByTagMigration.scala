@@ -111,7 +111,8 @@ class EventsByTagMigration(
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](readJournalNamespace)
   private implicit val materialiser = ActorMaterializer()(system)
 
-  implicit val ec = system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.plugin-dispatcher"))
+  implicit val ec =
+    system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.write.plugin-dispatcher"))
   override def config: CassandraJournalConfig =
     new CassandraJournalConfig(system, system.settings.config.getConfig(journalNamespace))
   val session: CassandraSession = {
