@@ -5,6 +5,9 @@
 package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{ ActorSystem, PoisonPill, Props }
@@ -13,11 +16,16 @@ import akka.testkit.{ TestKitBase, TestProbe }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
-
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
 object CassandraLifecycle {
+
+  val firstTimeBucket: String = {
+    val today = LocalDateTime.now(ZoneOffset.UTC)
+    val firstBucketFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HH:mm")
+    today.minusMinutes(5).format(firstBucketFormat)
+  }
 
   val config =
     ConfigFactory.parseString(s"""
@@ -25,6 +33,7 @@ object CassandraLifecycle {
     akka.persistence.journal.plugin = "cassandra-journal.write"
     akka.persistence.snapshot-store.plugin = "cassandra-journal.snapshot"
     cassandra-journal.circuit-breaker.call-timeout = 30s
+    cassandra-journal.read.first-time-bucket = "$firstTimeBucket"
     akka.test.single-expect-default = 20s
     akka.test.filter-leeway = 20s
     akka.actor.serialize-messages=on

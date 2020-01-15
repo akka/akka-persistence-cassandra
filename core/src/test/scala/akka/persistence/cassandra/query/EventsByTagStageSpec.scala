@@ -26,7 +26,6 @@ import scala.annotation.tailrec
 import scala.concurrent.duration._
 
 object EventsByTagStageSpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
   val fetchSize = 3L
   val eventualConsistencyDelay: FiniteDuration = 400.millis
   val waitTime: FiniteDuration = (eventualConsistencyDelay * 1.5).asInstanceOf[FiniteDuration] // bigger than the eventual consistency delay but less than the new pid timeout
@@ -39,7 +38,6 @@ object EventsByTagStageSpec {
           log-queries = off
 
           read {
-            first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormatter)}"
             max-result-size-query = $fetchSize
             log-queries = on
             refresh-interval = 200ms

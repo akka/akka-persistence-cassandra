@@ -5,7 +5,6 @@
 package akka.persistence.cassandra
 
 import java.io.{ OutputStream, PrintStream }
-import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
@@ -34,7 +33,6 @@ import akka.serialization.SerializationExtension
 import scala.util.control.NonFatal
 
 object CassandraSpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
   def getCallerName(clazz: Class[_]): String = {
     val s = Thread.currentThread.getStackTrace
       .map(_.getClassName)
@@ -72,7 +70,6 @@ object CassandraSpec {
       }
   
       cassandra-journal {
-        read.first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
         events-by-tag {
           eventual-consistency-delay = 200ms
         }

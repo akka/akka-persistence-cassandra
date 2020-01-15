@@ -4,8 +4,6 @@
 
 package akka.persistence.cassandra
 
-import java.time.{ LocalDateTime, ZoneOffset }
-
 import akka.persistence.cassandra.query.TestActor
 import akka.persistence.cassandra.query._
 import akka.persistence.journal.Tagged
@@ -18,9 +16,6 @@ import scala.concurrent.Future
 
 class EventsByTagStressSpec extends CassandraSpec(s"""
     cassandra-journal {
-      read {
-        first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusHours(2).format(firstBucketFormatter)}"
-      }
       events-by-tag {
         max-message-batch-size = 25
       }

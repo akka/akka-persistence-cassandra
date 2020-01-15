@@ -36,11 +36,6 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
       cassandra-journal {
         keyspace = $name
         
-        read {
-          first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10).format(firstBucketFormatter)}"
-          # first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10).format(firstBucketFormatter)}"
-        }
-
         events-by-tag {
           bucket-size = Minute
         }

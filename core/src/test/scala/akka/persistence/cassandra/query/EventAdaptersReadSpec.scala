@@ -4,8 +4,6 @@
 
 package akka.persistence.cassandra.query
 
-import java.time.{ LocalDateTime, ZoneOffset }
-
 import akka.actor.ActorRef
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.persistence.query.NoOffset
@@ -15,7 +13,6 @@ import com.typesafe.config.ConfigFactory
 import scala.concurrent.duration._
 
 object EventAdaptersReadSpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
     akka.actor.serialize-messages=off
@@ -32,7 +29,6 @@ object EventAdaptersReadSpec {
         max-buffer-size = 50
         refresh-interval = 500ms
         max-result-size-query = 2
-        first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
       }
       events-by-tag {
         flush-interval = 0ms

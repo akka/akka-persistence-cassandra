@@ -5,7 +5,6 @@
 package akka.persistence.cassandra
 
 import java.nio.ByteBuffer
-import java.time.{ LocalDateTime, ZoneOffset }
 import java.lang.{ Long => JLong }
 
 import akka.actor.{ ActorSystem, PoisonPill }
@@ -33,7 +32,6 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 /**
  */
 object EventsByTagMigrationSpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
   
@@ -48,7 +46,6 @@ object EventsByTagMigrationSpec {
          keyspace-autocreate = true
          tables-autocreate = true
          read {
-           first-time-bucket = "${today.minusHours(3).format(query.firstBucketFormatter)}"
            events-by-persistence-id-gap-timeout = 1s
          }
        }
