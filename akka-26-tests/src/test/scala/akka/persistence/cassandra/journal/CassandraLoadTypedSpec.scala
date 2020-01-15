@@ -10,12 +10,10 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter._
-import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.CassandraSpec
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
-import com.typesafe.config.ConfigFactory
 import org.scalatest._
 
 object CassandraLoadTypedSpec {

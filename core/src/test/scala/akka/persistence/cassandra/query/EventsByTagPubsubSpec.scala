@@ -27,14 +27,11 @@ object EventsByTagPubsubSpec {
     akka.remote.netty.tcp.hostname = "127.0.0.1"
     cassandra-journal {
       pubsub-notification = on
+      
+      read.refresh-interval = 10s
 
       events-by-tag {
         flush-interval = 0ms
-      }
-    }
-    cassandra-query-journal {
-      refresh-interval = 10s
-      events-by-tag {
         eventual-consistency-delay = 0s
       }
     }

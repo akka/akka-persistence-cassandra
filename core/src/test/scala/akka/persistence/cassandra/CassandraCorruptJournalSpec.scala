@@ -61,7 +61,7 @@ class CassandraCorruptJournalSpec extends CassandraSpec(s"""
       loggers = ["akka.testkit.TestEventListener"]
     }
 
-    cassandra-journal.replay-filter {
+    cassandra-journal.write.replay-filter {
    # What the filter should do when detecting invalid events.
    # Supported values:
    # `repair-by-discard-old` : discard events from old writers,
@@ -75,16 +75,16 @@ class CassandraCorruptJournalSpec extends CassandraSpec(s"""
 
     cassandra-journal-fail = $${cassandra-journal}
     cassandra-journal-fail {
-      replay-filter.mode = fail
+      write.replay-filter.mode = fail
     }
 
     cassandra-journal-warn = $${cassandra-journal}
     cassandra-journal-warn {
-      replay-filter.mode = warn
+      write.replay-filter.mode = warn
     }
   """.stripMargin) {
 
-  def setup(persistenceId: String, journalId: String = "cassandra-journal"): ActorRef = {
+  def setup(persistenceId: String, journalId: String = "cassandra-journal.write"): ActorRef = {
     val ref = system.actorOf(FullEventLog.props(persistenceId, journalId))
     ref
   }
@@ -122,7 +122,7 @@ class CassandraCorruptJournalSpec extends CassandraSpec(s"""
   "Cassandra recovery" must {
     "work with replay-filter = repair-by-discard-old" in {
 
-      val pid = runConcurrentPersistentActors("cassandra-journal")
+      val pid = runConcurrentPersistentActors("cassandra-journal.write")
 
       EventFilter.warning(pattern = "Invalid replayed event", occurrences = 2).intercept {
         val p1c = setup(pid)
@@ -135,18 +135,18 @@ class CassandraCorruptJournalSpec extends CassandraSpec(s"""
 
     "work with replay-filter = fail" in {
 
-      val pid = runConcurrentPersistentActors("cassandra-journal-fail")
+      val pid = runConcurrentPersistentActors("cassandra-journal-fail.write")
 
       EventFilter[IllegalStateException](pattern = "Invalid replayed event", occurrences = 1).intercept {
-        setup(pid, journalId = "cassandra-journal-fail")
+        setup(pid, journalId = "cassandra-journal-fail.write")
       }
     }
 
     "work with replay-filter = warn" in {
 
-      val pid = runConcurrentPersistentActors("cassandra-journal-warn")
+      val pid = runConcurrentPersistentActors("cassandra-journal-warn.write")
       EventFilter.warning(pattern = "Invalid replayed event", occurrences = 2).intercept {
-        val p1c = setup(pid, journalId = "cassandra-journal-warn")
+        val p1c = setup(pid, journalId = "cassandra-journal-warn.write")
         p1c ! "p1c-1"
         expectMsg("p1c-1-done")
         p1c ! GetEventLog

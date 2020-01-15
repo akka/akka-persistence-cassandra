@@ -76,12 +76,12 @@ object CassandraSpec {
         }
       }
   
-        cassandra-query-journal {
-          first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
-          events-by-tag {
-            eventual-consistency-delay = 200ms
-          }
+      cassandra-journal {
+        read.first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
+        events-by-tag {
+          eventual-consistency-delay = 200ms
         }
+      }
     """)
 
 }

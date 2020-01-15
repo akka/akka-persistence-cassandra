@@ -84,8 +84,6 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
 
   val supportDeletes: Boolean = config.getBoolean("support-deletes")
 
-  val queryPlugin: String = config.getString("query-plugin")
-
   val eventsByTagEnabled: Boolean = config.getBoolean("events-by-tag.enabled")
 
   val bucketSize: BucketSize =

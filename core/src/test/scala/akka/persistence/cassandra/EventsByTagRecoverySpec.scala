@@ -26,16 +26,15 @@ object EventsByTagRecoverySpec {
        cassandra-journal {
          keyspace = $keyspaceName
          log-queries = off
+         read {
+           first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
+         }
          events-by-tag {
             max-message-batch-size = 2
             bucket-size = "Day"
          }
        }
        cassandra-snapshot-store.keyspace=$keyspaceName
-       
-       cassandra-query-journal = {
-          first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
-       }
        
        akka.actor.serialize-messages=off
     """).withFallback(CassandraLifecycle.config)

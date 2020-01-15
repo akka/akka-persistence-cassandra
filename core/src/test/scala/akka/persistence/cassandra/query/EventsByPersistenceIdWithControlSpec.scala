@@ -17,9 +17,9 @@ import scala.concurrent.duration._
 object EventsByPersistenceIdWithControlSpec {
   val config = ConfigFactory.parseString(s"""
     cassandra-journal.keyspace=EventsByPersistenceIdWithControlSpec
-    cassandra-query-journal.refresh-interval = 120s # effectively disabled
-    cassandra-query-journal.max-result-size-query = 20
     cassandra-journal.write.target-partition-size = 15
+    cassandra-journal.read.refresh-interval = 120s # effectively disabled
+    cassandra-journal.read.max-result-size-query = 20
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
     """).withFallback(CassandraLifecycle.config)
 }

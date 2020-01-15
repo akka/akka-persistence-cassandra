@@ -37,18 +37,18 @@ object EventsByTagStageSpec {
 
         cassandra-journal {
           log-queries = off
-          events-by-tag {
-           flush-interval = 0ms
-           bucket-size = Minute
-          }
-        }
 
-        cassandra-query-journal {
-          first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormatter)}"
-          max-result-size-query = $fetchSize
-          log-queries = on
-          refresh-interval = 200ms
+          read {
+            first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormatter)}"
+            max-result-size-query = $fetchSize
+            log-queries = on
+            refresh-interval = 200ms
+          }
+          
           events-by-tag {
+            flush-interval = 0ms
+            bucket-size = Minute
+          
             # Speeds up tests
             eventual-consistency-delay = ${eventualConsistencyDelay.toMillis}ms
             gap-timeout = 5s

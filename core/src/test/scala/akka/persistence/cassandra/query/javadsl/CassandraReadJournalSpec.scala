@@ -16,12 +16,12 @@ import scala.concurrent.duration._
 object CassandraReadJournalSpec {
   val config = ConfigFactory.parseString(s"""
     akka.actor.serialize-messages=off
-    cassandra-query-journal.max-buffer-size = 10
-    cassandra-query-journal.refresh-interval = 0.5s
-    cassandra-journal.event-adapters {
+    cassandra-journal.read.max-buffer-size = 10
+    cassandra-journal.read.refresh-interval = 0.5s
+    cassandra-journal.write.event-adapters {
       test-tagger = akka.persistence.cassandra.query.javadsl.TestTagger
     }
-    cassandra-journal.event-adapter-bindings = {
+    cassandra-journal.write.event-adapter-bindings = {
       "java.lang.String" = test-tagger
     }
     """).withFallback(CassandraLifecycle.config)

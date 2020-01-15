@@ -36,19 +36,19 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
       cassandra-journal {
         keyspace = $name
         port = $CassPort
+        
+        read {
+          first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10).format(firstBucketFormatter)}"
+          # first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10).format(firstBucketFormatter)}"
+        }
 
         events-by-tag {
           bucket-size = Minute
         }
-
       }
       cassandra-snapshot-store {
         keyspace = $name
         port = $CassPort
-      }
-      cassandra-query-journal {
-       first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10).format(firstBucketFormatter)}"
-       # first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10).format(firstBucketFormatter)}"
       }
     """).withFallback(CassandraLifecycle.config))
 

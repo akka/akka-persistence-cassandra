@@ -22,7 +22,7 @@ object CassandraLifecycle {
   val config =
     ConfigFactory.parseString(s"""
     akka.test.timefactor = $${?AKKA_TEST_TIMEFACTOR}
-    akka.persistence.journal.plugin = "cassandra-journal"
+    akka.persistence.journal.plugin = "cassandra-journal.write"
     akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
     cassandra-journal.circuit-breaker.call-timeout = 30s
     akka.test.single-expect-default = 20s

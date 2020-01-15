@@ -20,10 +20,14 @@ import org.scalatest.BeforeAndAfterEach
 
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
-    cassandra-query-journal.max-buffer-size = 10
-    cassandra-query-journal.refresh-interval = 0.5s
-    cassandra-query-journal.max-result-size-query = 10
-    cassandra-journal.write.target-partition-size = 15
+    cassandra-journal {
+      write.target-partition-size = 15
+      read {
+        max-buffer-size = 10
+        refresh-interval = 0.5s
+        max-result-size-query = 10
+      }
+    }  
     """).withFallback(CassandraLifecycle.config)
 }
 

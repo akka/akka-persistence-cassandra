@@ -23,15 +23,15 @@ object CassandraEventsByTagLoadSpec {
   val config = ConfigFactory.parseString(s"""
        cassandra-journal {
          log-queries = off
+         read {
+           first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
+         }
          events-by-tag {
             max-message-batch-size = 25
             bucket-size = "Minute"
          }
        }
        cassandra-snapshot-store.keyspace=CassandraEventsByTagLoadSpecSnapshot
-       cassandra-query-journal = {
-          first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
-       }
        akka.actor.serialize-messages=off
     """).withFallback(CassandraLifecycle.config)
 }
@@ -60,7 +60,7 @@ class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoa
       }
 
       val readJournal =
-        PersistenceQuery(system).readJournalFor[CassandraReadJournal]("cassandra-query-journal")
+        PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
       eventTags.foreach({ tag =>
         try {

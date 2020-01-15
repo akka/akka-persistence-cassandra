@@ -18,12 +18,12 @@ import scala.concurrent.Future
 
 class EventsByTagStressSpec extends CassandraSpec(s"""
     cassandra-journal {
+      read {
+        first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusHours(2).format(firstBucketFormatter)}"
+      }
       events-by-tag {
         max-message-batch-size = 25
       }
-    }
-    cassandra-query-journal {
-       first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusHours(2).format(firstBucketFormatter)}"
     }
   """) {
 

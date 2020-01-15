@@ -12,7 +12,7 @@ object TagScanningSpec {
   val config = ConfigFactory.parseString(s"""
       cassandra-journal.events-by-tag.enabled = on
       cassandra-journal.events-by-tag.scanning-flush-interval = 2s
-      cassandra-journal.replay-filter.mode = off
+      cassandra-journal.write.replay-filter.mode = off
       cassandra-journal.log-queries = off
       cassandra-snapshot-store.log-queries = off
     """).withFallback(CassandraLifecycle.config)
