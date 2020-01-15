@@ -63,11 +63,11 @@ object CassandraJournalDeletionSpec {
 class CassandraJournalDeletionSpec extends CassandraSpec(s"""
     akka.loggers = ["akka.testkit.TestEventListener"]
     akka.log-dead-letters = off
-    cassandra-journal.max-concurrent-deletes = 100
+    cassandra-journal.write.max-concurrent-deletes = 100
 
     cassandra-journal-low-concurrent-deletes = $${cassandra-journal}
     cassandra-journal-low-concurrent-deletes {
-      max-concurrent-deletes = 5
+      write.max-concurrent-deletes = 5
     }
 
     cassandra-journal-small-partition-size = $${cassandra-journal}
@@ -78,7 +78,7 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
     
     cassandra-journal-no-delete = $${cassandra-journal}
     cassandra-journal-no-delete {
-      support-deletes = off
+      write.support-deletes = off
     }
   """) {
 
