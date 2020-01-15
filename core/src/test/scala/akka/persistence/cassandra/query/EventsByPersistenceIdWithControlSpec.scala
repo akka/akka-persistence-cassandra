@@ -19,7 +19,7 @@ object EventsByPersistenceIdWithControlSpec {
     cassandra-journal.keyspace=EventsByPersistenceIdWithControlSpec
     cassandra-query-journal.refresh-interval = 120s # effectively disabled
     cassandra-query-journal.max-result-size-query = 20
-    cassandra-journal.target-partition-size = 15
+    cassandra-journal.write.target-partition-size = 15
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
     """).withFallback(CassandraLifecycle.config)
 }

@@ -23,7 +23,7 @@ object CassandraSerializationSpec {
        |akka.persistence.journal.max-deletion-batch-size = 3
        |akka.persistence.publish-confirmations = on
        |akka.persistence.publish-plugin-commands = on
-       |cassandra-journal.target-partition-size = 5
+       |cassandra-journal.write.target-partition-size = 5
        |cassandra-journal.max-result-size = 3
        |cassandra-journal.keyspace=CassandraIntegrationSpec
        |cassandra-snapshot-store.keyspace=CassandraIntegrationSpecSnapshot

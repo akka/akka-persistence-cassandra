@@ -26,18 +26,18 @@ object MultiPluginSpec {
        |cassandra-snapshot-store.keyspace-autocreate=false
        |
        |cassandra-journal-a=$${cassandra-journal}
-       |cassandra-journal-a.table=processor_a_messages
+       |cassandra-journal-a.write.table=processor_a_messages
        |
        |cassandra-journal-b=$${cassandra-journal}
-       |cassandra-journal-b.table=processor_b_messages
+       |cassandra-journal-b.write.table=processor_b_messages
        |
         |cassandra-journal-c=$${cassandra-journal}
-       |cassandra-journal-c.table=processor_c_messages
+       |cassandra-journal-c.write.table=processor_c_messages
        |cassandra-snapshot-c=$${cassandra-snapshot-store}
        |cassandra-snapshot-c.table=snapshot_c_messages
        |
        |cassandra-journal-d=$${cassandra-journal}
-       |cassandra-journal-d.table=processor_d_messages
+       |cassandra-journal-d.write.table=processor_d_messages
        |cassandra-snapshot-d=$${cassandra-snapshot-store}
        |cassandra-snapshot-d.table=snapshot_d_messages
        |

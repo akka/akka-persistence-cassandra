@@ -22,7 +22,7 @@ object EventsByPersistenceIdSpec {
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 2
     cassandra-query-journal.events-by-persistence-id-gap-timeout = 4 seconds
-    cassandra-journal.target-partition-size = 15
+    cassandra-journal.write.target-partition-size = 15
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
     """).withFallback(CassandraLifecycle.config)
 }

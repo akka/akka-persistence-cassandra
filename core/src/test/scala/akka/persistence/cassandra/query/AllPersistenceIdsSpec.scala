@@ -6,29 +6,31 @@ package akka.persistence.cassandra.query
 
 import java.util.UUID
 
+import scala.concurrent.duration._
+
 import akka.NotUsed
 import akka.actor.ActorRef
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
+import akka.persistence.cassandra.CassandraLifecycle
+import akka.persistence.cassandra.CassandraSpec
+import akka.persistence.cassandra.journal.CassandraJournalConfig
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterEach
-
-import scala.concurrent.duration._
 
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
     cassandra-query-journal.max-buffer-size = 10
     cassandra-query-journal.refresh-interval = 0.5s
     cassandra-query-journal.max-result-size-query = 10
-    cassandra-journal.target-partition-size = 15
+    cassandra-journal.write.target-partition-size = 15
     """).withFallback(CassandraLifecycle.config)
 }
 
 class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) with BeforeAndAfterEach {
 
   val cfg = system.settings.config.getConfig("cassandra-journal")
-  val pluginConfig = new CassandraPluginConfig(system, cfg)
+  val pluginConfig = new CassandraJournalConfig(system, cfg)
 
   override protected def beforeEach() = {
     super.beforeEach()

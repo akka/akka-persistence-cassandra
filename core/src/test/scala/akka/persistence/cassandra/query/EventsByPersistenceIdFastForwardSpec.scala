@@ -20,7 +20,7 @@ object EventsByPersistenceIdFastForwardSpec {
     cassandra-journal.keyspace=EventsByPersistenceIdFastForwardSpec
     cassandra-query-journal.refresh-interval = 250ms
     cassandra-query-journal.max-result-size-query = 2
-    cassandra-journal.target-partition-size = 15
+    cassandra-journal.write.target-partition-size = 15
     """).withFallback(CassandraLifecycle.config)
 }
 

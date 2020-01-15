@@ -9,6 +9,9 @@ import scala.collection.immutable
 import com.typesafe.config.Config
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.actor.ActorSystem
+import akka.persistence.cassandra.CassandraPluginConfig.getReplicationStrategy
+import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
+import akka.persistence.cassandra.getListFromConfig
 
 class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
   val writeProfile: String = config.getString("write-profile")
@@ -16,6 +19,18 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
 
   CassandraPluginConfig.checkProfile(system, readProfile)
   CassandraPluginConfig.checkProfile(system, writeProfile)
+
+  val table: String = config.getString("table")
+
+  val tableCompactionStrategy: CassandraCompactionStrategy =
+    CassandraCompactionStrategy(config.getConfig("table-compaction-strategy"))
+
+  val replicationStrategy: String = getReplicationStrategy(
+    config.getString("replication-strategy"),
+    config.getInt("replication-factor"),
+    getListFromConfig(config, "data-center-replication-factors"))
+
+  val gcGraceSeconds: Long = config.getLong("gc-grace-seconds")
 
   val maxLoadAttempts = config.getInt("max-load-attempts")
   val cassandra2xCompat = config.getBoolean("cassandra-2x-compat")
@@ -27,7 +42,7 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-snapshot-store")).createKeyspaceStatement
+   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-journal.snapshot")).createKeyspaceStatement
    * }}}
    *
    * @see [[CassandraSnapshotStoreConfig#createTablesStatements]]

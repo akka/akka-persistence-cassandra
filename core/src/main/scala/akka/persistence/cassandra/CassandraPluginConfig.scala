@@ -4,34 +4,20 @@
 
 package akka.persistence.cassandra
 
-import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
-import com.typesafe.config.Config
-import akka.actor.{ ActorSystem, ExtendedActorSystem }
+import akka.actor.ActorSystem
+import akka.actor.ExtendedActorSystem
 import akka.cassandra.session.CqlSessionProvider
+import com.typesafe.config.Config
 
 class CassandraPluginConfig(system: ActorSystem, config: Config) {
-
-  import akka.persistence.cassandra.CassandraPluginConfig._
 
   val sessionProvider: CqlSessionProvider =
     CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
 
   val keyspace: String = config.getString("keyspace")
-  val table: String = config.getString("table")
-  val metadataTable: String = config.getString("metadata-table")
-
-  val tableCompactionStrategy: CassandraCompactionStrategy =
-    CassandraCompactionStrategy(config.getConfig("table-compaction-strategy"))
 
   val keyspaceAutoCreate: Boolean = config.getBoolean("keyspace-autocreate")
   val tablesAutoCreate: Boolean = config.getBoolean("tables-autocreate")
-
-  val replicationStrategy: String = getReplicationStrategy(
-    config.getString("replication-strategy"),
-    config.getInt("replication-factor"),
-    getListFromConfig(config, "data-center-replication-factors"))
-
-  val gcGraceSeconds: Long = config.getLong("gc-grace-seconds")
 
 }
 

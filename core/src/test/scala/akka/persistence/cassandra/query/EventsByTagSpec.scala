@@ -45,7 +45,7 @@ object EventsByTagSpec {
     akka.actor.serialize-messages = off
     akka.actor.warn-about-java-serializer-usage = off
     cassandra-journal {
-      #target-partition-size = 5
+      #write.target-partition-size = 5
 
       event-adapters {
         color-tagger  = akka.persistence.cassandra.query.ColorFruitTagger

@@ -77,7 +77,7 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
 
     cassandra-journal-small-partition-size = $${cassandra-journal}
     cassandra-journal-small-partition-size {
-      target-partition-size = 3
+      write.target-partition-size = 3
       keyspace = "DeletionSpecMany"
       query-plugin = cassandra-query-journal-small-partition-size
     }

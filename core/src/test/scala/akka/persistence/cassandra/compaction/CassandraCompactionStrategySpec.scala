@@ -32,14 +32,14 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
   "A CassandraCompactionStrategy" must {
 
     "successfully create a TimeWindowCompactionStrategy" in {
-      val twConfig = ConfigFactory.parseString("""table-compaction-strategy {
+      val twConfig = ConfigFactory.parseString("""write.table-compaction-strategy {
           | class = "TimeWindowCompactionStrategy"
           | compaction_window_size = 10
           | compaction_window_unit = "DAYS"
           |}
         """.stripMargin)
 
-      val compactionStrategy = CassandraCompactionStrategy(twConfig.getConfig("table-compaction-strategy"))
+      val compactionStrategy = CassandraCompactionStrategy(twConfig.getConfig("write.table-compaction-strategy"))
         .asInstanceOf[TimeWindowCompactionStrategy]
 
       compactionStrategy.compactionWindowSize shouldEqual 10
@@ -47,7 +47,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
     }
 
     "successfully create CQL from TimeWindowCompactionStrategy" in {
-      val twConfig = ConfigFactory.parseString("""table-compaction-strategy {
+      val twConfig = ConfigFactory.parseString("""write.table-compaction-strategy {
           | class = "TimeWindowCompactionStrategy"
           | compaction_window_size = 1
           | compaction_window_unit = "MINUTES"
@@ -56,7 +56,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
 
       val cqlExpression =
         s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable1 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(
-          twConfig.getConfig("table-compaction-strategy")).asCQL}"
+          twConfig.getConfig("write.table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
         cluster.execute(cqlExpression)
@@ -64,7 +64,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
     }
 
     "fail if unrecognised property for TimeWindowCompactionStrategy" in {
-      val twConfig = ConfigFactory.parseString("""table-compaction-strategy {
+      val twConfig = ConfigFactory.parseString("""write.table-compaction-strategy {
           | class = "TimeWindowCompactionStrategy"
           | compaction_window_size = 10
           | banana = "cherry"
@@ -72,13 +72,13 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
         """.stripMargin)
 
       assertThrows[IllegalArgumentException] {
-        CassandraCompactionStrategy(twConfig.getConfig("table-compaction-strategy"))
+        CassandraCompactionStrategy(twConfig.getConfig("write.table-compaction-strategy"))
           .asInstanceOf[TimeWindowCompactionStrategy]
       }
     }
 
     "successfully create a LeveledCompactionStrategy" in {
-      val uniqueConfig = ConfigFactory.parseString("""table-compaction-strategy {
+      val uniqueConfig = ConfigFactory.parseString("""write.table-compaction-strategy {
           | class = "LeveledCompactionStrategy"
           | enabled = true
           | tombstone_compaction_interval = 86400
@@ -88,7 +88,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
           |}
         """.stripMargin)
 
-      val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy"))
+      val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("write.table-compaction-strategy"))
         .asInstanceOf[LeveledCompactionStrategy]
 
       compactionStrategy.enabled shouldEqual true
@@ -99,7 +99,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
     }
 
     "successfully create CQL from LeveledCompactionStrategy" in {
-      val uniqueConfig = ConfigFactory.parseString("""table-compaction-strategy {
+      val uniqueConfig = ConfigFactory.parseString("""write.table-compaction-strategy {
           | class = "LeveledCompactionStrategy"
           | enabled = true
           | tombstone_compaction_interval = 86400
@@ -111,7 +111,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
 
       val cqlExpression =
         s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable2 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(
-          uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
+          uniqueConfig.getConfig("write.table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
         cluster.execute(cqlExpression)
@@ -119,7 +119,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
     }
 
     "successfully create a SizeTieredCompactionStrategy" in {
-      val uniqueConfig = ConfigFactory.parseString("""table-compaction-strategy {
+      val uniqueConfig = ConfigFactory.parseString("""write.table-compaction-strategy {
           | class = "SizeTieredCompactionStrategy"
           | enabled = true
           | tombstone_compaction_interval = 86400
@@ -133,7 +133,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
           |}
         """.stripMargin)
 
-      val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("table-compaction-strategy"))
+      val compactionStrategy = CassandraCompactionStrategy(uniqueConfig.getConfig("write.table-compaction-strategy"))
         .asInstanceOf[SizeTieredCompactionStrategy]
 
       compactionStrategy.enabled shouldEqual true
@@ -148,7 +148,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
     }
 
     "successfully create CQL from SizeTieredCompactionStrategy" in {
-      val uniqueConfig = ConfigFactory.parseString("""table-compaction-strategy {
+      val uniqueConfig = ConfigFactory.parseString("""write.table-compaction-strategy {
           | class = "SizeTieredCompactionStrategy"
           | enabled = true
           | tombstone_compaction_interval = 86400
@@ -164,7 +164,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
 
       val cqlExpression =
         s"CREATE TABLE IF NOT EXISTS testKeyspace.testTable3 (testId TEXT PRIMARY KEY) WITH compaction = ${CassandraCompactionStrategy(
-          uniqueConfig.getConfig("table-compaction-strategy")).asCQL}"
+          uniqueConfig.getConfig("write.table-compaction-strategy")).asCQL}"
 
       noException must be thrownBy {
         cluster.execute(cqlExpression)

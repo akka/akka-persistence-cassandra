@@ -15,6 +15,9 @@ import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
 import com.typesafe.config.Config
 import scala.concurrent.duration._
 
+import akka.persistence.cassandra.CassandraPluginConfig.getReplicationStrategy
+import akka.persistence.cassandra.getListFromConfig
+
 @InternalApi private[akka] sealed trait BucketSize {
   val durationMillis: Long
 }
@@ -57,9 +60,21 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
   CassandraPluginConfig.checkProfile(system, writeProfile)
   CassandraPluginConfig.checkProfile(system, readProfile)
 
-  val targetPartitionSize: Long =
-    config.getLong(CassandraJournalConfig.TargetPartitionProperty)
-  val maxMessageBatchSize: Int = config.getInt("max-message-batch-size")
+  val table: String = config.getString("write.table")
+  val metadataTable: String = config.getString("write.metadata-table")
+
+  val tableCompactionStrategy: CassandraCompactionStrategy =
+    CassandraCompactionStrategy(config.getConfig("write.table-compaction-strategy"))
+
+  val replicationStrategy: String = getReplicationStrategy(
+    config.getString("write.replication-strategy"),
+    config.getInt("write.replication-factor"),
+    getListFromConfig(config, "write.data-center-replication-factors"))
+
+  val gcGraceSeconds: Long = config.getLong("write.gc-grace-seconds")
+
+  val targetPartitionSize: Long = config.getLong("write.target-partition-size")
+  val maxMessageBatchSize: Int = config.getInt("write.max-message-batch-size")
 
   // TODO this is now only used when deciding how to delete, remove this config and just
   // query what version of cassandra we're connected to and do the right thing
@@ -158,8 +173,4 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     new CassandraStatements {
       override def config: CassandraJournalConfig = CassandraJournalConfig.this
     }
-}
-
-object CassandraJournalConfig {
-  val TargetPartitionProperty: String = "target-partition-size"
 }
