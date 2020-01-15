@@ -6,7 +6,7 @@ import com.typesafe.config.ConfigFactory
 object JournalDseSpec {
   val config = ConfigFactory.parseString(s"""
    cassandra-journal.keyspace=JournalDseSpec
-   cassandra-snapshot-store.keyspace=JournalDseSpec
+   cassandra-journal.snapshot.keyspace=JournalDseSpec
                                  
    //# override-session-provider
    cassandra-journal {

@@ -79,10 +79,6 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
   val targetPartitionSize: Long = writeConfig.getLong("target-partition-size")
   val maxMessageBatchSize: Int = writeConfig.getInt("max-message-batch-size")
 
-  // TODO this is now only used when deciding how to delete, remove this config and just
-  // query what version of cassandra we're connected to and do the right thing
-  val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
-
   val maxConcurrentDeletes: Int = writeConfig.getInt("max-concurrent-deletes")
 
   val supportDeletes: Boolean = writeConfig.getBoolean("support-deletes")

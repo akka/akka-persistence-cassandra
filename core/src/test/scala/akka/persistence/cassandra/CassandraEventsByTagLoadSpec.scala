@@ -30,8 +30,8 @@ object CassandraEventsByTagLoadSpec {
             max-message-batch-size = 25
             bucket-size = "Minute"
          }
+         snapshot.keyspace=CassandraEventsByTagLoadSpecSnapshot
        }
-       cassandra-snapshot-store.keyspace=CassandraEventsByTagLoadSpecSnapshot
        akka.actor.serialize-messages=off
     """).withFallback(CassandraLifecycle.config)
 }

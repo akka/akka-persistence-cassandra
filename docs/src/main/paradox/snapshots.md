@@ -8,7 +8,7 @@
 
 To activate the snapshot-store plugin, add the following line to your Akka `application.conf`:
 
-    akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
+    akka.persistence.snapshot-store.plugin = "cassandra-journal.snapshot"
 
 This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
 

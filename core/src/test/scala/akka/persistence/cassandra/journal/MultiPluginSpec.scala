@@ -22,8 +22,7 @@ object MultiPluginSpec {
        |cassandra-journal.keyspace = $journalKeyspace
        |cassandra-journal.keyspace-autocreate=false
        |cassandra-journal.circuit-breaker.call-timeout = 30s
-       |cassandra-snapshot-store.keyspace=$snapshotKeyspace
-       |cassandra-snapshot-store.keyspace-autocreate=false
+       |cassandra-journal.snapshot.keyspace=$snapshotKeyspace
        |
        |cassandra-journal-a=$${cassandra-journal}
        |cassandra-journal-a.write.table=processor_a_messages
@@ -33,13 +32,11 @@ object MultiPluginSpec {
        |
        |cassandra-journal-c=$${cassandra-journal}
        |cassandra-journal-c.write.table=processor_c_messages
-       |cassandra-snapshot-c=$${cassandra-snapshot-store}
-       |cassandra-snapshot-c.table=snapshot_c_messages
+       |cassandra-journal-c.snapshot.table=snapshot_c_messages
        |
        |cassandra-journal-d=$${cassandra-journal}
        |cassandra-journal-d.write.table=processor_d_messages
-       |cassandra-snapshot-d=$${cassandra-snapshot-store}
-       |cassandra-snapshot-d.table=snapshot_d_messages
+       |cassandra-journal-d.snapshot.table=snapshot_d_messages
        |
     """.stripMargin)
 
@@ -65,7 +62,7 @@ object MultiPluginSpec {
 
   class OverrideJournalPluginProcessor(override val journalPluginId: String) extends Processor {
     override val persistenceId: String = "always-the-same"
-    override val snapshotPluginId: String = "cassandra-snapshot-store"
+    override val snapshotPluginId: String = "cassandra-journal.snapshot"
   }
 
   class OverrideSnapshotPluginProcessor(override val journalPluginId: String, override val snapshotPluginId: String)
@@ -97,8 +94,8 @@ class MultiPluginSpec
 
     CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-a.write")
     CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-b.write")
-    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-c.write", "cassandra-snapshot-c")
-    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-d.write", "cassandra-snapshot-d")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-c.write", "cassandra-journal-c.snapshot")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-d.write", "cassandra-journal-d.snapshot")
   }
 
   "A Cassandra journal" must {
@@ -125,13 +122,13 @@ class MultiPluginSpec
     "be usable multiple times with different configurations for two actors having the same persistence id" in {
       val processorC =
         system.actorOf(
-          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-c.write", "cassandra-snapshot-c"))
+          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-c.write", "cassandra-journal-c.snapshot"))
       processorC ! s"msg"
       expectMsgAllOf(s"msg-1")
 
       val processorD =
         system.actorOf(
-          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-d.write", "cassandra-snapshot-d"))
+          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-d.write", "cassandra-journal-d.snapshot"))
       processorD ! s"msg"
       expectMsgAllOf(s"msg-1")
 
@@ -144,14 +141,14 @@ class MultiPluginSpec
       // e is actually c and therefore the next message must be seqNr 2 after recovery by using the snapshot
       val processorE =
         system.actorOf(
-          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-c.write", "cassandra-snapshot-c"))
+          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-c.write", "cassandra-journal-c.snapshot"))
       processorE ! s"msg"
       expectMsgAllOf(s"msg-2")
 
       // e is actually c and therefore the next message must be seqNr 2 after recovery by using the snapshot
       val processorF =
         system.actorOf(
-          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-d.write", "cassandra-snapshot-d"))
+          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-d.write", "cassandra-journal-d.snapshot"))
       processorF ! s"msg"
       expectMsgAllOf(s"msg-3")
 

@@ -26,7 +26,7 @@ object CassandraSerializationSpec {
        |cassandra-journal.write.target-partition-size = 5
        |cassandra-journal.max-result-size = 3
        |cassandra-journal.keyspace=CassandraIntegrationSpec
-       |cassandra-snapshot-store.keyspace=CassandraIntegrationSpecSnapshot
+       |cassandra-journal.snapshot.keyspace=CassandraIntegrationSpecSnapshot
        |
     """.stripMargin).withFallback(CassandraLifecycle.config)
 

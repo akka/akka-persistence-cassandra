@@ -4,19 +4,25 @@
 
 package akka.persistence.cassandra.query
 
-import java.time.{ LocalDateTime, ZoneOffset }
-
-import akka.actor.{ ActorSystem, ExtendedActorSystem, NoSerializationVerificationNeeded }
-import akka.annotation.InternalApi
-import akka.cassandra.session.CqlSessionProvider
-import akka.event.Logging
-import akka.persistence.cassandra.CassandraPluginConfig
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.Period
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.{ BackTrackConfig, Fixed, Max }
-import com.typesafe.config.Config
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 import scala.concurrent.duration._
+
+import akka.actor.ActorSystem
+import akka.actor.NoSerializationVerificationNeeded
+import akka.annotation.InternalApi
+import akka.event.Logging
+import akka.persistence.cassandra.CassandraPluginConfig
+import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.Day
+import akka.persistence.cassandra.journal.Hour
+import akka.persistence.cassandra.journal.TimeBucket
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.BackTrackConfig
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.Fixed
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.Max
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.Period
+import com.typesafe.config.Config
 
 /**
  * INTERNAL API
@@ -119,8 +125,6 @@ import scala.concurrent.duration._
 
   val readProfile: String = readConfig.getString("read-profile")
   CassandraPluginConfig.checkProfile(system, readProfile)
-
-  val sessionProvider: CqlSessionProvider = CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
 
   val refreshInterval: FiniteDuration =
     readConfig.getDuration("refresh-interval", MILLISECONDS).millis

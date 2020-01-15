@@ -22,8 +22,7 @@ object ManyActorsLoadSpec {
       # increase this to 3s when benchmarking
       cassandra-journal.events-by-tag.scanning-flush-interval = 1s
       #cassandra-journal.log-queries = on
-      cassandra-snapshot-store.keyspace=ManyActorsLoadSpecSnapshot
-      #cassandra-snapshot-store.log-queries = on
+      cassandra-journal.snapshot.keyspace=ManyActorsLoadSpecSnapshot
     """).withFallback(CassandraLifecycle.config)
 
   final case class Init(numberOfEvents: Int)

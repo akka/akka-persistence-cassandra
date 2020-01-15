@@ -12,7 +12,7 @@
 
 To activate the journal plugin, add the following line to your Akka `application.conf`:
 
-    akka.persistence.journal.plugin = "cassandra-journal"
+    akka.persistence.journal.plugin = "cassandra-journal.write"
 
 This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
 

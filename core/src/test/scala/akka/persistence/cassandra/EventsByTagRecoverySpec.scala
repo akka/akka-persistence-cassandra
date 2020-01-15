@@ -33,8 +33,8 @@ object EventsByTagRecoverySpec {
             max-message-batch-size = 2
             bucket-size = "Day"
          }
+         snapshot.keyspace=$keyspaceName
        }
-       cassandra-snapshot-store.keyspace=$keyspaceName
        
        akka.actor.serialize-messages=off
     """).withFallback(CassandraLifecycle.config)

@@ -52,17 +52,12 @@ object CassandraSpec {
       cassandra-journal {
         session-name = $journalKeyspace
         keyspace = $journalKeyspace
+        # FIXME #81 this is not the way to configure port. Do we need port config in tests?
         port = $port
-      }
-
-      cassandra-snapshot-store {
-        session-name = ${snapshotStoreKeyspace}Snapshot
-        keyspace = $snapshotStoreKeyspace
-        port = $port
-      }
-    
-      cassandra-query-plugin { 
-        session-name = ${journalKeyspace}Query
+        
+        snapshot {
+          keyspace = $snapshotStoreKeyspace
+        }
       }     
     """)
 
