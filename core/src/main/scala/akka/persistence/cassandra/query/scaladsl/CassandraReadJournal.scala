@@ -28,12 +28,15 @@ import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.util.ByteString
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
-
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
+
+import akka.cassandra.session.scaladsl.CassandraSessionRegistry
+import akka.persistence.cassandra.CassandraStatements
+import akka.persistence.cassandra.snapshot.CassandraSnapshotStoreConfig
 import akka.serialization.SerializationExtension
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
@@ -122,18 +125,17 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       override def config = queryPluginConfig
     }
 
-  def config: CassandraJournalConfig = writePluginConfig
+  override def config: CassandraJournalConfig = writePluginConfig
+
+  override val snapshotConfig = new CassandraSnapshotStoreConfig(system, sharedConfig)
+
+  import journalStatements._ // from CassandraStatements
 
   /**
    * Data Access Object for arbitrary queries or updates.
    */
-  val session: CassandraSession = new CassandraSession(
-    system,
-    writePluginConfig.sessionProvider,
-    ec,
-    log,
-    metricsCategory = cfgPath,
-    init = session => executeCreateKeyspaceAndTables(session, writePluginConfig))
+  val session: CassandraSession =
+    CassandraSessionRegistry(system).sessionFor(sharedConfigPath, ec, ses => executeAllCreateKeyspaceAndTables(ses))
 
   /**
    * Initialize connection to Cassandra and prepared statements.

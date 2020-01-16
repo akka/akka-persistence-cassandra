@@ -9,7 +9,7 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement
 
 import scala.concurrent.{ ExecutionContext, Future }
 
-trait TaggedPreparedStatements extends CassandraStatements {
+trait TaggedPreparedStatements extends CassandraJournalStatements {
   private[akka] val session: CassandraSession
   private[akka] implicit val ec: ExecutionContext
 

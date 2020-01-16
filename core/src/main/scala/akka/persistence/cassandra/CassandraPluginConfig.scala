@@ -5,12 +5,9 @@
 package akka.persistence.cassandra
 
 import akka.actor.ActorSystem
-import akka.actor.ExtendedActorSystem
-import akka.cassandra.session.CqlSessionProvider
 import com.typesafe.config.Config
 
 class CassandraPluginConfig(system: ActorSystem, config: Config) {
-  val sessionProvider: CqlSessionProvider = CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
 
   // TODO this is now only used when deciding how to delete, remove this config and just
   // query what version of cassandra we're connected to and do the right thing

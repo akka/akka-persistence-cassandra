@@ -34,7 +34,7 @@ class CassandraSnapshotStoreSpec
   val storeConfig =
     new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-plugin"))
 
-  val storeStatements = new CassandraStatements {
+  val storeStatements = new CassandraSnapshotStatements {
     def snapshotConfig = storeConfig
   }
 

@@ -5,6 +5,7 @@
 package akka.persistence.cassandra
 
 import scala.concurrent.ExecutionContext
+
 import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.event.Logging
@@ -25,7 +26,6 @@ import akka.util.Timeout
 import akka.{ Done, NotUsed }
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.protocol.internal.util.Bytes
-
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -103,7 +103,7 @@ class EventsByTagMigration(
     system: ActorSystem,
     journalNamespace: String = "cassandra-plugin",
     readJournalNamespace: String = CassandraReadJournal.Identifier)
-    extends CassandraStatements
+    extends CassandraJournalStatements
     with TaggedPreparedStatements
     with CassandraTagRecovery {
 
@@ -115,15 +115,8 @@ class EventsByTagMigration(
     system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.journal.plugin-dispatcher"))
   override def config: CassandraJournalConfig =
     new CassandraJournalConfig(system, system.settings.config.getConfig(journalNamespace))
-  val session: CassandraSession = {
-    new CassandraSession(
-      system,
-      config.sessionProvider,
-      ec,
-      log,
-      "EventsByTagMigration",
-      init = _ => Future.successful(Done))
-  }
+
+  lazy val session: CassandraSession = queries.session
 
   def createTables(): Future[Done] = {
     log.info("Creating keyspace {} and new tag tables", config.keyspace)

@@ -35,11 +35,9 @@ import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.ConsistencyLevel
-import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.retry.RetryPolicy
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -48,6 +46,9 @@ import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
+
+import akka.cassandra.session.scaladsl.CassandraSessionRegistry
+import akka.persistence.cassandra.snapshot.CassandraSnapshotStoreConfig
 
 /**
  * Journal implementation of the cassandra plugin.
@@ -62,10 +63,9 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
-  val config = {
-    val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
-    new CassandraJournalConfig(context.system, sharedConfig)
-  }
+  private val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
+  override val config = new CassandraJournalConfig(context.system, sharedConfig)
+  override val snapshotConfig = new CassandraSnapshotStoreConfig(context.system, sharedConfig)
   val serialization = SerializationExtension(context.system)
   val log: LoggingAdapter = Logging(context.system, getClass)
 
@@ -96,13 +96,8 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   // so fine to use an immutable list as the value
   private val pendingDeletes: JMap[String, List[PendingDelete]] = new JHMap
 
-  val session = new CassandraSession(
-    context.system,
-    config.sessionProvider,
-    context.dispatcher,
-    log,
-    metricsCategory = cfgPath,
-    init = (session: CqlSession) => executeCreateKeyspaceAndTables(session, config))
+  val session: CassandraSession = CassandraSessionRegistry(context.system)
+    .sessionFor(sharedConfigPath, context.dispatcher, ses => executeAllCreateKeyspaceAndTables(ses))
 
   private val tagWriterSession = TagWritersSession(
     session,

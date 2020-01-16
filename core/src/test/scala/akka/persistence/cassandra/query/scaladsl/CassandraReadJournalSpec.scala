@@ -79,8 +79,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
 
     "insert Cassandra metrics to Cassandra Metrics Registry" in {
       val registry = CassandraMetricsRegistry(system).getRegistry
-      val snapshots =
-        registry.getNames.toArray().filter(value => value.toString.startsWith(s"${CassandraReadJournal.Identifier}"))
+      val snapshots = registry.getNames.toArray().filter(value => value.toString.startsWith("cassandra-plugin"))
       snapshots.length should be > 0
     }
   }

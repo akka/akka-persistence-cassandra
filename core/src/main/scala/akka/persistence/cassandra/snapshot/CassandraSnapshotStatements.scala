@@ -8,12 +8,11 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import akka.Done
 import akka.cassandra.session.FutureDone
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
 import scala.compat.java8.FutureConverters._
 
-trait CassandraStatements {
+trait CassandraSnapshotStatements {
   def snapshotConfig: CassandraSnapshotStoreConfig
 
   def createKeyspace =
@@ -83,28 +82,18 @@ trait CassandraStatements {
   private def tableName = s"${snapshotConfig.keyspace}.${snapshotConfig.table}"
 
   /**
-   * Execute creation of keyspace and tables is limited to one thread at a time to
-   * reduce the risk of (annoying) "Column family ID mismatch" exception
-   * when write and read-side plugins are started at the same time.
-   * Those statements are retried, because that could happen across different
-   * nodes also but serializing those statements gives a better "experience".
+   * Execute creation of keyspace and tables if that is enabled in config.
+   * Avoid calling this from several threads at the same time to
+   * reduce the risk of (annoying) "Column family ID mismatch" exception.
    */
-  def executeCreateKeyspaceAndTables(session: CqlSession, config: CassandraSnapshotStoreConfig)(
-      implicit ec: ExecutionContext): Future[Done] = {
+  def executeCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
+    val keyspace: Future[Done] =
+      if (snapshotConfig.keyspaceAutoCreate)
+        session.executeAsync(createKeyspace).toScala.map(_ => Done)
+      else FutureDone
 
-    def create(): Future[Done] = {
-      val keyspace: Future[Done] =
-        if (config.keyspaceAutoCreate)
-          session.executeAsync(createKeyspace).toScala.map(_ => Done)
-        else FutureDone
-
-      if (config.tablesAutoCreate)
-        keyspace.flatMap(_ => session.executeAsync(createTable).toScala).map(_ => Done)
-      else keyspace
-    }
-
-    CassandraSession.serializedExecution(
-      recur = () => executeCreateKeyspaceAndTables(session, config),
-      exec = () => create())
+    if (snapshotConfig.tablesAutoCreate)
+      keyspace.flatMap(_ => session.executeAsync(createTable).toScala).map(_ => Done)
+    else keyspace
   }
 }

@@ -4,12 +4,9 @@
 
 package akka.cassandra.session.scaladsl
 
-import java.util.concurrent.atomic.AtomicReference
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.Promise
 import scala.util.Success
 import akka.Done
 import akka.NotUsed
@@ -338,31 +335,6 @@ final class CassandraSession(
             case _ =>
           }
       }
-  }
-
-}
-
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] object CassandraSession {
-  private val serializedExecutionProgress =
-    new AtomicReference[Future[Done]](FutureDone)
-
-  def serializedExecution(recur: () => Future[Done], exec: () => Future[Done])(
-      implicit ec: ExecutionContext): Future[Done] = {
-    val progress = serializedExecutionProgress.get
-    val p = Promise[Done]()
-    progress.onComplete { _ =>
-      val result =
-        if (serializedExecutionProgress.compareAndSet(progress, p.future))
-          exec()
-        else
-          recur()
-      p.completeWith(result)
-      result
-    }
-    p.future
   }
 
 }
