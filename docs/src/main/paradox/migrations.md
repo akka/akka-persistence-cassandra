@@ -21,6 +21,30 @@ The new driver supports reconnection during initialization which was previously 
 `datastax-java-driver.advanced.reconnect-on-init = true`
 It can't be turned on by the plugin as it is in the driver's reference.conf and is not overridable in a profile.
 
+#### Changed configuration structure
+
+In addition to the driver related configuration described above the overall configuration structure has been changed.
+It is now structured in four main sections within the top level `cassandra-journal` section:
+
+    cassandra-journal {
+      write {
+      }
+      query {
+      }
+      events-by-tag {
+      }
+      snapshot {
+      }
+    }
+
+See [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf)
+for details and update your `application.conf` accordingly.
+
+This also means that the properties for enabling the plugin have changed to:
+
+    akka.persistence.journal.plugin = "cassandra-journal.write"
+    akka.persistence.snapshot-store.plugin = "cassandra-journal.snapshot"
+
 #### Removals
 
 Using DateTieredCompactionStrategy with automatic schema creation

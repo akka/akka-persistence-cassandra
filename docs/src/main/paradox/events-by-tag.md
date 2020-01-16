@@ -36,7 +36,7 @@ To detect missed events without receiving another event for the same persistence
 to find events. Queries are run in the background to detect delayed events. A high frequency short back track is done
 for finding events delayed a small amount and a low frequency backtrack that scans further back. 
 
-These are configured with `cassandra-query-journal.events-by-tag.back-track`:
+These are configured with `cassandra-journal.query.events-by-tag.back-track`:
 
 @@snip [refernce.conf](/core/src/main/resources/reference.conf) { #backtrack }                                                                                                                                
 
@@ -66,14 +66,14 @@ Enable pub sub notifications so events by tag queries can execute a query right 
 query.
 ```
 cassandra-journal.pubsub-notification = on
-cassandra-query-journal.refresh-interval = 2s
+cassandra-journal.query.refresh-interval = 2s
 ```
 
 Reduce `eventual-consistency-delay`. You must test this has positive results for your use case. Setting this too low
 can decrease throughput and latency as more events will be missed initially and expensive searches carried out.
 
 ```
-cassandra-query-journal.events-by-tag.eventual-consistency-delay = 50ms
+cassandra-journal.events-by-tag.eventual-consistency-delay = 50ms
 ```
 
 ### Missing searches and gap detection
