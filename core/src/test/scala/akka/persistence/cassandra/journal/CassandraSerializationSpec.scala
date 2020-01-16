@@ -25,7 +25,7 @@ object CassandraSerializationSpec {
        |akka.persistence.publish-plugin-commands = on
        |cassandra-journal.write.target-partition-size = 5
        |cassandra-journal.max-result-size = 3
-       |cassandra-journal.keyspace=CassandraIntegrationSpec
+       |cassandra-journal.write.keyspace=CassandraIntegrationSpec
        |cassandra-journal.snapshot.keyspace=CassandraIntegrationSpecSnapshot
        |
     """.stripMargin).withFallback(CassandraLifecycle.config)

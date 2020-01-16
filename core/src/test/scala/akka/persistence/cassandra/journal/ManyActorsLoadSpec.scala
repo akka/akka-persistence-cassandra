@@ -17,7 +17,7 @@ import com.typesafe.config.ConfigFactory
 
 object ManyActorsLoadSpec {
   val config = ConfigFactory.parseString(s"""
-      cassandra-journal.keyspace=ManyActorsLoadSpec
+      cassandra-journal.write.keyspace=ManyActorsLoadSpec
       cassandra-journal.events-by-tag.enabled = on
       # increase this to 3s when benchmarking
       cassandra-journal.events-by-tag.scanning-flush-interval = 1s

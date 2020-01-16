@@ -109,7 +109,7 @@ object EventsByTagSpec {
 
   val disabledConfig = ConfigFactory.parseString("""
       cassandra-journal {
-        keyspace=EventsByTagDisabled
+        write.keyspace=EventsByTagDisabled
         events-by-tag.enabled = false
       }
     """).withFallback(config)

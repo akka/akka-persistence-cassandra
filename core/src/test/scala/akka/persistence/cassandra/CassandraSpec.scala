@@ -49,7 +49,7 @@ object CassandraSpec {
     ConfigFactory.parseString(s"""
       cassandra-journal {
         session-name = $journalKeyspace
-        keyspace = $journalKeyspace
+        write.keyspace = $journalKeyspace
         # FIXME #81 this is not the way to configure port. Do we need port config in tests?
         port = $port
         

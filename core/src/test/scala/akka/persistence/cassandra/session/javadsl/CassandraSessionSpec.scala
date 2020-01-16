@@ -27,7 +27,7 @@ import scala.concurrent.duration._
 object CassandraSessionSpec {
 
   lazy val config = ConfigFactory.parseString(s"""
-      cassandra-journal.keyspace=CassandraSessionSpec
+      cassandra-journal.write.keyspace=CassandraSessionSpec
     """).withFallback(CassandraLifecycle.config)
 
 }
@@ -45,7 +45,8 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
       system.dispatcher,
       log,
       "CassandraSessionSpec-metrics",
-      (s: CqlSession) => s.executeAsync(s"USE ${cfg.getString("keyspace")};").toScala.map(_ => Done.getInstance).toJava)
+      (s: CqlSession) =>
+        s.executeAsync(s"USE ${cfg.getString("write.keyspace")};").toScala.map(_ => Done.getInstance).toJava)
   }
 
   override def beforeAll(): Unit = {

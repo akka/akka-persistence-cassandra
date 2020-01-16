@@ -21,7 +21,7 @@ object EventsByTagRecoverySpec {
          actor.debug.unhandled = on
        }
        cassandra-journal {
-         keyspace = $keyspaceName
+         write.keyspace = $keyspaceName
          log-queries = off
          events-by-tag {
             max-message-batch-size = 2

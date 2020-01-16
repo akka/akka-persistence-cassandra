@@ -19,9 +19,9 @@ object MultiPluginSpec {
        |akka.test.single-expect-default = 20s
        |akka.test.filter-leeway = 20s
        |
-       |cassandra-journal.keyspace = $journalKeyspace
-       |cassandra-journal.keyspace-autocreate=false
-       |cassandra-journal.circuit-breaker.call-timeout = 30s
+       |cassandra-journal.write.keyspace = $journalKeyspace
+       |cassandra-journal.write.keyspace-autocreate=false
+       |cassandra-journal.write.circuit-breaker.call-timeout = 30s
        |cassandra-journal.snapshot.keyspace=$snapshotKeyspace
        |
        |cassandra-journal-a=$${cassandra-journal}

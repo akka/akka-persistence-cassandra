@@ -34,7 +34,9 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
       }
 
       cassandra-journal {
-        keyspace = $name
+        write {
+          keyspace = $name
+        }
         
         events-by-tag {
           bucket-size = Minute

@@ -16,7 +16,7 @@ import scala.concurrent.duration._
 
 object EventsByPersistenceIdWithControlSpec {
   val config = ConfigFactory.parseString(s"""
-    cassandra-journal.keyspace=EventsByPersistenceIdWithControlSpec
+    cassandra-journal.write.keyspace=EventsByPersistenceIdWithControlSpec
     cassandra-journal.write.target-partition-size = 15
     cassandra-journal.read.refresh-interval = 120s # effectively disabled
     cassandra-journal.read.max-result-size-query = 20

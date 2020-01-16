@@ -43,8 +43,10 @@ object EventsByTagMigrationSpec {
          actor.debug.unhandled = on
        }
        cassandra-journal {
-         keyspace-autocreate = true
-         tables-autocreate = true
+         write {
+           keyspace-autocreate = true
+           tables-autocreate = true
+         }
          read {
            events-by-persistence-id-gap-timeout = 1s
          }

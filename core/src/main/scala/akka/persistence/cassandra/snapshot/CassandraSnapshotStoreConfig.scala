@@ -22,6 +22,11 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
   CassandraPluginConfig.checkProfile(system, readProfile)
   CassandraPluginConfig.checkProfile(system, writeProfile)
 
+  val keyspaceAutoCreate: Boolean = snapshotConfig.getBoolean("keyspace-autocreate")
+  val tablesAutoCreate: Boolean = snapshotConfig.getBoolean("tables-autocreate")
+
+  val keyspace: String = snapshotConfig.getString("keyspace")
+
   val table: String = snapshotConfig.getString("table")
 
   val tableCompactionStrategy: CassandraCompactionStrategy =

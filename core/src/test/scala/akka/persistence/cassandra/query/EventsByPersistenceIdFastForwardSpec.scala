@@ -17,7 +17,7 @@ object EventsByPersistenceIdFastForwardSpec {
 
   // separate from EventsByPersistenceIdWithControlSpec since it needs the refreshing enabled
   val config = ConfigFactory.parseString(s"""
-    cassandra-journal.keyspace=EventsByPersistenceIdFastForwardSpec
+    cassandra-journal.write.keyspace=EventsByPersistenceIdFastForwardSpec
     cassandra-journal.read.refresh-interval = 250ms
     cassandra-journal.read.max-result-size-query = 2
     cassandra-journal.write.target-partition-size = 15

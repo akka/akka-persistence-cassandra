@@ -141,17 +141,17 @@ class CassandraPluginConfigSpec
 
     "parse keyspace-autocreate parameter" in {
       val configWithFalseKeyspaceAutocreate =
-        ConfigFactory.parseString("""keyspace-autocreate = false""").withFallback(defaultConfig)
+        ConfigFactory.parseString("write.keyspace-autocreate = false").withFallback(defaultConfig)
 
-      val config = new CassandraPluginConfig(system, configWithFalseKeyspaceAutocreate)
+      val config = new CassandraJournalConfig(system, configWithFalseKeyspaceAutocreate)
       config.keyspaceAutoCreate must be(false)
     }
 
     "parse tables-autocreate parameter" in {
       val configWithFalseTablesAutocreate =
-        ConfigFactory.parseString("""tables-autocreate = false""").withFallback(defaultConfig)
+        ConfigFactory.parseString("write.tables-autocreate = false").withFallback(defaultConfig)
 
-      val config = new CassandraPluginConfig(system, configWithFalseTablesAutocreate)
+      val config = new CassandraJournalConfig(system, configWithFalseTablesAutocreate)
       config.tablesAutoCreate must be(false)
     }
   }

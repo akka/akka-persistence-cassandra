@@ -32,7 +32,7 @@ object CassandraLifecycle {
     akka.test.timefactor = $${?AKKA_TEST_TIMEFACTOR}
     akka.persistence.journal.plugin = "cassandra-journal.write"
     akka.persistence.snapshot-store.plugin = "cassandra-journal.snapshot"
-    cassandra-journal.circuit-breaker.call-timeout = 30s
+    cassandra-journal.write.circuit-breaker.call-timeout = 30s
     cassandra-journal.read.first-time-bucket = "$firstTimeBucket"
     akka.test.single-expect-default = 20s
     akka.test.filter-leeway = 20s
@@ -125,7 +125,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   }
 
   def dropKeyspaces(): Unit = {
-    val journalKeyspace = system.settings.config.getString("cassandra-journal.keyspace")
+    val journalKeyspace = system.settings.config.getString("cassandra-journal.write.keyspace")
     val snapshotKeyspace = system.settings.config.getString("cassandra-journal.snapshot.keyspace")
     val dropped = Try {
       cluster.execute(s"drop keyspace if exists ${journalKeyspace}")

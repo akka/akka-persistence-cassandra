@@ -63,6 +63,11 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
   CassandraPluginConfig.checkProfile(system, writeProfile)
   CassandraPluginConfig.checkProfile(system, readProfile)
 
+  val keyspaceAutoCreate: Boolean = writeConfig.getBoolean("keyspace-autocreate")
+  val tablesAutoCreate: Boolean = writeConfig.getBoolean("tables-autocreate")
+
+  val keyspace: String = writeConfig.getString("keyspace")
+
   val table: String = writeConfig.getString("table")
   val metadataTable: String = writeConfig.getString("metadata-table")
 

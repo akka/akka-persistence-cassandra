@@ -12,7 +12,7 @@ import org.scalatest.WordSpecLike
 
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(s"""
-       |cassandra-journal.keyspace=CassandraCompactionStrategySpec
+       |cassandra-journal.write.keyspace=CassandraCompactionStrategySpec
        |cassandra-journal.snapshot.keyspace=CassandraCompactionStrategySpecSnapshot
     """.stripMargin).withFallback(CassandraLifecycle.config)
 }
