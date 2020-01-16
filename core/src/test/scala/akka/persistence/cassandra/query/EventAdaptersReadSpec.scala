@@ -25,7 +25,7 @@ object EventAdaptersReadSpec {
           "java.lang.String" = test
         }
       } 
-      read {
+      query {
         max-buffer-size = 50
         refresh-interval = 500ms
         max-result-size-query = 2

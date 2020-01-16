@@ -47,7 +47,7 @@ object EventsByTagMigrationSpec {
            keyspace-autocreate = true
            tables-autocreate = true
          }
-         read {
+         query {
            events-by-persistence-id-gap-timeout = 1s
          }
        }

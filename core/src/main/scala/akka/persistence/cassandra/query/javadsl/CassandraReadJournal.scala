@@ -23,7 +23,7 @@ object CassandraReadJournal {
    * The default identifier for [[CassandraReadJournal]] to be used with
    * `akka.persistence.query.PersistenceQuery#getReadJournalFor`.
    *
-   * The value is `"cassandra-journal.read"` and corresponds
+   * The value is `"cassandra-journal.query"` and corresponds
    * to the absolute path to the read journal configuration entry.
    */
   final val Identifier =
@@ -42,7 +42,7 @@ object CassandraReadJournal {
  * Corresponding Scala API is in [[akka.persistence.cassandra.query.scaladsl.CassandraReadJournal]].
  *
  * Configuration settings can be defined in the configuration section with the
- * absolute path corresponding to the identifier, which is `"cassandra-journal.read"`
+ * absolute path corresponding to the identifier, which is `"cassandra-journal.query"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  *
  */

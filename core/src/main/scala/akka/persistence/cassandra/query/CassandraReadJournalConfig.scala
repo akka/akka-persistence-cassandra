@@ -120,21 +120,21 @@ import com.typesafe.config.Config
 
   val log = Logging(system, classOf[CassandraReadJournalConfig])
 
-  private val readConfig = config.getConfig("read")
+  private val queryConfig = config.getConfig("query")
   private val eventsByTagConfig = config.getConfig("events-by-tag")
 
-  val readProfile: String = readConfig.getString("read-profile")
+  val readProfile: String = queryConfig.getString("read-profile")
   CassandraPluginConfig.checkProfile(system, readProfile)
 
   val refreshInterval: FiniteDuration =
-    readConfig.getDuration("refresh-interval", MILLISECONDS).millis
+    queryConfig.getDuration("refresh-interval", MILLISECONDS).millis
 
-  val gapFreeSequenceNumbers: Boolean = readConfig.getBoolean("gap-free-sequence-numbers")
+  val gapFreeSequenceNumbers: Boolean = queryConfig.getBoolean("gap-free-sequence-numbers")
 
-  val maxBufferSize: Int = readConfig.getInt("max-buffer-size")
+  val maxBufferSize: Int = queryConfig.getInt("max-buffer-size")
 
   val firstTimeBucket: TimeBucket = {
-    val firstBucket = readConfig.getString("first-time-bucket")
+    val firstBucket = queryConfig.getString("first-time-bucket")
     val firstBucketPadded = (writePluginConfig.bucketSize, firstBucket) match {
       case (_, fb) if fb.length == 14    => fb
       case (Hour, fb) if fb.length == 11 => s"$fb:00"
@@ -147,9 +147,9 @@ import com.typesafe.config.Config
     TimeBucket(date.toInstant(ZoneOffset.UTC).toEpochMilli, writePluginConfig.bucketSize)
   }
 
-  val deserializationParallelism: Int = readConfig.getInt("deserialization-parallelism")
+  val deserializationParallelism: Int = queryConfig.getInt("deserialization-parallelism")
 
-  val pluginDispatcher: String = readConfig.getString("plugin-dispatcher")
+  val pluginDispatcher: String = queryConfig.getString("plugin-dispatcher")
 
   val keyspace: String = writePluginConfig.keyspace
   val targetPartitionSize: Long = writePluginConfig.targetPartitionSize
@@ -157,7 +157,7 @@ import com.typesafe.config.Config
   val pubsubNotification: Duration =
     writePluginConfig.tagWriterSettings.pubsubNotification
   val eventsByPersistenceIdEventTimeout: FiniteDuration =
-    readConfig.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
+    queryConfig.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 
   val eventsByTagGapTimeout: FiniteDuration =
     eventsByTagConfig.getDuration("gap-timeout", MILLISECONDS).millis

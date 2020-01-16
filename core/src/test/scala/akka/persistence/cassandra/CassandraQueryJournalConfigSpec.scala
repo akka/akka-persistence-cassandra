@@ -15,7 +15,7 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpec
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 
-class CassandraReadJournalConfigSpec
+class CassandraQueryJournalConfigSpec
     extends TestKit(ActorSystem("CassandraReadJournalConfigSpec"))
     with WordSpecLike
     with Matchers
@@ -23,7 +23,7 @@ class CassandraReadJournalConfigSpec
 
   override protected def afterAll(): Unit = shutdown()
 
-  "Cassandra read journal config" must {
+  "Cassandra query journal config" must {
 
     "default persistence id cleanup to 2x bucket" in {
       import scala.concurrent.duration._
@@ -32,60 +32,60 @@ class CassandraReadJournalConfigSpec
         """).withFallback(system.settings.config)
 
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
-      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
+      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
 
-      readConfig.eventsByTagCleanUpPersistenceIds.get shouldEqual 2.hours
+      queryConfig.eventsByTagCleanUpPersistenceIds.get shouldEqual 2.hours
     }
 
     "support Day with just day format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-journal.events-by-tag.bucket-size = Day
-          |cassandra-journal.read.first-time-bucket = "20151120"
+          |cassandra-journal.query.first-time-bucket = "20151120"
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
-      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
+      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
 
-      readConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
+      queryConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
     }
 
     "support Day with full time format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-journal.events-by-tag.bucket-size = Day
-          |cassandra-journal.read.first-time-bucket = "20151120T12:20"
+          |cassandra-journal.query.first-time-bucket = "20151120T12:20"
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
-      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
+      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
 
       // Rounded down
-      readConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
+      queryConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
     }
 
     "support Hour with just hour format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-journal.events-by-tag.bucket-size = Hour
-          |cassandra-journal.read.first-time-bucket = "20151120T00"
+          |cassandra-journal.query.first-time-bucket = "20151120T00"
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
-      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
+      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
 
-      readConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
+      queryConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
     }
 
     "support Hour with full time format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-journal.events-by-tag.bucket-size = Hour
-          |cassandra-journal.read.first-time-bucket = "20151120T00:20"
+          |cassandra-journal.query.first-time-bucket = "20151120T00:20"
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
-      val readConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
+      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-journal"), writeConfig)
 
-      readConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
+      queryConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
     }
 
     "validate format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-journal.events-by-tag.bucket-size = Hour
-          |cassandra-journal.read.first-time-bucket = "cats"
+          |cassandra-journal.query.first-time-bucket = "cats"
         """.stripMargin).withFallback(system.settings.config)
       val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-journal"))
       val e = intercept[IllegalArgumentException] {

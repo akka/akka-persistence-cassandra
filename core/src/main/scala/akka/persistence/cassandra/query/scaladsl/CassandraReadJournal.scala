@@ -44,10 +44,10 @@ object CassandraReadJournal {
    * The default identifier for [[CassandraReadJournal]] to be used with
    * `akka.persistence.query.PersistenceQuery#readJournalFor`.
    *
-   * The value is `"cassandra-journal.read"` and corresponds
+   * The value is `"cassandra-journal.query"` and corresponds
    * to the absolute path to the read journal configuration entry.
    */
-  final val Identifier = "cassandra-journal.read"
+  final val Identifier = "cassandra-journal.query"
 
   /**
    * INTERNAL API
@@ -71,7 +71,7 @@ object CassandraReadJournal {
  * Corresponding Java API is in [[akka.persistence.cassandra.query.javadsl.CassandraReadJournal]].
  *
  * Configuration settings can be defined in the configuration section with the
- * absolute path corresponding to the identifier, which is `"cassandra-journal.read"`
+ * absolute path corresponding to the identifier, which is `"cassandra-journal.query"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  */
 class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: String)
@@ -89,7 +89,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   private val log = Logging.getLogger(system, getClass)
 
   // shared config is one level above the journal specific
-  private val sharedConfigPath = cfgPath.replaceAll("""\.read$""", "")
+  private val sharedConfigPath = cfgPath.replaceAll("""\.query$""", "")
   private val sharedConfig = system.settings.config.getConfig(sharedConfigPath)
   private val writePluginConfig = new CassandraJournalConfig(system, sharedConfig)
   private val queryPluginConfig = new CassandraReadJournalConfig(system, sharedConfig, writePluginConfig)

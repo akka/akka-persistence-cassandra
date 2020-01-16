@@ -22,7 +22,7 @@ object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
     cassandra-journal {
       write.target-partition-size = 15
-      read {
+      query {
         max-buffer-size = 10
         refresh-interval = 0.5s
         max-result-size-query = 10

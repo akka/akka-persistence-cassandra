@@ -37,7 +37,7 @@ object EventsByTagStageSpec {
         cassandra-journal {
           log-queries = off
 
-          read {
+          query {
             max-result-size-query = $fetchSize
             log-queries = on
             refresh-interval = 200ms

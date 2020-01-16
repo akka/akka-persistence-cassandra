@@ -15,10 +15,10 @@ object EventsByPersistenceIdMultiPartitionGapSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
     cassandra-journal.write.target-partition-size = 15
-    cassandra-journal.read.refresh-interval = 0.5s
-    cassandra-journal.read.max-result-size-query = 2
-    cassandra-journal.read.events-by-persistence-id-gap-timeout = 4 seconds
-    cassandra-journal.read.gap-free-sequence-numbers = off
+    cassandra-journal.query.refresh-interval = 0.5s
+    cassandra-journal.query.max-result-size-query = 2
+    cassandra-journal.query.events-by-persistence-id-gap-timeout = 4 seconds
+    cassandra-journal.query.gap-free-sequence-numbers = off
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
     """).withFallback(CassandraLifecycle.config)
 }

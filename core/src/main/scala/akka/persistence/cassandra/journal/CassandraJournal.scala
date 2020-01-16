@@ -158,7 +158,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
   private[akka] lazy val queries =
     PersistenceQuery(context.system.asInstanceOf[ExtendedActorSystem])
-      .readJournalFor[CassandraReadJournal](s"$sharedConfigPath.read")
+      .readJournalFor[CassandraReadJournal](s"$sharedConfigPath.query")
 
   override def preStart(): Unit = {
     // eager initialization, but not from constructor

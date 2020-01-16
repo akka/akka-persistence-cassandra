@@ -28,7 +28,7 @@ object EventsByTagPubsubSpec {
     cassandra-journal {
       pubsub-notification = on
       
-      read.refresh-interval = 10s
+      query.refresh-interval = 10s
 
       events-by-tag {
         flush-interval = 0ms

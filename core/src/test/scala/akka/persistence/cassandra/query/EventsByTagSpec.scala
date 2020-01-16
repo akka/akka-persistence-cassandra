@@ -59,7 +59,7 @@ object EventsByTagSpec {
         }
       }
       
-      read {
+      query {
         refresh-interval = 500ms
         max-buffer-size = 50
         first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
@@ -78,7 +78,7 @@ object EventsByTagSpec {
 
   val strictConfig = ConfigFactory.parseString(s"""
     cassandra-journal {
-      read.refresh-interval = 100ms
+      query.refresh-interval = 100ms
       events-by-tag {
         gap-timeout = 5s
         new-persistence-id-scan-timeout = 200s
@@ -89,7 +89,7 @@ object EventsByTagSpec {
 
   val strictConfigFirstOffset1001DaysAgo = ConfigFactory.parseString(s"""
     akka.loglevel = INFO # DEBUG is very verbose for this test so don't turn it on when debugging other tests
-    cassandra-journal.read.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
+    cassandra-journal.query.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
     """).withFallback(strictConfig)
 
   val persistenceIdCleanupConfig =
@@ -516,7 +516,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
 class EventsByTagZeroEventualConsistencyDelaySpec
     extends AbstractEventsByTagSpec(ConfigFactory.parseString("""
-            cassandra-journal.read.eventual-consistency-delay = 0s
+            cassandra-journal.query.eventual-consistency-delay = 0s
           """).withFallback(EventsByTagSpec.strictConfig)) {
 
   "Cassandra query currentEventsByTag with zero eventual-consistency-delay" must {
@@ -807,7 +807,7 @@ class EventsByTagLongRefreshIntervalSpec
       ConfigFactory.parseString("""
      akka.loglevel = INFO 
      cassandra-journal {
-       read.refresh-interval = 10s # set large enough so that it will fail the test if a refresh is required to continue the stream
+       query.refresh-interval = 10s # set large enough so that it will fail the test if a refresh is required to continue the stream
        events-by-tag {
          gap-timeout = 30s
          offset-scanning-period = 0ms # do no scanning so each new persistence id triggers the search
@@ -1046,7 +1046,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
 class EventsByTagSpecBackTrackingLongRefreshInterval
     extends AbstractEventsByTagSpec(
       ConfigFactory.parseString("""
-    cassandra-journal.read.refresh-interval = 10s
+    cassandra-journal.query.refresh-interval = 10s
     cassandra-journal.events-by-tag {
      back-track {
         interval = 500ms
@@ -1091,7 +1091,7 @@ class EventsByTagSpecBackTracking
     extends AbstractEventsByTagSpec(
       ConfigFactory.parseString("""
 // this slows down the test too much for all the expectNexts
-//  cassandra-journal.read.refresh-interval = 4s
+//  cassandra-journal.query.refresh-interval = 4s
     cassandra-journal.events-by-tag {
      back-track {
         interval = 1s
