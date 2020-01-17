@@ -17,6 +17,9 @@ lazy val session = (project in file("session"))
     OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
     OsgiKeys.privatePackage := Nil)
 
+lazy val dumpSchema = taskKey[Unit]("Dumps cassandra schema for docs")
+dumpSchema := (core / runMain in (Test)).toTask(" akka.persistence.cassandra.PrintCreateStatements").value
+
 lazy val core = (project in file("core"))
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
   .dependsOn(cassandraLauncher % Test, session)
@@ -71,8 +74,10 @@ lazy val akka26Tests = (project in file("akka-26-tests"))
 
 lazy val docs = project
   .enablePlugins(Common, AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
+  .dependsOn(core)
   .settings(
     name := "Akka Persistence Cassandra",
+    (Compile / paradox) := (Compile / paradox).dependsOn(root / dumpSchema).value,
     publish / skip := true,
     whitesourceIgnore := true,
     makeSite := makeSite.dependsOn(LocalRootProject / ScalaUnidoc / doc).value,
