@@ -503,6 +503,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       toSequenceNr,
       Long.MaxValue,
       Some(queryPluginConfig.refreshInterval),
+      queryPluginConfig.readProfile,
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
       .mapMaterializedValue(_ => NotUsed)
@@ -524,6 +525,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       toSequenceNr,
       Long.MaxValue,
       None,
+      queryPluginConfig.readProfile,
       s"currentEventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
       .mapMaterializedValue(_ => NotUsed)
@@ -545,6 +547,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       toSequenceNr,
       Long.MaxValue,
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
+      config.readProfile, // write journal read-profile
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization),
       fastForwardEnabled = true).map(p => mapEvent(p.persistentRepr)).mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
@@ -562,6 +565,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       toSequenceNr: Long,
       max: Long,
       refreshInterval: Option[FiniteDuration],
+      readProfile: String,
       name: String,
       extractor: Extractor[T],
       fastForwardEnabled: Boolean = false): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
@@ -583,7 +587,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
               c.prepareSelectHighestNr,
               c.preparedSelectDeletedTo,
               s,
-              queryPluginConfig.readProfile),
+              readProfile),
             queryPluginConfig,
             fastForwardEnabled))
         .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
