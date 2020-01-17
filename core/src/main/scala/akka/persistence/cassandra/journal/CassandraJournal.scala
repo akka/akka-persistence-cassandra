@@ -619,6 +619,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         highestDeletedSequenceNumber,
         1,
         None,
+        config.readProfile,
         "asyncReadLowestSequenceNr",
         extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
       .map(_.sequenceNr)
