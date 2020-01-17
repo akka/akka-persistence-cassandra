@@ -14,12 +14,36 @@ All driver related configuration e.g. query consistency, query retries etc has b
 project's `reference.conf` and now each part of the plugin (journal, snapshot and query) specify a read and write 
 [execution profile](https://docs.datastax.com/en/developer/java-driver/4.3/manual/core/configuration/#execution-profiles) that gives
 fine grained control over consistencies and retires for each are. By default all read/write profiles are the same and under
-`datastax-java-driver.profile.cassandra-journal`. The only value in the profile provided by the plugin is setting the `basic.request.consistency`
+`datastax-java-driver.profile.cassandra-plugin`. The only value in the profile provided by the plugin is setting the `basic.request.consistency`
 to `QUORUM`.
 
 The new driver supports reconnection during initialization which was previously built into the plugin. It is recommended to turn this on with:
 `datastax-java-driver.advanced.reconnect-on-init = true`
 It can't be turned on by the plugin as it is in the driver's reference.conf and is not overridable in a profile.
+
+#### Changed configuration structure
+
+In addition to the driver related configuration described above the overall configuration structure has been changed.
+It is now structured in four main sections within the top level `cassandra-plugin` section:
+
+    cassandra-plugin {
+      journal {
+      }
+      query {
+      }
+      events-by-tag {
+      }
+      snapshot {
+      }
+    }
+
+See [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf)
+for details and update your `application.conf` accordingly.
+
+This also means that the properties for enabling the plugin have changed to:
+
+    akka.persistence.journal.plugin = "cassandra-plugin.journal"
+    akka.persistence.snapshot-store.plugin = "cassandra-plugin.snapshot"
 
 #### Removals
 
@@ -57,7 +81,7 @@ After complete roll out of 0.101 in step 1 the configuration can be changed so t
 at all.
 
 ```
-cassandra-journal.write-static-column-compat = off
+cassandra-plugin.journal-static-column-compat = off
 ```
 
 It can still run with an old schema where the column exists. 
@@ -171,7 +195,7 @@ It is also not required to add the materialized views, not even if the meta data
 If you don't alter existing messages table and still use `tables-autocreate=on` you have to set config:
 
 ```
-cassandra-journal.meta-in-events-by-tag-view = off
+cassandra-plugin.meta-in-events-by-tag-view = off
 ``` 
 
 When trying to create the materialized view (tables-autocreate=on) with the meta columns before corresponding columns have been added the messages table an exception "Undefined column name meta_ser_id" is raised, because Cassandra validates the ["CREATE MATERIALIZED VIEW IF NOT EXISTS"](https://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlCreateMaterializedView.html#cqlCreateMaterializedView__if-not-exists) even though the view already exists and will not be created. To work around that issue you can disable the meta columns in the materialized view by setting `meta-in-events-by-tag-view=off`.

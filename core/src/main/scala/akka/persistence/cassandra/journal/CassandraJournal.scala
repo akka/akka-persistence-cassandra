@@ -60,7 +60,12 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     with CassandraStatements
     with NoSerializationVerificationNeeded {
 
-  val config = new CassandraJournalConfig(context.system, cfg)
+  // shared config is one level above the journal specific
+  private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
+  val config = {
+    val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
+    new CassandraJournalConfig(context.system, sharedConfig)
+  }
   val serialization = SerializationExtension(context.system)
   val log: LoggingAdapter = Logging(context.system, getClass)
 
@@ -153,7 +158,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
   private[akka] lazy val queries =
     PersistenceQuery(context.system.asInstanceOf[ExtendedActorSystem])
-      .readJournalFor[CassandraReadJournal](config.queryPlugin)
+      .readJournalFor[CassandraReadJournal](s"$sharedConfigPath.query")
 
   override def preStart(): Unit = {
     // eager initialization, but not from constructor
@@ -614,6 +619,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         highestDeletedSequenceNumber,
         1,
         None,
+        config.readProfile,
         "asyncReadLowestSequenceNr",
         extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
       .map(_.sequenceNr)

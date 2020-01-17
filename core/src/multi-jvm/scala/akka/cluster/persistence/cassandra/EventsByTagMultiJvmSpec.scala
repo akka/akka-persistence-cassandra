@@ -33,22 +33,18 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
         testconductor.barrier-timeout = 60 s
       }
 
-      cassandra-journal {
-        keyspace = $name
-        port = $CassPort
-
+      cassandra-plugin {
+        journal {
+          keyspace = $name
+        }
+        
         events-by-tag {
           bucket-size = Minute
         }
-
-      }
-      cassandra-snapshot-store {
-        keyspace = $name
-        port = $CassPort
-      }
-      cassandra-query-journal {
-       first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10).format(firstBucketFormatter)}"
-       # first-time-bucket = "${LocalDateTime.now(ZoneOffset.UTC).minusSeconds(10).format(firstBucketFormatter)}"
+        
+        snapshot {
+          keyspace = $name
+        }
       }
     """).withFallback(CassandraLifecycle.config))
 

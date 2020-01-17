@@ -5,7 +5,6 @@
 package akka.persistence.cassandra
 
 import java.io.{ OutputStream, PrintStream }
-import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
@@ -34,7 +33,6 @@ import akka.serialization.SerializationExtension
 import scala.util.control.NonFatal
 
 object CassandraSpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
   def getCallerName(clazz: Class[_]): String = {
     val s = Thread.currentThread.getStackTrace
       .map(_.getClassName)
@@ -49,20 +47,15 @@ object CassandraSpec {
 
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
     ConfigFactory.parseString(s"""
-      cassandra-journal {
+      cassandra-plugin {
         session-name = $journalKeyspace
-        keyspace = $journalKeyspace
+        journal.keyspace = $journalKeyspace
+        # FIXME this is not the way to configure port. Do we need port config in tests?
         port = $port
-      }
-
-      cassandra-snapshot-store {
-        session-name = ${snapshotStoreKeyspace}Snapshot
-        keyspace = $snapshotStoreKeyspace
-        port = $port
-      }
-    
-      cassandra-query-plugin { 
-        session-name = ${journalKeyspace}Query
+        
+        snapshot {
+          keyspace = $snapshotStoreKeyspace
+        }
       }     
     """)
 
@@ -76,12 +69,11 @@ object CassandraSpec {
         }
       }
   
-        cassandra-query-journal {
-          first-time-bucket = "${today.minusHours(2).format(query.firstBucketFormatter)}"
-          events-by-tag {
-            eventual-consistency-delay = 200ms
-          }
+      cassandra-plugin {
+        events-by-tag {
+          eventual-consistency-delay = 200ms
         }
+      }
     """)
 
 }
@@ -168,7 +160,7 @@ abstract class CassandraSpec(
       if (failed && dumpRowsOnFailure) {
         println("RowDump::")
         import scala.collection.JavaConverters._
-        if (system.settings.config.getBoolean("cassandra-journal.events-by-tag.enabled")) {
+        if (system.settings.config.getBoolean("cassandra-plugin.events-by-tag.enabled")) {
           println("tag_views")
           cluster
             .execute(s"select * from ${journalName}.tag_views")
@@ -245,6 +237,7 @@ abstract class CassandraSpec(
         Long.MaxValue,
         100,
         None,
+        readProfile = "cassandra-plugin",
         "test",
         extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .toMat(Sink.seq)(Keep.right)
@@ -259,6 +252,7 @@ abstract class CassandraSpec(
         Long.MaxValue,
         100,
         None,
+        readProfile = "cassandra-plugin",
         "test",
         extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .map { tpr =>

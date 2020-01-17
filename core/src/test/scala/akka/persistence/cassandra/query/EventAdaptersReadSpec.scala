@@ -4,8 +4,6 @@
 
 package akka.persistence.cassandra.query
 
-import java.time.{ LocalDateTime, ZoneOffset }
-
 import akka.actor.ActorRef
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.persistence.query.NoOffset
@@ -15,26 +13,26 @@ import com.typesafe.config.ConfigFactory
 import scala.concurrent.duration._
 
 object EventAdaptersReadSpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
     akka.actor.serialize-messages=off
-    cassandra-journal.keyspace=EventAdaptersReadSpec
-    cassandra-query-journal.max-buffer-size = 10
-    cassandra-query-journal.refresh-interval = 0.5s
-    cassandra-query-journal.max-result-size-query = 2
-    cassandra-journal.target-partition-size = 15
-    cassandra-journal.event-adapters.test = "akka.persistence.cassandra.query.TestEventAdapter"
-    cassandra-journal.event-adapter-bindings {
-      "java.lang.String" = test
-    }
-    cassandra-journal.events-by-tag {
-      flush-interval = 0ms
-    }
-    cassandra-query-journal {
-      refresh-interval = 500ms
-      max-buffer-size = 50
-      first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
+    cassandra-plugin {
+      keyspace=EventAdaptersReadSpec
+      journal {
+        target-partition-size = 15
+        event-adapters.test = "akka.persistence.cassandra.query.TestEventAdapter"
+        event-adapter-bindings {
+          "java.lang.String" = test
+        }
+      } 
+      query {
+        max-buffer-size = 50
+        refresh-interval = 500ms
+        max-result-size-query = 2
+      }
+      events-by-tag {
+        flush-interval = 0ms
+      }
     }
     """).withFallback(CassandraLifecycle.config)
 }

@@ -4,19 +4,25 @@
 
 package akka.persistence.cassandra.query
 
-import java.time.{ LocalDateTime, ZoneOffset }
-
-import akka.actor.{ ActorSystem, ExtendedActorSystem, NoSerializationVerificationNeeded }
-import akka.annotation.InternalApi
-import akka.cassandra.session.CqlSessionProvider
-import akka.event.Logging
-import akka.persistence.cassandra.CassandraPluginConfig
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.Period
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.{ BackTrackConfig, Fixed, Max }
-import com.typesafe.config.Config
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 import scala.concurrent.duration._
+
+import akka.actor.ActorSystem
+import akka.actor.NoSerializationVerificationNeeded
+import akka.annotation.InternalApi
+import akka.event.Logging
+import akka.persistence.cassandra.CassandraPluginConfig
+import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.Day
+import akka.persistence.cassandra.journal.Hour
+import akka.persistence.cassandra.journal.TimeBucket
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.BackTrackConfig
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.Fixed
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.Max
+import akka.persistence.cassandra.query.CassandraReadJournalConfig.Period
+import com.typesafe.config.Config
 
 /**
  * INTERNAL API
@@ -54,7 +60,7 @@ import scala.concurrent.duration._
     validatePeriodLengths()
     validateIntervals()
 
-    private def validateIntervals() = {
+    private def validateIntervals(): Unit = {
       (interval, longInterval) match {
         case (None, Some(_)) =>
           throw new IllegalArgumentException(
@@ -63,7 +69,7 @@ import scala.concurrent.duration._
         case _                   =>
       }
     }
-    private def validatePeriodLengths() = {
+    private def validatePeriodLengths(): Unit = {
       def cleanUpGreaterThanPeriod(period: Period, name: String): Unit = {
         (metadataCleanupInterval, period) match {
           case (Some(cleanup), Fixed(p)) =>
@@ -114,20 +120,21 @@ import scala.concurrent.duration._
 
   val log = Logging(system, classOf[CassandraReadJournalConfig])
 
-  val readProfile = config.getString("read-profile")
+  private val queryConfig = config.getConfig("query")
+  private val eventsByTagConfig = config.getConfig("events-by-tag")
+
+  val readProfile: String = queryConfig.getString("read-profile")
   CassandraPluginConfig.checkProfile(system, readProfile)
 
-  val sessionProvider: CqlSessionProvider = CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
-
   val refreshInterval: FiniteDuration =
-    config.getDuration("refresh-interval", MILLISECONDS).millis
+    queryConfig.getDuration("refresh-interval", MILLISECONDS).millis
 
-  val gapFreeSequenceNumbers: Boolean = config.getBoolean("gap-free-sequence-numbers")
+  val gapFreeSequenceNumbers: Boolean = queryConfig.getBoolean("gap-free-sequence-numbers")
 
-  val maxBufferSize: Int = config.getInt("max-buffer-size")
+  val maxBufferSize: Int = queryConfig.getInt("max-buffer-size")
 
   val firstTimeBucket: TimeBucket = {
-    val firstBucket = config.getString("first-time-bucket")
+    val firstBucket = queryConfig.getString("first-time-bucket")
     val firstBucketPadded = (writePluginConfig.bucketSize, firstBucket) match {
       case (_, fb) if fb.length == 14    => fb
       case (Hour, fb) if fb.length == 11 => s"$fb:00"
@@ -140,9 +147,9 @@ import scala.concurrent.duration._
     TimeBucket(date.toInstant(ZoneOffset.UTC).toEpochMilli, writePluginConfig.bucketSize)
   }
 
-  val deserializationParallelism: Int = config.getInt("deserialization-parallelism")
+  val deserializationParallelism: Int = queryConfig.getInt("deserialization-parallelism")
 
-  val pluginDispatcher: String = config.getString("plugin-dispatcher")
+  val pluginDispatcher: String = queryConfig.getString("plugin-dispatcher")
 
   val keyspace: String = writePluginConfig.keyspace
   val targetPartitionSize: Long = writePluginConfig.targetPartitionSize
@@ -150,23 +157,23 @@ import scala.concurrent.duration._
   val pubsubNotification: Duration =
     writePluginConfig.tagWriterSettings.pubsubNotification
   val eventsByPersistenceIdEventTimeout: FiniteDuration =
-    config.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
+    queryConfig.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 
   val eventsByTagGapTimeout: FiniteDuration =
-    config.getDuration("events-by-tag.gap-timeout", MILLISECONDS).millis
+    eventsByTagConfig.getDuration("gap-timeout", MILLISECONDS).millis
   val eventsByTagDebug: Boolean =
-    config.getBoolean("events-by-tag.verbose-debug-logging")
+    eventsByTagConfig.getBoolean("verbose-debug-logging")
   val eventsByTagEventualConsistency: FiniteDuration =
-    config.getDuration("events-by-tag.eventual-consistency-delay", MILLISECONDS).millis
+    eventsByTagConfig.getDuration("eventual-consistency-delay", MILLISECONDS).millis
   val eventsByTagNewPersistenceIdScanTimeout: FiniteDuration =
-    config.getDuration("events-by-tag.new-persistence-id-scan-timeout", MILLISECONDS).millis
+    eventsByTagConfig.getDuration("new-persistence-id-scan-timeout", MILLISECONDS).millis
   val eventsByTagOffsetScanning: FiniteDuration =
-    config.getDuration("events-by-tag.offset-scanning-period", MILLISECONDS).millis
+    eventsByTagConfig.getDuration("offset-scanning-period", MILLISECONDS).millis
   val eventsByTagCleanUpPersistenceIds: Option[FiniteDuration] =
-    config.getString("events-by-tag.cleanup-old-persistence-ids").toLowerCase match {
+    eventsByTagConfig.getString("cleanup-old-persistence-ids").toLowerCase match {
       case "off" | "false" => None
       case "<default>"     => Some((writePluginConfig.bucketSize.durationMillis * 2).millis)
-      case _               => Some(config.getDuration("events-by-tag.cleanup-old-persistence-ids", MILLISECONDS).millis)
+      case _               => Some(eventsByTagConfig.getDuration("cleanup-old-persistence-ids", MILLISECONDS).millis)
     }
 
   if (eventsByTagCleanUpPersistenceIds.exists(_.toMillis < (writePluginConfig.bucketSize.durationMillis * 2))) {
@@ -177,22 +184,22 @@ import scala.concurrent.duration._
 
   val eventsByTagBacktrack = BackTrackConfig(
     eventsByTagCleanUpPersistenceIds,
-    optionalDuration("events-by-tag.back-track.interval"),
-    period("events-by-tag.back-track.period"),
-    optionalDuration("events-by-tag.back-track.long-interval"),
-    period("events-by-tag.back-track.long-period"))
+    optionalDuration(eventsByTagConfig, "back-track.interval"),
+    period(eventsByTagConfig, "back-track.period"),
+    optionalDuration(eventsByTagConfig, "back-track.long-interval"),
+    period(eventsByTagConfig, "back-track.long-period"))
 
-  private def optionalDuration(path: String): Option[FiniteDuration] = {
-    config.getString(path).toLowerCase match {
+  private def optionalDuration(cfg: Config, path: String): Option[FiniteDuration] = {
+    cfg.getString(path).toLowerCase match {
       case "off" | "false" => None
-      case _               => Some(config.getDuration(path, MILLISECONDS).millis)
+      case _               => Some(cfg.getDuration(path, MILLISECONDS).millis)
     }
   }
 
-  private def period(path: String): Period = {
-    config.getString(path).toLowerCase match {
+  private def period(cfg: Config, path: String): Period = {
+    cfg.getString(path).toLowerCase match {
       case "max" => Max
-      case _     => Fixed(config.getDuration(path, MILLISECONDS).millis)
+      case _     => Fixed(cfg.getDuration(path, MILLISECONDS).millis)
     }
   }
 

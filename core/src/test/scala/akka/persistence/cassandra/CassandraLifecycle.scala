@@ -5,6 +5,9 @@
 package akka.persistence.cassandra
 
 import java.net.InetSocketAddress
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{ ActorSystem, PoisonPill, Props }
@@ -13,18 +16,24 @@ import akka.testkit.{ TestKitBase, TestProbe }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
-
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 
 object CassandraLifecycle {
 
+  val firstTimeBucket: String = {
+    val today = LocalDateTime.now(ZoneOffset.UTC)
+    val firstBucketFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HH:mm")
+    today.minusMinutes(5).format(firstBucketFormat)
+  }
+
   val config =
     ConfigFactory.parseString(s"""
     akka.test.timefactor = $${?AKKA_TEST_TIMEFACTOR}
-    akka.persistence.journal.plugin = "cassandra-journal"
-    akka.persistence.snapshot-store.plugin = "cassandra-snapshot-store"
-    cassandra-journal.circuit-breaker.call-timeout = 30s
+    akka.persistence.journal.plugin = "cassandra-plugin.journal"
+    akka.persistence.snapshot-store.plugin = "cassandra-plugin.snapshot"
+    cassandra-plugin.journal.circuit-breaker.call-timeout = 30s
+    cassandra-plugin.query.first-time-bucket = "$firstTimeBucket"
     akka.test.single-expect-default = 20s
     akka.test.filter-leeway = 20s
     akka.actor.serialize-messages=on
@@ -116,8 +125,8 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   }
 
   def dropKeyspaces(): Unit = {
-    val journalKeyspace = system.settings.config.getString("cassandra-journal.keyspace")
-    val snapshotKeyspace = system.settings.config.getString("cassandra-snapshot-store.keyspace")
+    val journalKeyspace = system.settings.config.getString("cassandra-plugin.journal.keyspace")
+    val snapshotKeyspace = system.settings.config.getString("cassandra-plugin.snapshot.keyspace")
     val dropped = Try {
       cluster.execute(s"drop keyspace if exists ${journalKeyspace}")
       cluster.execute(s"drop keyspace if exists ${snapshotKeyspace}")

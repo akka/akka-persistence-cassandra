@@ -27,24 +27,24 @@ class JournalOverrideProvider(as: ExtendedActorSystem, config: Config, configPat
   override def javadslReadJournal() = null
 }
 
-object CassandraReadJournalOverrideSpec {
+object CassandraQueryJournalOverrideSpec {
 
   val config = ConfigFactory.parseString("""
-      cassandra-query-journal {
+      cassandra-plugin.query {
         class = "akka.persistence.cassandra.query.JournalOverrideProvider"
       }
     """.stripMargin).withFallback(CassandraLifecycle.config)
 
 }
 
-class CassandraReadJournalOverrideSpec extends CassandraSpec(CassandraReadJournalOverrideSpec.config) {
+class CassandraQueryJournalOverrideSpec extends CassandraSpec(CassandraQueryJournalOverrideSpec.config) {
 
   implicit val materialiser = ActorMaterializer()
 
   lazy val journal =
     PersistenceQuery(system).readJournalFor[JournalOverride](CassandraReadJournal.Identifier)
 
-  "Cassandra read journal override" must {
+  "Cassandra query journal override" must {
     "map events" in {
       val pid = "p1"
       val p1 = system.actorOf(TestTaggingActor.props(pid))

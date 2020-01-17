@@ -9,16 +9,37 @@ import scala.collection.immutable
 import com.typesafe.config.Config
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.actor.ActorSystem
+import akka.persistence.cassandra.CassandraPluginConfig.getReplicationStrategy
+import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
+import akka.persistence.cassandra.getListFromConfig
 
 class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends CassandraPluginConfig(system, config) {
-  val writeProfile: String = config.getString("write-profile")
-  val readProfile: String = config.getString("read-profile")
+  private val snapshotConfig = config.getConfig("snapshot")
+
+  val writeProfile: String = snapshotConfig.getString("write-profile")
+  val readProfile: String = snapshotConfig.getString("read-profile")
 
   CassandraPluginConfig.checkProfile(system, readProfile)
   CassandraPluginConfig.checkProfile(system, writeProfile)
 
-  val maxLoadAttempts = config.getInt("max-load-attempts")
-  val cassandra2xCompat = config.getBoolean("cassandra-2x-compat")
+  val keyspaceAutoCreate: Boolean = snapshotConfig.getBoolean("keyspace-autocreate")
+  val tablesAutoCreate: Boolean = snapshotConfig.getBoolean("tables-autocreate")
+
+  val keyspace: String = snapshotConfig.getString("keyspace")
+
+  val table: String = snapshotConfig.getString("table")
+
+  val tableCompactionStrategy: CassandraCompactionStrategy =
+    CassandraCompactionStrategy(snapshotConfig.getConfig("table-compaction-strategy"))
+
+  val replicationStrategy: String = getReplicationStrategy(
+    snapshotConfig.getString("replication-strategy"),
+    snapshotConfig.getInt("replication-factor"),
+    getListFromConfig(snapshotConfig, "data-center-replication-factors"))
+
+  val gcGraceSeconds: Long = snapshotConfig.getLong("gc-grace-seconds")
+
+  val maxLoadAttempts: Int = snapshotConfig.getInt("max-load-attempts")
 
   /**
    * The Cassandra Statement[_]that can be used to create the configured keyspace.
@@ -27,7 +48,7 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-snapshot-store")).createKeyspaceStatement
+   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-plugin.snapshot")).createKeyspaceStatement
    * }}}
    *
    * @see [[CassandraSnapshotStoreConfig#createTablesStatements]]
@@ -42,7 +63,7 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-snapshot-store")).createTablesStatements
+   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-plugin.snapshot")).createTablesStatements
    * }}}
    * *
    * * @see [[CassandraSnapshotStoreConfig#createKeyspaceStatement]]
@@ -57,7 +78,7 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-snapshot-store")).getCreateTablesStatements();
+   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-plugin.snapshot")).getCreateTablesStatements();
    * }}}
    * *
    * * @see [[CassandraSnapshotStoreConfig#createKeyspaceStatement]]

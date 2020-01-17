@@ -15,6 +15,9 @@ import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
 import com.typesafe.config.Config
 import scala.concurrent.duration._
 
+import akka.persistence.cassandra.CassandraPluginConfig.getReplicationStrategy
+import akka.persistence.cassandra.getListFromConfig
+
 @InternalApi private[akka] sealed trait BucketSize {
   val durationMillis: Long
 }
@@ -51,41 +54,55 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     extends CassandraPluginConfig(system, config)
     with NoSerializationVerificationNeeded {
 
+  private val writeConfig = config.getConfig("journal")
+  private val eventsByTagConfig = config.getConfig("events-by-tag")
+
   val writeProfile: String = config.getString("write-profile")
   val readProfile: String = config.getString("read-profile")
 
   CassandraPluginConfig.checkProfile(system, writeProfile)
   CassandraPluginConfig.checkProfile(system, readProfile)
 
-  val targetPartitionSize: Long =
-    config.getLong(CassandraJournalConfig.TargetPartitionProperty)
-  val maxMessageBatchSize: Int = config.getInt("max-message-batch-size")
+  val keyspaceAutoCreate: Boolean = writeConfig.getBoolean("keyspace-autocreate")
+  val tablesAutoCreate: Boolean = writeConfig.getBoolean("tables-autocreate")
 
-  // TODO this is now only used when deciding how to delete, remove this config and just
-  // query what version of cassandra we're connected to and do the right thing
-  val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
+  val keyspace: String = writeConfig.getString("keyspace")
 
-  val maxConcurrentDeletes: Int = config.getInt("max-concurrent-deletes")
+  val table: String = writeConfig.getString("table")
+  val metadataTable: String = writeConfig.getString("metadata-table")
 
-  val supportDeletes: Boolean = config.getBoolean("support-deletes")
+  val tableCompactionStrategy: CassandraCompactionStrategy =
+    CassandraCompactionStrategy(writeConfig.getConfig("table-compaction-strategy"))
 
-  val queryPlugin: String = config.getString("query-plugin")
+  val replicationStrategy: String = getReplicationStrategy(
+    writeConfig.getString("replication-strategy"),
+    writeConfig.getInt("replication-factor"),
+    getListFromConfig(writeConfig, "data-center-replication-factors"))
 
-  val eventsByTagEnabled: Boolean = config.getBoolean("events-by-tag.enabled")
+  val gcGraceSeconds: Long = writeConfig.getLong("gc-grace-seconds")
+
+  val targetPartitionSize: Long = writeConfig.getLong("target-partition-size")
+  val maxMessageBatchSize: Int = writeConfig.getInt("max-message-batch-size")
+
+  val maxConcurrentDeletes: Int = writeConfig.getInt("max-concurrent-deletes")
+
+  val supportDeletes: Boolean = writeConfig.getBoolean("support-deletes")
+
+  val eventsByTagEnabled: Boolean = eventsByTagConfig.getBoolean("enabled")
 
   val bucketSize: BucketSize =
-    BucketSize.fromString(config.getString("events-by-tag.bucket-size"))
+    BucketSize.fromString(eventsByTagConfig.getString("bucket-size"))
 
   if (bucketSize == Second) {
     system.log.warning("Do not use Second bucket size in production. It is meant for testing purposes only.")
   }
 
   val tagTable = TableSettings(
-    config.getString("events-by-tag.table"),
-    CassandraCompactionStrategy(config.getConfig("events-by-tag.compaction-strategy")),
-    config.getLong("events-by-tag.gc-grace-seconds"),
-    if (config.hasPath("events-by-tag.time-to-live"))
-      Some(config.getDuration("events-by-tag.time-to-live", TimeUnit.MILLISECONDS).millis)
+    eventsByTagConfig.getString("table"),
+    CassandraCompactionStrategy(eventsByTagConfig.getConfig("compaction-strategy")),
+    eventsByTagConfig.getLong("gc-grace-seconds"),
+    if (eventsByTagConfig.hasPath("time-to-live"))
+      Some(eventsByTagConfig.getDuration("time-to-live", TimeUnit.MILLISECONDS).millis)
     else None)
 
   private val pubsubNotificationInterval: Duration = config.getString("pubsub-notification").toLowerCase match {
@@ -95,9 +112,9 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
   }
 
   val tagWriterSettings = TagWriterSettings(
-    config.getInt("events-by-tag.max-message-batch-size"),
-    config.getDuration("events-by-tag.flush-interval", TimeUnit.MILLISECONDS).millis,
-    config.getDuration("events-by-tag.scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
+    eventsByTagConfig.getInt("max-message-batch-size"),
+    eventsByTagConfig.getDuration("flush-interval", TimeUnit.MILLISECONDS).millis,
+    eventsByTagConfig.getDuration("scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
     pubsubNotificationInterval)
 
   val coordinatedShutdownOnError: Boolean = config.getBoolean("coordinated-shutdown-on-error")
@@ -109,7 +126,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-journal")).createKeyspaceStatement
+   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-plugin")).createKeyspaceStatement
    * }}}
    *
    * @see [[CassandraJournalConfig#createTablesStatements]]
@@ -124,7 +141,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-journal")).createTablesStatements
+   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-plugin")).createTablesStatements
    * }}}
    * *
    * * @see [[CassandraJournalConfig#createKeyspaceStatement]]
@@ -144,7 +161,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraJournalConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-journal")).getCreateTablesStatements();
+   * new CassandraJournalConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-plugin")).getCreateTablesStatements();
    * }}}
    * *
    * * @see [[CassandraJournalConfig#createKeyspaceStatement]]
@@ -158,8 +175,4 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     new CassandraStatements {
       override def config: CassandraJournalConfig = CassandraJournalConfig.this
     }
-}
-
-object CassandraJournalConfig {
-  val TargetPartitionProperty: String = "target-partition-size"
 }

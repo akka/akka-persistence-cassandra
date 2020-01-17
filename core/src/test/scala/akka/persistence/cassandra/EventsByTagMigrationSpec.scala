@@ -5,7 +5,6 @@
 package akka.persistence.cassandra
 
 import java.nio.ByteBuffer
-import java.time.{ LocalDateTime, ZoneOffset }
 import java.lang.{ Long => JLong }
 
 import akka.actor.{ ActorSystem, PoisonPill }
@@ -33,7 +32,6 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 /**
  */
 object EventsByTagMigrationSpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
   
@@ -41,16 +39,17 @@ object EventsByTagMigrationSpec {
        // so if one fails need the logs for all
        akka.loggers = []
        akka {
-        actor.serialize-messages=off
-        actor.debug.unhandled = on
+         actor.serialize-messages=off
+         actor.debug.unhandled = on
        }
-       cassandra-journal {
-        keyspace-autocreate = true
-        tables-autocreate = true
-       }
-       cassandra-query-journal {
-         first-time-bucket = "${today.minusHours(3).format(query.firstBucketFormatter)}"
-         events-by-persistence-id-gap-timeout = 1s
+       cassandra-plugin {
+         journal {
+           keyspace-autocreate = true
+           tables-autocreate = true
+         }
+         query {
+           events-by-persistence-id-gap-timeout = 1s
+         }
        }
     """).withFallback(CassandraLifecycle.config).withFallback(ConfigFactory.load())
 
@@ -355,7 +354,7 @@ abstract class AbstractEventsByTagMigrationSpec
 
   val statements = new CassandraStatements {
     override def config: CassandraJournalConfig =
-      new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+      new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
   }
 
   implicit val materialiser = ActorMaterializer()(system)

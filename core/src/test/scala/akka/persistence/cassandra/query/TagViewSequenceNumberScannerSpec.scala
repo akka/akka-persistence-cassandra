@@ -28,7 +28,7 @@ object TagViewSequenceNumberScannerSpec {
   val bucketSize = Hour
   val name = "EventsByTagSequenceNumberScanningSpec"
   val config = ConfigFactory.parseString(s"""
-      |cassandra-journal.events-by-tag.bucket-size = ${bucketSize.toString}
+      |cassandra-plugin.events-by-tag.bucket-size = ${bucketSize.toString}
     """.stripMargin).withFallback(CassandraLifecycle.config)
 }
 
@@ -38,7 +38,7 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
 
   implicit override val patienceConfig = PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
-  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
   val serialization: Serialization = SerializationExtension(system)
 
   before {

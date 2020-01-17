@@ -95,13 +95,13 @@ object EventsByTagMigration {
 
 /**
  *
- * @param journalNamespace The config namespace where the journal is configured, default is `cassandra-journal`
+ * @param journalNamespace The config namespace where the journal is configured, default is `cassandra-plugin`
  * @param readJournalNamespace The config namespace where the query-journal is configured, default is the same
  *                             as `CassandraReadJournal.Identifier`
  */
 class EventsByTagMigration(
     system: ActorSystem,
-    journalNamespace: String = "cassandra-journal",
+    journalNamespace: String = "cassandra-plugin",
     readJournalNamespace: String = CassandraReadJournal.Identifier)
     extends CassandraStatements
     with TaggedPreparedStatements
@@ -111,7 +111,8 @@ class EventsByTagMigration(
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](readJournalNamespace)
   private implicit val materialiser = ActorMaterializer()(system)
 
-  implicit val ec = system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.plugin-dispatcher"))
+  implicit val ec =
+    system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.journal.plugin-dispatcher"))
   override def config: CassandraJournalConfig =
     new CassandraJournalConfig(system, system.settings.config.getConfig(journalNamespace))
   val session: CassandraSession = {
@@ -237,6 +238,7 @@ class EventsByTagMigration(
                   Long.MaxValue,
                   Long.MaxValue,
                   None,
+                  config.readProfile,
                   s"migrateToTag-$pid",
                   extractor =
                     EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system))
