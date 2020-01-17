@@ -75,15 +75,6 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
     sessions.computeIfAbsent(key, _ => startSession(key, init, executionContext))
   }
 
-  /**
-   * Java API: Get an existing session or start a new one with the given settings,
-   * makes it possible to share one session across plugins.
-   *
-   * Note that the session must not be stopped manually, it is shut down when the actor system is shutdown,
-   * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
-   */
-  // FIXME in javadsl: def getSessionFor(configPath: String): CompletionStage[JCassandraSession] =
-
   private def startSession(
       key: SessionKey,
       init: CqlSession => Future[Done],
