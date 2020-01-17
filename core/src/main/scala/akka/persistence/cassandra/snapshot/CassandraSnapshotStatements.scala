@@ -87,13 +87,23 @@ trait CassandraSnapshotStatements {
    * reduce the risk of (annoying) "Column family ID mismatch" exception.
    */
   def executeCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
-    val keyspace: Future[Done] =
+    def keyspace: Future[Done] =
       if (snapshotConfig.keyspaceAutoCreate)
         session.executeAsync(createKeyspace).toScala.map(_ => Done)
       else FutureDone
 
-    if (snapshotConfig.tablesAutoCreate)
-      keyspace.flatMap(_ => session.executeAsync(createTable).toScala).map(_ => Done)
-    else keyspace
+    if (snapshotConfig.tablesAutoCreate) {
+      // reason for setSchemaMetadataEnabled is that it speed up tests by multiple factors
+      session.setSchemaMetadataEnabled(false)
+      val result = for {
+        _ <- keyspace
+        _ <- session.executeAsync(createTable).toScala
+      } yield {
+        session.setSchemaMetadataEnabled(null)
+        Done
+      }
+      result.failed.foreach(_ => session.setSchemaMetadataEnabled(null))
+      result
+    } else keyspace
   }
 }

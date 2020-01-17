@@ -306,18 +306,20 @@ trait CassandraJournalStatements {
       else FutureDone
 
     val done = if (config.tablesAutoCreate) {
+      // reason for setSchemaMetadataEnabled is that it speed up tests by multiple factors
       session.setSchemaMetadataEnabled(false)
-      for {
+      val result = for {
         _ <- keyspace
         _ <- session.executeAsync(createTable).toScala
         _ <- session.executeAsync(createMetadataTable).toScala
-        done <- tagStatements
-      } yield done
+        _ <- tagStatements
+      } yield {
+        session.setSchemaMetadataEnabled(null)
+        Done
+      }
+      result.failed.foreach(_ => session.setSchemaMetadataEnabled(null))
+      result
     } else keyspace
-
-    done.onComplete { _ =>
-      session.setSchemaMetadataEnabled(null)
-    }
 
     done
   }
