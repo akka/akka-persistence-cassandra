@@ -115,8 +115,8 @@ final class CassandraSession(
    * `executeWrite` or `select` multiple times.
    */
   def prepare(stmt: String): Future[PreparedStatement] =
-    underlying().map { session =>
-      session.prepare(stmt)
+    underlying().flatMap { session =>
+      session.prepareAsync(stmt).toScala
     }
 
   /**
