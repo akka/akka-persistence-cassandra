@@ -89,3 +89,11 @@ env:
     - secure: "OEXKKiL7BvNssXWWK9x0/VPepCg+65wrB+nz3uexILM8PCVKMUnrNfkB8q5s1TXLmMtv5XPx5EBRVG252ZVjwrweXs66ne+BeDxUig7PKUQJoJwzCnkpNI9iutySXET85m4eWq4sVF/TG0LBjuZLFz7J01aUxAc1cJABqGMrdlR0IZbW8vqG8iQM3rkn0+BUeYqbYygDCac0Cyw74K0X/ncDBI76ItA1BO4NnJ7HfI2266ZhNi0lTFkI9JYy1ogFmwqJKlGTVrosofcAoiQcT4nWhvH6IWKKeLn5wuUGsntA6KfaVuPQNr65VgrS0KrP8umKHH7SucH/fnClwbrSHOxFvmq4BY6aliZ22keGMAau0RPgSS9j9UkjvQy1St7UoHVL3yuzqHOVBIzOXgKYxG6yy/gY8zu1jVOZIIse8oCtBFcQvz0AoO4f0T+tyUD8wfU9jxxxNt6i6jikuOd2o2ZR4+8yIQOum23Xb8sG2eOtH3sXPJm+gD/MnNeR1wx9Zn5zJDL6FmwUfDlSK++C6EEVy6tunWLDeqQWeZDuthqro9xXup+wcCKuEXYugNnx+OAzuDgJMCgSbOU6BkwAQtBIszAJWPnndMGRXocfoi4WhE2/FLMdXYt1uCcKiz8a+B3UvPzgDHugOkxI/dwB/8p0ecuE65MSYpbrhP+9O0o="
     # encrypt with: travis encrypt DEPLOY_PASSPHRASE=...
     - secure: "KzAhc0NqxpltrYXG0jikQ7X1jYdOqXMVfXjMAhzAg7RBQ/O9UQuIjD6Q4//6GNHg0rPnzKglWdkRgN1Ha8zRaW/PrRXu9FKVual6ypP4auqmgtHjVNbPHMftkRQn4RzFozMUsaM2nknveSeth24lFcBA2GrPf5ySMfcUJ+hqGENoOJFKK2e5PO0lBe+Kl3jYxxM8xJCp5lEWQ2utHE5cwJzFuXfE2IgbInavPGQHua/UbNthdnwTjEyh9bobNWEzcj9wzh9tsUUwNpbQIw42Bg0UsDP9fcQkqPW5MGjXwyM/uZ5VuTFtOfED2wrgkvccvJTek8wejU8jdHrpK/YfwZWagKmPeS7DXUtPfzCs0WF7I4m2GRFZf8+pUwZaU/kMcm5hpiM/ay7eumNBo5UwRknfvYzV9hC5y7bcYy5OtDdxd2mJ8Pu9GYMTKYMiYrOorkdDSPekG4bUofP7NI9xePoVJEQVOMM/MKBP0T9ryJuWRDDpBBkMCzLqBHHEwRkh9Ft5p8RFTO33MMCooNlcRP/THHJu6ajGj+yL5+JV1Tn6R6Py0kIIzMw+YzlPQ1JZqSRpJ0Znat3l4Dlxz2ULn45x2oUNKGGpPWBiE8FhbyuSUQ4m/efwwrTZ+gMFv+6LVjYEqYy6umXj4N+3XkZsu5ZXZqd49FaitJfcH5ApQ/w="
+
+# safelist
+branches:
+  only:
+    - master
+    - release-0.x
+    - release-0.50
+    - /^v\d+\.\d+(\.\d+)?(-\S*)?$/
