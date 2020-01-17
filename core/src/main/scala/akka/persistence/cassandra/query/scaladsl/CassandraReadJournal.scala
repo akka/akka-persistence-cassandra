@@ -44,10 +44,10 @@ object CassandraReadJournal {
    * The default identifier for [[CassandraReadJournal]] to be used with
    * `akka.persistence.query.PersistenceQuery#readJournalFor`.
    *
-   * The value is `"cassandra-journal.query"` and corresponds
+   * The value is `"cassandra-plugin.query"` and corresponds
    * to the absolute path to the read journal configuration entry.
    */
-  final val Identifier = "cassandra-journal.query"
+  final val Identifier = "cassandra-plugin.query"
 
   /**
    * INTERNAL API
@@ -71,7 +71,7 @@ object CassandraReadJournal {
  * Corresponding Java API is in [[akka.persistence.cassandra.query.javadsl.CassandraReadJournal]].
  *
  * Configuration settings can be defined in the configuration section with the
- * absolute path corresponding to the identifier, which is `"cassandra-journal.query"`
+ * absolute path corresponding to the identifier, which is `"cassandra-plugin.query"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  */
 class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: String)
@@ -102,7 +102,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       "EventsByTag eventual consistency set below 2 seconds. This can result in missed events. See reference.conf for details.")
   }
   // event adapters are defined in the write section
-  private val eventAdapters = Persistence(system).adaptersFor(s"$sharedConfigPath.write")
+  private val eventAdapters = Persistence(system).adaptersFor(s"$sharedConfigPath.journal")
 
   // The EventDeserializer is caching some things based on the column structure and
   // therefore different instances must be used for the eventsByPersistenceId and eventsByTag
@@ -228,7 +228,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    *
    * To tag events you create an `akka.persistence.journal.EventAdapter` that wraps the events
    * in a `akka.persistence.journal.Tagged` with the given `tags`.
-   * The tags must be defined in the `tags` section of the `cassandra-journal` configuration.
+   * The tags must be defined in the `tags` section of the `cassandra-plugin` configuration.
    *
    * You can use [[NoOffset]] to retrieve all events with a given tag or
    * retrieve a subset of all events by specifying a `TimeBasedUUID` `offset`.

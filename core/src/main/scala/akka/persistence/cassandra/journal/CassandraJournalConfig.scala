@@ -54,7 +54,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     extends CassandraPluginConfig(system, config)
     with NoSerializationVerificationNeeded {
 
-  private val writeConfig = config.getConfig("write")
+  private val writeConfig = config.getConfig("journal")
   private val eventsByTagConfig = config.getConfig("events-by-tag")
 
   val writeProfile: String = config.getString("write-profile")
@@ -126,7 +126,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-journal")).createKeyspaceStatement
+   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-plugin")).createKeyspaceStatement
    * }}}
    *
    * @see [[CassandraJournalConfig#createTablesStatements]]
@@ -141,7 +141,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-journal")).createTablesStatements
+   * new CassandraJournalConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-plugin")).createTablesStatements
    * }}}
    * *
    * * @see [[CassandraJournalConfig#createKeyspaceStatement]]
@@ -161,7 +161,7 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraJournalConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-journal")).getCreateTablesStatements();
+   * new CassandraJournalConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-plugin")).getCreateTablesStatements();
    * }}}
    * *
    * * @see [[CassandraJournalConfig#createKeyspaceStatement]]

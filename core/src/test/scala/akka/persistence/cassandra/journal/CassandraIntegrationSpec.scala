@@ -18,10 +18,10 @@ object CassandraIntegrationSpec {
       |akka.persistence.journal.max-deletion-batch-size = 3
       |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
-      |cassandra-journal.write.target-partition-size = 5
-      |cassandra-journal.max-result-size = 3
-      |cassandra-journal.write.keyspace=CassandraIntegrationSpec
-      |cassandra-journal.snapshot.keyspace=CassandraIntegrationSpecSnapshot
+      |cassandra-plugin.journal.target-partition-size = 5
+      |cassandra-plugin.max-result-size = 3
+      |cassandra-plugin.journal.keyspace=CassandraIntegrationSpec
+      |cassandra-plugin.snapshot.keyspace=CassandraIntegrationSpecSnapshot
     """.stripMargin).withFallback(CassandraLifecycle.config)
 
   case class DeleteTo(snr: Long)

@@ -17,20 +17,20 @@ import com.typesafe.config.ConfigFactory
 
 object CassandraJournalConfiguration {
   val config = ConfigFactory.parseString(s"""
-       |cassandra-journal.write.keyspace=CassandraJournalSpec
-       |cassandra-journal.snapshot.keyspace=CassandraJournalSpecSnapshot
+       |cassandra-plugin.journal.keyspace=CassandraJournalSpec
+       |cassandra-plugin.snapshot.keyspace=CassandraJournalSpecSnapshot
     """.stripMargin).withFallback(CassandraLifecycle.config)
 
   lazy val perfConfig = ConfigFactory.parseString("""
     akka.actor.serialize-messages=off
-    cassandra-journal.write.keyspace=CassandraJournalPerfSpec
-    cassandra-journal.snapshot.keyspace=CassandraJournalPerfSpecSnapshot
+    cassandra-plugin.journal.keyspace=CassandraJournalPerfSpec
+    cassandra-plugin.snapshot.keyspace=CassandraJournalPerfSpecSnapshot
     """).withFallback(config)
 
   lazy val compat2Config = ConfigFactory.parseString(s"""
-      cassandra-journal.cassandra-2x-compat = on
-      cassandra-journal.write.keyspace=CassandraJournalCompat2Spec
-      cassandra-journal.snapshot.keyspace=CassandraJournalCompat2Spec
+      cassandra-plugin.cassandra-2x-compat = on
+      cassandra-plugin.journal.keyspace=CassandraJournalCompat2Spec
+      cassandra-plugin.snapshot.keyspace=CassandraJournalCompat2Spec
     """).withFallback(config)
 }
 

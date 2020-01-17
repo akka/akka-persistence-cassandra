@@ -95,13 +95,13 @@ object EventsByTagMigration {
 
 /**
  *
- * @param journalNamespace The config namespace where the journal is configured, default is `cassandra-journal`
+ * @param journalNamespace The config namespace where the journal is configured, default is `cassandra-plugin`
  * @param readJournalNamespace The config namespace where the query-journal is configured, default is the same
  *                             as `CassandraReadJournal.Identifier`
  */
 class EventsByTagMigration(
     system: ActorSystem,
-    journalNamespace: String = "cassandra-journal",
+    journalNamespace: String = "cassandra-plugin",
     readJournalNamespace: String = CassandraReadJournal.Identifier)
     extends CassandraStatements
     with TaggedPreparedStatements
@@ -112,7 +112,7 @@ class EventsByTagMigration(
   private implicit val materialiser = ActorMaterializer()(system)
 
   implicit val ec =
-    system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.write.plugin-dispatcher"))
+    system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.journal.plugin-dispatcher"))
   override def config: CassandraJournalConfig =
     new CassandraJournalConfig(system, system.settings.config.getConfig(journalNamespace))
   val session: CassandraSession = {

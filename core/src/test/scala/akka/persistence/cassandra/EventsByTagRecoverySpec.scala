@@ -20,8 +20,8 @@ object EventsByTagRecoverySpec {
        akka {
          actor.debug.unhandled = on
        }
-       cassandra-journal {
-         write.keyspace = $keyspaceName
+       cassandra-plugin {
+         journal.keyspace = $keyspaceName
          log-queries = off
          events-by-tag {
             max-message-batch-size = 2

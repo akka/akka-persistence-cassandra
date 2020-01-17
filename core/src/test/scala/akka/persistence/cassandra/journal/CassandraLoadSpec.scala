@@ -16,8 +16,8 @@ import org.scalatest._
 
 object CassandraLoadSpec {
   val config = ConfigFactory.parseString(s"""
-      cassandra-journal.write.replication-strategy = NetworkTopologyStrategy
-      cassandra-journal.write.data-center-replication-factors = ["datacenter1:1"]
+      cassandra-plugin.journal.replication-strategy = NetworkTopologyStrategy
+      cassandra-plugin.journal.data-center-replication-factors = ["datacenter1:1"]
       akka.actor.serialize-messages=off
      """).withFallback(CassandraLifecycle.config)
 

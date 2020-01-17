@@ -18,7 +18,7 @@ class CassandraSnapshotCleanupSpec extends CassandraSpec {
   private val log = Logging(system, getClass)
   val snapshotCleanup = new CassandraSnapshotCleanup {
     override def snapshotConfig: CassandraSnapshotStoreConfig =
-      new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-journal"))
+      new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-plugin"))
     override val session: CassandraSession = new CassandraSession(
       system,
       snapshotConfig.sessionProvider,

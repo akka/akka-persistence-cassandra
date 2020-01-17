@@ -61,7 +61,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     with NoSerializationVerificationNeeded {
 
   // shared config is one level above the journal specific
-  private val sharedConfigPath = cfgPath.replaceAll("""\.write$""", "")
+  private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
   val config = {
     val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
     new CassandraJournalConfig(context.system, sharedConfig)

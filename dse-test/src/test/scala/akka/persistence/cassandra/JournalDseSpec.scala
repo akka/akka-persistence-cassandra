@@ -5,11 +5,11 @@ import com.typesafe.config.ConfigFactory
 
 object JournalDseSpec {
   val config = ConfigFactory.parseString(s"""
-   cassandra-journal.write.keyspace=JournalDseSpec
-   cassandra-journal.snapshot.keyspace=JournalDseSpec
+   cassandra-plugin.journal.keyspace=JournalDseSpec
+   cassandra-plugin.snapshot.keyspace=JournalDseSpec
                                  
    //# override-session-provider
-   cassandra-journal {
+   cassandra-plugin {
      session-provider = "your.pack.DseSessionProvider"
    }
    //# override-session-provider

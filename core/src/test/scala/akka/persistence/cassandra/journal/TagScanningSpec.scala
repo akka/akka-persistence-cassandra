@@ -10,10 +10,10 @@ import com.typesafe.config.ConfigFactory
 
 object TagScanningSpec {
   val config = ConfigFactory.parseString(s"""
-      cassandra-journal.events-by-tag.enabled = on
-      cassandra-journal.events-by-tag.scanning-flush-interval = 2s
-      cassandra-journal.write.replay-filter.mode = off
-      cassandra-journal.log-queries = off
+      cassandra-plugin.events-by-tag.enabled = on
+      cassandra-plugin.events-by-tag.scanning-flush-interval = 2s
+      cassandra-plugin.journal.replay-filter.mode = off
+      cassandra-plugin.log-queries = off
     """).withFallback(CassandraLifecycle.config)
 }
 

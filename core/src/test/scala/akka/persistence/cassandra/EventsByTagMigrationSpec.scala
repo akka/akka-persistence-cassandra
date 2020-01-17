@@ -42,8 +42,8 @@ object EventsByTagMigrationSpec {
          actor.serialize-messages=off
          actor.debug.unhandled = on
        }
-       cassandra-journal {
-         write {
+       cassandra-plugin {
+         journal {
            keyspace-autocreate = true
            tables-autocreate = true
          }
@@ -354,7 +354,7 @@ abstract class AbstractEventsByTagMigrationSpec
 
   val statements = new CassandraStatements {
     override def config: CassandraJournalConfig =
-      new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+      new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
   }
 
   implicit val materialiser = ActorMaterializer()(system)

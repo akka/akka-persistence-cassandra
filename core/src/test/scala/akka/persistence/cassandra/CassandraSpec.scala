@@ -47,9 +47,9 @@ object CassandraSpec {
 
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
     ConfigFactory.parseString(s"""
-      cassandra-journal {
+      cassandra-plugin {
         session-name = $journalKeyspace
-        write.keyspace = $journalKeyspace
+        journal.keyspace = $journalKeyspace
         # FIXME this is not the way to configure port. Do we need port config in tests?
         port = $port
         
@@ -69,7 +69,7 @@ object CassandraSpec {
         }
       }
   
-      cassandra-journal {
+      cassandra-plugin {
         events-by-tag {
           eventual-consistency-delay = 200ms
         }
@@ -160,7 +160,7 @@ abstract class CassandraSpec(
       if (failed && dumpRowsOnFailure) {
         println("RowDump::")
         import scala.collection.JavaConverters._
-        if (system.settings.config.getBoolean("cassandra-journal.events-by-tag.enabled")) {
+        if (system.settings.config.getBoolean("cassandra-plugin.events-by-tag.enabled")) {
           println("tag_views")
           cluster
             .execute(s"select * from ${journalName}.tag_views")

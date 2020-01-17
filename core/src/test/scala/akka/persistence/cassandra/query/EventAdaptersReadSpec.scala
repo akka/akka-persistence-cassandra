@@ -16,9 +16,9 @@ object EventAdaptersReadSpec {
 
   val config = ConfigFactory.parseString(s"""
     akka.actor.serialize-messages=off
-    cassandra-journal {
+    cassandra-plugin {
       keyspace=EventAdaptersReadSpec
-      write {
+      journal {
         target-partition-size = 15
         event-adapters.test = "akka.persistence.cassandra.query.TestEventAdapter"
         event-adapter-bindings {

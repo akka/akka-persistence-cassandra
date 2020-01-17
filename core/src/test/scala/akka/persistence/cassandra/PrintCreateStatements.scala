@@ -11,7 +11,7 @@ import akka.actor.ActorSystem
 
 /**
  * Main application that prints the create keyspace and create table statements.
- * It's using `cassandra-journal` and `cassandra-journal.snapshot` configuration from default application.conf.
+ * It's using `cassandra-plugin` and `cassandra-plugin.snapshot` configuration from default application.conf.
  *
  * These statements can be copy-pasted and run in `cqlsh`.
  */
@@ -20,14 +20,14 @@ object PrintCreateStatements {
   def main(args: Array[String]): Unit = {
     val system = ActorSystem("PrintCreateStatements")
 
-    val journalSettings = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+    val journalSettings = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
     println(journalSettings.createKeyspaceStatement + ";")
     println("")
     println(journalSettings.createTablesStatements.mkString(";\n\n") + ";")
     println("")
 
     val snapshotSettings =
-      new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-journal.snapshot"))
+      new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-plugin.snapshot"))
     println(snapshotSettings.createKeyspaceStatement + ";")
     println("")
     println(snapshotSettings.createTablesStatements.mkString(";\n\n") + ";")

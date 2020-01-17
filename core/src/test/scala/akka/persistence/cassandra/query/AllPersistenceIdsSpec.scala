@@ -20,8 +20,8 @@ import org.scalatest.BeforeAndAfterEach
 
 object AllPersistenceIdsSpec {
   val config = ConfigFactory.parseString(s"""
-    cassandra-journal {
-      write.target-partition-size = 15
+    cassandra-plugin {
+      journal.target-partition-size = 15
       query {
         max-buffer-size = 10
         refresh-interval = 0.5s
@@ -33,7 +33,7 @@ object AllPersistenceIdsSpec {
 
 class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) with BeforeAndAfterEach {
 
-  val cfg = system.settings.config.getConfig("cassandra-journal")
+  val cfg = system.settings.config.getConfig("cassandra-plugin")
   val pluginConfig = new CassandraJournalConfig(system, cfg)
 
   override protected def beforeEach() = {

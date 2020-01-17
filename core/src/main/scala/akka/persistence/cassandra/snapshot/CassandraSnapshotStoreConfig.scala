@@ -48,7 +48,7 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-journal.snapshot")).createKeyspaceStatement
+   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-plugin.snapshot")).createKeyspaceStatement
    * }}}
    *
    * @see [[CassandraSnapshotStoreConfig#createTablesStatements]]
@@ -63,7 +63,7 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-journal.snapshot")).createTablesStatements
+   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings.config.getConfig("cassandra-plugin.snapshot")).createTablesStatements
    * }}}
    * *
    * * @see [[CassandraSnapshotStoreConfig#createKeyspaceStatement]]
@@ -78,7 +78,7 @@ class CassandraSnapshotStoreConfig(system: ActorSystem, config: Config) extends 
    * Cassandra plugin actor.
    *
    * {{{
-   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-journal.snapshot")).getCreateTablesStatements();
+   * new CassandraSnapshotStoreConfig(actorSystem, actorSystem.settings().config().getConfig("cassandra-plugin.snapshot")).getCreateTablesStatements();
    * }}}
    * *
    * * @see [[CassandraSnapshotStoreConfig#createKeyspaceStatement]]

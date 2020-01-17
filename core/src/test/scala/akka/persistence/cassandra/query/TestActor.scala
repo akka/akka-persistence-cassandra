@@ -13,7 +13,7 @@ import akka.persistence.cassandra.EventWithMetaData
 import akka.persistence.journal.Tagged
 
 object TestActor {
-  def props(persistenceId: String, journalId: String = "cassandra-journal.write"): Props =
+  def props(persistenceId: String, journalId: String = "cassandra-plugin.journal"): Props =
     Props(new TestActor(persistenceId, journalId))
 
   final case class PersistAll(events: immutable.Seq[String])

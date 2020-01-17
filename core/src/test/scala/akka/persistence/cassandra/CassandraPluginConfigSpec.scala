@@ -21,7 +21,7 @@ class CassandraPluginConfigSpec
     with MustMatchers
     with BeforeAndAfterAll {
 
-  lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-journal")
+  lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-plugin")
 
   lazy val keyspaceNames = {
     // Generate a key that is the max acceptable length ensuring the first char is alpha
@@ -73,8 +73,8 @@ class CassandraPluginConfigSpec
     "parse config with a list of datacenters configured for NetworkTopologyStrategy" in {
       lazy val configWithNetworkStrategy =
         ConfigFactory.parseString("""
-          |write.replication-strategy = "NetworkTopologyStrategy"
-          |write.data-center-replication-factors = ["dc1:3", "dc2:2"]
+          |journal.replication-strategy = "NetworkTopologyStrategy"
+          |journal.data-center-replication-factors = ["dc1:3", "dc2:2"]
         """.stripMargin).withFallback(defaultConfig)
       val config = new CassandraJournalConfig(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
@@ -83,9 +83,9 @@ class CassandraPluginConfigSpec
     "parse config with a list of datacenters configured for NetworkTopologyStrategy using dot syntax" in {
       lazy val configWithNetworkStrategy =
         ConfigFactory.parseString("""
-          |write.replication-strategy = "NetworkTopologyStrategy"
-          |write.data-center-replication-factors.0 = "dc1:3"
-          |write.data-center-replication-factors.1 = "dc2:2"
+          |journal.replication-strategy = "NetworkTopologyStrategy"
+          |journal.data-center-replication-factors.0 = "dc1:3"
+          |journal.data-center-replication-factors.1 = "dc2:2"
         """.stripMargin).withFallback(defaultConfig)
       val config = new CassandraJournalConfig(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
@@ -94,8 +94,8 @@ class CassandraPluginConfigSpec
     "parse config with comma-separated data-center-replication-factors" in {
       lazy val configWithNetworkStrategy =
         ConfigFactory.parseString("""
-          |write.replication-strategy = "NetworkTopologyStrategy"
-          |write.data-center-replication-factors = "dc1:3,dc2:2"
+          |journal.replication-strategy = "NetworkTopologyStrategy"
+          |journal.data-center-replication-factors = "dc1:3,dc2:2"
         """.stripMargin).withFallback(defaultConfig)
       val config = new CassandraJournalConfig(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
@@ -141,7 +141,7 @@ class CassandraPluginConfigSpec
 
     "parse keyspace-autocreate parameter" in {
       val configWithFalseKeyspaceAutocreate =
-        ConfigFactory.parseString("write.keyspace-autocreate = false").withFallback(defaultConfig)
+        ConfigFactory.parseString("journal.keyspace-autocreate = false").withFallback(defaultConfig)
 
       val config = new CassandraJournalConfig(system, configWithFalseKeyspaceAutocreate)
       config.keyspaceAutoCreate must be(false)
@@ -149,7 +149,7 @@ class CassandraPluginConfigSpec
 
     "parse tables-autocreate parameter" in {
       val configWithFalseTablesAutocreate =
-        ConfigFactory.parseString("write.tables-autocreate = false").withFallback(defaultConfig)
+        ConfigFactory.parseString("journal.tables-autocreate = false").withFallback(defaultConfig)
 
       val config = new CassandraJournalConfig(system, configWithFalseTablesAutocreate)
       config.tablesAutoCreate must be(false)

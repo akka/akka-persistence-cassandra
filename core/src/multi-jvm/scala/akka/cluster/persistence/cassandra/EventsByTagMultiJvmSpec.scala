@@ -33,8 +33,8 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
         testconductor.barrier-timeout = 60 s
       }
 
-      cassandra-journal {
-        write {
+      cassandra-plugin {
+        journal {
           keyspace = $name
         }
         

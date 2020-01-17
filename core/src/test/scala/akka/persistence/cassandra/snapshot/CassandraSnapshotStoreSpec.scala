@@ -22,8 +22,8 @@ import scala.collection.immutable.Seq
 
 object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(s"""
-       cassandra-journal.write.keyspace=CassandraSnapshotStoreSpec
-       cassandra-journal.snapshot.keyspace=CassandraSnapshotStoreSpecSnapshot
+       cassandra-plugin.journal.keyspace=CassandraSnapshotStoreSpec
+       cassandra-plugin.snapshot.keyspace=CassandraSnapshotStoreSpecSnapshot
     """).withFallback(CassandraLifecycle.config)
 }
 
@@ -32,7 +32,7 @@ class CassandraSnapshotStoreSpec
     with CassandraLifecycle {
 
   val storeConfig =
-    new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-journal"))
+    new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-plugin"))
 
   val storeStatements = new CassandraStatements {
     def snapshotConfig = storeConfig

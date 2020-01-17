@@ -18,7 +18,7 @@ import scala.concurrent.duration._
 object CassandraEventsByTagLoadSpec {
 
   val config = ConfigFactory.parseString(s"""
-       cassandra-journal {
+       cassandra-plugin {
          log-queries = off
          events-by-tag {
             max-message-batch-size = 25
