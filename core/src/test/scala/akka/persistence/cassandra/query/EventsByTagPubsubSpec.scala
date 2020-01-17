@@ -25,16 +25,13 @@ object EventsByTagPubsubSpec {
     akka.remote.netty.tcp.port = 0
     akka.remote.artery.canonical.port = 0
     akka.remote.netty.tcp.hostname = "127.0.0.1"
-    cassandra-journal {
+    cassandra-plugin {
       pubsub-notification = on
+      
+      query.refresh-interval = 10s
 
       events-by-tag {
         flush-interval = 0ms
-      }
-    }
-    cassandra-query-journal {
-      refresh-interval = 10s
-      events-by-tag {
         eventual-consistency-delay = 0s
       }
     }
@@ -43,7 +40,7 @@ object EventsByTagPubsubSpec {
 
 class EventsByTagPubsubSpec extends CassandraSpec(EventsByTagPubsubSpec.config) {
 
-  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

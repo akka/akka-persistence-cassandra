@@ -19,27 +19,24 @@ object MultiPluginSpec {
        |akka.test.single-expect-default = 20s
        |akka.test.filter-leeway = 20s
        |
-       |cassandra-journal.keyspace = $journalKeyspace
-       |cassandra-journal.keyspace-autocreate=false
-       |cassandra-journal.circuit-breaker.call-timeout = 30s
-       |cassandra-snapshot-store.keyspace=$snapshotKeyspace
-       |cassandra-snapshot-store.keyspace-autocreate=false
+       |cassandra-plugin.journal.keyspace = $journalKeyspace
+       |cassandra-plugin.journal.keyspace-autocreate=false
+       |cassandra-plugin.journal.circuit-breaker.call-timeout = 30s
+       |cassandra-plugin.snapshot.keyspace=$snapshotKeyspace
        |
-       |cassandra-journal-a=$${cassandra-journal}
-       |cassandra-journal-a.table=processor_a_messages
+       |cassandra-plugin-a=$${cassandra-plugin}
+       |cassandra-plugin-a.journal.table=processor_a_messages
        |
-       |cassandra-journal-b=$${cassandra-journal}
-       |cassandra-journal-b.table=processor_b_messages
+       |cassandra-plugin-b=$${cassandra-plugin}
+       |cassandra-plugin-b.journal.table=processor_b_messages
        |
-        |cassandra-journal-c=$${cassandra-journal}
-       |cassandra-journal-c.table=processor_c_messages
-       |cassandra-snapshot-c=$${cassandra-snapshot-store}
-       |cassandra-snapshot-c.table=snapshot_c_messages
+       |cassandra-plugin-c=$${cassandra-plugin}
+       |cassandra-plugin-c.journal.table=processor_c_messages
+       |cassandra-plugin-c.snapshot.table=snapshot_c_messages
        |
-       |cassandra-journal-d=$${cassandra-journal}
-       |cassandra-journal-d.table=processor_d_messages
-       |cassandra-snapshot-d=$${cassandra-snapshot-store}
-       |cassandra-snapshot-d.table=snapshot_d_messages
+       |cassandra-plugin-d=$${cassandra-plugin}
+       |cassandra-plugin-d.journal.table=processor_d_messages
+       |cassandra-plugin-d.snapshot.table=snapshot_d_messages
        |
     """.stripMargin)
 
@@ -65,7 +62,7 @@ object MultiPluginSpec {
 
   class OverrideJournalPluginProcessor(override val journalPluginId: String) extends Processor {
     override val persistenceId: String = "always-the-same"
-    override val snapshotPluginId: String = "cassandra-snapshot-store"
+    override val snapshotPluginId: String = "cassandra-plugin.snapshot"
   }
 
   class OverrideSnapshotPluginProcessor(override val journalPluginId: String, override val snapshotPluginId: String)
@@ -82,7 +79,7 @@ class MultiPluginSpec
       MultiPluginSpec.snapshotKeyspace) {
 
   lazy val cassandraPluginConfig =
-    new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-journal"))
+    new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-plugin"))
 
   // default journal plugin is not configured for this test
   override def awaitPersistenceInit(): Unit = ()
@@ -95,19 +92,19 @@ class MultiPluginSpec
     cluster.execute(
       s"CREATE KEYSPACE IF NOT EXISTS $snapshotKeyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }")
 
-    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-a")
-    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-b")
-    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-c", "cassandra-snapshot-c")
-    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-journal-d", "cassandra-snapshot-d")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-plugin-a.journal")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-plugin-b.journal")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-plugin-c.journal", "cassandra-plugin-c.snapshot")
+    CassandraLifecycle.awaitPersistenceInit(system, "cassandra-plugin-d.journal", "cassandra-plugin-d.snapshot")
   }
 
   "A Cassandra journal" must {
     "be usable multiple times with different configurations for two actors having the same persistence id" in {
-      val processorA = system.actorOf(Props(classOf[OverrideJournalPluginProcessor], "cassandra-journal-a"))
+      val processorA = system.actorOf(Props(classOf[OverrideJournalPluginProcessor], "cassandra-plugin-a.journal"))
       processorA ! s"msg"
       expectMsgAllOf(s"msg-1")
 
-      val processorB = system.actorOf(Props(classOf[OverrideJournalPluginProcessor], "cassandra-journal-b"))
+      val processorB = system.actorOf(Props(classOf[OverrideJournalPluginProcessor], "cassandra-plugin-b.journal"))
       processorB ! s"msg"
       expectMsgAllOf(s"msg-1")
 
@@ -115,7 +112,7 @@ class MultiPluginSpec
       expectMsgAllOf(s"msg-2")
 
       // c is actually a and therefore the next message must be seqNr 2 and not 3
-      val processorC = system.actorOf(Props(classOf[OverrideJournalPluginProcessor], "cassandra-journal-a"))
+      val processorC = system.actorOf(Props(classOf[OverrideJournalPluginProcessor], "cassandra-plugin-a.journal"))
       processorC ! s"msg"
       expectMsgAllOf(s"msg-2")
     }
@@ -124,12 +121,14 @@ class MultiPluginSpec
   "A Cassandra snapshot store" must {
     "be usable multiple times with different configurations for two actors having the same persistence id" in {
       val processorC =
-        system.actorOf(Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-c", "cassandra-snapshot-c"))
+        system.actorOf(
+          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-plugin-c.journal", "cassandra-plugin-c.snapshot"))
       processorC ! s"msg"
       expectMsgAllOf(s"msg-1")
 
       val processorD =
-        system.actorOf(Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-d", "cassandra-snapshot-d"))
+        system.actorOf(
+          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-plugin-d.journal", "cassandra-plugin-d.snapshot"))
       processorD ! s"msg"
       expectMsgAllOf(s"msg-1")
 
@@ -141,13 +140,15 @@ class MultiPluginSpec
 
       // e is actually c and therefore the next message must be seqNr 2 after recovery by using the snapshot
       val processorE =
-        system.actorOf(Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-c", "cassandra-snapshot-c"))
+        system.actorOf(
+          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-plugin-c.journal", "cassandra-plugin-c.snapshot"))
       processorE ! s"msg"
       expectMsgAllOf(s"msg-2")
 
       // e is actually c and therefore the next message must be seqNr 2 after recovery by using the snapshot
       val processorF =
-        system.actorOf(Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-journal-d", "cassandra-snapshot-d"))
+        system.actorOf(
+          Props(classOf[OverrideSnapshotPluginProcessor], "cassandra-plugin-d.journal", "cassandra-plugin-d.snapshot"))
       processorF ! s"msg"
       expectMsgAllOf(s"msg-3")
 

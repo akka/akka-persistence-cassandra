@@ -4,8 +4,6 @@
 
 package akka.persistence.cassandra
 
-import java.time.{ LocalDateTime, ZoneOffset }
-
 import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.{ Ack, DoASnapshotPlease, SnapShotAck }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
@@ -17,24 +15,19 @@ import com.typesafe.config.ConfigFactory
 import scala.concurrent.duration._
 
 object EventsByTagRecoverySpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
   val keyspaceName = "EventsByTagRecoverySpec"
   val config = ConfigFactory.parseString(s"""
        akka {
          actor.debug.unhandled = on
        }
-       cassandra-journal {
-         keyspace = $keyspaceName
+       cassandra-plugin {
+         journal.keyspace = $keyspaceName
          log-queries = off
          events-by-tag {
             max-message-batch-size = 2
             bucket-size = "Day"
          }
-       }
-       cassandra-snapshot-store.keyspace=$keyspaceName
-       
-       cassandra-query-journal = {
-          first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
+         snapshot.keyspace=$keyspaceName
        }
        
        akka.actor.serialize-messages=off

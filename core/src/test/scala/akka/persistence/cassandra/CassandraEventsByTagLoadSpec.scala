@@ -4,8 +4,6 @@
 
 package akka.persistence.cassandra
 
-import java.time.{ LocalDateTime, ZoneOffset }
-
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ NoOffset, PersistenceQuery }
@@ -18,19 +16,15 @@ import org.scalatest.time.{ Seconds, Span }
 import scala.concurrent.duration._
 
 object CassandraEventsByTagLoadSpec {
-  val today = LocalDateTime.now(ZoneOffset.UTC)
 
   val config = ConfigFactory.parseString(s"""
-       cassandra-journal {
+       cassandra-plugin {
          log-queries = off
          events-by-tag {
             max-message-batch-size = 25
             bucket-size = "Minute"
          }
-       }
-       cassandra-snapshot-store.keyspace=CassandraEventsByTagLoadSpecSnapshot
-       cassandra-query-journal = {
-          first-time-bucket = "${today.minusMinutes(5).format(query.firstBucketFormatter)}"
+         snapshot.keyspace=CassandraEventsByTagLoadSpecSnapshot
        }
        akka.actor.serialize-messages=off
     """).withFallback(CassandraLifecycle.config)
@@ -60,7 +54,7 @@ class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoa
       }
 
       val readJournal =
-        PersistenceQuery(system).readJournalFor[CassandraReadJournal]("cassandra-query-journal")
+        PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
       eventTags.foreach({ tag =>
         try {

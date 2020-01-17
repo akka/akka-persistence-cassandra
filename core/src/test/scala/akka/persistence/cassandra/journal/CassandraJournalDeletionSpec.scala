@@ -27,7 +27,7 @@ object CassandraJournalDeletionSpec {
       val persistenceId: String,
       deleteSuccessProbe: ActorRef,
       deleteFailProbe: ActorRef,
-      override val journalPluginId: String = "cassandra-journal")
+      override val journalPluginId: String = "cassandra-plugin.journal")
       extends PersistentActor {
 
     var recoveredEvents: List[Any] = List.empty
@@ -63,37 +63,22 @@ object CassandraJournalDeletionSpec {
 class CassandraJournalDeletionSpec extends CassandraSpec(s"""
     akka.loggers = ["akka.testkit.TestEventListener"]
     akka.log-dead-letters = off
-    cassandra-journal.max-concurrent-deletes = 100
+    cassandra-plugin.journal.max-concurrent-deletes = 100
 
-    cassandra-journal-low-concurrent-deletes = $${cassandra-journal}
-    cassandra-journal-low-concurrent-deletes {
-      max-concurrent-deletes = 5
-      query-plugin = cassandra-query-journal-low-concurrent-deletes
-    }
-    cassandra-query-journal-low-concurrent-deletes = $${cassandra-query-journal}
-    cassandra-query-journal-low-concurrent-deletes {
-      write-plugin = cassandra-journal-low-concurrent-deletes
+    cassandra-plugin-low-concurrent-deletes = $${cassandra-plugin}
+    cassandra-plugin-low-concurrent-deletes {
+      journal.max-concurrent-deletes = 5
     }
 
-    cassandra-journal-small-partition-size = $${cassandra-journal}
-    cassandra-journal-small-partition-size {
-      target-partition-size = 3
-      keyspace = "DeletionSpecMany"
-      query-plugin = cassandra-query-journal-small-partition-size
-    }
-    cassandra-query-journal-small-partition-size = $${cassandra-query-journal}
-    cassandra-query-journal-small-partition-size {
-      write-plugin = cassandra-journal-small-partition-size
+    cassandra-plugin-small-partition-size = $${cassandra-plugin}
+    cassandra-plugin-small-partition-size {
+      journal.target-partition-size = 3
+      journal.keyspace = "DeletionSpecMany"
     }
     
-    cassandra-journal-no-delete = $${cassandra-journal}
-    cassandra-journal-no-delete {
-      support-deletes = off
-      query-plugin = cassandra-query-journal-no-delete
-    }
-    cassandra-query-journal-no-delete = $${cassandra-query-journal}
-    cassandra-query-journal-no-delete {
-      write-plugin = cassandra-journal-no-delete
+    cassandra-plugin-no-delete = $${cassandra-plugin}
+    cassandra-plugin-no-delete {
+      journal.support-deletes = off
     }
   """) {
 
@@ -133,8 +118,8 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
     "fail fast if too many concurrent deletes" in {
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
-      val p1 = system.actorOf(
-        Props(new PAThatDeletes("p2", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-low-concurrent-deletes")))
+      val p1 = system.actorOf(Props(
+        new PAThatDeletes("p2", deleteSuccess.ref, deleteFail.ref, "cassandra-plugin-low-concurrent-deletes.journal")))
 
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)
@@ -183,7 +168,8 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
       val props =
-        Props(new PAThatDeletes("p4", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-small-partition-size"))
+        Props(
+          new PAThatDeletes("p4", deleteSuccess.ref, deleteFail.ref, "cassandra-plugin-small-partition-size.journal"))
       val p1 = system.actorOf(props)
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)
@@ -225,7 +211,8 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
       val props =
-        Props(new PAThatDeletes("p5", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-small-partition-size"))
+        Props(
+          new PAThatDeletes("p5", deleteSuccess.ref, deleteFail.ref, "cassandra-plugin-small-partition-size.journal"))
       val p1 = system.actorOf(props)
       (1 to 100).foreach { i =>
         p1 ! PersistMe(i)
@@ -249,7 +236,8 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
       val p1 =
-        system.actorOf(Props(new PAThatDeletes("p6", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-no-delete")))
+        system.actorOf(
+          Props(new PAThatDeletes("p6", deleteSuccess.ref, deleteFail.ref, "cassandra-plugin-no-delete.journal")))
 
       (1 to 3).foreach { i =>
         p1 ! PersistMe(i)
@@ -267,7 +255,8 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()
       val p1 =
-        system.actorOf(Props(new PAThatDeletes("p7", deleteSuccess.ref, deleteFail.ref, "cassandra-journal-no-delete")))
+        system.actorOf(
+          Props(new PAThatDeletes("p7", deleteSuccess.ref, deleteFail.ref, "cassandra-plugin-no-delete.journal")))
 
       (1 to 3).foreach { i =>
         p1 ! PersistMe(i)

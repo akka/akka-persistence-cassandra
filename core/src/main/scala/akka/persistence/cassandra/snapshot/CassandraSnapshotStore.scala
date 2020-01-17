@@ -42,7 +42,12 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
 
   import CassandraSnapshotStore._
 
-  val snapshotConfig = new CassandraSnapshotStoreConfig(context.system, cfg)
+  val snapshotConfig = {
+    // shared config is one level above the journal specific
+    val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
+    val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
+    new CassandraSnapshotStoreConfig(context.system, sharedConfig)
+  }
   val serialization = SerializationExtension(context.system)
   val snapshotDeserializer = new SnapshotDeserializer(context.system)
   implicit val ec: ExecutionContext = context.dispatcher

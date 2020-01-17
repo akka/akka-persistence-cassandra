@@ -25,7 +25,7 @@ trait DirectWriting extends BeforeAndAfterAll {
   def system: ActorSystem
   private lazy val serialization = SerializationExtension(system)
   private lazy val writePluginConfig =
-    new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+    new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
 
   def cluster: CqlSession
 

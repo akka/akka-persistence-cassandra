@@ -28,16 +28,12 @@ object EventsByTagRestartSpec {
        |akka {
        |  actor.debug.unhandled = on
        |}
-       |cassandra-journal {
+       |cassandra-plugin {
        |  log-queries = off
        |  events-by-tag {
        |     max-message-batch-size = 250 // make it likely we have messages in the buffer
        |     bucket-size = "Day"
        |  }
-       |}
-       |
-       |cassandra-query-journal = {
-       |   first-time-bucket = "${today.minusMinutes(5).format(firstBucketFormat)}"
        |}
        |
        |akka.actor.serialize-messages=off
