@@ -24,7 +24,7 @@ private[akka] trait TestTagWriter {
   val writePluginConfig: CassandraJournalConfig
 
   lazy val (preparedWriteTagMessage, preparedWriteTagMessageWithMeta) = {
-    val writeStatements: CassandraStatements = new CassandraStatements {
+    val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {
       def config: CassandraJournalConfig = writePluginConfig
     }
     (cluster.prepare(writeStatements.writeTags(false)), cluster.prepare(writeStatements.writeTags(true)))

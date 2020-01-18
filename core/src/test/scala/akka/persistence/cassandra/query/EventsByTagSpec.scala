@@ -11,7 +11,7 @@ import java.util.UUID
 
 import akka.actor.{ PoisonPill, Props }
 import akka.event.Logging.Warning
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Day }
+import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraJournalStatements, Day }
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, EventWithMetaData }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, EventsByTagQuery }
@@ -152,7 +152,7 @@ abstract class AbstractEventsByTagSpec(config: Config)
   val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
 
   lazy val preparedWriteMessage = {
-    val writeStatements: CassandraStatements = new CassandraStatements {
+    val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {
       def config: CassandraJournalConfig = writePluginConfig
     }
     cluster.prepare(writeStatements.writeMessage(withMeta = false))

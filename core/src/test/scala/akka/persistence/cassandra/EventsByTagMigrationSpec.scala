@@ -9,7 +9,7 @@ import java.lang.{ Long => JLong }
 
 import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.Ack
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
+import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraJournalStatements, Hour, TimeBucket }
 import akka.persistence.cassandra.query.DirectWriting
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
@@ -352,7 +352,7 @@ abstract class AbstractEventsByTagMigrationSpec
        |CREATE KEYSPACE IF NOT EXISTS $journalName WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1 }
      """.stripMargin
 
-  val statements = new CassandraStatements {
+  val statements = new CassandraJournalStatements {
     override def config: CassandraJournalConfig =
       new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
   }

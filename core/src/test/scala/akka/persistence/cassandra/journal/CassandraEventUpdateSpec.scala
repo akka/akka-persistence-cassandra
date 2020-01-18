@@ -16,7 +16,11 @@ import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, TestTaggingActor, _ }
 import akka.serialization.SerializationExtension
 import com.typesafe.config.ConfigFactory
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+
+import akka.actor.ExtendedActorSystem
+import akka.cassandra.session.CqlSessionProvider
 
 object CassandraEventUpdateSpec {
   val config = ConfigFactory.parseString("""
@@ -31,11 +35,15 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
   val updater = new CassandraEventUpdate {
 
     override private[akka] val log = s.log
+    private val configPath = "cassandra-plugin"
     override private[akka] def config: CassandraJournalConfig =
-      new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
+      new CassandraJournalConfig(system, system.settings.config.getConfig(configPath))
     override private[akka] implicit val ec: ExecutionContext = system.dispatcher
+    // use separate session, not shared via CassandraSessionRegistry because init is different
+    private val sessionProvider =
+      CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], system.settings.config.getConfig(configPath))
     override private[akka] val session: CassandraSession =
-      new CassandraSession(system, config.sessionProvider, ec, log, systemName, init = _ => Future.successful(Done))
+      new CassandraSession(system, sessionProvider, ec, log, systemName, init = _ => Future.successful(Done))
   }
 
   "CassandraEventUpdate" must {

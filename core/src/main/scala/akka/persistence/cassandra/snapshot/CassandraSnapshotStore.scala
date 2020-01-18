@@ -9,17 +9,19 @@ import java.nio.ByteBuffer
 import java.util.NoSuchElementException
 
 import akka.NotUsed
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
+
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSessionRegistry
+import akka.persistence.cassandra.journal.CassandraJournalConfig
 import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.AsyncSerializer
@@ -42,12 +44,11 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
 
   import CassandraSnapshotStore._
 
-  val snapshotConfig = {
-    // shared config is one level above the journal specific
-    val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
-    val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
-    new CassandraSnapshotStoreConfig(context.system, sharedConfig)
-  }
+  // shared config is one level above the journal specific
+  private val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
+  private val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
+  override val config = new CassandraJournalConfig(context.system, sharedConfig)
+  override val snapshotConfig = new CassandraSnapshotStoreConfig(context.system, sharedConfig)
   val serialization = SerializationExtension(context.system)
   val snapshotDeserializer = new SnapshotDeserializer(context.system)
   implicit val ec: ExecutionContext = context.dispatcher
@@ -56,13 +57,8 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
 
   private val someMaxLoadAttempts = Some(snapshotConfig.maxLoadAttempts)
 
-  val session = new CassandraSession(
-    context.system,
-    snapshotConfig.sessionProvider,
-    context.dispatcher,
-    log,
-    metricsCategory = cfgPath,
-    init = session => executeCreateKeyspaceAndTables(session, snapshotConfig))
+  val session: CassandraSession = CassandraSessionRegistry(context.system)
+    .sessionFor(sharedConfigPath, context.dispatcher, ses => executeAllCreateKeyspaceAndTables(ses))
 
   private def preparedWriteSnapshot =
     session.prepare(writeSnapshot(withMeta = false))

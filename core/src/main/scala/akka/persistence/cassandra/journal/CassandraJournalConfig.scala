@@ -171,8 +171,8 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
     createTablesStatements.asJava
   }
 
-  private def statements: CassandraStatements =
-    new CassandraStatements {
+  private def statements: CassandraJournalStatements =
+    new CassandraJournalStatements {
       override def config: CassandraJournalConfig = CassandraJournalConfig.this
     }
 }

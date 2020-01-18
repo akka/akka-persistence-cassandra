@@ -6,27 +6,34 @@ package akka.persistence.cassandra.snapshot
 
 import akka.Done
 import akka.actor.Props
-import akka.event.Logging
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.{ CassandraSpec, Persister }
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
-import scala.concurrent.{ ExecutionContext, Future }
 import Persister._
+import akka.actor.ExtendedActorSystem
+import akka.cassandra.session.CqlSessionProvider
+import akka.event.Logging
 
 class CassandraSnapshotCleanupSpec extends CassandraSpec {
 
+  private val configPath = "cassandra-plugin"
+
   private val log = Logging(system, getClass)
+
   val snapshotCleanup = new CassandraSnapshotCleanup {
     override def snapshotConfig: CassandraSnapshotStoreConfig =
-      new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-plugin"))
-    override val session: CassandraSession = new CassandraSession(
-      system,
-      snapshotConfig.sessionProvider,
-      system.dispatcher,
-      log,
-      systemName,
-      init = _ => Future.successful(Done))
+      new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig(configPath))
+
     override implicit val ec: ExecutionContext = system.dispatcher
+
+    // use separate session, not shared via CassandraSessionRegistry because init is different
+    private val sessionProvider =
+      CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], system.settings.config.getConfig(configPath))
+    override val session: CassandraSession =
+      new CassandraSession(system, sessionProvider, ec, log, systemName, init = _ => Future.successful(Done))
+
   }
 
   "Snapshot cleanup" must {
