@@ -73,6 +73,14 @@ object CassandraSpec {
         events-by-tag {
           eventual-consistency-delay = 200ms
         }
+        snapshot {
+          keyspace-autocreate = true
+          tables-autocreate = true
+        } 
+        journal {
+          keyspace-autocreate = true
+          tables-autocreate = true
+        }
       }
     """)
 
