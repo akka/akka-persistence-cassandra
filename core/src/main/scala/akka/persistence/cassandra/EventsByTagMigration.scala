@@ -231,6 +231,7 @@ class EventsByTagMigration(
                   Long.MaxValue,
                   Long.MaxValue,
                   None,
+                  config.readProfile,
                   s"migrateToTag-$pid",
                   extractor =
                     EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system))
