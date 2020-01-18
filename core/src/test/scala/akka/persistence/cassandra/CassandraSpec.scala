@@ -59,16 +59,7 @@ object CassandraSpec {
       }     
     """)
 
-  val fallbackConfig = ConfigFactory.parseString(s"""
-      akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
-      akka.loglevel = DEBUG
-
-      datastax-java-driver {
-        basic.request {
-          timeout = 10s # drop keyspaces 
-        }
-      }
-  
+  val enableAutocreate = ConfigFactory.parseString("""
       cassandra-plugin {
         events-by-tag {
           eventual-consistency-delay = 200ms
@@ -81,8 +72,19 @@ object CassandraSpec {
           keyspace-autocreate = true
           tables-autocreate = true
         }
+      } 
+     """)
+
+  val fallbackConfig = ConfigFactory.parseString(s"""
+      akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
+      akka.loglevel = DEBUG
+
+      datastax-java-driver {
+        basic.request {
+          timeout = 10s # drop keyspaces 
+        }
       }
-    """)
+    """).withFallback(enableAutocreate)
 
 }
 

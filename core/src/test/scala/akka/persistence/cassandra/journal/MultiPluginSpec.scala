@@ -38,7 +38,7 @@ object MultiPluginSpec {
        |cassandra-plugin-d.journal.table=processor_d_messages
        |cassandra-plugin-d.snapshot.table=snapshot_d_messages
        |
-    """.stripMargin)
+    """.stripMargin).withFallback(CassandraSpec.enableAutocreate)
 
   trait Processor extends PersistentActor {
 
