@@ -9,7 +9,7 @@ import java.time.{ Instant, LocalDateTime, ZoneOffset }
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
+import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, SerializedMeta }
 import akka.serialization.Serialization
 

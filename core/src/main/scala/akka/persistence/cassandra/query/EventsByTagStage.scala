@@ -9,7 +9,7 @@ import java.util.concurrent.ThreadLocalRandom
 
 import akka.annotation.InternalApi
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.journal.{ BucketSize, TimeBucket }
+import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.query.EventsByTagStage._
 import akka.stream.stage.{ GraphStage, _ }
 import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
@@ -71,7 +71,7 @@ import scala.compat.java8.FutureConverters._
       session: TagStageSession,
       fromOffset: UUID,
       toOffset: Option[UUID],
-      settings: CassandraReadJournalConfig,
+      settings: PluginSettings,
       refreshInterval: Option[FiniteDuration],
       bucketSize: BucketSize,
       usingOffset: Boolean,
@@ -204,7 +204,7 @@ import scala.compat.java8.FutureConverters._
     session: TagStageSession,
     initialQueryOffset: UUID,
     toOffset: Option[UUID],
-    settings: CassandraReadJournalConfig,
+    settings: PluginSettings,
     refreshInterval: Option[FiniteDuration],
     bucketSize: BucketSize,
     usingOffset: Boolean,
@@ -212,9 +212,12 @@ import scala.compat.java8.FutureConverters._
     scanner: TagViewSequenceNumberScanner)
     extends GraphStage[SourceShape[UUIDRow]] {
 
+  import settings.querySettings
+  import settings.eventsByTagSettings
+
   private val out: Outlet[UUIDRow] = Outlet("event.out")
-  private val verboseDebug = settings.eventsByTagDebug
-  private val backtracking = settings.eventsByTagBacktrack
+  private val verboseDebug = eventsByTagSettings.verboseDebug
+  private val backtracking = eventsByTagSettings.backtrack
 
   override def shape = SourceShape(out)
 
@@ -237,7 +240,7 @@ import scala.compat.java8.FutureConverters._
       }
 
       private def calculateToOffset(): UUID = {
-        val to: Long = Uuids.unixTimestamp(Uuids.timeBased()) - settings.eventsByTagEventualConsistency.toMillis
+        val to: Long = Uuids.unixTimestamp(Uuids.timeBased()) - eventsByTagSettings.eventualConsistency.toMillis
         val tOff = if (to < toOffsetMillis) {
           // The eventual consistency delay is before the end of the query
           val u = Uuids.endOf(to)
@@ -353,7 +356,7 @@ import scala.compat.java8.FutureConverters._
               missingData,
               missingSequenceNrs,
               explicitGapDetected = true,
-              settings.eventsByTagGapTimeout)
+              eventsByTagSettings.eventsByTagGapTimeout)
             stageState.state match {
               case qip @ QueryInProgress(_, _) =>
                 // let the current query finish and then look for missing
@@ -372,26 +375,26 @@ import scala.compat.java8.FutureConverters._
           log.info(
             s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset [{}] toOffset [{}]",
             stageUuid,
-            settings.eventsByTagEventualConsistency.toMillis,
+            eventsByTagSettings.eventualConsistency.toMillis,
             formatOffset(initialQueryOffset),
             toOffset.map(formatOffset))
         }
         log.debug("[{}] Starting with tag pid sequence nrs [{}]", stageUuid, stageState.tagPidSequenceNrs)
 
-        if (settings.pubsubNotification.isFinite) {
+        if (eventsByTagSettings.pubsubNotification.isFinite) {
           Try {
             getStageActor {
               case (_, publishedTag) =>
                 if (publishedTag.equals(session.tag)) {
                   log.debug("[{}] Received pub sub tag update for our tag, initiating query", stageUuid)
-                  if (settings.eventsByTagEventualConsistency == Duration.Zero) {
+                  if (eventsByTagSettings.eventualConsistency == Duration.Zero) {
                     continue()
-                  } else if (settings.eventsByTagEventualConsistency < settings.refreshInterval) {
+                  } else if (eventsByTagSettings.eventualConsistency < querySettings.refreshInterval) {
                     // No point scheduling for EC if the QueryPoll will come in beforehand
                     // No point in scheduling more frequently than once every 10 ms
                     scheduleOnce(
                       TagNotification(System.currentTimeMillis() / 10),
-                      settings.eventsByTagEventualConsistency)
+                      eventsByTagSettings.eventualConsistency)
                   }
 
                 }
@@ -418,8 +421,8 @@ import scala.compat.java8.FutureConverters._
           duration.foreach(fd => schedulePeriodically(key, fd))
         }
 
-        optionallySchedule(PersistenceIdsCleanup, settings.eventsByTagCleanUpPersistenceIds)
-        optionallySchedule(ScanForDelayedEvents, settings.eventsByTagBacktrack.interval)
+        optionallySchedule(PersistenceIdsCleanup, eventsByTagSettings.cleanUpPersistenceIds)
+        optionallySchedule(ScanForDelayedEvents, eventsByTagSettings.backtrack.interval)
       }
 
       @silent("deprecated")
@@ -475,7 +478,7 @@ import scala.compat.java8.FutureConverters._
       }
 
       private val cleanupPersistenceIdsMills =
-        settings.eventsByTagCleanUpPersistenceIds.map(_.toMillis).getOrElse(Long.MaxValue)
+        eventsByTagSettings.cleanUpPersistenceIds.map(_.toMillis).getOrElse(Long.MaxValue)
       private def cleanup(): Unit = {
         val now = System.currentTimeMillis()
         val remaining = stageState.tagPidSequenceNrs.filterNot {
@@ -611,7 +614,7 @@ import scala.compat.java8.FutureConverters._
               .tagPidSequenceNumberUpdate(repr.persistenceId, (1, repr.offset, System.currentTimeMillis())))
           push(out, repr)
           false
-        } else if (usingOffset && (stageState.currentTimeBucket.inPast || settings.eventsByTagNewPersistenceIdScanTimeout == Duration.Zero)) {
+        } else if (usingOffset && (stageState.currentTimeBucket.inPast || eventsByTagSettings.newPersistenceIdScanTimeout == Duration.Zero)) {
           // If we're in the past and this is an offset query we assume this is
           // the first tagPidSequenceNr
           log.debug(
@@ -635,7 +638,7 @@ import scala.compat.java8.FutureConverters._
               session.tag,
               repr.persistenceId,
               repr.tagPidSequenceNr,
-              settings.eventsByTagNewPersistenceIdScanTimeout.pretty)
+              eventsByTagSettings.newPersistenceIdScanTimeout.pretty)
           }
           val previousBucketStart =
             Uuids.startOf(stageState.currentTimeBucket.previous(1).key)
@@ -657,7 +660,7 @@ import scala.compat.java8.FutureConverters._
             missingData,
             Map(repr.persistenceId -> (1L until repr.tagPidSequenceNr).toSet),
             explicitGapDetected = false,
-            settings.eventsByTagNewPersistenceIdScanTimeout)
+            eventsByTagSettings.newPersistenceIdScanTimeout)
           true
         }
       }
@@ -689,7 +692,7 @@ import scala.compat.java8.FutureConverters._
             missingData,
             Map(repr.persistenceId -> (expectedSequenceNr until repr.tagPidSequenceNr).toSet),
             explicitGapDetected = true,
-            settings.eventsByTagGapTimeout)
+            eventsByTagSettings.eventsByTagGapTimeout)
           true
         } else {
           // this is per row so put behind a flag. Per query logging is on at debug without this flag
@@ -836,13 +839,13 @@ import scala.compat.java8.FutureConverters._
 
               // the new persistence-id scan time is typically much smaller than the refresh interval
               // so do not wait for the next refresh to look again
-              if (timeLeft < settings.refreshInterval) {
+              if (timeLeft < querySettings.refreshInterval) {
                 log.debug("Scheduling one off poll in {}", timeLeft.pretty)
                 scheduleOnce(OneOffQueryPoll, timeLeft)
               } else if (!isLiveQuery()) {
                 // a current query doesn't have a poll schedule one
-                log.debug("Scheduling one off poll in {}", settings.refreshInterval)
-                scheduleOnce(OneOffQueryPoll, settings.refreshInterval)
+                log.debug("Scheduling one off poll in {}", querySettings.refreshInterval)
+                scheduleOnce(OneOffQueryPoll, querySettings.refreshInterval)
               }
             }
 
@@ -863,8 +866,8 @@ import scala.compat.java8.FutureConverters._
               log.debug(
                 "[{}] Scheduling poll for eventual consistency delay: {}",
                 stageUuid,
-                settings.eventsByTagEventualConsistency)
-              scheduleOnce(OneOffQueryPoll, settings.eventsByTagEventualConsistency)
+                eventsByTagSettings.eventualConsistency)
+              scheduleOnce(OneOffQueryPoll, eventsByTagSettings.eventualConsistency)
             }
           }
         }

@@ -36,8 +36,8 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
 
     override private[akka] val log = s.log
     private val configPath = "cassandra-plugin"
-    override private[akka] def config: CassandraJournalConfig =
-      new CassandraJournalConfig(system, system.settings.config.getConfig(configPath))
+    override private[akka] def settings: PluginSettings =
+      new PluginSettings(system, system.settings.config.getConfig(configPath))
     override private[akka] implicit val ec: ExecutionContext = system.dispatcher
     // use separate session, not shared via CassandraSessionRegistry because init is different
     private val sessionProvider =

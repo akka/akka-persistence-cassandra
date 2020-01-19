@@ -33,7 +33,7 @@ object CassandraLifecycle {
     akka.persistence.journal.plugin = "cassandra-plugin.journal"
     akka.persistence.snapshot-store.plugin = "cassandra-plugin.snapshot"
     cassandra-plugin.journal.circuit-breaker.call-timeout = 30s
-    cassandra-plugin.query.first-time-bucket = "$firstTimeBucket"
+    cassandra-plugin.events-by-tag.first-time-bucket = "$firstTimeBucket"
     akka.test.single-expect-default = 20s
     akka.test.filter-leeway = 20s
     akka.actor.serialize-messages=on

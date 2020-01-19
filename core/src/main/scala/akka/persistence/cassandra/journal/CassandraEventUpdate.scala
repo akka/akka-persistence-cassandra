@@ -6,19 +6,18 @@ package akka.persistence.cassandra.journal
 
 import akka.Done
 import akka.event.LoggingAdapter
+import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
 import akka.cassandra.session.scaladsl.CassandraSession
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row, Statement }
-
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
-
 import java.lang.{ Long => JLong }
 
 private[akka] trait CassandraEventUpdate extends CassandraJournalStatements {
 
   private[akka] val session: CassandraSession
-  private[akka] def config: CassandraJournalConfig
+  private[akka] def settings: PluginSettings
   private[akka] implicit val ec: ExecutionContext
   private[akka] val log: LoggingAdapter
 
@@ -26,6 +25,8 @@ private[akka] trait CassandraEventUpdate extends CassandraJournalStatements {
   def psSelectTagPidSequenceNr: Future[PreparedStatement] = session.prepare(selectTagPidSequenceNr)
   def psUpdateTagView: Future[PreparedStatement] = session.prepare(updateMessagePayloadInTagView)
   def psSelectMessages: Future[PreparedStatement] = session.prepare(selectMessages)
+
+  private def journalSettings = settings.journalSettings
 
   /**
    * Update the given event in the messages table and the tag_views table.
@@ -44,7 +45,7 @@ private[akka] trait CassandraEventUpdate extends CassandraJournalStatements {
     } yield Done
 
   private def findEvent(s: Serialized): Future[(Long, Set[String])] = {
-    val firstPartition = partitionNr(s.sequenceNr, config.targetPartitionSize)
+    val firstPartition = partitionNr(s.sequenceNr, journalSettings.targetPartitionSize)
     for {
       ps <- psSelectMessages
       row <- findEvent(ps, s.persistenceId, s.sequenceNr, firstPartition)

@@ -48,7 +48,6 @@ import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
 
 import akka.cassandra.session.scaladsl.CassandraSessionRegistry
-import akka.persistence.cassandra.snapshot.CassandraSnapshotStoreConfig
 
 /**
  * Journal implementation of the cassandra plugin.
@@ -64,8 +63,8 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
   private val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
-  override val config = new CassandraJournalConfig(context.system, sharedConfig)
-  override val snapshotConfig = new CassandraSnapshotStoreConfig(context.system, sharedConfig)
+  override val settings = new PluginSettings(context.system, sharedConfig)
+
   val serialization = SerializationExtension(context.system)
   val log: LoggingAdapter = Logging(context.system, getClass)
 
@@ -73,7 +72,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
     case e: Exception =>
       log.error(e, "Cassandra Journal has experienced an unexpected error and requires an ActorSystem restart.")
-      if (config.coordinatedShutdownOnError) {
+      if (settings.journalSettings.coordinatedShutdownOnError) {
         CoordinatedShutdown(context.system).run(CassandraJournalUnexpectedError)
       }
       context.stop(context.self)
@@ -81,7 +80,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   }
 
   import CassandraJournal._
-  import config._
+  import settings._
 
   implicit override val ec: ExecutionContext = context.dispatcher
 
@@ -101,25 +100,27 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
   private val tagWriterSession = TagWritersSession(
     session,
-    writeProfile,
-    readProfile,
+    journalSettings.writeProfile,
+    journalSettings.readProfile,
     () => preparedWriteToTagViewWithoutMeta,
     () => preparedWriteToTagViewWithMeta,
     () => preparedWriteToTagProgress,
     () => preparedWriteTagScanning)
 
   protected val tagWrites: Option[ActorRef] =
-    if (config.eventsByTagEnabled)
+    if (eventsByTagSettings.eventsByTagEnabled)
       Some(
         context.actorOf(
-          TagWriters.props(config.tagWriterSettings, tagWriterSession).withDispatcher(context.props.dispatcher),
+          TagWriters
+            .props(eventsByTagSettings.tagWriterSettings, tagWriterSession)
+            .withDispatcher(context.props.dispatcher),
           "tagWrites"))
     else None
 
   def preparedWriteMessage =
     session.prepare(writeMessage(withMeta = false))
   def preparedSelectDeletedTo: Option[Future[PreparedStatement]] = {
-    if (config.supportDeletes)
+    if (journalSettings.supportDeletes)
       Some(session.prepare(selectDeletedTo))
     else
       None
@@ -131,13 +132,13 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     Future.failed(new IllegalArgumentException(s"Deletes not supported because config support-deletes=off"))
 
   def preparedInsertDeletedTo: Future[PreparedStatement] = {
-    if (config.supportDeletes)
+    if (journalSettings.supportDeletes)
       session.prepare(insertDeletedTo)
     else
       deletesNotSupportedException
   }
   def preparedDeleteMessages: Future[PreparedStatement] = {
-    if (config.supportDeletes)
+    if (journalSettings.supportDeletes)
       session.prepare(deleteMessages)
     else
       deletesNotSupportedException
@@ -192,14 +193,14 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       preparedWriteMessageWithMeta
       preparedSelectMessages
       preparedSelectHighestSequenceNr
-      if (config.supportDeletes) {
+      if (journalSettings.supportDeletes) {
         preparedDeleteMessages
         preparedSelectDeletedTo
         preparedInsertDeletedTo
       }
       queries.initialize()
 
-      if (config.eventsByTagEnabled) {
+      if (eventsByTagSettings.eventsByTagEnabled) {
         preparedSelectTagProgress
         preparedSelectTagProgressForPersistenceId
         preparedWriteToTagProgress
@@ -233,7 +234,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
               case _ =>
                 (pr, Set.empty[String])
             }
-            serializeEvent(pr2, tags, uuid, config.bucketSize, serialization, context.system)
+            serializeEvent(pr2, tags, uuid, eventsByTagSettings.bucketSize, serialization, context.system)
         })
 
       serializedEventsFut.map { serializedEvents =>
@@ -251,7 +252,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     val toReturn: Future[Nil.type] = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap {
       serialized: Seq[SerializedAtomicWrite] =>
         val result: Future[Any] =
-          if (messages.map(_.payload.size).sum <= config.maxMessageBatchSize) {
+          if (messages.map(_.payload.size).sum <= journalSettings.maxMessageBatchSize) {
             // optimize for the common case
             writeMessages(serialized)
           } else {
@@ -291,7 +292,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       currentGroup: List[SerializedAtomicWrite],
       grouped: List[List[SerializedAtomicWrite]]): List[List[SerializedAtomicWrite]] = reversed match {
     case Nil => currentGroup +: grouped
-    case x :: xs if currentGroup.size + x.payload.size < config.maxMessageBatchSize =>
+    case x :: xs if currentGroup.size + x.payload.size < journalSettings.maxMessageBatchSize =>
       groupedWrites(xs, x +: currentGroup, grouped)
     case x :: xs => groupedWrites(xs, List(x), currentGroup +: grouped)
   }
@@ -349,9 +350,9 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   }
 
   private def statementGroup(atomicWrites: Seq[SerializedAtomicWrite]): Seq[Future[BoundStatement]] = {
-    val maxPnr = partitionNr(atomicWrites.last.payload.last.sequenceNr, targetPartitionSize)
+    val maxPnr = partitionNr(atomicWrites.last.payload.last.sequenceNr, journalSettings.targetPartitionSize)
     val firstSeq = atomicWrites.head.payload.head.sequenceNr
-    val minPnr = partitionNr(firstSeq, targetPartitionSize)
+    val minPnr = partitionNr(firstSeq, journalSettings.targetPartitionSize)
     val persistenceId: String = atomicWrites.head.persistenceId
     val all = atomicWrites.flatMap(_.payload)
 
@@ -413,7 +414,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         f.flatMap(_ => asyncReadHighestSequenceNrInternal(persistenceId, fromSequenceNr))
     }
 
-    val toReturn = if (config.eventsByTagEnabled) {
+    val toReturn = if (eventsByTagSettings.eventsByTagEnabled) {
 
       // This relies on asyncReadHighestSequenceNr having the correct sender()
       // No other calls into the async journal have this as they are called from Future callbacks
@@ -465,11 +466,14 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         delete(persistenceId, toSequenceNr)
         p.future
       case otherDeletes =>
-        if (otherDeletes.length > config.maxConcurrentDeletes) {
-          log.error("[}}] Over [{}] outstanding deletes. Failing delete", persistenceId, config.maxConcurrentDeletes)
+        if (otherDeletes.length > journalSettings.maxConcurrentDeletes) {
+          log.error(
+            "[}}] Over [{}] outstanding deletes. Failing delete",
+            persistenceId,
+            journalSettings.maxConcurrentDeletes)
           Future.failed(
             new RuntimeException(
-              s"Over ${config.maxConcurrentDeletes} outstanding deletes for persistenceId $persistenceId"))
+              s"Over ${journalSettings.maxConcurrentDeletes} outstanding deletes for persistenceId $persistenceId"))
         } else {
           log.debug(
             "[{}] outstanding delete. Delete to seqNr [{}] will be scheduled after previous one finished.",
@@ -485,7 +489,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   private def delete(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
 
     def physicalDelete(lowestPartition: Long, highestPartition: Long, toSeqNr: Long): Future[Done] = {
-      if (config.cassandra2xCompat) {
+      if (settings.cassandra2xCompat) {
         def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = {
           val boundStatements = messageIds.map(mid =>
             preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
@@ -498,21 +502,23 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         val deleteResult =
           Future.sequence(partitionInfos.map(future =>
             future.flatMap(pi => {
-              Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(config.maxMessageBatchSize).map { group =>
-                {
-                  val groupDeleteResult = asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
-                  groupDeleteResult.failed.foreach { e =>
-                    log.warning(
-                      s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                      "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                      "Caused by: [{}: {}]",
-                      persistenceId,
-                      toSequenceNr,
-                      e.getClass.getName,
-                      e.getMessage)
+              Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(journalSettings.maxMessageBatchSize).map {
+                group =>
+                  {
+                    val groupDeleteResult =
+                      asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
+                    groupDeleteResult.failed.foreach { e =>
+                      log.warning(
+                        s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                        "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                        "Caused by: [{}: {}]",
+                        persistenceId,
+                        toSequenceNr,
+                        e.getClass.getName,
+                        e.getMessage)
+                    }
+                    groupDeleteResult
                   }
-                  groupDeleteResult
-                }
               })
             })))
         deleteResult.map(_ => Done)
@@ -543,9 +549,9 @@ class CassandraJournal(cfg: Config, cfgPath: String)
      * and physically deletes the rows.
      */
     def logicalAndPhysicalDelete(highestDeletedSequenceNumber: Long, highestSequenceNr: Long): Future[Done] = {
-      val lowestPartition = partitionNr(highestDeletedSequenceNumber + 1, config.targetPartitionSize)
+      val lowestPartition = partitionNr(highestDeletedSequenceNumber + 1, journalSettings.targetPartitionSize)
       val toSeqNr = math.min(toSequenceNr, highestSequenceNr)
-      val highestPartition = partitionNr(toSeqNr, config.targetPartitionSize) + 1 // may have been moved to the next partition
+      val highestPartition = partitionNr(toSeqNr, journalSettings.targetPartitionSize) + 1 // may have been moved to the next partition
       val logicalDelete =
         if (toSeqNr <= highestDeletedSequenceNumber) {
           // already deleted same or higher sequence number, don't update highestDeletedSequenceNumber,
@@ -564,7 +570,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       highestSequenceNr <- {
         // MaxValue may be used as magic value to delete all events without specifying actual toSequenceNr
         if (toSequenceNr == Long.MaxValue)
-          asyncFindHighestSequenceNr(persistenceId, highestDeletedSequenceNumber, config.targetPartitionSize)
+          asyncFindHighestSequenceNr(persistenceId, highestDeletedSequenceNumber, journalSettings.targetPartitionSize)
         else
           Future.successful(toSequenceNr)
       }
@@ -614,7 +620,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         highestDeletedSequenceNumber,
         1,
         None,
-        config.readProfile,
+        settings.journalSettings.readProfile,
         "asyncReadLowestSequenceNr",
         extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
       .map(_.sequenceNr)
@@ -657,20 +663,21 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   }
 
   private def executeBatch(body: BatchStatement => BatchStatement): Future[Unit] = {
-    var batch = new BatchStatementBuilder(BatchType.UNLOGGED).build().setExecutionProfileName(config.writeProfile)
+    var batch =
+      new BatchStatementBuilder(BatchType.UNLOGGED).build().setExecutionProfileName(journalSettings.writeProfile)
     batch = body(batch)
     session.underlying().flatMap(_.executeAsync(batch).toScala).map(_ => ())
   }
 
   def selectOne[T <: Statement[T]](stmt: Statement[T]): Future[Option[Row]] = {
-    session.selectOne(stmt.setExecutionProfileName(readProfile))
+    session.selectOne(stmt.setExecutionProfileName(journalSettings.readProfile))
   }
 
   private def minSequenceNr(partitionNr: Long): Long =
-    partitionNr * config.targetPartitionSize + 1
+    partitionNr * journalSettings.targetPartitionSize + 1
 
   private def execute[T <: Statement[T]](stmt: Statement[T]): Future[Unit] = {
-    session.executeWrite(stmt.setExecutionProfileName(config.writeProfile)).map(_ => ())
+    session.executeWrite(stmt.setExecutionProfileName(journalSettings.writeProfile)).map(_ => ())
   }
 
 }

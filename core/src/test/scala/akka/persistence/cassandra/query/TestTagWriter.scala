@@ -10,6 +10,9 @@ import java.util.UUID
 
 import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
+import akka.persistence.cassandra.BucketSize
+import akka.persistence.cassandra.EventsByTagSettings
+import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal._
 import akka.serialization.Serialization
@@ -21,17 +24,19 @@ private[akka] trait TestTagWriter {
   def system: ActorSystem
   def cluster: CqlSession
   val serialization: Serialization
-  val writePluginConfig: CassandraJournalConfig
+  val settings: PluginSettings
+  final def journalSettings: JournalSettings = settings.journalSettings
+  final def eventsByTagSettings: EventsByTagSettings = settings.eventsByTagSettings
 
   lazy val (preparedWriteTagMessage, preparedWriteTagMessageWithMeta) = {
     val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {
-      def config: CassandraJournalConfig = writePluginConfig
+      def settings: PluginSettings = TestTagWriter.this.settings
     }
     (cluster.prepare(writeStatements.writeTags(false)), cluster.prepare(writeStatements.writeTags(true)))
   }
 
   def clearAllEvents(): Unit = {
-    cluster.execute(s"truncate ${writePluginConfig.keyspace}.${writePluginConfig.tagTable.name}")
+    cluster.execute(s"truncate ${journalSettings.keyspace}.${eventsByTagSettings.tagTable.name}")
   }
 
   def writeTaggedEvent(

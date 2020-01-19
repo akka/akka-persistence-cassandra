@@ -17,18 +17,19 @@ import akka.serialization.Serialization
 import akka.stream.{ Attributes, Outlet, SourceShape }
 import akka.stream.stage._
 import com.datastax.oss.driver.api.core.cql._
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.concurrent.duration.{ FiniteDuration, _ }
 import scala.util.{ Failure, Success, Try }
+
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.protocol.internal.util.Bytes
 import com.github.ghik.silencer.silent
-
 import scala.compat.java8.FutureConverters._
+
+import akka.persistence.cassandra.PluginSettings
 
 /**
  * INTERNAL API
@@ -219,11 +220,13 @@ import scala.compat.java8.FutureConverters._
     max: Long,
     refreshInterval: Option[FiniteDuration],
     session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
-    config: CassandraReadJournalConfig,
+    settings: PluginSettings,
     fastForwardEnabled: Boolean = false)
     extends GraphStageWithMaterializedValue[SourceShape[Row], EventsByPersistenceIdStage.Control] {
 
   import EventsByPersistenceIdStage._
+  import settings.querySettings
+  import settings.journalSettings
 
   val out: Outlet[Row] = Outlet("EventsByPersistenceId.out")
   override val shape: SourceShape[Row] = SourceShape(out)
@@ -350,7 +353,7 @@ import scala.compat.java8.FutureConverters._
       }
 
       def partitionNr(sequenceNr: Long): Long =
-        (sequenceNr - 1L) / config.targetPartitionSize
+        (sequenceNr - 1L) / journalSettings.targetPartitionSize
 
       override def preStart(): Unit = {
         queryState = QueryInProgress(switchPartition = false, fetchMore = false, System.nanoTime())
@@ -406,7 +409,7 @@ import scala.compat.java8.FutureConverters._
             onFailure(
               new IllegalStateException(
                 s"Sequence number [$expectedNextSeqNr] still missing after " +
-                s"[${config.eventsByPersistenceIdEventTimeout.pretty}], " +
+                s"[${querySettings.eventsByPersistenceIdEventTimeout.pretty}], " +
                 s"saw unexpected seqNr [${m.sawSeqNr}] for persistenceId [$persistenceId]."))
           case Some(_) =>
             queryState = QueryIdle
@@ -461,7 +464,7 @@ import scala.compat.java8.FutureConverters._
               // We keep track of if the query was such switching partition and if result is empty
               // we complete the stage or wait until next Continue tick.
               if (empty && switchPartition && lookingForMissingSeqNr.isEmpty) {
-                if (expectedNextSeqNr < toSeqNr && !config.gapFreeSequenceNumbers) {
+                if (expectedNextSeqNr < toSeqNr && !querySettings.gapFreeSequenceNumbers) {
                   log.warning(
                     s"Gap found! Checking if data in partition was deleted for {}, expected seq nr: {}, current partition nr: {}",
                     persistenceId,
@@ -518,7 +521,7 @@ import scala.compat.java8.FutureConverters._
               if ((sequenceNr < expectedNextSeqNr && fastForwardEnabled) || pendingFastForward.isDefined && pendingFastForward.get > sequenceNr) {
                 // skip event due to fast forward
                 tryPushOne()
-              } else if (pendingFastForward.isEmpty && config.gapFreeSequenceNumbers && sequenceNr > expectedNextSeqNr) {
+              } else if (pendingFastForward.isEmpty && querySettings.gapFreeSequenceNumbers && sequenceNr > expectedNextSeqNr) {
                 // we will probably now come in here which isn't what we want
                 lookingForMissingSeqNr match {
                   case Some(_) =>
@@ -531,7 +534,7 @@ import scala.compat.java8.FutureConverters._
                       expectedNextSeqNr,
                       sequenceNr)
                     lookingForMissingSeqNr = Some(
-                      MissingSeqNr(Deadline.now + config.eventsByPersistenceIdEventTimeout, sequenceNr))
+                      MissingSeqNr(Deadline.now + querySettings.eventsByPersistenceIdEventTimeout, sequenceNr))
                     // Forget about any other rows in this result set until we find
                     // the missing sequence nrs
                     queryState = QueryIdle

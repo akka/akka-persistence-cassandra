@@ -6,7 +6,7 @@ package akka.persistence.cassandra.compaction
 
 import java.util.concurrent.TimeUnit
 
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, PluginSettings }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
 
@@ -21,7 +21,7 @@ class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionS
 
   val defaultConfigs = system.settings.config.getConfig("cassandra-plugin")
 
-  val cassandraPluginConfig = new CassandraPluginConfig(system, defaultConfigs)
+  val cassandraPluginSettings = new PluginSettings(system, defaultConfigs)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

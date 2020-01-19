@@ -4,21 +4,28 @@
 
 package akka.persistence.cassandra.journal
 
-import akka.Done
+import scala.compat.java8.FutureConverters._
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
-import scala.concurrent.{ ExecutionContext, Future }
+import akka.Done
+import akka.annotation.InternalApi
+import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
 
-import scala.compat.java8.FutureConverters._
-
-trait CassandraJournalStatements {
-  private[akka] def config: CassandraJournalConfig
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] trait CassandraJournalStatements {
+  private[akka] def settings: PluginSettings
+  private def journalSettings = settings.journalSettings
+  private def eventsByTagSettings = settings.eventsByTagSettings
 
   private[akka] def createKeyspace =
     s"""
-     |CREATE KEYSPACE IF NOT EXISTS ${config.keyspace}
-     |WITH REPLICATION = { 'class' : ${config.replicationStrategy} }
+     |CREATE KEYSPACE IF NOT EXISTS ${journalSettings.keyspace}
+     |WITH REPLICATION = { 'class' : ${journalSettings.replicationStrategy} }
     """.stripMargin.trim
 
   // message is the serialized PersistentRepr that was used in v0.6 and earlier
@@ -46,8 +53,8 @@ trait CassandraJournalStatements {
       |  message blob,
       |  tags set<text>,
       |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
-      |  WITH gc_grace_seconds =${config.gcGraceSeconds}
-      |  AND compaction = ${indent(config.tableCompactionStrategy.asCQL, "    ")}
+      |  WITH gc_grace_seconds =${journalSettings.gcGraceSeconds}
+      |  AND compaction = ${indent(journalSettings.tableCompactionStrategy.asCQL, "    ")}
     """.stripMargin.trim
 
   private[akka] def createTagsTable =
@@ -68,10 +75,10 @@ trait CassandraJournalStatements {
       |  meta_ser_manifest text,
       |  meta blob,
       |  PRIMARY KEY ((tag_name, timebucket), timestamp, persistence_id, tag_pid_sequence_nr))
-      |  WITH gc_grace_seconds =${config.tagTable.gcGraceSeconds}
-      |  AND compaction = ${indent(config.tagTable.compactionStrategy.asCQL, "    ")}
-      |  ${if (config.tagTable.ttl.isDefined)
-         "AND default_time_to_live = " + config.tagTable.ttl.get.toSeconds
+      |  WITH gc_grace_seconds =${eventsByTagSettings.tagTable.gcGraceSeconds}
+      |  AND compaction = ${indent(eventsByTagSettings.tagTable.compactionStrategy.asCQL, "    ")}
+      |  ${if (eventsByTagSettings.tagTable.ttl.isDefined)
+         "AND default_time_to_live = " + eventsByTagSettings.tagTable.ttl.get.toSeconds
        else ""}
     """.stripMargin.trim
 
@@ -231,7 +238,7 @@ trait CassandraJournalStatements {
     """
 
   private[akka] def deleteMessages =
-    if (config.cassandra2xCompat)
+    if (settings.cassandra2xCompat)
       s"""
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND
@@ -277,11 +284,11 @@ trait CassandraJournalStatements {
       VALUES ( ?, ? )
     """
 
-  protected def tableName = s"${config.keyspace}.${config.table}"
-  private def tagTableName = s"${config.keyspace}.${config.tagTable.name}"
-  private def tagProgressTableName = s"${config.keyspace}.tag_write_progress"
-  private def tagScanningTableName = s"${config.keyspace}.tag_scanning"
-  private def metadataTableName = s"${config.keyspace}.${config.metadataTable}"
+  protected def tableName = s"${journalSettings.keyspace}.${journalSettings.table}"
+  private def tagTableName = s"${journalSettings.keyspace}.${eventsByTagSettings.tagTable.name}"
+  private def tagProgressTableName = s"${journalSettings.keyspace}.tag_write_progress"
+  private def tagScanningTableName = s"${journalSettings.keyspace}.tag_scanning"
+  private def metadataTableName = s"${journalSettings.keyspace}.${journalSettings.metadataTable}"
 
   /**
    * Execute creation of keyspace and tables if that is enabled in config.
@@ -292,7 +299,7 @@ trait CassandraJournalStatements {
     import akka.cassandra.session._
 
     def tagStatements: Future[Done] =
-      if (config.eventsByTagEnabled) {
+      if (eventsByTagSettings.eventsByTagEnabled) {
         for {
           _ <- session.executeAsync(createTagsTable).toScala
           _ <- session.executeAsync(createTagsProgressTable).toScala
@@ -301,11 +308,11 @@ trait CassandraJournalStatements {
       } else FutureDone
 
     def keyspace: Future[Done] =
-      if (config.keyspaceAutoCreate)
+      if (journalSettings.keyspaceAutoCreate)
         session.executeAsync(createKeyspace).toScala.map(_ => Done)
       else FutureDone
 
-    val done = if (config.tablesAutoCreate) {
+    val done = if (journalSettings.tablesAutoCreate) {
       // reason for setSchemaMetadataEnabled is that it speed up tests by multiple factors
       session.setSchemaMetadataEnabled(false)
       val result = for {

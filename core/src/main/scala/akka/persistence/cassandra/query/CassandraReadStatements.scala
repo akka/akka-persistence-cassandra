@@ -5,16 +5,18 @@
 package akka.persistence.cassandra.query
 
 import akka.annotation.InternalApi
+import akka.persistence.cassandra.PluginSettings
 
 /**
  * INTERNAL API
  */
 @InternalApi private[akka] trait CassandraReadStatements {
 
-  def config: CassandraReadJournalConfig
+  def settings: PluginSettings
+  private def journalSettings = settings.journalSettings
 
-  private def tableName = s"${config.keyspace}.${config.table}"
-  private def tagViewTableName = s"${config.keyspace}.tag_views"
+  private def tableName = s"${journalSettings.keyspace}.${journalSettings.table}"
+  private def tagViewTableName = s"${journalSettings.keyspace}.tag_views"
 
   def selectDistinctPersistenceIds =
     s"""

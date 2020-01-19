@@ -10,8 +10,6 @@ import java.util.UUID
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal.PersistenceId
 import akka.persistence.cassandra.journal.CassandraJournal.TagPidSequenceNr
-import akka.persistence.cassandra.journal.CassandraJournalConfig
-import akka.persistence.cassandra.journal.Hour
 import akka.persistence.cassandra.query.TagViewSequenceNumberScannerSpec.config
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.CassandraSpec
@@ -21,8 +19,10 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfter
 import org.scalatest.time.{ Seconds, Span }
-
 import scala.concurrent.duration.Duration
+
+import akka.persistence.cassandra.Hour
+import akka.persistence.cassandra.PluginSettings
 
 object TagViewSequenceNumberScannerSpec {
   val bucketSize = Hour
@@ -38,7 +38,7 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
 
   implicit override val patienceConfig = PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
-  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
+  override val settings = new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
   val serialization: Serialization = SerializationExtension(system)
 
   before {

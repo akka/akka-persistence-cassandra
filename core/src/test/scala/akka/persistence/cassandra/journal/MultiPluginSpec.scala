@@ -7,7 +7,7 @@ package akka.persistence.cassandra.journal
 import akka.actor.Props
 import akka.persistence.cassandra.journal.MultiPluginSpec._
 import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraPluginConfig, CassandraSpec }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, PluginSettings }
 import akka.persistence.{ PersistentActor, SaveSnapshotSuccess }
 import com.typesafe.config.ConfigFactory
 
@@ -78,8 +78,8 @@ class MultiPluginSpec
       MultiPluginSpec.journalKeyspace,
       MultiPluginSpec.snapshotKeyspace) {
 
-  lazy val cassandraPluginConfig =
-    new CassandraPluginConfig(system, system.settings.config.getConfig("cassandra-plugin"))
+  lazy val cassandraPluginSettings =
+    new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
 
   // default journal plugin is not configured for this test
   override def awaitPersistenceInit(): Unit = ()
