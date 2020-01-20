@@ -69,6 +69,7 @@ class TagWriterSpec
     maxBatchSize = 10,
     flushInterval = 10.seconds,
     scanningFlushInterval = 20.seconds,
+    stopTagWriterWhenIdle = 5.seconds,
     pubsubNotification = Duration.Undefined)
   val waitDuration = 100.millis
   val shortDuration = 50.millis
@@ -601,6 +602,40 @@ class TagWriterSpec
 
     }
 
+    "passivate when idle" in {
+      val parent = TestProbe()
+      val idleTimeout = 100.millis
+      val (probe, ref) =
+        setupWithParent(
+          settings = defaultSettings.copy(maxBatchSize = 2, stopTagWriterWhenIdle = idleTimeout),
+          parent = parent.ref)
+      parent.expectMsg(PassivateTagWriter("tag-1"))
+      ref.tell(StopTagWriter, parent.ref)
+      watch(ref)
+      expectTerminated(ref)
+    }
+
+    "do not passivate if write in progress" in {
+      val promiseForWrite = Promise[Done]()
+      val parent = TestProbe()
+      val idleTimeout = 1.second
+      val (probe, ref) =
+        setupWithParent(
+          writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
+          settings = defaultSettings.copy(maxBatchSize = 2, stopTagWriterWhenIdle = idleTimeout),
+          parent = parent.ref)
+      val bucket = nowBucket()
+
+      val e1 = event("p1", 1L, "e-1", bucket)
+      val e2 = event("p1", 2L, "e-2", bucket)
+
+      ref ! TagWrite(tagName, Vector(e1, e2))
+      probe.expectMsg(Vector(toEw(e1, 1), toEw(e2, 2)))
+      parent.expectNoMessage(idleTimeout + 100.millis)
+
+      promiseForWrite.success(Done)
+    }
+
   }
 
   "Tag writer error scenarios" must {
@@ -675,6 +710,15 @@ class TagWriterSpec
       writeResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done)),
       progressWriteResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done)))
       : (TestProbe, ActorRef) = {
+    setupWithParent(tag, settings, writeResponse, progressWriteResponse, TestProbe().ref)
+  }
+
+  private def setupWithParent(
+      tag: String = "tag-1",
+      settings: TagWriterSettings,
+      writeResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done)),
+      progressWriteResponse: Stream[Future[Done]] = Stream.continually(Future.successful(Done)),
+      parent: ActorRef): (TestProbe, ActorRef) = {
     var writeResponseStream = writeResponse
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
@@ -703,7 +747,7 @@ class TagWriterSpec
         }
       }
 
-    val ref = system.actorOf(TagWriter.props(settings, session, tag))
+    val ref = system.actorOf(TagWriter.props(settings, session, tag, parent))
     (probe, ref)
   }
 
