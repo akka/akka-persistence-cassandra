@@ -107,5 +107,3 @@ def configImport(packageName: String = "com.typesafe.config.*") =
 def versionedImport(packageName: String, lower: String, upper: String) =
   s"""$packageName;version="[$lower,$upper)""""
 def optionalImport(packageName: String) = s"$packageName;resolution:=optional"
-
-ThisBuild / dynverSonatypeSnapshots := true
