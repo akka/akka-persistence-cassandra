@@ -86,7 +86,6 @@ object Common extends AutoPlugin {
     Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
     Test / parallelExecution := false,
     bintrayOrganization := Some("akka"),
-    bintrayPackage := "akka-persistence-cassandra",
-
+    bintrayPackage := "akka-persistence-cassandra"
   )
 }
