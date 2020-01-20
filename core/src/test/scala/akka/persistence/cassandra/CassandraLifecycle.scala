@@ -40,7 +40,7 @@ object CassandraLifecycle {
     # needed when testing with Akka 2.6
     akka.actor.allow-java-serialization = on
     akka.actor.warn-about-java-serializer-usage = off
-    """).resolve()
+    """).withFallback(CassandraSpec.enableAutocreate).resolve()
 
   def awaitPersistenceInit(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
     val probe = TestProbe()(system)

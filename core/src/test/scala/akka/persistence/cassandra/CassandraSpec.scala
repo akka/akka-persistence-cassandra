@@ -59,6 +59,22 @@ object CassandraSpec {
       }     
     """)
 
+  val enableAutocreate = ConfigFactory.parseString("""
+      cassandra-plugin {
+        events-by-tag {
+          eventual-consistency-delay = 200ms
+        }
+        snapshot {
+          keyspace-autocreate = true
+          tables-autocreate = true
+        } 
+        journal {
+          keyspace-autocreate = true
+          tables-autocreate = true
+        }
+      } 
+     """)
+
   val fallbackConfig = ConfigFactory.parseString(s"""
       akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
       akka.loglevel = DEBUG
@@ -68,13 +84,7 @@ object CassandraSpec {
           timeout = 10s # drop keyspaces 
         }
       }
-  
-      cassandra-plugin {
-        events-by-tag {
-          eventual-consistency-delay = 200ms
-        }
-      }
-    """)
+    """).withFallback(enableAutocreate)
 
 }
 
