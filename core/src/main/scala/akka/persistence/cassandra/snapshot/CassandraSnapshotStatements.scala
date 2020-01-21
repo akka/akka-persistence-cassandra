@@ -4,21 +4,22 @@
 
 package akka.persistence.cassandra.snapshot
 
+import scala.compat.java8.FutureConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
 import akka.Done
 import akka.cassandra.session.FutureDone
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
-import scala.compat.java8.FutureConverters._
 
 trait CassandraSnapshotStatements {
-  def snapshotConfig: CassandraSnapshotStoreConfig
+  def snapshotSettings: SnapshotSettings
 
   def createKeyspace =
     s"""
-    | CREATE KEYSPACE IF NOT EXISTS ${snapshotConfig.keyspace}
-    | WITH REPLICATION = { 'class' : ${snapshotConfig.replicationStrategy} }
+    | CREATE KEYSPACE IF NOT EXISTS ${snapshotSettings.keyspace}
+    | WITH REPLICATION = { 'class' : ${snapshotSettings.replicationStrategy} }
     """.stripMargin.trim
 
   // snapshot_data is the serialized snapshot payload
@@ -37,8 +38,8 @@ trait CassandraSnapshotStatements {
     |  meta_ser_manifest text,
     |  meta blob,
     |  PRIMARY KEY (persistence_id, sequence_nr))
-    |  WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${snapshotConfig.gcGraceSeconds}
-    |  AND compaction = ${indent(snapshotConfig.tableCompactionStrategy.asCQL, "    ")}
+    |  WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${snapshotSettings.gcGraceSeconds}
+    |  AND compaction = ${indent(snapshotSettings.tableCompactionStrategy.asCQL, "    ")}
     """.stripMargin.trim
 
   def writeSnapshot(withMeta: Boolean): String = s"""
@@ -79,7 +80,7 @@ trait CassandraSnapshotStatements {
         ${limit.map(l => s"LIMIT ${l}").getOrElse("")}
     """
 
-  private def tableName = s"${snapshotConfig.keyspace}.${snapshotConfig.table}"
+  private def tableName = s"${snapshotSettings.keyspace}.${snapshotSettings.table}"
 
   /**
    * Execute creation of keyspace and tables if that is enabled in config.
@@ -88,11 +89,11 @@ trait CassandraSnapshotStatements {
    */
   def executeCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
     def keyspace: Future[Done] =
-      if (snapshotConfig.keyspaceAutoCreate)
+      if (snapshotSettings.keyspaceAutoCreate)
         session.executeAsync(createKeyspace).toScala.map(_ => Done)
       else FutureDone
 
-    if (snapshotConfig.tablesAutoCreate) {
+    if (snapshotSettings.tablesAutoCreate) {
       // reason for setSchemaMetadataEnabled is that it speed up tests by multiple factors
       session.setSchemaMetadataEnabled(false)
       val result = for {

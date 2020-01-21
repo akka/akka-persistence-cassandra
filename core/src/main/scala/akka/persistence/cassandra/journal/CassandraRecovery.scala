@@ -20,16 +20,16 @@ import akka.cassandra.session._
 trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatements {
   this: CassandraJournal =>
 
-  private[akka] val config: CassandraJournalConfig
+  private[akka] val settings: PluginSettings
 
-  import config._
+  import settings._
 
   private[akka] val eventDeserializer: CassandraJournal.EventDeserializer =
     new CassandraJournal.EventDeserializer(context.system)
 
   private[akka] def asyncReadHighestSequenceNrInternal(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
     asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
-      asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h), targetPartitionSize)
+      asyncFindHighestSequenceNr(persistenceId, math.max(fromSequenceNr, h), journalSettings.targetPartitionSize)
     }
   }
 
@@ -39,7 +39,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
       replayCallback: PersistentRepr => Unit): Future[Unit] = {
     log.debug("[{}] asyncReplayMessages from [{}] to [{}]", persistenceId, fromSequenceNr, toSequenceNr)
 
-    if (config.eventsByTagEnabled) {
+    if (eventsByTagSettings.eventsByTagEnabled) {
       val recoveryPrep: Future[Map[String, TagProgress]] = {
         val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
         for {
@@ -65,7 +65,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
               toSequenceNr,
               max,
               None,
-              config.readProfile,
+              settings.journalSettings.readProfile,
               "asyncReplayMessages",
               extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
             .mapAsync(1)(sendMissingTagWrite(tp, tagWrites.get))
@@ -82,7 +82,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
           toSequenceNr,
           max,
           None,
-          config.readProfile,
+          settings.journalSettings.readProfile,
           "asyncReplayMessages",
           extractor = Extractors.persistentRepr(eventDeserializer, serialization))
         .map(p => queries.mapEvent(p.persistentRepr))
@@ -111,7 +111,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
           scanTo,
           max,
           None,
-          config.readProfile,
+          settings.journalSettings.readProfile,
           "asyncReplayMessagesPreSnapshot",
           Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization))
         .mapAsync(1) { t =>
@@ -139,7 +139,15 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
     else {
       val completed: List[Future[Done]] =
         tpr.tags.toList
-          .map(tag => tag -> serializeEvent(tpr.pr, tpr.tags, tpr.offset, bucketSize, serialization, context.system))
+          .map(
+            tag =>
+              tag -> serializeEvent(
+                tpr.pr,
+                tpr.tags,
+                tpr.offset,
+                eventsByTagSettings.bucketSize,
+                serialization,
+                context.system))
           .map {
             case (tag, serializedFut) =>
               serializedFut.map { serialized =>

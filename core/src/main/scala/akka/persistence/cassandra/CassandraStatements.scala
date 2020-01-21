@@ -9,23 +9,21 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.annotation.InternalApi
-import akka.persistence.cassandra.journal.CassandraJournalConfig
 import akka.persistence.cassandra.journal.CassandraJournalStatements
 import akka.persistence.cassandra.snapshot.CassandraSnapshotStatements
-import akka.persistence.cassandra.snapshot.CassandraSnapshotStoreConfig
+import akka.persistence.cassandra.snapshot.SnapshotSettings
 import com.datastax.oss.driver.api.core.CqlSession
 
 @InternalApi
 private[akka] trait CassandraStatements {
-  def config: CassandraJournalConfig // FIXME rename to journalConfig, or create one single CassandraSettings holding everything
-  def snapshotConfig: CassandraSnapshotStoreConfig
+  private[akka] def settings: PluginSettings
 
   val journalStatements: CassandraJournalStatements = new CassandraJournalStatements {
-    override def config: CassandraJournalConfig = CassandraStatements.this.config
+    override def settings: PluginSettings = CassandraStatements.this.settings
   }
 
   val snapshotStatements: CassandraSnapshotStatements = new CassandraSnapshotStatements {
-    override def snapshotConfig: CassandraSnapshotStoreConfig = CassandraStatements.this.snapshotConfig
+    override def snapshotSettings: SnapshotSettings = settings.snapshotSettings
   }
 
   def executeAllCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {

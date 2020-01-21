@@ -10,6 +10,7 @@ import java.util.UUID
 import akka.Done
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.event.Logging.Warning
+import akka.persistence.cassandra.Day
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters.TagWrite
@@ -22,7 +23,6 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.github.ghik.silencer.silent
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, WordSpecLike }
-
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.control.NoStackTrace

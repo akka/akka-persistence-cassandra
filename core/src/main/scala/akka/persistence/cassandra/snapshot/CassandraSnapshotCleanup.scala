@@ -15,7 +15,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 
 trait CassandraSnapshotCleanup extends CassandraSnapshotStatements {
 
-  def snapshotConfig: CassandraSnapshotStoreConfig
+  def snapshotSettings: SnapshotSettings
   def session: CassandraSession
   private[akka] implicit val ec: ExecutionContext
 

@@ -5,17 +5,16 @@
 package akka.persistence.cassandra
 
 import akka.actor.ActorSystem
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Day, Hour, TimeBucket }
-import akka.persistence.cassandra.query.CassandraReadJournalConfig
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.BackTrackConfig
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.Fixed
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.Max
+import akka.persistence.cassandra.journal.TimeBucket
+import akka.persistence.cassandra.EventsByTagSettings.BackTrackSettings
+import akka.persistence.cassandra.EventsByTagSettings.Fixed
+import akka.persistence.cassandra.EventsByTagSettings.Max
 import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpec
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
 
-class CassandraQueryJournalConfigSpec
+class CassandraQueryJournalSettingsSpec
     extends TestKit(ActorSystem("CassandraReadJournalConfigSpec"))
     with WordSpecLike
     with Matchers
@@ -30,66 +29,59 @@ class CassandraQueryJournalConfigSpec
       val config = ConfigFactory.parseString("""
          cassandra-plugin.events-by-tag.bucket-size = Hour
         """).withFallback(system.settings.config)
+      val settings = new PluginSettings(system, config.getConfig("cassandra-plugin"))
 
-      val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-plugin"))
-      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-plugin"), writeConfig)
-
-      queryConfig.eventsByTagCleanUpPersistenceIds.get shouldEqual 2.hours
+      settings.eventsByTagSettings.cleanUpPersistenceIds.get shouldEqual 2.hours
     }
 
     "support Day with just day format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-plugin.events-by-tag.bucket-size = Day
-          |cassandra-plugin.query.first-time-bucket = "20151120"
+          |cassandra-plugin.events-by-tag.first-time-bucket = "20151120"
         """.stripMargin).withFallback(system.settings.config)
-      val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-plugin"))
-      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-plugin"), writeConfig)
+      val settings = new PluginSettings(system, config.getConfig("cassandra-plugin"))
 
-      queryConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
+      settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
     }
 
     "support Day with full time format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-plugin.events-by-tag.bucket-size = Day
-          |cassandra-plugin.query.first-time-bucket = "20151120T12:20"
+          |cassandra-plugin.events-by-tag.first-time-bucket = "20151120T12:20"
         """.stripMargin).withFallback(system.settings.config)
-      val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-plugin"))
-      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-plugin"), writeConfig)
+      val settings = new PluginSettings(system, config.getConfig("cassandra-plugin"))
 
       // Rounded down
-      queryConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
+      settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
     }
 
     "support Hour with just hour format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-plugin.events-by-tag.bucket-size = Hour
-          |cassandra-plugin.query.first-time-bucket = "20151120T00"
+          |cassandra-plugin.events-by-tag.first-time-bucket = "20151120T00"
         """.stripMargin).withFallback(system.settings.config)
-      val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-plugin"))
-      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-plugin"), writeConfig)
+      val settings = new PluginSettings(system, config.getConfig("cassandra-plugin"))
 
-      queryConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
+      settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
     }
 
     "support Hour with full time format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-plugin.events-by-tag.bucket-size = Hour
-          |cassandra-plugin.query.first-time-bucket = "20151120T00:20"
+          |cassandra-plugin.events-by-tag.first-time-bucket = "20151120T00:20"
         """.stripMargin).withFallback(system.settings.config)
-      val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-plugin"))
-      val queryConfig = new CassandraReadJournalConfig(system, config.getConfig("cassandra-plugin"), writeConfig)
+      val settings = new PluginSettings(system, config.getConfig("cassandra-plugin"))
 
-      queryConfig.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
+      settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
     }
 
     "validate format" in {
       val config = ConfigFactory.parseString("""
           |cassandra-plugin.events-by-tag.bucket-size = Hour
-          |cassandra-plugin.query.first-time-bucket = "cats"
+          |cassandra-plugin.events-by-tag.first-time-bucket = "cats"
         """.stripMargin).withFallback(system.settings.config)
-      val writeConfig = new CassandraJournalConfig(system, config.getConfig("cassandra-plugin"))
       val e = intercept[IllegalArgumentException] {
-        new CassandraReadJournalConfig(system, config.getConfig("cassandra-plugin"), writeConfig)
+        new PluginSettings(system, config.getConfig("cassandra-plugin"))
       }
       e.getMessage shouldEqual "Invalid first-time-bucket format. Use: yyyyMMdd'T'HH:mm"
     }
@@ -101,7 +93,7 @@ class BackTrackConfigSpec extends WordSpec with Matchers {
   val currentTime = 100
   "BackTrack config" should {
 
-    val baseConfig = BackTrackConfig(None, None, Max, None, Max)
+    val baseConfig = BackTrackSettings(None, None, Max, None, Max)
 
     "set long interval to max mills if disabled" in {
       val longIntervalDisabled = baseConfig.copy(longInterval = None)
@@ -169,21 +161,21 @@ class BackTrackConfigSpec extends WordSpec with Matchers {
 
     "disallow only setting a long interval" in {
       intercept[IllegalArgumentException] {
-        BackTrackConfig(None, None, Max, Some(10.seconds), Max)
+        BackTrackSettings(None, None, Max, Some(10.seconds), Max)
       }.getMessage should include("interval must be enabled to use long-interval")
     }
     "disallow long interval being shorter than interval" in {
       intercept[IllegalArgumentException] {
-        BackTrackConfig(None, Some(11.seconds), Max, Some(10.seconds), Max)
+        BackTrackSettings(None, Some(11.seconds), Max, Some(10.seconds), Max)
       }.getMessage should include("interval must be smaller than long-interval")
     }
     "disallow periods being within 10% of metadataCleanupInterval" in {
       intercept[IllegalArgumentException] {
-        BackTrackConfig(Some(10.seconds), None, Fixed(9500.millis), None, Max)
+        BackTrackSettings(Some(10.seconds), None, Fixed(9500.millis), None, Max)
       }.getMessage should include("period has to be at least 10% lower than cleanup-old-persistence-ids")
 
       intercept[IllegalArgumentException] {
-        BackTrackConfig(Some(10.seconds), None, Max, None, Fixed(9500.millis))
+        BackTrackSettings(Some(10.seconds), None, Max, None, Fixed(9500.millis))
       }.getMessage should include("long-period has to be at least 10% lower than cleanup-old-persistence-ids")
     }
   }

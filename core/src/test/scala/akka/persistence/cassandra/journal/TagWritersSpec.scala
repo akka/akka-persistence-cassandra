@@ -7,6 +7,7 @@ package akka.persistence.cassandra.journal
 import java.nio.ByteBuffer
 
 import akka.actor.{ Actor, ActorRef, ActorSystem, PoisonPill, Props }
+import akka.persistence.cassandra.Hour
 import akka.persistence.cassandra.journal.CassandraJournal.Serialized
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
@@ -14,7 +15,6 @@ import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import akka.util.Timeout
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
-
 import scala.concurrent.duration._
 
 class TagWritersSpec

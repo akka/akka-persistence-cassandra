@@ -31,11 +31,11 @@ class CassandraSnapshotStoreSpec
     extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config)
     with CassandraLifecycle {
 
-  val storeConfig =
-    new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-plugin"))
+  val snapshotSettings =
+    new SnapshotSettings(system, system.settings.config.getConfig("cassandra-plugin"))
 
   val storeStatements = new CassandraSnapshotStatements {
-    def snapshotConfig = storeConfig
+    def snapshotSettings = CassandraSnapshotStoreSpec.this.snapshotSettings
   }
 
   import storeStatements._

@@ -13,9 +13,9 @@ import org.scalatest.WordSpecLike
 import org.scalatest.prop.TableDrivenPropertyChecks._
 import scala.util.Random
 
-import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.JournalSettings
 
-class CassandraPluginConfigSpec
+class CassandraPluginSettingsSpec
     extends TestKit(ActorSystem("CassandraPluginConfigSpec"))
     with WordSpecLike
     with MustMatchers
@@ -58,15 +58,15 @@ class CassandraPluginConfigSpec
     super.afterAll()
   }
 
-  "A CassandraJournalConfig" must {
+  "A CassandraJournalSettings" must {
 
     "set the metadata table" in {
-      val config = new CassandraJournalConfig(system, defaultConfig)
+      val config = new JournalSettings(system, defaultConfig)
       config.metadataTable must be("metadata")
     }
 
     "parse config with SimpleStrategy as default for replication-strategy" in {
-      val config = new CassandraJournalConfig(system, defaultConfig)
+      val config = new JournalSettings(system, defaultConfig)
       config.replicationStrategy must be("'SimpleStrategy','replication_factor':1")
     }
 
@@ -76,7 +76,7 @@ class CassandraPluginConfigSpec
           |journal.replication-strategy = "NetworkTopologyStrategy"
           |journal.data-center-replication-factors = ["dc1:3", "dc2:2"]
         """.stripMargin).withFallback(defaultConfig)
-      val config = new CassandraJournalConfig(system, configWithNetworkStrategy)
+      val config = new JournalSettings(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }
 
@@ -87,7 +87,7 @@ class CassandraPluginConfigSpec
           |journal.data-center-replication-factors.0 = "dc1:3"
           |journal.data-center-replication-factors.1 = "dc2:2"
         """.stripMargin).withFallback(defaultConfig)
-      val config = new CassandraJournalConfig(system, configWithNetworkStrategy)
+      val config = new JournalSettings(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }
 
@@ -97,44 +97,44 @@ class CassandraPluginConfigSpec
           |journal.replication-strategy = "NetworkTopologyStrategy"
           |journal.data-center-replication-factors = "dc1:3,dc2:2"
         """.stripMargin).withFallback(defaultConfig)
-      val config = new CassandraJournalConfig(system, configWithNetworkStrategy)
+      val config = new JournalSettings(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }
 
     "throw an exception for an unknown replication strategy" in {
       intercept[IllegalArgumentException] {
-        CassandraPluginConfig.getReplicationStrategy("UnknownStrategy", 0, List.empty)
+        PluginSettings.getReplicationStrategy("UnknownStrategy", 0, List.empty)
       }
     }
 
     "throw an exception when data-center-replication-factors is invalid or empty for NetworkTopologyStrategy" in {
       intercept[IllegalArgumentException] {
-        CassandraPluginConfig.getReplicationStrategy("NetworkTopologyStrategy", 0, List.empty)
+        PluginSettings.getReplicationStrategy("NetworkTopologyStrategy", 0, List.empty)
       }
       intercept[IllegalArgumentException] {
-        CassandraPluginConfig.getReplicationStrategy("NetworkTopologyStrategy", 0, null)
+        PluginSettings.getReplicationStrategy("NetworkTopologyStrategy", 0, null)
       }
       intercept[IllegalArgumentException] {
-        CassandraPluginConfig.getReplicationStrategy("NetworkTopologyStrategy", 0, Seq("dc1"))
+        PluginSettings.getReplicationStrategy("NetworkTopologyStrategy", 0, Seq("dc1"))
       }
     }
 
     "validate keyspace parameter" in {
       forAll(keyspaceNames) { (keyspace, isValid) =>
-        if (isValid) CassandraPluginConfig.validateKeyspaceName(keyspace) must be(keyspace)
+        if (isValid) PluginSettings.validateKeyspaceName(keyspace) must be(keyspace)
         else
           intercept[IllegalArgumentException] {
-            CassandraPluginConfig.validateKeyspaceName(keyspace)
+            PluginSettings.validateKeyspaceName(keyspace)
           }
       }
     }
 
     "validate table name parameter" in {
       forAll(keyspaceNames) { (tableName, isValid) =>
-        if (isValid) CassandraPluginConfig.validateKeyspaceName(tableName) must be(tableName)
+        if (isValid) PluginSettings.validateKeyspaceName(tableName) must be(tableName)
         else
           intercept[IllegalArgumentException] {
-            CassandraPluginConfig.validateKeyspaceName(tableName)
+            PluginSettings.validateKeyspaceName(tableName)
           }
       }
     }
@@ -143,7 +143,7 @@ class CassandraPluginConfigSpec
       val configWithFalseKeyspaceAutocreate =
         ConfigFactory.parseString("journal.keyspace-autocreate = false").withFallback(defaultConfig)
 
-      val config = new CassandraJournalConfig(system, configWithFalseKeyspaceAutocreate)
+      val config = new JournalSettings(system, configWithFalseKeyspaceAutocreate)
       config.keyspaceAutoCreate must be(false)
     }
 
@@ -151,7 +151,7 @@ class CassandraPluginConfigSpec
       val configWithFalseTablesAutocreate =
         ConfigFactory.parseString("journal.tables-autocreate = false").withFallback(defaultConfig)
 
-      val config = new CassandraJournalConfig(system, configWithFalseTablesAutocreate)
+      val config = new JournalSettings(system, configWithFalseTablesAutocreate)
       config.tablesAutoCreate must be(false)
     }
   }

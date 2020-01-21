@@ -113,13 +113,16 @@ class EventsByTagMigration(
 
   implicit val ec =
     system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.journal.plugin-dispatcher"))
-  override def config: CassandraJournalConfig =
-    new CassandraJournalConfig(system, system.settings.config.getConfig(journalNamespace))
+
+  override val settings: PluginSettings =
+    new PluginSettings(system, system.settings.config.getConfig(journalNamespace))
+  private def journalSettings = settings.journalSettings
+  private def eventsByTagSettings = settings.eventsByTagSettings
 
   lazy val session: CassandraSession = queries.session
 
   def createTables(): Future[Done] = {
-    log.info("Creating keyspace {} and new tag tables", config.keyspace)
+    log.info("Creating keyspace {} and new tag tables", journalSettings.keyspace)
     for {
       _ <- session.executeWrite(createKeyspace)
       _ <- session.executeWrite(createTagsTable)
@@ -183,16 +186,16 @@ class EventsByTagMigration(
       src: Source[PersistenceId, NotUsed],
       periodicFlush: Int,
       flushTimeout: Timeout): Future[Done] = {
-    log.info("Beginning migration of data to tag_views table in keyspace {}", config.keyspace)
+    log.info("Beginning migration of data to tag_views table in keyspace {}", journalSettings.keyspace)
     val tagWriterSession = TagWritersSession(
       session,
-      config.writeProfile,
-      config.readProfile,
+      journalSettings.writeProfile,
+      journalSettings.readProfile,
       () => preparedWriteToTagViewWithoutMeta,
       () => preparedWriteToTagViewWithMeta,
       () => preparedWriteToTagProgress,
       () => preparedWriteTagScanning)
-    val tagWriters = system.actorOf(TagWriters.props(config.tagWriterSettings, tagWriterSession))
+    val tagWriters = system.actorOf(TagWriters.props(eventsByTagSettings.tagWriterSettings, tagWriterSession))
 
     val eventDeserializer: CassandraJournal.EventDeserializer =
       new CassandraJournal.EventDeserializer(system)
@@ -231,10 +234,10 @@ class EventsByTagMigration(
                   Long.MaxValue,
                   Long.MaxValue,
                   None,
-                  config.readProfile,
+                  settings.querySettings.readProfile,
                   s"migrateToTag-$pid",
-                  extractor =
-                    EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system))
+                  extractor = EventsByTagMigration
+                    .rawPayloadOldTagSchemaExtractor(eventsByTagSettings.bucketSize, eventDeserializer, system))
                 .map(sendMissingTagWriteRaw(tp, tagWriters, actorRunning = false))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
                 .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])

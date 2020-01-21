@@ -23,8 +23,8 @@ class CassandraSnapshotCleanupSpec extends CassandraSpec {
   private val log = Logging(system, getClass)
 
   val snapshotCleanup = new CassandraSnapshotCleanup {
-    override def snapshotConfig: CassandraSnapshotStoreConfig =
-      new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig(configPath))
+    override def snapshotSettings: SnapshotSettings =
+      new SnapshotSettings(system, system.settings.config.getConfig(configPath))
 
     override implicit val ec: ExecutionContext = system.dispatcher
 
