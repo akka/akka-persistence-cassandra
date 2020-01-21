@@ -9,7 +9,7 @@ import java.lang.{ Long => JLong }
 
 import akka.actor.{ ActorSystem, PoisonPill }
 import akka.persistence.cassandra.TestTaggingActor.Ack
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
+import akka.persistence.cassandra.journal.CassandraJournalStatements
 import akka.persistence.cassandra.query.DirectWriting
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
@@ -22,9 +22,10 @@ import akka.testkit.TestProbe
 import akka.{ Done, NotUsed }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
-
 import scala.concurrent.duration._
 import scala.util.Try
+
+import akka.persistence.cassandra.journal.TimeBucket
 import akka.serialization.Serializers
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.datastax.oss.driver.api.core.uuid.Uuids
@@ -352,9 +353,9 @@ abstract class AbstractEventsByTagMigrationSpec
        |CREATE KEYSPACE IF NOT EXISTS $journalName WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1 }
      """.stripMargin
 
-  val statements = new CassandraStatements {
-    override def config: CassandraJournalConfig =
-      new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
+  val statements = new CassandraJournalStatements {
+    override def settings: PluginSettings =
+      new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
   }
 
   implicit val materialiser = ActorMaterializer()(system)

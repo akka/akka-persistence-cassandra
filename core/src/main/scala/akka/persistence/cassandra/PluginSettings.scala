@@ -5,20 +5,34 @@
 package akka.persistence.cassandra
 
 import akka.actor.ActorSystem
-import akka.actor.ExtendedActorSystem
-import akka.cassandra.session.CqlSessionProvider
+import akka.annotation.InternalApi
+import akka.persistence.cassandra.journal.JournalSettings
+import akka.persistence.cassandra.query.QuerySettings
+import akka.persistence.cassandra.snapshot.SnapshotSettings
 import com.typesafe.config.Config
 
-class CassandraPluginConfig(system: ActorSystem, config: Config) {
-  val sessionProvider: CqlSessionProvider = CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], config)
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class PluginSettings(system: ActorSystem, config: Config) {
 
   // TODO this is now only used when deciding how to delete, remove this config and just
   // query what version of cassandra we're connected to and do the right thing
   val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
 
+  val journalSettings: JournalSettings = new JournalSettings(system, config)
+
+  val eventsByTagSettings: EventsByTagSettings = new EventsByTagSettings(system, config)
+
+  val querySettings: QuerySettings = new QuerySettings(system, config, eventsByTagSettings)
+
+  val snapshotSettings: SnapshotSettings = new SnapshotSettings(system, config)
 }
 
-object CassandraPluginConfig {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object PluginSettings {
 
   private[akka] def checkProfile(system: ActorSystem, profile: String) = {
     require(

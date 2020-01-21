@@ -11,8 +11,8 @@ import java.util.UUID
 
 import akka.actor.{ PoisonPill, Props }
 import akka.event.Logging.Warning
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Day }
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, EventWithMetaData }
+import akka.persistence.cassandra.journal.CassandraJournalStatements
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, Day, EventWithMetaData }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, EventsByTagQuery }
 import akka.persistence.query.{ EventEnvelope, NoOffset, Offset, TimeBasedUUID }
@@ -27,8 +27,9 @@ import com.datastax.oss.driver.api.core.CqlIdentifier
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.BeforeAndAfterEach
-
 import scala.concurrent.duration._
+
+import akka.persistence.cassandra.PluginSettings
 
 object EventsByTagSpec {
   def withProbe[T](probe: TestSubscriber.Probe[Any], f: TestSubscriber.Probe[Any] => T): T = {
@@ -62,10 +63,10 @@ object EventsByTagSpec {
       query {
         refresh-interval = 500ms
         max-buffer-size = 50
-        first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
       }
 
       events-by-tag {
+        first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
         flush-interval = 0ms
         eventual-consistency-delay = 2s
         bucket-size = Day
@@ -89,7 +90,7 @@ object EventsByTagSpec {
 
   val strictConfigFirstOffset1001DaysAgo = ConfigFactory.parseString(s"""
     akka.loglevel = INFO # DEBUG is very verbose for this test so don't turn it on when debugging other tests
-    cassandra-plugin.query.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
+    cassandra-plugin.events-by-tag.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
     """).withFallback(strictConfig)
 
   val persistenceIdCleanupConfig =
@@ -149,11 +150,11 @@ abstract class AbstractEventsByTagSpec(config: Config)
   val waitTime = 100.millis
 
   val serialization = SerializationExtension(system)
-  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
+  val settings = new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
 
   lazy val preparedWriteMessage = {
-    val writeStatements: CassandraStatements = new CassandraStatements {
-      def config: CassandraJournalConfig = writePluginConfig
+    val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {
+      def settings: PluginSettings = AbstractEventsByTagSpec.this.settings
     }
     cluster.prepare(writeStatements.writeMessage(withMeta = false))
   }

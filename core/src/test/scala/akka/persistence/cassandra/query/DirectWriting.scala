@@ -8,9 +8,9 @@ import java.nio.ByteBuffer
 
 import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.CassandraJournalConfig
-import akka.persistence.cassandra.journal.CassandraStatements
-import akka.persistence.cassandra.journal.Hour
+import akka.persistence.cassandra.Hour
+import akka.persistence.cassandra.PluginSettings
+import akka.persistence.cassandra.journal.CassandraJournalStatements
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
@@ -24,13 +24,13 @@ trait DirectWriting extends BeforeAndAfterAll {
 
   def system: ActorSystem
   private lazy val serialization = SerializationExtension(system)
-  private lazy val writePluginConfig =
-    new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
+  private lazy val settings =
+    new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
 
   def cluster: CqlSession
 
-  private lazy val writeStatements: CassandraStatements = new CassandraStatements {
-    def config: CassandraJournalConfig = writePluginConfig
+  private lazy val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {
+    def settings: PluginSettings = DirectWriting.this.settings
   }
 
   private lazy val preparedWriteMessage = cluster.prepare(writeStatements.writeMessage(withMeta = false))

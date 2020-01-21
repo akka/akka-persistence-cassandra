@@ -94,4 +94,25 @@ b `journal` and `query`.
 
 These issues are likely to be resolved in future versions of the plugin.
 
+### Schema 
 
+The keyspace and tables must be created before using the plugin. Auto creation of the keyspace and tables
+is included as a development convenience and should never be used in production. Cassandra does not handle
+concurrent schema migrations well and if every Akka node tries to create the schema at the same time you'll
+get column id mismatch errors in Cassandra.
+
+The default keyspace used by the plugin is called `akka`, it should be created with the
+NetworkTopology replication strategy with a replication factor of at least 3:
+
+```
+CREATE KEYSPACE IF NOT EXISTS akka WITH replication = {'class': 'NetworkTopologyStrategy', '<your_dc_name>' : 3 }; 
+```
+
+For local testing, and the default if you enable `cassandra-plugin.journal.keyspace-autocreate` you can use the following:
+
+@@snip [journal-schema](/target/journal-keyspace.txt) { #journal-keyspace } 
+
+There are multiple tables required. These need to be created before starting your application.
+For local testing you can enable `cassnadra-plugin.journal.table-autocreate`
+
+@@snip [journal-tables](/target/journal-tables.txt) { #journal-tables } 

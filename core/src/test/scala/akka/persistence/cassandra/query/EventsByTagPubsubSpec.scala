@@ -8,7 +8,7 @@ import java.time.{ LocalDate, ZoneOffset }
 
 import akka.cluster.Cluster
 import akka.persistence.cassandra.CassandraSpec
-import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.JournalSettings
 import akka.persistence.query.{ EventEnvelope, NoOffset }
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
@@ -26,11 +26,11 @@ object EventsByTagPubsubSpec {
     akka.remote.artery.canonical.port = 0
     akka.remote.netty.tcp.hostname = "127.0.0.1"
     cassandra-plugin {
-      pubsub-notification = on
       
       query.refresh-interval = 10s
 
       events-by-tag {
+        pubsub-notification = on
         flush-interval = 0ms
         eventual-consistency-delay = 0s
       }
@@ -40,7 +40,7 @@ object EventsByTagPubsubSpec {
 
 class EventsByTagPubsubSpec extends CassandraSpec(EventsByTagPubsubSpec.config) {
 
-  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
+  val journalSettings = new JournalSettings(system, system.settings.config.getConfig("cassandra-plugin"))
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

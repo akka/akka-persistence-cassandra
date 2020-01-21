@@ -13,9 +13,9 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement
 
 import scala.concurrent.{ ExecutionContext, Future }
 
-trait CassandraSnapshotCleanup extends CassandraStatements {
+trait CassandraSnapshotCleanup extends CassandraSnapshotStatements {
 
-  def snapshotConfig: CassandraSnapshotStoreConfig
+  def snapshotSettings: SnapshotSettings
   def session: CassandraSession
   private[akka] implicit val ec: ExecutionContext
 

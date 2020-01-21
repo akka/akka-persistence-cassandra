@@ -9,6 +9,8 @@ import java.lang.{ Integer => JInt, Long => JLong }
 import java.net.URLEncoder
 import java.util.UUID
 
+import scala.concurrent.Promise
+
 import akka.Done
 import akka.actor.SupervisorStrategy.Escalate
 import akka.pattern.ask
@@ -27,6 +29,7 @@ import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
+import akka.util.ByteString
 import akka.util.Timeout
 import com.datastax.oss.driver.api.core.cql.{
   BatchStatementBuilder,
@@ -41,7 +44,6 @@ import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-import akka.util.ByteString
 
 @InternalApi private[akka] object TagWriters {
 
@@ -152,6 +154,13 @@ import akka.util.ByteString
   private case class WriteTagScanningCompleted(result: Try[Done], startTime: Long, size: Int)
 
   private case class PersistentActorTerminated(pid: PersistenceId, ref: ActorRef)
+  private case class TagWriterTerminated(tag: String)
+
+  /**
+   * @param message the message to send
+   * @param tellOrAsk Left for the `sender` of tell, `right` for the promise of ask.
+   */
+  private case class PassivateBufferEntry(message: Any, tellOrAsk: Either[ActorRef, Promise[Any]])
 }
 
 /**
@@ -173,6 +182,8 @@ import akka.util.ByteString
   }
 
   private var tagActors = Map.empty[String, ActorRef]
+  // When TagWriter is idle it starts passivation process. Incoming messages are buffered here.
+  private var passivatingTagActors = Map.empty[String, Vector[PassivateBufferEntry]]
   // just used for local actor asks
   private implicit val timeout: Timeout = Timeout(10.seconds)
 
@@ -190,18 +201,17 @@ import akka.util.ByteString
       if (log.isDebugEnabled)
         log.debug("Flushing all tag writers [{}]", tagActors.keySet.mkString(", "))
       val replyTo = sender()
-      val flushes = tagActors.map {
-        case (tag, ref) =>
-          (ref ? Flush)
-            .mapTo[FlushComplete.type]
-            .map(fc => {
-              log.debug("Flush complete for tag {}", tag)
-              fc
-            })
+      val flushes = tagActors.keySet.map { tag =>
+        askTagActor(tag, Flush)
+          .mapTo[FlushComplete.type]
+          .map(fc => {
+            log.debug("Flush complete for tag {}", tag)
+            fc
+          })
       }
       Future.sequence(flushes).map(_ => AllFlushed).pipeTo(replyTo)
     case TagFlush(tag) =>
-      tagActor(tag).tell(Flush, sender())
+      tellTagActor(tag, Flush, sender())
     case tw: TagWrite =>
       forwardTagWrite(tw)
     case BulkTagWrite(tws, withoutTags) =>
@@ -250,13 +260,13 @@ import akka.util.ByteString
       val tagWriterAcks = Future.sequence(tagProgresses.map {
         case (tag, progress) =>
           log.debug("Sending tag progress: [{}] [{}]", tag, progress)
-          (tagActor(tag) ? ResetPersistenceId(tag, progress)).mapTo[ResetPersistenceIdComplete.type]
+          askTagActor(tag, ResetPersistenceId(tag, progress)).mapTo[ResetPersistenceIdComplete.type]
       })
       // We send an empty progress in case the tag actor has buffered events
       // and has never written any tag progress for this tag/pid
       val blankTagWriterAcks = Future.sequence(missingProgress.map { tag =>
         log.debug("Sending blank progress for tag [{}] pid [{}]", tag, pid)
-        (tagActor(tag) ? ResetPersistenceId(tag, TagProgress(pid, 0, 0))).mapTo[ResetPersistenceIdComplete.type]
+        askTagActor(tag, ResetPersistenceId(tag, TagProgress(pid, 0, 0))).mapTo[ResetPersistenceIdComplete.type]
       })
 
       val recoveryNotificationComplete = for {
@@ -296,6 +306,31 @@ import akka.util.ByteString
             pid,
             ref)
       }
+
+    case PassivateTagWriter(tag) =>
+      tagActors.get(tag) match {
+        case Some(tagWriter) =>
+          if (!passivatingTagActors.contains(tag))
+            passivatingTagActors = passivatingTagActors.updated(tag, Vector.empty)
+          log.debug("Tag writer {} for tag [{}] is passivating", tagWriter, tag)
+          tagWriter ! StopTagWriter
+        case None =>
+          log.warning(
+            "Unknown tag [{}] in passivate request from {}. Please raise an issue with debug logs.",
+            tag,
+            sender())
+      }
+
+    case CancelPassivateTagWriter(tag) =>
+      passivatingTagActors.get(tag).foreach { buffer =>
+        passivatingTagActors = passivatingTagActors - tag
+        log.debug("Tag writer {} for tag [{}] canceled passivation.", sender, tag)
+        sendPassivateBuffer(tag, buffer)
+      }
+
+    case TagWriterTerminated(tag) =>
+      tagWriterTerminated(tag)
+
   }
 
   private def forwardTagWrite(tw: TagWrite): Unit = {
@@ -305,7 +340,7 @@ import akka.util.ByteString
         tw.serialised.head.persistenceId)
     } else {
       updatePendingScanning(tw.serialised)
-      tagActor(tw.tag).forward(tw)
+      tellTagActor(tw.tag, tw, sender())
     }
   }
 
@@ -385,9 +420,67 @@ import akka.util.ByteString
 
   // protected for testing purposes
   protected def createTagWriter(tag: String): ActorRef = {
-    context.actorOf(
-      TagWriter.props(settings, tagWriterSession, tag).withDispatcher(context.props.dispatcher),
-      name = URLEncoder.encode(tag, ByteString.UTF_8))
+    context.watchWith(
+      context.actorOf(
+        TagWriter.props(settings, tagWriterSession, tag, self).withDispatcher(context.props.dispatcher),
+        name = URLEncoder.encode(tag, ByteString.UTF_8)),
+      TagWriterTerminated(tag))
   }
 
+  private def tellTagActor(tag: String, message: Any, snd: ActorRef): Unit = {
+    passivatingTagActors.get(tag) match {
+      case Some(buffer) =>
+        passivatingTagActors = passivatingTagActors.updated(tag, buffer :+ PassivateBufferEntry(message, Left(snd)))
+      case None =>
+        tagActor(tag).tell(message, snd)
+    }
+  }
+
+  private def askTagActor(tag: String, message: Any)(implicit timeout: Timeout): Future[Any] = {
+    passivatingTagActors.get(tag) match {
+      case Some(buffer) =>
+        val p = Promise[Any]()
+        passivatingTagActors = passivatingTagActors.updated(tag, buffer :+ PassivateBufferEntry(message, Right(p)))
+        p.future
+      case None =>
+        tagActor(tag).ask(message)
+    }
+  }
+
+  private def tagWriterTerminated(tag: String): Unit = {
+    tagActors.get(tag) match {
+      case Some(ref) =>
+        passivatingTagActors.get(tag) match {
+          case Some(buffer) =>
+            tagActors = tagActors - tag
+            passivatingTagActors = passivatingTagActors - tag
+            if (buffer.isEmpty)
+              log.debug("Tag writer {} for tag [{}] terminated after passivation.", ref, tag)
+            else {
+              log.debug(
+                "Tag writer {} for tag [{}] terminated after passivation, but starting again " +
+                "because [{}] messages buffered.",
+                ref,
+                tag,
+                buffer.size)
+              sendPassivateBuffer(tag, buffer)
+            }
+          case None =>
+            log.warning(
+              "Tag writer {} for tag [{}] terminated without passivation. Please raise an issue with debug logs.",
+              ref,
+              tag)
+            tagActors = tagActors - tag
+        }
+      case None =>
+        log.warning("Unknown tag writer for tag [{}] terminated. Please raise an issue with debug logs.", tag)
+    }
+  }
+
+  private def sendPassivateBuffer(tag: String, buffer: Vector[PassivateBufferEntry]): Unit = {
+    buffer.foreach {
+      case PassivateBufferEntry(message, Left(snd))      => tellTagActor(tag, message, snd)
+      case PassivateBufferEntry(message, Right(promise)) => promise.completeWith(askTagActor(tag, message))
+    }
+  }
 }

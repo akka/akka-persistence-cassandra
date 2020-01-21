@@ -7,6 +7,7 @@ package akka.persistence.cassandra.journal
 import java.util.UUID
 
 import akka.annotation.InternalApi
+import akka.persistence.cassandra.BucketSize
 import akka.util.HashCode
 import com.datastax.oss.driver.api.core.uuid.Uuids
 

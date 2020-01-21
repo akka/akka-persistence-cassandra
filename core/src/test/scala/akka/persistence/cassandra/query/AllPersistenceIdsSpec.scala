@@ -12,7 +12,7 @@ import akka.NotUsed
 import akka.actor.ActorRef
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.CassandraSpec
-import akka.persistence.cassandra.journal.CassandraJournalConfig
+import akka.persistence.cassandra.journal.JournalSettings
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
@@ -34,7 +34,7 @@ object AllPersistenceIdsSpec {
 class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) with BeforeAndAfterEach {
 
   val cfg = system.settings.config.getConfig("cassandra-plugin")
-  val pluginConfig = new CassandraJournalConfig(system, cfg)
+  val journalSettings = new JournalSettings(system, cfg)
 
   override protected def beforeEach() = {
     super.beforeEach()
@@ -46,7 +46,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
   def current(): Source[String, NotUsed] = queries.currentPersistenceIds().filterNot(_ == "persistenceInit")
 
   private[this] def deleteAllEvents(): Unit =
-    cluster.execute(s"TRUNCATE ${pluginConfig.keyspace}.${pluginConfig.table}")
+    cluster.execute(s"TRUNCATE ${journalSettings.keyspace}.${journalSettings.table}")
 
   private[this] def setup(persistenceId: String, n: Int): ActorRef = {
     val ref = system.actorOf(TestActor.props(persistenceId))

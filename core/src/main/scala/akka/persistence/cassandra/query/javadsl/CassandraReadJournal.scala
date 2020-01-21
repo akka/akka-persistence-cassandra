@@ -78,8 +78,8 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
 
   /**
    * Create a time based UUID that can be used as offset in [[eventsByTag]]
-   * queries. The timestamp` is a unix timestamp (as returned by
-   * `System#currentTimeMillis`.
+   * queries. The `timestamp` is a unix timestamp (as returned by
+   * `System#currentTimeMillis`).
    */
   def offsetUuid(timestamp: Long): UUID =
     scaladslReadJournal.offsetUuid(timestamp)
@@ -87,14 +87,14 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
   /**
    * Create a time based UUID that can be used as offset in [[eventsByTag]]
    * queries. The `timestamp` is a unix timestamp (as returned by
-   * `System#currentTimeMillis`.
+   * `System#currentTimeMillis`).
    */
   def timeBasedUUIDFrom(timestamp: Long): Offset =
     scaladslReadJournal.timeBasedUUIDFrom(timestamp)
 
   /**
    * Convert a `TimeBasedUUID` to a unix timestamp (as returned by
-   * `System#currentTimeMillis`.
+   * `System#currentTimeMillis`).
    */
   def timestampFrom(offset: TimeBasedUUID): Long =
     scaladslReadJournal.timestampFrom(offset)

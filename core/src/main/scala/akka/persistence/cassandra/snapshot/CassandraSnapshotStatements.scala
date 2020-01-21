@@ -4,22 +4,22 @@
 
 package akka.persistence.cassandra.snapshot
 
+import scala.compat.java8.FutureConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
 import akka.Done
 import akka.cassandra.session.FutureDone
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
-import scala.compat.java8.FutureConverters._
 
-trait CassandraStatements {
-  def snapshotConfig: CassandraSnapshotStoreConfig
+trait CassandraSnapshotStatements {
+  def snapshotSettings: SnapshotSettings
 
   def createKeyspace =
     s"""
-    | CREATE KEYSPACE IF NOT EXISTS ${snapshotConfig.keyspace}
-    | WITH REPLICATION = { 'class' : ${snapshotConfig.replicationStrategy} }
+    | CREATE KEYSPACE IF NOT EXISTS ${snapshotSettings.keyspace}
+    | WITH REPLICATION = { 'class' : ${snapshotSettings.replicationStrategy} }
     """.stripMargin.trim
 
   // snapshot_data is the serialized snapshot payload
@@ -38,8 +38,8 @@ trait CassandraStatements {
     |  meta_ser_manifest text,
     |  meta blob,
     |  PRIMARY KEY (persistence_id, sequence_nr))
-    |  WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${snapshotConfig.gcGraceSeconds}
-    |  AND compaction = ${indent(snapshotConfig.tableCompactionStrategy.asCQL, "    ")}
+    |  WITH CLUSTERING ORDER BY (sequence_nr DESC) AND gc_grace_seconds =${snapshotSettings.gcGraceSeconds}
+    |  AND compaction = ${indent(snapshotSettings.tableCompactionStrategy.asCQL, "    ")}
     """.stripMargin.trim
 
   def writeSnapshot(withMeta: Boolean): String = s"""
@@ -80,31 +80,31 @@ trait CassandraStatements {
         ${limit.map(l => s"LIMIT ${l}").getOrElse("")}
     """
 
-  private def tableName = s"${snapshotConfig.keyspace}.${snapshotConfig.table}"
+  private def tableName = s"${snapshotSettings.keyspace}.${snapshotSettings.table}"
 
   /**
-   * Execute creation of keyspace and tables is limited to one thread at a time to
-   * reduce the risk of (annoying) "Column family ID mismatch" exception
-   * when write and read-side plugins are started at the same time.
-   * Those statements are retried, because that could happen across different
-   * nodes also but serializing those statements gives a better "experience".
+   * Execute creation of keyspace and tables if that is enabled in config.
+   * Avoid calling this from several threads at the same time to
+   * reduce the risk of (annoying) "Column family ID mismatch" exception.
    */
-  def executeCreateKeyspaceAndTables(session: CqlSession, config: CassandraSnapshotStoreConfig)(
-      implicit ec: ExecutionContext): Future[Done] = {
+  def executeCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
+    def keyspace: Future[Done] =
+      if (snapshotSettings.keyspaceAutoCreate)
+        session.executeAsync(createKeyspace).toScala.map(_ => Done)
+      else FutureDone
 
-    def create(): Future[Done] = {
-      val keyspace: Future[Done] =
-        if (config.keyspaceAutoCreate)
-          session.executeAsync(createKeyspace).toScala.map(_ => Done)
-        else FutureDone
-
-      if (config.tablesAutoCreate)
-        keyspace.flatMap(_ => session.executeAsync(createTable).toScala).map(_ => Done)
-      else keyspace
-    }
-
-    CassandraSession.serializedExecution(
-      recur = () => executeCreateKeyspaceAndTables(session, config),
-      exec = () => create())
+    if (snapshotSettings.tablesAutoCreate) {
+      // reason for setSchemaMetadataEnabled is that it speed up tests by multiple factors
+      session.setSchemaMetadataEnabled(false)
+      val result = for {
+        _ <- keyspace
+        _ <- session.executeAsync(createTable).toScala
+      } yield {
+        session.setSchemaMetadataEnabled(null)
+        Done
+      }
+      result.failed.foreach(_ => session.setSchemaMetadataEnabled(null))
+      result
+    } else keyspace
   }
 }

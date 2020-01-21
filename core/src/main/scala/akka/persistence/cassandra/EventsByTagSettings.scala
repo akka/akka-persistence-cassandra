@@ -2,33 +2,27 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.persistence.cassandra.query
+package akka.persistence.cassandra
 
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.util.concurrent.TimeUnit
 
 import scala.concurrent.duration._
 
 import akka.actor.ActorSystem
-import akka.actor.NoSerializationVerificationNeeded
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.persistence.cassandra.CassandraPluginConfig
-import akka.persistence.cassandra.journal.CassandraJournalConfig
-import akka.persistence.cassandra.journal.Day
-import akka.persistence.cassandra.journal.Hour
+import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
+import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
 import akka.persistence.cassandra.journal.TimeBucket
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.BackTrackConfig
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.Fixed
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.Max
-import akka.persistence.cassandra.query.CassandraReadJournalConfig.Period
+import akka.persistence.cassandra.query.firstBucketFormatter
 import com.typesafe.config.Config
 
 /**
  * INTERNAL API
  */
-@InternalApi object CassandraReadJournalConfig {
-
+@InternalApi private[akka] object EventsByTagSettings {
   sealed trait Period
   case object Max extends Period
   case class Fixed(duration: FiniteDuration) extends Period
@@ -50,7 +44,7 @@ import com.typesafe.config.Config
    * @param longInterval A less frequent back track and can be used to go back further
    * @param longPeriod How far to back track for the long interval
    */
-  final case class BackTrackConfig(
+  final case class BackTrackSettings(
       metadataCleanupInterval: Option[FiniteDuration],
       interval: Option[FiniteDuration],
       period: Period,
@@ -112,78 +106,86 @@ import com.typesafe.config.Config
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraReadJournalConfig(
-    system: ActorSystem,
-    config: Config,
-    writePluginConfig: CassandraJournalConfig)
-    extends NoSerializationVerificationNeeded {
-
-  val log = Logging(system, classOf[CassandraReadJournalConfig])
-
-  private val queryConfig = config.getConfig("query")
+@InternalApi private[akka] class EventsByTagSettings(system: ActorSystem, config: Config) {
+  import EventsByTagSettings._
   private val eventsByTagConfig = config.getConfig("events-by-tag")
+  private val log = Logging(system, classOf[EventsByTagSettings])
 
-  val readProfile: String = queryConfig.getString("read-profile")
-  CassandraPluginConfig.checkProfile(system, readProfile)
+  val eventsByTagEnabled: Boolean = eventsByTagConfig.getBoolean("enabled")
 
-  val refreshInterval: FiniteDuration =
-    queryConfig.getDuration("refresh-interval", MILLISECONDS).millis
+  val bucketSize: BucketSize =
+    BucketSize.fromString(eventsByTagConfig.getString("bucket-size"))
 
-  val gapFreeSequenceNumbers: Boolean = queryConfig.getBoolean("gap-free-sequence-numbers")
+  if (bucketSize == Second) {
+    system.log.warning("Do not use Second bucket size in production. It is meant for testing purposes only.")
+  }
 
-  val maxBufferSize: Int = queryConfig.getInt("max-buffer-size")
+  val tagTable = TableSettings(
+    eventsByTagConfig.getString("table"),
+    CassandraCompactionStrategy(eventsByTagConfig.getConfig("compaction-strategy")),
+    eventsByTagConfig.getLong("gc-grace-seconds"),
+    if (eventsByTagConfig.hasPath("time-to-live"))
+      Some(eventsByTagConfig.getDuration("time-to-live", TimeUnit.MILLISECONDS).millis)
+    else None)
+
+  val pubsubNotification: Duration =
+    eventsByTagConfig.getString("pubsub-notification").toLowerCase match {
+      case "on" | "true"   => 100.millis
+      case "off" | "false" => Duration.Undefined
+      case _               => eventsByTagConfig.getDuration("pubsub-notification", TimeUnit.MILLISECONDS).millis
+    }
+
+  val tagWriterSettings = TagWriterSettings(
+    eventsByTagConfig.getInt("max-message-batch-size"),
+    eventsByTagConfig.getDuration("flush-interval", TimeUnit.MILLISECONDS).millis,
+    eventsByTagConfig.getDuration("scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
+    eventsByTagConfig.getDuration("stop-tag-writer-when-idle", TimeUnit.MILLISECONDS).millis,
+    pubsubNotification)
 
   val firstTimeBucket: TimeBucket = {
-    val firstBucket = queryConfig.getString("first-time-bucket")
-    val firstBucketPadded = (writePluginConfig.bucketSize, firstBucket) match {
+    val firstBucket = eventsByTagConfig.getString("first-time-bucket")
+    val firstBucketPadded = (bucketSize, firstBucket) match {
       case (_, fb) if fb.length == 14    => fb
       case (Hour, fb) if fb.length == 11 => s"$fb:00"
       case (Day, fb) if fb.length == 8   => s"${fb}T00:00"
       case _ =>
-        throw new IllegalArgumentException("Invalid first-time-bucket format. Use: " + firstBucketFormat)
+        throw new IllegalArgumentException("Invalid first-time-bucket format. Use: " + query.firstBucketFormat)
     }
     val date: LocalDateTime =
       LocalDateTime.parse(firstBucketPadded, firstBucketFormatter)
-    TimeBucket(date.toInstant(ZoneOffset.UTC).toEpochMilli, writePluginConfig.bucketSize)
+    TimeBucket(date.toInstant(ZoneOffset.UTC).toEpochMilli, bucketSize)
   }
-
-  val deserializationParallelism: Int = queryConfig.getInt("deserialization-parallelism")
-
-  val pluginDispatcher: String = queryConfig.getString("plugin-dispatcher")
-
-  val keyspace: String = writePluginConfig.keyspace
-  val targetPartitionSize: Long = writePluginConfig.targetPartitionSize
-  val table: String = writePluginConfig.table
-  val pubsubNotification: Duration =
-    writePluginConfig.tagWriterSettings.pubsubNotification
-  val eventsByPersistenceIdEventTimeout: FiniteDuration =
-    queryConfig.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 
   val eventsByTagGapTimeout: FiniteDuration =
     eventsByTagConfig.getDuration("gap-timeout", MILLISECONDS).millis
-  val eventsByTagDebug: Boolean =
+
+  val verboseDebug: Boolean =
     eventsByTagConfig.getBoolean("verbose-debug-logging")
-  val eventsByTagEventualConsistency: FiniteDuration =
+
+  val eventualConsistency: FiniteDuration =
     eventsByTagConfig.getDuration("eventual-consistency-delay", MILLISECONDS).millis
-  val eventsByTagNewPersistenceIdScanTimeout: FiniteDuration =
+
+  val newPersistenceIdScanTimeout: FiniteDuration =
     eventsByTagConfig.getDuration("new-persistence-id-scan-timeout", MILLISECONDS).millis
-  val eventsByTagOffsetScanning: FiniteDuration =
+
+  val offsetScanning: FiniteDuration =
     eventsByTagConfig.getDuration("offset-scanning-period", MILLISECONDS).millis
-  val eventsByTagCleanUpPersistenceIds: Option[FiniteDuration] =
+
+  val cleanUpPersistenceIds: Option[FiniteDuration] =
     eventsByTagConfig.getString("cleanup-old-persistence-ids").toLowerCase match {
       case "off" | "false" => None
-      case "<default>"     => Some((writePluginConfig.bucketSize.durationMillis * 2).millis)
+      case "<default>"     => Some((bucketSize.durationMillis * 2).millis)
       case _               => Some(eventsByTagConfig.getDuration("cleanup-old-persistence-ids", MILLISECONDS).millis)
     }
 
-  if (eventsByTagCleanUpPersistenceIds.exists(_.toMillis < (writePluginConfig.bucketSize.durationMillis * 2))) {
+  if (cleanUpPersistenceIds.exists(_.toMillis < (bucketSize.durationMillis * 2))) {
     log.warning(
       "cleanup-old-persistence-ids has been set to less than 2 x the bucket size. If a tagged event for a persistence id " +
       "is not received for the cleanup period but then received before 2 x the bucket size then old events could re-delivered.")
   }
 
-  val eventsByTagBacktrack = BackTrackConfig(
-    eventsByTagCleanUpPersistenceIds,
+  val backtrack = BackTrackSettings(
+    cleanUpPersistenceIds,
     optionalDuration(eventsByTagConfig, "back-track.interval"),
     period(eventsByTagConfig, "back-track.period"),
     optionalDuration(eventsByTagConfig, "back-track.long-interval"),
@@ -203,4 +205,47 @@ import com.typesafe.config.Config
     }
   }
 
+}
+
+/** INTERNAL API */
+@InternalApi private[akka] case class TableSettings(
+    name: String,
+    compactionStrategy: CassandraCompactionStrategy,
+    gcGraceSeconds: Long,
+    ttl: Option[Duration])
+
+/** INTERNAL API */
+@InternalApi private[akka] sealed trait BucketSize {
+  val durationMillis: Long
+}
+
+/** INTERNAL API */
+@InternalApi private[akka] case object Day extends BucketSize {
+  override val durationMillis: Long = 1.day.toMillis
+}
+
+/** INTERNAL API */
+@InternalApi private[akka] case object Hour extends BucketSize {
+  override val durationMillis: Long = 1.hour.toMillis
+}
+
+/** INTERNAL API */
+@InternalApi private[akka] case object Minute extends BucketSize {
+  override val durationMillis: Long = 1.minute.toMillis
+}
+
+/**
+ * INTERNAL API
+ * Not to be used for real production apps. Just to make testing bucket transitions easier.
+ */
+@InternalApi private[akka] case object Second extends BucketSize {
+  override val durationMillis: Long = 1.second.toMillis
+}
+
+/** INTERNAL API */
+@InternalApi private[akka] object BucketSize {
+  def fromString(value: String): BucketSize =
+    Vector(Day, Hour, Minute, Second)
+      .find(_.toString.toLowerCase == value.toLowerCase)
+      .getOrElse(throw new IllegalArgumentException("Invalid value for bucket size: " + value))
 }

@@ -1,9 +1,8 @@
 import de.heikoseeberger.sbtheader.HeaderPlugin.autoImport._
 import de.heikoseeberger.sbtheader._
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
-import xerial.sbt.Sonatype.autoImport._
 import sbtdynver.DynVerPlugin.autoImport._
-import io.crashbox.gpg.SbtGpg.autoImport._
+import bintray.BintrayPlugin.autoImport._
 import sbt.Keys._
 import sbt._
 import sbt.plugins.JvmPlugin
@@ -86,7 +85,6 @@ object Common extends AutoPlugin {
     // -q Suppress stdout for successful tests.
     Test / testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
     Test / parallelExecution := false,
-    publishTo := sonatypePublishTo.value,
-    sonatypeProfileName := "com.lightbend",
-    gpgKey := Some("4704549B8310E30C64805EFB7A4A132FB335FFFE"))
+    bintrayOrganization := Some("akka"),
+    bintrayPackage := "akka-persistence-cassandra")
 }

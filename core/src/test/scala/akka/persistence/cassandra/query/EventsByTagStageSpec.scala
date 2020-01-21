@@ -9,8 +9,8 @@ import java.time.{ LocalDateTime, ZoneOffset }
 import akka.NotUsed
 import akka.actor.ActorRef
 import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.{ CassandraJournalConfig, Minute, TimeBucket }
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
+import akka.persistence.cassandra.journal.TimeBucket
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, Minute }
 import akka.persistence.journal.Tagged
 import akka.persistence.query.scaladsl.EventsByTagQuery
 import akka.persistence.query.{ EventEnvelope, NoOffset }
@@ -21,9 +21,10 @@ import akka.testkit.ImplicitSender
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
-
 import scala.annotation.tailrec
 import scala.concurrent.duration._
+
+import akka.persistence.cassandra.PluginSettings
 
 object EventsByTagStageSpec {
   val fetchSize = 3L
@@ -66,7 +67,7 @@ class EventsByTagStageSpec
 
   import EventsByTagStageSpec._
 
-  val writePluginConfig = new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-plugin"))
+  override val settings = new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
   val serialization: Serialization = SerializationExtension(system)
 
   private val bucketSize = Minute

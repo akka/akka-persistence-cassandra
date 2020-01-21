@@ -65,7 +65,7 @@ Enable pub sub notifications so events by tag queries can execute a query right 
 `refresh-interval`. Lower the `refresh-interval` for cases where the pub sub messages take a long time to arrive at the
 query.
 ```
-cassandra-plugin.pubsub-notification = on
+cassandra-plugin.events-by-tag.pubsub-notification = on
 cassandra-plugin.query.refresh-interval = 2s
 ```
 
@@ -167,7 +167,7 @@ The stream will initially do a query per time bucket to get up to the current
 if you set the offset to be 30 days ago and a day time bucket, it will require 30 * nr queries to get each stream up to date. 
 If a particular partition contains many events then it is paged back from Cassandra based on demand.
 
-When no offset is provided EventsByTag queries start at the configured `first-time-bucket`. For new applications
+When no offset is provided EventsByTag queries start at the configured `events-by-tag.first-time-bucket`. For new applications
 increase this to the day your application is initially deployed to speed up `NoOffset` queries.
 
 ### Implementation

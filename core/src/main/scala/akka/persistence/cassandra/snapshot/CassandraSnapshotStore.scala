@@ -9,17 +9,18 @@ import java.nio.ByteBuffer
 import java.util.NoSuchElementException
 
 import akka.NotUsed
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
+
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.AsyncSerializer
@@ -42,27 +43,19 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
 
   import CassandraSnapshotStore._
 
-  val snapshotConfig = {
-    // shared config is one level above the journal specific
-    val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
-    val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
-    new CassandraSnapshotStoreConfig(context.system, sharedConfig)
-  }
+  // shared config is one level above the journal specific
+  private val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
+  private val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
+  override val settings = new PluginSettings(context.system, sharedConfig)
+  override def snapshotSettings = settings.snapshotSettings
   val serialization = SerializationExtension(context.system)
   val snapshotDeserializer = new SnapshotDeserializer(context.system)
   implicit val ec: ExecutionContext = context.dispatcher
 
-  import snapshotConfig._
+  private val someMaxLoadAttempts = Some(snapshotSettings.maxLoadAttempts)
 
-  private val someMaxLoadAttempts = Some(snapshotConfig.maxLoadAttempts)
-
-  val session = new CassandraSession(
-    context.system,
-    snapshotConfig.sessionProvider,
-    context.dispatcher,
-    log,
-    metricsCategory = cfgPath,
-    init = session => executeCreateKeyspaceAndTables(session, snapshotConfig))
+  val session: CassandraSession = CassandraSessionRegistry(context.system)
+    .sessionFor(sharedConfigPath, context.dispatcher, ses => executeAllCreateKeyspaceAndTables(ses))
 
   private def preparedWriteSnapshot =
     session.prepare(writeSnapshot(withMeta = false))
@@ -73,7 +66,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
   private def preparedSelectSnapshotMetadata: Future[PreparedStatement] =
     session.prepare(selectSnapshotMetadata(limit = None))
   private def preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit: Future[PreparedStatement] =
-    session.prepare(selectSnapshotMetadata(limit = Some(maxLoadAttempts)))
+    session.prepare(selectSnapshotMetadata(limit = Some(snapshotSettings.maxLoadAttempts)))
 
   private implicit val materializer = ActorMaterializer()
 
@@ -89,7 +82,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
       preparedWriteSnapshotWithMeta
       preparedDeleteSnapshot
       preparedDeleteAllSnapshotsForPid
-      if (!snapshotConfig.cassandra2xCompat) preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
+      if (!settings.cassandra2xCompat) preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
       preparedSelectSnapshot
       preparedSelectSnapshotMetadata
       preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
@@ -135,16 +128,16 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
             if (mds.isEmpty) {
               log.warning(
                 s"Failed to load snapshot [$md] ({} of {}), last attempt. Caused by: [{}: {}]",
-                maxLoadAttempts,
-                maxLoadAttempts,
+                snapshotSettings.maxLoadAttempts,
+                snapshotSettings.maxLoadAttempts,
                 e.getClass.getName,
                 e.getMessage)
               Future.failed(e) // all attempts failed
             } else {
               log.warning(
                 s"Failed to load snapshot [$md] ({} of {}), trying older one. Caused by: [{}: {}]",
-                maxLoadAttempts - mds.size,
-                maxLoadAttempts,
+                snapshotSettings.maxLoadAttempts - mds.size,
+                snapshotSettings.maxLoadAttempts,
                 e.getClass.getName,
                 e.getMessage)
               loadNAsync(mds) // try older snapshot
@@ -154,7 +147,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
 
   private def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
     val boundSelectSnapshot = preparedSelectSnapshot.map(
-      _.bind(metadata.persistenceId, metadata.sequenceNr: JLong).setExecutionProfileName(readProfile))
+      _.bind(metadata.persistenceId, metadata.sequenceNr: JLong).setExecutionProfileName(snapshotSettings.readProfile))
     boundSelectSnapshot.flatMap(session.selectOne).flatMap {
       case None =>
         // Can happen since metadata and the actual snapshot might not be replicated at exactly same time.
@@ -202,7 +195,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
             bs
         }
 
-        session.executeWrite(finished.setExecutionProfileName(writeProfile)).map(_ => ())
+        session.executeWrite(finished.setExecutionProfileName(snapshotSettings.writeProfile)).map(_ => ())
       }
     }
 
@@ -215,7 +208,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
    * range deletion on the sequence number is used instead, except if timestamp constraints are specified, which still
    * requires the original two step routine.*/
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
-    if (snapshotConfig.cassandra2xCompat
+    if (settings.cassandra2xCompat
         || 0L < criteria.minTimestamp
         || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
       preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
@@ -250,7 +243,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
   def executeBatch(body: BatchStatementBuilder => Unit): Future[Unit] = {
     import scala.compat.java8.FutureConverters._
     val batch =
-      new BatchStatementBuilder(BatchType.UNLOGGED).setExecutionProfileName(writeProfile)
+      new BatchStatementBuilder(BatchType.UNLOGGED).setExecutionProfileName(snapshotSettings.writeProfile)
     body(batch)
     session.underlying().flatMap(_.executeAsync(batch.build()).toScala).map(_ => ())
   }

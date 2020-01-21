@@ -32,13 +32,15 @@ trait CassandraTagRecovery {
   // used for local asks
   private implicit val timeout = Timeout(10.second)
 
+  private def journalSettings = settings.journalSettings
+
   // No other writes for this pid should be taking place during recovery
   // The result set size will be the number of distinct tags that this pid has used, expecting
   // that to be small (<10) so call to all should be safe
   private[akka] def lookupTagProgress(
       persistenceId: String)(implicit ec: ExecutionContext, mat: Materializer): Future[Map[Tag, TagProgress]] =
     preparedSelectTagProgressForPersistenceId
-      .map(_.bind(persistenceId).setExecutionProfileName(config.readProfile))
+      .map(_.bind(persistenceId).setExecutionProfileName(journalSettings.readProfile))
       .flatMap(stmt => {
         session.select(stmt).runWith(Sink.seq)
       })
@@ -55,7 +57,7 @@ trait CassandraTagRecovery {
   // happened before the latest snapshot
   private[akka] def tagScanningStartingSequenceNr(persistenceId: String): Future[SequenceNr] =
     preparedSelectTagScanningForPersistenceId
-      .map(_.bind(persistenceId).setExecutionProfileName(config.readProfile))
+      .map(_.bind(persistenceId).setExecutionProfileName(journalSettings.readProfile))
       .flatMap(session.selectOne)
       .map {
         case Some(row) => row.getLong("sequence_nr")

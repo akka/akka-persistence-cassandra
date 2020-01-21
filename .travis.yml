@@ -44,8 +44,13 @@ jobs:
       name: White Source
       script: git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH" && sbt whitesourceCheckPolicies whitesourceUpdate
 
+    - stage: publish
+      script: openssl aes-256-cbc -K $encrypted_fb56f898a62a_key -iv $encrypted_fb56f898a62a_iv -in .travis/sign_key.enc -out sign_key -d && gpg --import sign_key && sbt +publish
+      name: Publish artifacts
+
     - script: eval "$(ssh-agent -s)" && cp .travis/id_rsa /tmp/id_rsa && chmod 600 /tmp/id_rsa && ssh-keygen -p -P "$DEPLOY_PASSPHRASE" -N "" -f /tmp/id_rsa && ssh-add /tmp/id_rsa && sbt docs/publishRsync
       name: Publish documentation
+
 
 stages:
   # runs on master commits and PRs
@@ -83,12 +88,12 @@ env:
   global:
     # encrypt with: travis encrypt WHITESOURCE_PASSWORD=...
     - secure: "n7Rn9Qn8GtMzlwJOsixSlKA5dTvtRoihJB4m5QdzWwjo9S3ZW+Q4ce3JT8/ve5Pj6/3b/hOi/YeLoyuHjTAfzZ1ghy+h0rgJA36n1JpyfBOqKW4PGhp8neJPleoa+7bGyG9OUiXt+5ahPng22+P2pGRO6QnX/n+eoHbxtjGc8un2I2yVj/JYJH1ZxfvbLuxFf3hdquEgY2Ety7JF73dUDpL5cEvKrXuUKb00hRXsBQO1v/9otRUlt7tH0ko/Ko3pqEqag0ilT2dYiNk85Zz9l2bwlMoNsfB55Q5jYSvSkDxEq5Olyg+ffk7UIZllIZ3fsXDQRVfqXcKAZN/tz1vFxzLUoVYqkgEI4sgQLmDwI7LtO+mbQPDDiHmKDy00uWI3TV4lUNUJ9isaffbMNH+OMnut4O/q4l6wBgCyveO56oTxhDiLizGUjsYct6LIr4WG2VOBkYbPdJoYjoGn/53BhB5JobnunvjYAmgQ2yqWvjEQbu6lQzz58r25lqTAMDR9s5ffwV3X5dk7VHdEue6kT7FKa7THlJnaDWYEuMGo59UuJm9hOPDZLGEzRY7X5VYNKZAxCEk+kxzh3rtAK9X0ByUvQ+yAfBgcruyKPLT6Y+d+Fbql4C+uB2SFPsGHmTkF1ThLmDyd4dQ68/I2I+4RtGb1k/5oSa7p6jT/kiEDC6s="
-    # encrypt with: travis encrypt SONATYPE_USERNAME=...
-    - secure: "iCz1dqU7apHFcgVbzwnvqY9D3DNhXUoWVzUBGvN1Ee/BhqE8kiJscICrsCw2Ec4lts6kHUHKVaNCazaSG/Um9aWZNFwNDAbM4Uvlo3fpleeO4nadjlAebqz8i0m6z6KqukMoQKjRkI1nrvrV1wPIxOSeiKYe6n+j7ZahGrJcU67WxcAlBXVYcAa+gLGBx96Yr/eqZJqAp+zhoGNrkXp4VQ6igjj9BmAJZzSegSaEt44bSN84RlpfeeYk8OWtdLysIqrCrkylj9hH+jRP99TF/1hekSQS4MAdh9nUhzaJbAp34DIOK7RCEw7+6/o76iND35Ftj+DrMd6s01EbN1slMU2xFalv/+UDYSoj8MtLiFwNpH1PrrXmODT/dZpLH8U0fO2g93wBkyvvbb+XABlQODv8rSRTWA9tNyWeSfNVHpD0AazvjIoI7rTOZUDyO64utOU+NO3od2khODtqqqfBvsUHNAOtOJ34o03fqv7UIFlPk0d3VsWEgio5wJJOZKf9DCbEDn8WUejlXWUdtbQavu575OrYe9/nfpYXZZFVbnUPhJ1vjunf1wO/EFoP3Eni3iBH3NjBKC68Eq4GgYBEpctPFhuz48cFoJkDDkkMAJhGliFsUS/xwdpdMxtM/sm/2/8v/qZ8zVEiw/151H6qO2SHGmoWQyFMxmeDGdmFd1I="
-    # encrypt with: travis encrypt SONATYPE_PASSWORD=...
-    - secure: "OEXKKiL7BvNssXWWK9x0/VPepCg+65wrB+nz3uexILM8PCVKMUnrNfkB8q5s1TXLmMtv5XPx5EBRVG252ZVjwrweXs66ne+BeDxUig7PKUQJoJwzCnkpNI9iutySXET85m4eWq4sVF/TG0LBjuZLFz7J01aUxAc1cJABqGMrdlR0IZbW8vqG8iQM3rkn0+BUeYqbYygDCac0Cyw74K0X/ncDBI76ItA1BO4NnJ7HfI2266ZhNi0lTFkI9JYy1ogFmwqJKlGTVrosofcAoiQcT4nWhvH6IWKKeLn5wuUGsntA6KfaVuPQNr65VgrS0KrP8umKHH7SucH/fnClwbrSHOxFvmq4BY6aliZ22keGMAau0RPgSS9j9UkjvQy1St7UoHVL3yuzqHOVBIzOXgKYxG6yy/gY8zu1jVOZIIse8oCtBFcQvz0AoO4f0T+tyUD8wfU9jxxxNt6i6jikuOd2o2ZR4+8yIQOum23Xb8sG2eOtH3sXPJm+gD/MnNeR1wx9Zn5zJDL6FmwUfDlSK++C6EEVy6tunWLDeqQWeZDuthqro9xXup+wcCKuEXYugNnx+OAzuDgJMCgSbOU6BkwAQtBIszAJWPnndMGRXocfoi4WhE2/FLMdXYt1uCcKiz8a+B3UvPzgDHugOkxI/dwB/8p0ecuE65MSYpbrhP+9O0o="
     # encrypt with: travis encrypt DEPLOY_PASSPHRASE=...
     - secure: "KzAhc0NqxpltrYXG0jikQ7X1jYdOqXMVfXjMAhzAg7RBQ/O9UQuIjD6Q4//6GNHg0rPnzKglWdkRgN1Ha8zRaW/PrRXu9FKVual6ypP4auqmgtHjVNbPHMftkRQn4RzFozMUsaM2nknveSeth24lFcBA2GrPf5ySMfcUJ+hqGENoOJFKK2e5PO0lBe+Kl3jYxxM8xJCp5lEWQ2utHE5cwJzFuXfE2IgbInavPGQHua/UbNthdnwTjEyh9bobNWEzcj9wzh9tsUUwNpbQIw42Bg0UsDP9fcQkqPW5MGjXwyM/uZ5VuTFtOfED2wrgkvccvJTek8wejU8jdHrpK/YfwZWagKmPeS7DXUtPfzCs0WF7I4m2GRFZf8+pUwZaU/kMcm5hpiM/ay7eumNBo5UwRknfvYzV9hC5y7bcYy5OtDdxd2mJ8Pu9GYMTKYMiYrOorkdDSPekG4bUofP7NI9xePoVJEQVOMM/MKBP0T9ryJuWRDDpBBkMCzLqBHHEwRkh9Ft5p8RFTO33MMCooNlcRP/THHJu6ajGj+yL5+JV1Tn6R6Py0kIIzMw+YzlPQ1JZqSRpJ0Znat3l4Dlxz2ULn45x2oUNKGGpPWBiE8FhbyuSUQ4m/efwwrTZ+gMFv+6LVjYEqYy6umXj4N+3XkZsu5ZXZqd49FaitJfcH5ApQ/w="
+    # encrypt with: travis encrypt BINTRAY_USER=...
+    - secure: "bgFT3+UC15qsWsAM2RIGKjUrdyzpvqMHDfkDm8kulkYqhcNzBjKaL3rxVJkjA3qO7F9OAm5pidoZWTXZKcg64vOC3+AD3WL94kIevKK0TI2nsnYTjiElpG8zoxgakEVRfqJX3BA2kMCr2Xwrit0cOkbUW4T9cduMh0AIHAfojNLvHifboIcWKP7Kchp4gOuf1FVVdGI8Hzh+H57MnCER9b7HG/ivKJDnfZkD9VjsG278rdkFA9MVz+HWJ0EKr2/Iql8iAkKplimamJnc68zcAw15vR2Twf1IZdA9vks4hFM90zRtnn89VLQOswTz6nRXChupoyquoYcCNKdaC9d3qEFW9XWeBf7H4NstThFNFY9Ot4uaYtqOX0AAPe9Bu6BQg71TlX2k1TOTcM+h2VhVMzkWNgNq1laYSOOxQbXDR9dVlMkeG0tyuJipCxq67DaF3b+xlGwVByc1ZDjKkFjyvwGllCkjp62bjtIbYqbKQjRcHGZS8ffMqfQD+A9uom8Psa2B13P7Rq6gxR7Gb9U13z8m743yUcbNSTY1EgF7YC/F7rdJZsRVnj5eex42nq186sUFp7gJVOvTP8so9qpjsYL4fHBVzHibI4kRyrfPkIo4uSgvYXqtdGV+BWQtNkS9DtRSYMmcHx4fVu0p+EnGmEzakwNJPT//0ln8LBuNHgI="
+    # encrypt with: travis encrypt BINTRAY_PASS=...
+    - secure: "dASp4DvWoUAviDyTdcFzziBXJgWfdHzRfH+aywQcF3/2cNbjXIRu4NVqN6x39NqgONIhtk1CCDADtqShv79uYVnsR6i1OZ0zvz20wW926cJp0oXO/PDnCNoVD+HGqr6RyS40jlOvGZBbPykRjcWOZ5CWr50n+Tiatyd99sPe6L/c48NOBbGkxgvy9uv2Px2b6r6mAg8IxwEKOxn5buBVxnWtrwBycaDsxhjHdl6AXF4nfhKzO4T/yS20irds9+/AuhuD5gEvm/nscVh01HEpYh59bpjWOdChGbjQzaaHzjf4Xo1q9+DADXBKZp8OpX+4QEV/oGC6tHBix+TX47azHK3ffjaARKVO8g6r3NGY3DBySF+EKAky+fE/U3nQ6wjQ/fa9JwW1HQlTw0AD57ELzFU7e49P8d/NmbHisqv//d1NWSOOMyIW1KPX3R65CzYPWr1vk62ueKRg7YhfJ634VoGNZHM0vWFOxnPwXj0ixoQTRR+4w4BDPA//bAK5ruZLYcM5C3FqdbRBFbAbrPVpbRrb1UYxMSnEOeOV+BbnRyF606vvkYxoFsqpCt2tq291aiW6b5ee+kuEJVsxVOcw7PUBt3GN8TL+wV4RBYuEG2RLNn7zCk5WHE5+/RPfkMLq3lSZweQSh8h2fh+SJBwLwPDoSLi3ZjnQkG/t6YXwFVI="
 
 # safelist
 branches:
