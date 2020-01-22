@@ -5,13 +5,22 @@
 package akka.stream.alpakka.cassandra
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
+import akka.discovery.Discovery
+import akka.util.unused
+import akka.util.JavaDurationConverters._
+import akka.event.Logging
 import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import scala.collection.immutable
-import scala.compat.java8.FutureConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.Failure
+import scala.compat.java8.FutureConverters._
+import scala.collection.JavaConverters._
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.config.{ DefaultDriverOption, DriverConfigLoader }
+
+import scala.concurrent.duration.FiniteDuration
 
 /**
  * The implementation of the `SessionProvider` is used for creating the
@@ -44,7 +53,75 @@ class DefaultSessionProvider(system: ActorSystem, config: Config) extends CqlSes
     val driverConfigLoader = DriverConfigLoaderFromConfig.fromConfig(driverConfig)
     builder.withConfigLoader(driverConfigLoader).buildAsync().toScala
   }
+}
 
+/**
+ * ```
+ * akka {
+ *   discovery.method = config
+ * }
+ * akka.discovery.config.services = {
+ *   cassandra-service = {
+ *     endpoints = [
+ *       {
+ *         host = "127.0.0.1"
+ *         port = 9042
+ *       },
+ *       {
+ *         host = "127.0.0.2"
+ *         port = 9042
+ *       }
+ *     ]
+ *   }
+ * }
+ * my-cassandra-session {
+ *   session-provider = "akka.cassandra.session.AkkaDiscoverySessionProvider"
+ *   session-name = "my-session"
+ *   service {
+ *     name = "cassandra-service"
+ *     lookup-timeout = 1 s
+ *   }
+ * }
+ * ```
+ */
+class AkkaDiscoverySessionProvider(system: ActorSystem, config: Config) extends CqlSessionProvider {
+
+  /**
+   * Use Akka Discovery to read the addresses for `serviceName` within `lookupTimeout`.
+   */
+  private def readNodes(serviceName: String, lookupTimeout: FiniteDuration)(
+      implicit system: ActorSystem): Future[immutable.Seq[String]] = {
+    import system.dispatcher
+    val discovery = Discovery(system).discovery
+    discovery.lookup(serviceName, lookupTimeout).map { resolved =>
+      resolved.addresses.map(addr => addr.host + ":" + addr.port)
+    }
+  }
+
+  /**
+   * Expect a `service` section in Config and use Akka Discovery to read the addresses for `name` within `lookup-timeout`.
+   */
+  private def readNodes(config: Config)(implicit system: ActorSystem): Future[immutable.Seq[String]] =
+    if (config.hasPath("service")) {
+      val serviceName = config.getString("service.name")
+      val lookupTimeout = config.getDuration("service.lookup-timeout").asScala
+      readNodes(serviceName, lookupTimeout)
+    } else throw new IllegalArgumentException(s"config $config does not contain `service` section")
+
+  override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
+    val sessionName = config.getString("session-name")
+    require(sessionName != null && sessionName.nonEmpty, s"config needs to set a non-empty `session-name`")
+    val contactPoints = readNodes(config)(system)
+    contactPoints.flatMap { contactPoints =>
+      val overload: DriverConfigLoader =
+        DriverConfigLoader
+          .programmaticBuilder()
+          .withString(DefaultDriverOption.SESSION_NAME, sessionName)
+          .withStringList(DefaultDriverOption.CONTACT_POINTS, contactPoints.asJava)
+          .build()
+      CqlSession.builder().withConfigLoader(overload).buildAsync().toScala
+    }
+  }
 }
 
 object CqlSessionProvider {
