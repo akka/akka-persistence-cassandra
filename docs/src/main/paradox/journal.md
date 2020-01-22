@@ -8,6 +8,35 @@
 - Messages written by a single persistent actor are partitioned across the cluster to achieve scalability with data volume by adding nodes.
 - @extref:[Persistence Query](akka:scala/persistence-query.html) support by `CassandraReadJournal`
 
+### Schema 
+
+The keyspace and tables needs to be created before using the plugin. 
+  
+@@@ warning
+
+Auto creation of the keyspace and tables
+is included as a development convenience and should never be used in production. Cassandra does not handle
+concurrent schema migrations well and if every Akka node tries to create the schema at the same time you'll
+get column id mismatch errors in Cassandra.
+
+@@@
+
+The default keyspace used by the plugin is `akka`, it should be created with the
+NetworkTopology replication strategy with a replication factor of at least 3:
+
+```
+CREATE KEYSPACE IF NOT EXISTS akka WITH replication = {'class': 'NetworkTopologyStrategy', '<your_dc_name>' : 3 }; 
+```
+
+For local testing you can use the following:
+
+@@snip [journal-schema](/target/journal-keyspace.txt) { #journal-keyspace } 
+
+There are multiple tables required. These need to be created before starting your application.
+For local testing you can enable `cassnadra-plugin.journal.table-autocreate`. The default table definitions look like this:
+
+@@snip [journal-tables](/target/journal-tables.txt) { #journal-tables } 
+
 ### Configuration
 
 To activate the journal plugin, add the following line to your Akka `application.conf`:
@@ -16,11 +45,48 @@ To activate the journal plugin, add the following line to your Akka `application
 
 This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
 
+All Cassandra driver settings are via its [standard profile mechanism](https://docs.datastax.com/en/developer/java-driver/4.4/manual/core/configuration/).
+
 One important setting is to configure the database driver to retry the initial connection:
 
 `datastax-java-driver.advanced.reconnect-on-init = true`
 
-It can't be turned on by the plugin as it is in the driver's reference.conf and is not overridable in a profile.
+It is not enabled automatically as it is in the driver's reference.conf and is not overridable in a profile.
+
+#### Consistency
+
+By default the journal uses `QUORUM` for all reads and writes.
+For setups with multiple datacentres this can set to `LOCAL_QUORUM` to
+avoid cross DC latency.
+Any other consistency level is highly discouraged.
+
+```
+datastax-java-driver.profiles {
+  cassandra-plugin {
+    basic.request.consistency = QUORUM
+  }
+}
+```
+#### Journal settings
+
+@@snip [reference.conf](/core/src/main/resources/reference.conf) { #journal }
+
+#### Cassandra driver overrides
+
+@@snip [reference.conf](/core/src/main/resources/reference.conf) { #profile }
+
+#### Shared settings for all parts of the plugin
+
+The following settings are shared by the `journal`, `query`, and `snapshot` parts of the plugin and are under
+`cassandra-plugin`: 
+
+@@snip [reference.conf](/core/src/main/resources/reference.conf) { #shared }
+
+Events by tag configuration is under `cassandra-plugin-events-by-tag` and shared
+b `journal` and `query`.
+
+@@snip [reference.conf](/core/src/main/resources/reference.conf) { #events-by-tag }
+
 
 ### Caveats
 

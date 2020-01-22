@@ -12,6 +12,7 @@ To activate the snapshot-store plugin, add the following line to your Akka `appl
 
 This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
 
+
 ### Keyspace and table definitions
 
 The default keyspace used by the plugin is called `akka_snapshot`. Auto creation of the keyspace and tables
@@ -32,3 +33,24 @@ A single table is required. This needs to be created before starting your applic
 For local testing you can enable `cassnadra-plugin.snapshot.table-autocreate`
 
 @@snip [snapshot-tables](/target/snapshot-tables.txt) { #snapshot-tables} 
+
+#### Snapshot settings
+
+Under `cassandra-plugin.snapshot`:
+
+@@snip [reference.conf](/core/src/main/resources/reference.conf) { #snapshot }
+
+##### Cassandra driver overrides
+
+@@snip [reference.conf](/core/src/main/resources/reference.conf) { #profile }
+
+##### Shared settings for all parts of the plugin
+
+The following settings are shared by the `journal`, `query`, and `snapshot` parts of the plugin and are under
+`cassandra-plugin`: 
+
+@@snip [reference.conf](/core/src/main/resources/reference.conf) { #shared }
+
+
+
+

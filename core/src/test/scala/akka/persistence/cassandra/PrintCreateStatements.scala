@@ -6,7 +6,6 @@ package akka.persistence.cassandra
 
 import java.io.File
 import java.io.PrintWriter
-
 import akka.actor.ActorSystem
 
 /**
@@ -37,6 +36,7 @@ object PrintCreateStatements {
       pw.println(statements.createJournalKeyspaceStatement + ";")
       pw.println("//#journal-keyspace")
     }
+
     withWriter("./target/journal-tables.txt") { pw =>
       pw.println("//#journal-tables")
       pw.println(statements.createJournalTablesStatements.mkString(";\n\n") + ";")
