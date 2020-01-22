@@ -39,24 +39,6 @@ object Common extends AutoPlugin {
     crossScalaVersions := Dependencies.ScalaVersions,
     scalaVersion := Dependencies.Scala212,
     scalacOptions ++= Seq("-encoding", "UTF-8", "-feature", "-unchecked", "-Xlint", "-Ywarn-dead-code", "-deprecation"),
-    scalacOptions ++= {
-      // define scalac options that are only valid or desirable for 2.12
-      if (scalaVersion.value.startsWith("2.13"))
-        Seq()
-      else if (Dependencies.AkkaVersion.startsWith("2.6"))
-        Seq(
-          // -deprecation causes some warnings with Akka 2.6 because of deprecation of ActorMaterializer
-          // We only enable `fatal-warnings` on Akka 2.5 and accept the warning on 2.6
-          "-Xfuture" // invalid in 2.13
-        )
-      else
-        Seq(
-          // -deprecation causes some warnings on 2.13 because of collection converters.
-          // We only enable `fatal-warnings` on 2.12 and accept the warning on 2.13
-          "-Xfatal-warnings",
-          "-Xfuture" // invalid in 2.13
-        )
-    },
     Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
     Compile / doc / scalacOptions := scalacOptions.value ++ Seq(
         "-doc-title",
