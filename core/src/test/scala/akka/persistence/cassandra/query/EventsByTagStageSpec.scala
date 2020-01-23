@@ -67,7 +67,7 @@ class EventsByTagStageSpec
 
   import EventsByTagStageSpec._
 
-  override val settings = new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
+  override val settings = PluginSettings(system)
   val serialization: Serialization = SerializationExtension(system)
 
   private val bucketSize = Minute

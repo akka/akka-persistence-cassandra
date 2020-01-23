@@ -150,7 +150,7 @@ abstract class AbstractEventsByTagSpec(config: Config)
   val waitTime = 100.millis
 
   val serialization = SerializationExtension(system)
-  val settings = new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
+  val settings = PluginSettings(system)
 
   lazy val preparedWriteMessage = {
     val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {

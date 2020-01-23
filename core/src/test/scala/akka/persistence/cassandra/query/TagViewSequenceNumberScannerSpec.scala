@@ -38,7 +38,7 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
 
   implicit override val patienceConfig = PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
-  override val settings = new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
+  override val settings = PluginSettings(system)
   val serialization: Serialization = SerializationExtension(system)
 
   before {

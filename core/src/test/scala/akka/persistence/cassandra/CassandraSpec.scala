@@ -247,7 +247,7 @@ abstract class CassandraSpec(
         Long.MaxValue,
         100,
         None,
-        readProfile = "akka.persistence.cassandra",
+        readProfile = "akka-persistence-cassandra-profile",
         "test",
         extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .toMat(Sink.seq)(Keep.right)
@@ -262,7 +262,7 @@ abstract class CassandraSpec(
         Long.MaxValue,
         100,
         None,
-        readProfile = "akka.persistence.cassandra",
+        readProfile = "akka-persistence-cassandra-profile",
         "test",
         extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .map { tpr =>

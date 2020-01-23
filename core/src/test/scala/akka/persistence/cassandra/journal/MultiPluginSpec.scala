@@ -78,8 +78,7 @@ class MultiPluginSpec
       MultiPluginSpec.journalKeyspace,
       MultiPluginSpec.snapshotKeyspace) {
 
-  lazy val cassandraPluginSettings =
-    new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
+  lazy val cassandraPluginSettings = PluginSettings(system)
 
   // default journal plugin is not configured for this test
   override def awaitPersistenceInit(): Unit = ()

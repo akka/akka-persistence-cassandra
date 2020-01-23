@@ -46,7 +46,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
   private val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
-  override val settings = new PluginSettings(context.system, sharedConfig)
+  override val settings = PluginSettings(context.system, sharedConfig)
   override def snapshotSettings = settings.snapshotSettings
   val serialization = SerializationExtension(context.system)
   val snapshotDeserializer = new SnapshotDeserializer(context.system)

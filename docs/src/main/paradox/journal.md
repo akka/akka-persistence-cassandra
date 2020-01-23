@@ -62,7 +62,7 @@ Any other consistency level is highly discouraged.
 
 ```
 datastax-java-driver.profiles {
-  akka.persistence.cassandra {
+  akka-persistence-cassandra-profile {
     basic.request.consistency = QUORUM
   }
 }

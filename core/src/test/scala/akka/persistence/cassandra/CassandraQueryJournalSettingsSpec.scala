@@ -29,7 +29,7 @@ class CassandraQueryJournalSettingsSpec
       val config = ConfigFactory.parseString("""
          akka.persistence.cassandra.events-by-tag.bucket-size = Hour
         """).withFallback(system.settings.config)
-      val settings = new PluginSettings(system, config.getConfig("akka.persistence.cassandra"))
+      val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       settings.eventsByTagSettings.cleanUpPersistenceIds.get shouldEqual 2.hours
     }
@@ -39,7 +39,7 @@ class CassandraQueryJournalSettingsSpec
           |akka.persistence.cassandra.events-by-tag.bucket-size = Day
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "20151120"
         """.stripMargin).withFallback(system.settings.config)
-      val settings = new PluginSettings(system, config.getConfig("akka.persistence.cassandra"))
+      val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
     }
@@ -50,7 +50,7 @@ class CassandraQueryJournalSettingsSpec
           |akka.persistence.cassandra.events-by-tag.bucket-size = Day
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "20151120T12:20"
         """.stripMargin).withFallback(system.settings.config)
-      val settings = new PluginSettings(system, config.getConfig("akka.persistence.cassandra"))
+      val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       // Rounded down
       settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
@@ -61,7 +61,7 @@ class CassandraQueryJournalSettingsSpec
           |akka.persistence.cassandra.events-by-tag.bucket-size = Hour
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "20151120T00"
         """.stripMargin).withFallback(system.settings.config)
-      val settings = new PluginSettings(system, config.getConfig("akka.persistence.cassandra"))
+      val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
     }
@@ -72,7 +72,7 @@ class CassandraQueryJournalSettingsSpec
           |akka.persistence.cassandra.events-by-tag.bucket-size = Hour
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "20151120T00:20"
         """.stripMargin).withFallback(system.settings.config)
-      val settings = new PluginSettings(system, config.getConfig("akka.persistence.cassandra"))
+      val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
     }
@@ -83,7 +83,7 @@ class CassandraQueryJournalSettingsSpec
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "cats"
         """.stripMargin).withFallback(system.settings.config)
       val e = intercept[IllegalArgumentException] {
-        new PluginSettings(system, config.getConfig("akka.persistence.cassandra"))
+        PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
       }
       e.getMessage shouldEqual "Invalid first-time-bucket format. Use: yyyyMMdd'T'HH:mm"
     }

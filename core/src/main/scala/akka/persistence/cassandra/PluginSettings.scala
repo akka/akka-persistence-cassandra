@@ -34,6 +34,14 @@ import com.typesafe.config.Config
  */
 @InternalApi private[akka] object PluginSettings {
 
+  val DefaultConfigPath = "akka.persistence.cassandra"
+
+  def apply(system: ActorSystem): PluginSettings =
+    apply(system, system.settings.config.getConfig(DefaultConfigPath))
+
+  def apply(system: ActorSystem, config: Config): PluginSettings =
+    new PluginSettings(system, config)
+
   private[akka] def checkProfile(system: ActorSystem, profile: String) = {
     require(
       system.settings.config.hasPath(s"datastax-java-driver.profiles.$profile"),

@@ -19,9 +19,7 @@ object CassandraCompactionStrategySpec {
 
 class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionStrategySpec.config) with WordSpecLike {
 
-  val defaultConfigs = system.settings.config.getConfig("akka.persistence.cassandra")
-
-  val cassandraPluginSettings = new PluginSettings(system, defaultConfigs)
+  val cassandraPluginSettings = PluginSettings(system)
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()

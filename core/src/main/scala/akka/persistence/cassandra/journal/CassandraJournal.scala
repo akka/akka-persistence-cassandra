@@ -63,7 +63,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
   private val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
-  override val settings = new PluginSettings(context.system, sharedConfig)
+  override val settings = PluginSettings(context.system, sharedConfig)
 
   val serialization = SerializationExtension(context.system)
   val log: LoggingAdapter = Logging(context.system, getClass)

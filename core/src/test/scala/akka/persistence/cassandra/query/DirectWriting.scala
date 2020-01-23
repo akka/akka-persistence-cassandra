@@ -24,8 +24,7 @@ trait DirectWriting extends BeforeAndAfterAll {
 
   def system: ActorSystem
   private lazy val serialization = SerializationExtension(system)
-  private lazy val settings =
-    new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
+  private lazy val settings = PluginSettings(system)
 
   def cluster: CqlSession
 

@@ -355,7 +355,7 @@ abstract class AbstractEventsByTagMigrationSpec
 
   val statements = new CassandraJournalStatements {
     override def settings: PluginSettings =
-      new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
+      PluginSettings(system)
   }
 
   implicit val materialiser = ActorMaterializer()(system)

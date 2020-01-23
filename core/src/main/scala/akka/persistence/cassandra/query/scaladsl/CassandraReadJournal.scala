@@ -94,7 +94,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.query$""", "")
   private val sharedConfig = system.settings.config.getConfig(sharedConfigPath)
-  override private[akka] val settings = new PluginSettings(system, sharedConfig)
+  override private[akka] val settings = PluginSettings(system, sharedConfig)
 
   import settings.querySettings
   import settings.eventsByTagSettings
