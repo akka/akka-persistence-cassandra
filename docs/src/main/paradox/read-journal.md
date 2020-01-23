@@ -18,7 +18,7 @@ Persistence Query usage example to obtain a stream with all events tagged with "
 
 ### Query settings
 
-Under `cassandra-plugin.query`:
+Under `akka.persistence.cassandra.query`:
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #query }
 
@@ -29,11 +29,11 @@ Under `cassandra-plugin.query`:
 #### Shared settings for all parts of the plugin
 
 The following settings are shared by the `journal`, `query`, and `snapshot` parts of the plugin and are under
-`cassandra-plugin`: 
+`akka.persistence.cassandra`: 
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #shared }
 
-Events by tag configuration is under `cassandra-plugin-events-by-tag` and shared
+Events by tag configuration is under `akka.persistence.cassandra.events-by-tag` and shared
 b `journal` and `query`.
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #events-by-tag }

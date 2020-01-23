@@ -41,7 +41,7 @@ For local testing you can enable `cassnadra-plugin.journal.table-autocreate`. Th
 
 To activate the journal plugin, add the following line to your Akka `application.conf`:
 
-    akka.persistence.journal.plugin = "cassandra-plugin.journal"
+    akka.persistence.journal.plugin = "akka.persistence.cassandra.journal"
 
 This will run the journal with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
 
@@ -62,7 +62,7 @@ Any other consistency level is highly discouraged.
 
 ```
 datastax-java-driver.profiles {
-  cassandra-plugin {
+  akka-persistence-cassandra-profile {
     basic.request.consistency = QUORUM
   }
 }
@@ -78,11 +78,11 @@ datastax-java-driver.profiles {
 #### Shared settings for all parts of the plugin
 
 The following settings are shared by the `journal`, `query`, and `snapshot` parts of the plugin and are under
-`cassandra-plugin`: 
+`akka.persistence.cassandra`: 
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #shared }
 
-Events by tag configuration is under `cassandra-plugin-events-by-tag` and shared
+Events by tag configuration is under `akka.persistence.cassandra.events-by-tag` and shared
 b `journal` and `query`.
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #events-by-tag }
@@ -114,7 +114,7 @@ NetworkTopology replication strategy with a replication factor of at least 3:
 CREATE KEYSPACE IF NOT EXISTS akka WITH replication = {'class': 'NetworkTopologyStrategy', '<your_dc_name>' : 3 }; 
 ```
 
-For local testing, and the default if you enable `cassandra-plugin.journal.keyspace-autocreate` you can use the following:
+For local testing, and the default if you enable `akka.persistence.cassandra.journal.keyspace-autocreate` you can use the following:
 
 @@snip [journal-schema](/target/journal-keyspace.txt) { #journal-keyspace } 
 

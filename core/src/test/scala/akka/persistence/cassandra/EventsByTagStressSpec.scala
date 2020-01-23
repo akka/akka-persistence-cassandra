@@ -15,7 +15,7 @@ import scala.collection.immutable
 import scala.concurrent.Future
 
 class EventsByTagStressSpec extends CassandraSpec(s"""
-    cassandra-plugin {
+    akka.persistence.cassandra {
       events-by-tag {
         max-message-batch-size = 25
       }

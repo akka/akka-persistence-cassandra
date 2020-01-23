@@ -28,7 +28,7 @@ object EventsByTagRestartSpec {
        |akka {
        |  actor.debug.unhandled = on
        |}
-       |cassandra-plugin {
+       |akka.persistence.cassandra {
        |  log-queries = off
        |  events-by-tag {
        |     max-message-batch-size = 250 // make it likely we have messages in the buffer

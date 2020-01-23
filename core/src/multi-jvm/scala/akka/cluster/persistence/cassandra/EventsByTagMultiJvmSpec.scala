@@ -33,7 +33,7 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
         testconductor.barrier-timeout = 60 s
       }
 
-      cassandra-plugin {
+      akka.persistence.cassandra {
         journal {
           keyspace = $name
         }

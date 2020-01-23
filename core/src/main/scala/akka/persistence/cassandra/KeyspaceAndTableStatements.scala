@@ -14,7 +14,7 @@ import akka.actor.ActorSystem
 class KeyspaceAndTableStatements(system: ActorSystem, configPath: String) extends CassandraStatements {
 
   override private[akka] val settings =
-    new PluginSettings(system, system.settings.config.getConfig(configPath))
+    PluginSettings(system, system.settings.config.getConfig(configPath))
 
   /**
    * The Cassandra Statement that can be used to create the configured keyspace.

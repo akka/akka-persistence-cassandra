@@ -10,7 +10,7 @@ import akka.actor.ActorSystem
 
 /**
  * Main application that prints the create keyspace and create table statements.
- * It's using `cassandra-plugin` configuration from default application.conf.
+ * It's using `akka.persistence.cassandra` configuration from default application.conf.
  *
  * These statements can be copy-pasted and run in `cqlsh`.
  */
@@ -18,7 +18,7 @@ object PrintCreateStatements {
 
   def main(args: Array[String]): Unit = {
     val system = ActorSystem("PrintCreateStatements")
-    val statements = new KeyspaceAndTableStatements(system, "cassandra-plugin")
+    val statements = new KeyspaceAndTableStatements(system, "akka.persistence.cassandra")
 
     def withWriter(name: String)(f: PrintWriter => Unit): Unit = {
       val writer: PrintWriter = new PrintWriter(new File(name))

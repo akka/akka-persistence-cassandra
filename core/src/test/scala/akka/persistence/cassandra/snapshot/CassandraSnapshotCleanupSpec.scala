@@ -18,7 +18,7 @@ import akka.event.Logging
 
 class CassandraSnapshotCleanupSpec extends CassandraSpec {
 
-  private val configPath = "cassandra-plugin"
+  private val configPath = "akka.persistence.cassandra"
 
   private val log = Logging(system, getClass)
 
