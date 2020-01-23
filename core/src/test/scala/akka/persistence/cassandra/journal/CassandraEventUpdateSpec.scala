@@ -35,7 +35,7 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
   val updater = new CassandraEventUpdate {
 
     override private[akka] val log = s.log
-    private val configPath = "cassandra-plugin"
+    private val configPath = "akka.persistence.cassandra"
     override private[akka] def settings: PluginSettings =
       new PluginSettings(system, system.settings.config.getConfig(configPath))
     override private[akka] implicit val ec: ExecutionContext = system.dispatcher

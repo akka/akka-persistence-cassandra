@@ -45,7 +45,7 @@ object EventsByTagSpec {
   val config = ConfigFactory.parseString(s"""
     akka.actor.serialize-messages = off
     akka.actor.warn-about-java-serializer-usage = off
-    cassandra-plugin {
+    akka.persistence.cassandra {
       journal {
         #target-partition-size = 5
 
@@ -78,7 +78,7 @@ object EventsByTagSpec {
     """).withFallback(CassandraLifecycle.config)
 
   val strictConfig = ConfigFactory.parseString(s"""
-    cassandra-plugin {
+    akka.persistence.cassandra {
       query.refresh-interval = 100ms
       events-by-tag {
         gap-timeout = 5s
@@ -90,12 +90,12 @@ object EventsByTagSpec {
 
   val strictConfigFirstOffset1001DaysAgo = ConfigFactory.parseString(s"""
     akka.loglevel = INFO # DEBUG is very verbose for this test so don't turn it on when debugging other tests
-    cassandra-plugin.events-by-tag.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
+    akka.persistence.cassandra.events-by-tag.first-time-bucket = "${today.minusDays(1001).format(firstBucketFormatter)}"
     """).withFallback(strictConfig)
 
   val persistenceIdCleanupConfig =
     ConfigFactory.parseString("""
-       cassandra-plugin.events-by-tag {
+       akka.persistence.cassandra.events-by-tag {
           eventual-consistency-delay = 0s
           # will test by requiring a new persistence-id search every 2s
           new-persistence-id-scan-timeout = 500ms
@@ -109,7 +109,7 @@ object EventsByTagSpec {
       """).withFallback(config)
 
   val disabledConfig = ConfigFactory.parseString("""
-      cassandra-plugin {
+      akka.persistence.cassandra {
         journal.keyspace=EventsByTagDisabled
         events-by-tag.enabled = false
       }
@@ -150,7 +150,7 @@ abstract class AbstractEventsByTagSpec(config: Config)
   val waitTime = 100.millis
 
   val serialization = SerializationExtension(system)
-  val settings = new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
+  val settings = new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
 
   lazy val preparedWriteMessage = {
     val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {
@@ -516,8 +516,9 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 }
 
 class EventsByTagZeroEventualConsistencyDelaySpec
-    extends AbstractEventsByTagSpec(ConfigFactory.parseString("""
-            cassandra-plugin.query.eventual-consistency-delay = 0s
+    extends AbstractEventsByTagSpec(
+      ConfigFactory.parseString("""
+            akka.persistence.cassandra.query.eventual-consistency-delay = 0s
           """).withFallback(EventsByTagSpec.strictConfig)) {
 
   "Cassandra query currentEventsByTag with zero eventual-consistency-delay" must {
@@ -565,8 +566,8 @@ class EventsByTagFindDelayedEventsSpec
 # find delayed events from offset relies on this as it puts an event before the offset that will not
 # be found and one after that will be found for a new persistence id
 # have it at least 2x the interval so searching for missing tries trice
-cassandra-plugin.events-by-tag.new-persistence-id-scan-timeout = 600ms
-cassandra-plugin.events-by-tag.refresh-internal = 100ms
+akka.persistence.cassandra.events-by-tag.new-persistence-id-scan-timeout = 600ms
+akka.persistence.cassandra.events-by-tag.refresh-internal = 100ms
 
 """)
         .withFallback(EventsByTagSpec.strictConfig)) {
@@ -807,7 +808,7 @@ class EventsByTagLongRefreshIntervalSpec
     extends AbstractEventsByTagSpec(
       ConfigFactory.parseString("""
      akka.loglevel = INFO 
-     cassandra-plugin {
+     akka.persistence.cassandra {
        query.refresh-interval = 10s # set large enough so that it will fail the test if a refresh is required to continue the stream
        events-by-tag {
          gap-timeout = 30s
@@ -1047,8 +1048,8 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
 class EventsByTagSpecBackTrackingLongRefreshInterval
     extends AbstractEventsByTagSpec(
       ConfigFactory.parseString("""
-    cassandra-plugin.query.refresh-interval = 10s
-    cassandra-plugin.events-by-tag {
+    akka.persistence.cassandra.query.refresh-interval = 10s
+    akka.persistence.cassandra.events-by-tag {
      back-track {
         interval = 500ms
         period = max
@@ -1092,8 +1093,8 @@ class EventsByTagSpecBackTracking
     extends AbstractEventsByTagSpec(
       ConfigFactory.parseString("""
 // this slows down the test too much for all the expectNexts
-//  cassandra-plugin.query.refresh-interval = 4s
-    cassandra-plugin.events-by-tag {
+//  akka.persistence.cassandra.query.refresh-interval = 4s
+    akka.persistence.cassandra.events-by-tag {
      back-track {
         interval = 1s
         period = 10m

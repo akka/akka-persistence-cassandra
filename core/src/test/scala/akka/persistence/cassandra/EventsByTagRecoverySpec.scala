@@ -20,7 +20,7 @@ object EventsByTagRecoverySpec {
        akka {
          actor.debug.unhandled = on
        }
-       cassandra-plugin {
+       akka.persistence.cassandra {
          journal.keyspace = $keyspaceName
          log-queries = off
          events-by-tag {

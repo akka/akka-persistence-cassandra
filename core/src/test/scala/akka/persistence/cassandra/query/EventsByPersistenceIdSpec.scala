@@ -19,10 +19,10 @@ import scala.concurrent.duration._
 
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
-    cassandra-plugin.journal.target-partition-size = 15
-    cassandra-plugin.query.refresh-interval = 0.5s
-    cassandra-plugin.query.max-result-size-query = 2
-    cassandra-plugin.query.events-by-persistence-id-gap-timeout = 4 seconds
+    akka.persistence.cassandra.journal.target-partition-size = 15
+    akka.persistence.cassandra.query.refresh-interval = 0.5s
+    akka.persistence.cassandra.query.max-result-size-query = 2
+    akka.persistence.cassandra.query.events-by-persistence-id-gap-timeout = 4 seconds
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
     """).withFallback(CassandraLifecycle.config)
 }

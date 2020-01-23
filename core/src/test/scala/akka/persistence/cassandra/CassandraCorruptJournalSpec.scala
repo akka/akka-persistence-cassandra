@@ -61,7 +61,7 @@ class CassandraCorruptJournalSpec extends CassandraSpec(s"""
       loggers = ["akka.testkit.TestEventListener"]
     }
 
-    cassandra-plugin.journal.replay-filter {
+    akka.persistence.cassandra.journal.replay-filter {
    # What the filter should do when detecting invalid events.
    # Supported values:
    # `repair-by-discard-old` : discard events from old writers,
@@ -73,18 +73,18 @@ class CassandraCorruptJournalSpec extends CassandraSpec(s"""
       debug = yes
     }
 
-    cassandra-plugin-fail = $${cassandra-plugin}
+    cassandra-plugin-fail = $${akka.persistence.cassandra}
     cassandra-plugin-fail {
       journal.replay-filter.mode = fail
     }
 
-    cassandra-plugin-warn = $${cassandra-plugin}
+    cassandra-plugin-warn = $${akka.persistence.cassandra}
     cassandra-plugin-warn {
       journal.replay-filter.mode = warn
     }
   """.stripMargin) {
 
-  def setup(persistenceId: String, journalId: String = "cassandra-plugin.journal"): ActorRef = {
+  def setup(persistenceId: String, journalId: String = "akka.persistence.cassandra.journal"): ActorRef = {
     val ref = system.actorOf(FullEventLog.props(persistenceId, journalId))
     ref
   }
@@ -122,7 +122,7 @@ class CassandraCorruptJournalSpec extends CassandraSpec(s"""
   "Cassandra recovery" must {
     "work with replay-filter = repair-by-discard-old" in {
 
-      val pid = runConcurrentPersistentActors("cassandra-plugin.journal")
+      val pid = runConcurrentPersistentActors("akka.persistence.cassandra.journal")
 
       EventFilter.warning(pattern = "Invalid replayed event", occurrences = 2).intercept {
         val p1c = setup(pid)

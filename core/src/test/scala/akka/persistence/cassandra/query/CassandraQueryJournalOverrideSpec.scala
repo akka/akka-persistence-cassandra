@@ -30,7 +30,7 @@ class JournalOverrideProvider(as: ExtendedActorSystem, config: Config, configPat
 object CassandraQueryJournalOverrideSpec {
 
   val config = ConfigFactory.parseString("""
-      cassandra-plugin.query {
+      akka.persistence.cassandra.query {
         class = "akka.persistence.cassandra.query.JournalOverrideProvider"
       }
     """.stripMargin).withFallback(CassandraLifecycle.config)

@@ -17,15 +17,15 @@ import scala.concurrent.duration._
 object CassandraReadJournalSpec {
   val config = ConfigFactory.parseString(s"""
     akka.actor.serialize-messages=off
-    cassandra-plugin.query.max-buffer-size = 10
-    cassandra-plugin.query.refresh-interval = 0.5s
-    cassandra-plugin.journal.event-adapters {
+    akka.persistence.cassandra.query.max-buffer-size = 10
+    akka.persistence.cassandra.query.refresh-interval = 0.5s
+    akka.persistence.cassandra.journal.event-adapters {
       test-tagger = akka.persistence.cassandra.query.scaladsl.TestTagger
     }
-    cassandra-plugin.journal.event-adapter-bindings = {
+    akka.persistence.cassandra.journal.event-adapter-bindings = {
       "java.lang.String" = test-tagger
     }
-    cassandra-plugin.log-queries = off
+    akka.persistence.cassandra.log-queries = off
     """).withFallback(CassandraLifecycle.config)
 }
 
@@ -79,7 +79,8 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
 
     "insert Cassandra metrics to Cassandra Metrics Registry" in {
       val registry = CassandraMetricsRegistry(system).getRegistry
-      val snapshots = registry.getNames.toArray().filter(value => value.toString.startsWith("cassandra-plugin"))
+      val snapshots =
+        registry.getNames.toArray().filter(value => value.toString.startsWith("akka.persistence.cassandra"))
       snapshots.length should be > 0
     }
   }

@@ -43,7 +43,7 @@ object EventsByTagMigrationSpec {
          actor.serialize-messages=off
          actor.debug.unhandled = on
        }
-       cassandra-plugin {
+       akka.persistence.cassandra {
          journal {
            keyspace-autocreate = true
            tables-autocreate = true
@@ -355,7 +355,7 @@ abstract class AbstractEventsByTagMigrationSpec
 
   val statements = new CassandraJournalStatements {
     override def settings: PluginSettings =
-      new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
+      new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
   }
 
   implicit val materialiser = ActorMaterializer()(system)

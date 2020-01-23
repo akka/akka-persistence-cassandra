@@ -19,22 +19,22 @@ object MultiPluginSpec {
        |akka.test.single-expect-default = 20s
        |akka.test.filter-leeway = 20s
        |
-       |cassandra-plugin.journal.keyspace = $journalKeyspace
-       |cassandra-plugin.journal.keyspace-autocreate=false
-       |cassandra-plugin.journal.circuit-breaker.call-timeout = 30s
-       |cassandra-plugin.snapshot.keyspace=$snapshotKeyspace
+       |akka.persistence.cassandra.journal.keyspace = $journalKeyspace
+       |akka.persistence.cassandra.journal.keyspace-autocreate=false
+       |akka.persistence.cassandra.journal.circuit-breaker.call-timeout = 30s
+       |akka.persistence.cassandra.snapshot.keyspace=$snapshotKeyspace
        |
-       |cassandra-plugin-a=$${cassandra-plugin}
+       |cassandra-plugin-a=$${akka.persistence.cassandra}
        |cassandra-plugin-a.journal.table=processor_a_messages
        |
-       |cassandra-plugin-b=$${cassandra-plugin}
+       |cassandra-plugin-b=$${akka.persistence.cassandra}
        |cassandra-plugin-b.journal.table=processor_b_messages
        |
-       |cassandra-plugin-c=$${cassandra-plugin}
+       |cassandra-plugin-c=$${akka.persistence.cassandra}
        |cassandra-plugin-c.journal.table=processor_c_messages
        |cassandra-plugin-c.snapshot.table=snapshot_c_messages
        |
-       |cassandra-plugin-d=$${cassandra-plugin}
+       |cassandra-plugin-d=$${akka.persistence.cassandra}
        |cassandra-plugin-d.journal.table=processor_d_messages
        |cassandra-plugin-d.snapshot.table=snapshot_d_messages
        |
@@ -62,7 +62,7 @@ object MultiPluginSpec {
 
   class OverrideJournalPluginProcessor(override val journalPluginId: String) extends Processor {
     override val persistenceId: String = "always-the-same"
-    override val snapshotPluginId: String = "cassandra-plugin.snapshot"
+    override val snapshotPluginId: String = "akka.persistence.cassandra.snapshot"
   }
 
   class OverrideSnapshotPluginProcessor(override val journalPluginId: String, override val snapshotPluginId: String)
@@ -79,7 +79,7 @@ class MultiPluginSpec
       MultiPluginSpec.snapshotKeyspace) {
 
   lazy val cassandraPluginSettings =
-    new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
+    new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
 
   // default journal plugin is not configured for this test
   override def awaitPersistenceInit(): Unit = ()

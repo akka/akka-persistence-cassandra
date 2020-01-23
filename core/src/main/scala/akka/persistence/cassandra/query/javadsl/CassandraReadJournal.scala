@@ -23,7 +23,7 @@ object CassandraReadJournal {
    * The default identifier for [[CassandraReadJournal]] to be used with
    * `akka.persistence.query.PersistenceQuery#getReadJournalFor`.
    *
-   * The value is `"cassandra-plugin.query"` and corresponds
+   * The value is `"akka.persistence.cassandra.query"` and corresponds
    * to the absolute path to the read journal configuration entry.
    */
   final val Identifier =
@@ -42,7 +42,7 @@ object CassandraReadJournal {
  * Corresponding Scala API is in [[akka.persistence.cassandra.query.scaladsl.CassandraReadJournal]].
  *
  * Configuration settings can be defined in the configuration section with the
- * absolute path corresponding to the identifier, which is `"cassandra-plugin.query"`
+ * absolute path corresponding to the identifier, which is `"akka.persistence.cassandra.query"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  *
  */
@@ -105,7 +105,7 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    *
    * To tag events you create an `akka.persistence.journal.EventAdapter` that wraps the events
    * in a `akka.persistence.journal.Tagged` with the given `tags`.
-   * The tags must be defined in the `tags` section of the `cassandra-plugin` configuration.
+   * The tags must be defined in the `tags` section of the `akka.persistence.cassandra` configuration.
    *
    * You can use [[akka.persistence.query.NoOffset]] to retrieve all events with a given tag or
    * retrieve a subset of all events by specifying a [[TimeBasedUUID]] `offset`.

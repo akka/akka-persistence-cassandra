@@ -47,7 +47,7 @@ object CassandraSpec {
 
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
     ConfigFactory.parseString(s"""
-      cassandra-plugin {
+      akka.persistence.cassandra {
         session-name = $journalKeyspace
         journal.keyspace = $journalKeyspace
         # FIXME this is not the way to configure port. Do we need port config in tests?
@@ -60,7 +60,7 @@ object CassandraSpec {
     """)
 
   val enableAutocreate = ConfigFactory.parseString("""
-      cassandra-plugin {
+      akka.persistence.cassandra {
         events-by-tag {
           eventual-consistency-delay = 200ms
         }
@@ -170,7 +170,7 @@ abstract class CassandraSpec(
       if (failed && dumpRowsOnFailure) {
         println("RowDump::")
         import scala.collection.JavaConverters._
-        if (system.settings.config.getBoolean("cassandra-plugin.events-by-tag.enabled")) {
+        if (system.settings.config.getBoolean("akka.persistence.cassandra.events-by-tag.enabled")) {
           println("tag_views")
           cluster
             .execute(s"select * from ${journalName}.tag_views")
@@ -247,7 +247,7 @@ abstract class CassandraSpec(
         Long.MaxValue,
         100,
         None,
-        readProfile = "cassandra-plugin",
+        readProfile = "akka.persistence.cassandra",
         "test",
         extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .toMat(Sink.seq)(Keep.right)
@@ -262,7 +262,7 @@ abstract class CassandraSpec(
         Long.MaxValue,
         100,
         None,
-        readProfile = "cassandra-plugin",
+        readProfile = "akka.persistence.cassandra",
         "test",
         extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
       .map { tpr =>

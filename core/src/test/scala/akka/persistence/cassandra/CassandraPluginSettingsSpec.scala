@@ -21,7 +21,7 @@ class CassandraPluginSettingsSpec
     with MustMatchers
     with BeforeAndAfterAll {
 
-  lazy val defaultConfig = ConfigFactory.load().getConfig("cassandra-plugin")
+  lazy val defaultConfig = ConfigFactory.load().getConfig("akka.persistence.cassandra")
 
   lazy val keyspaceNames = {
     // Generate a key that is the max acceptable length ensuring the first char is alpha

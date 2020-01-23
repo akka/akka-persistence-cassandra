@@ -12,14 +12,14 @@ import org.scalatest.WordSpecLike
 
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(s"""
-       |cassandra-plugin.journal.keyspace=CassandraCompactionStrategySpec
-       |cassandra-plugin.snapshot.keyspace=CassandraCompactionStrategySpecSnapshot
+       |akka.persistence.cassandra.journal.keyspace=CassandraCompactionStrategySpec
+       |akka.persistence.cassandra.snapshot.keyspace=CassandraCompactionStrategySpecSnapshot
     """.stripMargin).withFallback(CassandraLifecycle.config)
 }
 
 class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionStrategySpec.config) with WordSpecLike {
 
-  val defaultConfigs = system.settings.config.getConfig("cassandra-plugin")
+  val defaultConfigs = system.settings.config.getConfig("akka.persistence.cassandra")
 
   val cassandraPluginSettings = new PluginSettings(system, defaultConfigs)
 

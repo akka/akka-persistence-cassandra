@@ -95,13 +95,13 @@ object EventsByTagMigration {
 
 /**
  *
- * @param journalNamespace The config namespace where the journal is configured, default is `cassandra-plugin`
+ * @param journalNamespace The config namespace where the journal is configured, default is `akka.persistence.cassandra`
  * @param readJournalNamespace The config namespace where the query-journal is configured, default is the same
  *                             as `CassandraReadJournal.Identifier`
  */
 class EventsByTagMigration(
     system: ActorSystem,
-    journalNamespace: String = "cassandra-plugin",
+    journalNamespace: String = "akka.persistence.cassandra",
     readJournalNamespace: String = CassandraReadJournal.Identifier)
     extends CassandraJournalStatements
     with TaggedPreparedStatements
