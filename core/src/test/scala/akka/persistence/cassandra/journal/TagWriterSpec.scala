@@ -723,7 +723,7 @@ class TagWriterSpec
     var progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
     val session =
-      new TagWritersSession(null, "unused", "unused", () => fakePs, () => fakePs, () => fakePs, () => fakePs) {
+      new TagWritersSession(null, "unused", "unused", null) {
 
         override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
           probe.ref ! events.map {

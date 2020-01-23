@@ -29,9 +29,7 @@ private[akka] trait TestTagWriter {
   final def eventsByTagSettings: EventsByTagSettings = settings.eventsByTagSettings
 
   lazy val (preparedWriteTagMessage, preparedWriteTagMessageWithMeta) = {
-    val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {
-      def settings: PluginSettings = TestTagWriter.this.settings
-    }
+    val writeStatements: CassandraJournalStatements = new CassandraJournalStatements(settings)
     (cluster.prepare(writeStatements.writeTags(false)), cluster.prepare(writeStatements.writeTags(true)))
   }
 

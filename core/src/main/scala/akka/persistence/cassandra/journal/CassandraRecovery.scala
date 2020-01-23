@@ -16,15 +16,19 @@ import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.OptionVal
 import scala.concurrent._
 import akka.cassandra.session._
+import akka.serialization.Serialization
 
-trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatements {
+trait CassandraRecovery {
   this: CassandraJournal =>
 
   private[akka] val settings: PluginSettings
 
   import settings._
 
-  private[akka] val eventDeserializer: CassandraJournal.EventDeserializer =
+  lazy val tagRecovery =
+    new CassandraTagRecovery(context.system, session, settings, taggedPreparedStatements)
+
+  private val eventDeserializer: CassandraJournal.EventDeserializer =
     new CassandraJournal.EventDeserializer(context.system)
 
   private[akka] def asyncReadHighestSequenceNrInternal(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
@@ -41,10 +45,10 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
 
     if (eventsByTagSettings.eventsByTagEnabled) {
       val recoveryPrep: Future[Map[String, TagProgress]] = {
-        val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
+        val scanningSeqNrFut = tagRecovery.tagScanningStartingSequenceNr(persistenceId)
         for {
-          tp <- lookupTagProgress(persistenceId)
-          _ <- setTagProgress(persistenceId, tp, tagWrites.get)
+          tp <- tagRecovery.lookupTagProgress(persistenceId)
+          _ <- tagRecovery.setTagProgress(persistenceId, tp, tagWrites.get)
           scanningSeqNr <- scanningSeqNrFut
           _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, max, tp)
         } yield tp
@@ -68,7 +72,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
               settings.journalSettings.readProfile,
               "asyncReplayMessages",
               extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
-            .mapAsync(1)(sendMissingTagWrite(tp, tagWrites.get))
+            .mapAsync(1)(tagRecovery.sendMissingTagWrite(tp, tagWrites.get))
         }))
         .map(te => queries.mapEvent(te.pr))
         .runForeach(replayCallback)
@@ -117,7 +121,7 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
         .mapAsync(1) { t =>
           t.tagged match {
             case OptionVal.Some(tpr) =>
-              sendMissingTagWrite(tp, tagWrites.get)(tpr)
+              tagRecovery.sendMissingTagWrite(tp, tagWrites.get)(tpr)
             case OptionVal.None => FutureDone // no tags, skip
           }
         }
@@ -131,49 +135,4 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
       FutureDone
     }
   }
-
-  // TODO migrate this to using raw, maybe after offering a way to migrate old events in message?
-  private def sendMissingTagWrite(tagProgress: Map[Tag, TagProgress], tagWriters: ActorRef)(
-      tpr: TaggedPersistentRepr): Future[TaggedPersistentRepr] =
-    if (tpr.tags.isEmpty) Future.successful(tpr)
-    else {
-      val completed: List[Future[Done]] =
-        tpr.tags.toList
-          .map(
-            tag =>
-              tag -> serializeEvent(
-                tpr.pr,
-                tpr.tags,
-                tpr.offset,
-                eventsByTagSettings.bucketSize,
-                serialization,
-                context.system))
-          .map {
-            case (tag, serializedFut) =>
-              serializedFut.map { serialized =>
-                tagProgress.get(tag) match {
-                  case None =>
-                    log.debug(
-                      "[{}] Tag write not in progress. Sending to TagWriter. Tag [{}] Sequence Nr [{}]",
-                      tpr.pr.persistenceId,
-                      tag,
-                      tpr.sequenceNr)
-                    tagWriters ! TagWrite(tag, serialized :: Nil)
-                    Done
-                  case Some(progress) =>
-                    if (tpr.sequenceNr > progress.sequenceNr) {
-                      log.debug(
-                        "[{}] Sequence nr > than write progress. Sending to TagWriter. Tag [{}] Sequence Nr [{}]",
-                        tpr.pr.persistenceId,
-                        tag,
-                        tpr.sequenceNr)
-                      tagWriters ! TagWrite(tag, serialized :: Nil)
-                    }
-                    Done
-                }
-              }
-          }
-
-      Future.sequence(completed).map(_ => tpr)
-    }
 }

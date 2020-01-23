@@ -39,6 +39,7 @@ object EventsByTagMigrationSpec {
        // disable normal failure logging as tall these tests are related 
        // so if one fails need the logs for all
        akka.loggers = []
+       akka.loglevel = DEBUG
        akka {
          actor.serialize-messages=off
          actor.debug.unhandled = on
@@ -157,7 +158,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     }
 
     "allow adding of the new tags column" in {
-      migrator.addTagsColumn()
+      migrator.addTagsColumn().futureValue shouldEqual Done
     }
 
     "work with the current implementation" in {
@@ -253,7 +254,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       // the tags column existing
       val pidOnePA = systemTwo.actorOf(TestTaggingActor.props(pidOne, Set("blue", "yellow")))
       pidOnePA ! "new-event-1"
-      expectMsg(Ack)
+      expectMsg(1.second, Ack)
       pidOnePA ! "new-event-2"
       expectMsg(Ack)
 
@@ -353,10 +354,9 @@ abstract class AbstractEventsByTagMigrationSpec
        |CREATE KEYSPACE IF NOT EXISTS $journalName WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1 }
      """.stripMargin
 
-  val statements = new CassandraJournalStatements {
-    override def settings: PluginSettings =
-      new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
-  }
+  val settings = new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
+
+  val statements = new CassandraJournalStatements(settings)
 
   implicit val materialiser = ActorMaterializer()(system)
   val waitTime = 100.millis
@@ -393,7 +393,7 @@ abstract class AbstractEventsByTagMigrationSpec
 
   override protected def afterAll(): Unit = {
     Try {
-      externalCassandraCleanup()
+      //externalCassandraCleanup()
       cluster.close()
     }
     super.afterAll()

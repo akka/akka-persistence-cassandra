@@ -18,14 +18,10 @@ object Dependencies {
 
   val reconcilerDependencies = Seq(
     ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
-    "com.typesafe.akka" %% "akka-stream" % Akka26Version,
-    "com.typesafe.akka" %% "akka-actor-typed" % Akka26Version,
-    "com.typesafe.akka" %% "akka-persistence-query" % Akka26Version,
-    "com.typesafe.akka" %% "akka-stream-testkit" % Akka26Version % Test,
-
-    // override all deps to 26
-    "com.typesafe.akka" %% "akka-cluster-tools" % Akka26Version % Test,
-    "com.typesafe.akka" %% "akka-remote" % Akka26Version % Test,
+    "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
   )
 
 

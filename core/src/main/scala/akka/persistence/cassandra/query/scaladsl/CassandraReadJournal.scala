@@ -84,8 +84,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
     with EventsByPersistenceIdQuery
     with CurrentEventsByPersistenceIdQuery
     with EventsByTagQuery
-    with CurrentEventsByTagQuery
-    with CassandraStatements {
+    with CurrentEventsByTagQuery {
 
   import CassandraReadJournal.CombinedEventsByPersistenceIdStmts
 
@@ -94,7 +93,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.query$""", "")
   private val sharedConfig = system.settings.config.getConfig(sharedConfigPath)
-  override private[akka] val settings = new PluginSettings(system, sharedConfig)
+  private val settings = new PluginSettings(system, sharedConfig)
+  private val statements = new CassandraStatements(settings)
 
   import settings.querySettings
   import settings.eventsByTagSettings
@@ -127,13 +127,14 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       override def settings = CassandraReadJournal.this.settings
     }
 
-  import journalStatements._ // from CassandraStatements
-
   /**
    * Data Access Object for arbitrary queries or updates.
    */
   val session: CassandraSession =
-    CassandraSessionRegistry(system).sessionFor(sharedConfigPath, ec, ses => executeAllCreateKeyspaceAndTables(ses))
+    CassandraSessionRegistry(system).sessionFor(
+      sharedConfigPath,
+      ec,
+      ses => statements.executeAllCreateKeyspaceAndTables(ses))
 
   /**
    * Initialize connection to Cassandra and prepared statements.
@@ -153,10 +154,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       .map(_ => Done)
 
   private def preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
-    session.prepare(selectMessages)
+    session.prepare(statements.journalStatements.selectMessages)
 
   private def preparedSelectDeletedTo: Future[PreparedStatement] =
-    session.prepare(selectDeletedTo)
+    session.prepare(statements.journalStatements.selectDeletedTo)
 
   private def preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
     session.prepare(queryStatements.selectDistinctPersistenceIds)
@@ -168,7 +169,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
     session.prepare(queryStatements.selectTagSequenceNrs)
 
   private def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
-    session.prepare(selectHighestSequenceNr)
+    session.prepare(statements.journalStatements.selectHighestSequenceNr)
 
   /**
    * INTERNAL API

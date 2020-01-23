@@ -102,10 +102,7 @@ object EventsByTagMigration {
 class EventsByTagMigration(
     system: ActorSystem,
     journalNamespace: String = "cassandra-plugin",
-    readJournalNamespace: String = CassandraReadJournal.Identifier)
-    extends CassandraJournalStatements
-    with TaggedPreparedStatements
-    with CassandraTagRecovery {
+    readJournalNamespace: String = CassandraReadJournal.Identifier) {
 
   private[akka] val log = Logging.getLogger(system, getClass)
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](readJournalNamespace)
@@ -114,8 +111,17 @@ class EventsByTagMigration(
   implicit val ec =
     system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.journal.plugin-dispatcher"))
 
-  override val settings: PluginSettings =
+  private val settings: PluginSettings =
     new PluginSettings(system, system.settings.config.getConfig(journalNamespace))
+  private val journalStatements = new CassandraJournalStatements(settings)
+  private val taggedPreparedStatements = new TaggedPreparedStatements(journalStatements, session.prepare)
+  private val tagRecovery =
+    new CassandraTagRecovery(system, session, settings, taggedPreparedStatements)
+
+  private val serialization = SerializationExtension(system)
+
+  import journalStatements._
+
   private def journalSettings = settings.journalSettings
   private def eventsByTagSettings = settings.eventsByTagSettings
 
@@ -132,9 +138,13 @@ class EventsByTagMigration(
   }
 
   def addTagsColumn(): Future[Done] = {
+    log.info("Adding tags column to tabe {}", journalSettings.table)
     for {
-      _ <- session.executeWrite(s"ALTER TABLE ${tableName} ADD tags set<text>")
-    } yield Done
+      _ <- session.executeWrite(s"ALTER TABLE ${journalSettings.keyspace}.${journalSettings.table} ADD tags set<text>")
+    } yield {
+      log.info("Columns tag added")
+      Done
+    }
   }
 
   // TODO might be nice to return a summary of what was done rather than just Done
@@ -187,14 +197,8 @@ class EventsByTagMigration(
       periodicFlush: Int,
       flushTimeout: Timeout): Future[Done] = {
     log.info("Beginning migration of data to tag_views table in keyspace {}", journalSettings.keyspace)
-    val tagWriterSession = TagWritersSession(
-      session,
-      journalSettings.writeProfile,
-      journalSettings.readProfile,
-      () => preparedWriteToTagViewWithoutMeta,
-      () => preparedWriteToTagViewWithMeta,
-      () => preparedWriteToTagProgress,
-      () => preparedWriteTagScanning)
+    val tagWriterSession =
+      TagWritersSession(session, journalSettings.writeProfile, journalSettings.readProfile, taggedPreparedStatements)
     val tagWriters = system.actorOf(TagWriters.props(eventsByTagSettings.tagWriterSettings, tagWriterSession))
 
     val eventDeserializer: CassandraJournal.EventDeserializer =
@@ -209,10 +213,10 @@ class EventsByTagMigration(
       }
       .flatMapConcat(pid => {
         val prereqs: Future[(Map[Tag, TagProgress], SequenceNr)] = {
-          val startingSeqFut = tagScanningStartingSequenceNr(pid)
+          val startingSeqFut = tagRecovery.tagScanningStartingSequenceNr(pid)
           for {
-            tp <- lookupTagProgress(pid)
-            _ <- setTagProgress(pid, tp, tagWriters)
+            tp <- tagRecovery.lookupTagProgress(pid)
+            _ <- tagRecovery.setTagProgress(pid, tp, tagWriters)
             startingSeq <- startingSeqFut
           } yield (tp, startingSeq)
         }
@@ -238,7 +242,7 @@ class EventsByTagMigration(
                   s"migrateToTag-$pid",
                   extractor = EventsByTagMigration
                     .rawPayloadOldTagSchemaExtractor(eventsByTagSettings.bucketSize, eventDeserializer, system))
-                .map(sendMissingTagWriteRaw(tp, tagWriters, actorRunning = false))
+                .map(tagRecovery.sendMissingTagWriteRaw(tp, tagWriters, actorRunning = false))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
                 .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])
             }
