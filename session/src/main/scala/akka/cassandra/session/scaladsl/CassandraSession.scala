@@ -204,6 +204,21 @@ final class CassandraSession(
   }
 
   /**
+   * Execute a select statement created by [[#prepare]].
+   *
+   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
+   *
+   * The configured read consistency level is used if a specific consistency
+   * level has not been set on the `Statement`.
+   *
+   * Note that you have to connect a `Sink` that consumes the messages from
+   * this `Source` and then `run` the stream.
+   */
+  def select(stmt: Future[Statement[_]]): Source[Row, NotUsed] = {
+    Source.fromGraph(new SelectSource(stmt))
+  }
+
+  /**
    * Prepare, bind and execute a select statement in one go.
    *
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
