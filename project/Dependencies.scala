@@ -22,7 +22,12 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-actor-typed" % Akka26Version,
     "com.typesafe.akka" %% "akka-persistence-query" % Akka26Version,
     "com.typesafe.akka" %% "akka-stream-testkit" % Akka26Version % Test,
+
+    // override all deps to 26
+    "com.typesafe.akka" %% "akka-cluster-tools" % Akka26Version % Test,
+    "com.typesafe.akka" %% "akka-remote" % Akka26Version % Test,
   )
+
 
   val akkaTestDeps = Seq(
     "com.typesafe.akka" %% "akka-persistence",
@@ -40,8 +45,8 @@ object Dependencies {
       // Specifying guava dependency because older transitive dependency has security vulnerability
       "com.google.guava" % "guava" % "27.0.1-jre",
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
+      "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
       "org.scalatest" %% "scalatest" % "3.0.8" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,

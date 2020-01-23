@@ -1,7 +1,7 @@
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
-  .aggregate(core, cassandraLauncher, session, reconciler)
+  .aggregate(core, cassandraLauncher, session)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
 lazy val session = (project in file("session"))
