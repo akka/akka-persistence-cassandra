@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.collection.JavaConverters._
 
 import akka.Done
 import akka.actor.ActorSystem
@@ -81,7 +82,20 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
       executionContext: ExecutionContext): CassandraSession = {
     val sessionProvider = CqlSessionProvider(system, system.settings.config.getConfig(key.configPath))
     val log = Logging(system, classOf[CassandraSession])
-    new CassandraSession(system, sessionProvider, executionContext, log, metricsCategory = key.configPath, init)
+    new CassandraSession(
+      system,
+      sessionProvider,
+      executionContext,
+      log,
+      metricsCategory = key.configPath,
+      init,
+      onClose = () => sessions.remove(key))
+  }
+
+  def close(): Future[Done] = {
+    import system.dispatcher
+    val closing = sessions.values().asScala.map(_.close())
+    Future.sequence(closing).map(_ => Done)
   }
 
 }

@@ -51,7 +51,8 @@ final class CassandraSession(
     executionContext: ExecutionContext,
     log: LoggingAdapter,
     metricsCategory: String,
-    init: CqlSession => Future[Done])
+    init: CqlSession => Future[Done],
+    onClose: () => Unit)
     extends NoSerializationVerificationNeeded {
 
   implicit private[akka] val ec = executionContext
@@ -64,6 +65,15 @@ final class CassandraSession(
     init(session).map(_ => session)
   }
 
+  def this(
+      system: ActorSystem,
+      sessionProvider: CqlSessionProvider,
+      executionContext: ExecutionContext,
+      log: LoggingAdapter,
+      metricsCategory: String,
+      init: CqlSession => Future[Done]) =
+    this(system, sessionProvider, executionContext, log, metricsCategory, init, onClose = () => ())
+
   /**
    * The `Session` of the underlying
    * <a href="http://datastax.github.io/java-driver/">Datastax Java Driver</a>.
@@ -72,7 +82,10 @@ final class CassandraSession(
    */
   def underlying(): Future[CqlSession] = _underlyingSession
 
-  def close(): Unit = _underlyingSession.foreach(_.close())
+  def close(): Future[Done] = {
+    onClose()
+    _underlyingSession.map(_.closeAsync().toScala).map(_ => Done)
+  }
 
   /**
    * This can only be used after successful initialization,
