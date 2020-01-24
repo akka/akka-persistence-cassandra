@@ -16,7 +16,7 @@ object EventAdaptersReadSpec {
 
   val config = ConfigFactory.parseString(s"""
     akka.actor.serialize-messages=off
-    cassandra-plugin {
+    akka.persistence.cassandra {
       keyspace=EventAdaptersReadSpec
       journal {
         target-partition-size = 15

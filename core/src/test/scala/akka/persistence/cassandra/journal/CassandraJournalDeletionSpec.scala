@@ -27,7 +27,7 @@ object CassandraJournalDeletionSpec {
       val persistenceId: String,
       deleteSuccessProbe: ActorRef,
       deleteFailProbe: ActorRef,
-      override val journalPluginId: String = "cassandra-plugin.journal")
+      override val journalPluginId: String = "akka.persistence.cassandra.journal")
       extends PersistentActor {
 
     var recoveredEvents: List[Any] = List.empty
@@ -63,20 +63,20 @@ object CassandraJournalDeletionSpec {
 class CassandraJournalDeletionSpec extends CassandraSpec(s"""
     akka.loggers = ["akka.testkit.TestEventListener"]
     akka.log-dead-letters = off
-    cassandra-plugin.journal.max-concurrent-deletes = 100
+    akka.persistence.cassandra.journal.max-concurrent-deletes = 100
 
-    cassandra-plugin-low-concurrent-deletes = $${cassandra-plugin}
+    cassandra-plugin-low-concurrent-deletes = $${akka.persistence.cassandra}
     cassandra-plugin-low-concurrent-deletes {
       journal.max-concurrent-deletes = 5
     }
 
-    cassandra-plugin-small-partition-size = $${cassandra-plugin}
+    cassandra-plugin-small-partition-size = $${akka.persistence.cassandra}
     cassandra-plugin-small-partition-size {
       journal.target-partition-size = 3
       journal.keyspace = "DeletionSpecMany"
     }
     
-    cassandra-plugin-no-delete = $${cassandra-plugin}
+    cassandra-plugin-no-delete = $${akka.persistence.cassandra}
     cassandra-plugin-no-delete {
       journal.support-deletes = off
     }

@@ -27,7 +27,7 @@ import scala.concurrent.duration._
 object CassandraSessionSpec {
 
   lazy val config = ConfigFactory.parseString(s"""
-      cassandra-plugin.journal.keyspace=CassandraSessionSpec
+      akka.persistence.cassandra.journal.keyspace=CassandraSessionSpec
     """).withFallback(CassandraLifecycle.config)
 
 }
@@ -38,7 +38,7 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
   val log = Logging.getLogger(system, this.getClass)
 
   lazy val session: CassandraSession = {
-    val cfg = system.settings.config.withFallback(system.settings.config.getConfig("cassandra-plugin"))
+    val cfg = system.settings.config.withFallback(system.settings.config.getConfig("akka.persistence.cassandra"))
     new CassandraSession(
       system,
       new DefaultSessionProvider(system, cfg),

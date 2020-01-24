@@ -8,7 +8,7 @@
 
 To activate the snapshot-store plugin, add the following line to your Akka `application.conf`:
 
-    akka.persistence.snapshot-store.plugin = "cassandra-plugin.snapshot"
+    akka.persistence.snapshot-store.plugin = "akka.persistence.cassandra.snapshot"
 
 This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
 
@@ -25,7 +25,7 @@ NetworkTopology replication strategy with a replication factor of at least 3:
 CREATE KEYSPACE IF NOT EXISTS akka_snapshot WITH replication = {'class': 'NetworkTopologyStrategy', '<your_dc_name>' : 3 }; 
 ```
 
-For local testing, and the default if you enable `cassandra-plugin.snapshot.keyspace-autocreate` you can use the following:
+For local testing, and the default if you enable `akka.persistence.cassandra.snapshot.keyspace-autocreate` you can use the following:
 
 @@snip [snapshot-keyspace](/target/snapshot-keyspace.txt) { #snapshot-keyspace } 
 
@@ -36,7 +36,7 @@ For local testing you can enable `cassnadra-plugin.snapshot.table-autocreate`
 
 #### Snapshot settings
 
-Under `cassandra-plugin.snapshot`:
+Under `akka.persistence.cassandra.snapshot`:
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #snapshot }
 
@@ -47,7 +47,7 @@ Under `cassandra-plugin.snapshot`:
 ##### Shared settings for all parts of the plugin
 
 The following settings are shared by the `journal`, `query`, and `snapshot` parts of the plugin and are under
-`cassandra-plugin`: 
+`akka.persistence.cassandra`: 
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #shared }
 

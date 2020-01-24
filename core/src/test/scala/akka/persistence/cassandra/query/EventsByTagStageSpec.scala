@@ -35,7 +35,7 @@ object EventsByTagStageSpec {
   val config = ConfigFactory.parseString(s"""
         akka.actor.serialize-messages=on
 
-        cassandra-plugin {
+        akka.persistence.cassandra {
           log-queries = off
 
           query {
@@ -67,7 +67,7 @@ class EventsByTagStageSpec
 
   import EventsByTagStageSpec._
 
-  override val settings = new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
+  override val settings = PluginSettings(system)
   val serialization: Serialization = SerializationExtension(system)
 
   private val bucketSize = Minute

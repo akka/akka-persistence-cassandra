@@ -95,24 +95,17 @@ object EventsByTagMigration {
 
 /**
  *
- * @param journalNamespace The config namespace where the journal is configured, default is `cassandra-plugin`
- * @param readJournalNamespace The config namespace where the query-journal is configured, default is the same
- *                             as `CassandraReadJournal.Identifier`
+ * @param pluginConfigPath The config namespace where the plugin is configured, default is `akka.persistence.cassandra`
  */
-class EventsByTagMigration(
-    system: ActorSystem,
-    journalNamespace: String = "cassandra-plugin",
-    readJournalNamespace: String = CassandraReadJournal.Identifier) {
-
+class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka.persistence.cassandra") {
   private[akka] val log = Logging.getLogger(system, getClass)
-  private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](readJournalNamespace)
+  private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](pluginConfigPath + ".query")
   private implicit val materialiser = ActorMaterializer()(system)
 
   implicit val ec =
-    system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.journal.plugin-dispatcher"))
-
+    system.dispatchers.lookup(system.settings.config.getString(s"$pluginConfigPath.journal.plugin-dispatcher"))
   private val settings: PluginSettings =
-    new PluginSettings(system, system.settings.config.getConfig(journalNamespace))
+    new PluginSettings(system, system.settings.config.getConfig(pluginConfigPath))
   private val journalStatements = new CassandraJournalStatements(settings)
   private val taggedPreparedStatements = new TaggedPreparedStatements(journalStatements, session.prepare)
   private val tagRecovery =

@@ -15,10 +15,10 @@ import scala.concurrent.duration._
 object RecoveryLoadSpec {
   val config = ConfigFactory.parseString(s"""
       akka.loglevel = INFO
-      cassandra-plugin.events-by-tag.enabled = on
-      cassandra-plugin.events-by-tag.scanning-flush-interval = 2s
-      cassandra-plugin.journal.replay-filter.mode = off
-      cassandra-plugin.log-queries = off
+      akka.persistence.cassandra.events-by-tag.enabled = on
+      akka.persistence.cassandra.events-by-tag.scanning-flush-interval = 2s
+      akka.persistence.cassandra.journal.replay-filter.mode = off
+      akka.persistence.cassandra.log-queries = off
     """).withFallback(CassandraLifecycle.config)
 
   final case class Init(numberOfEvents: Int)

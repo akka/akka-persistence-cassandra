@@ -36,7 +36,7 @@ To detect missed events without receiving another event for the same persistence
 to find events. Queries are run in the background to detect delayed events. A high frequency short back track is done
 for finding events delayed a small amount and a low frequency backtrack that scans further back. 
 
-These are configured with `cassandra-plugin.query.events-by-tag.back-track`:
+These are configured with `akka.persistence.cassandra.query.events-by-tag.back-track`:
 
 @@snip [refernce.conf](/core/src/main/resources/reference.conf) { #backtrack }                                                                                                                                
 
@@ -55,7 +55,7 @@ depending on the load and performance of your Cassandra cluster.
 Flush the tag writes right away. By default they are batched and written as an unlogged back which increases throughput. To write each individually
 without delay use:
 ```
-cassandra-plugin.events-by-tag.flush-interval = 0s
+akka.persistence.cassandra.events-by-tag.flush-interval = 0s
 ```
 
 Alternatively set a very small value e.g. `25ms` so some batching is done. If your applicaion has a large number of tagged events per second
@@ -65,15 +65,15 @@ Enable pub sub notifications so events by tag queries can execute a query right 
 `refresh-interval`. Lower the `refresh-interval` for cases where the pub sub messages take a long time to arrive at the
 query.
 ```
-cassandra-plugin.events-by-tag.pubsub-notification = on
-cassandra-plugin.query.refresh-interval = 2s
+akka.persistence.cassandra.events-by-tag.pubsub-notification = on
+akka.persistence.cassandra.query.refresh-interval = 2s
 ```
 
 Reduce `eventual-consistency-delay`. You must test this has positive results for your use case. Setting this too low
 can decrease throughput and latency as more events will be missed initially and expensive searches carried out.
 
 ```
-cassandra-plugin.events-by-tag.eventual-consistency-delay = 50ms
+akka.persistence.cassandra.events-by-tag.eventual-consistency-delay = 50ms
 ```
 
 ### Missing searches and gap detection
@@ -113,7 +113,7 @@ getting to large.
 * 100,000s  of events per day per tag -- Hour
 * 1,000,000s of events per day per tag -- Minute
  
-The default is `Hour` and can be overridden by setting `cassandra-plugin.events-by-tag.bucket-size`.
+The default is `Hour` and can be overridden by setting `akka.persistence.cassandra.events-by-tag.bucket-size`.
 This setting can not be changed after data has been written.
  
 More billion per day per tag? You probably need a specialised schema rather than a general library like this.

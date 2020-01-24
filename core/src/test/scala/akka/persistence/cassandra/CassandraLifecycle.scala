@@ -30,10 +30,10 @@ object CassandraLifecycle {
   val config =
     ConfigFactory.parseString(s"""
     akka.test.timefactor = $${?AKKA_TEST_TIMEFACTOR}
-    akka.persistence.journal.plugin = "cassandra-plugin.journal"
-    akka.persistence.snapshot-store.plugin = "cassandra-plugin.snapshot"
-    cassandra-plugin.journal.circuit-breaker.call-timeout = 30s
-    cassandra-plugin.events-by-tag.first-time-bucket = "$firstTimeBucket"
+    akka.persistence.journal.plugin = "akka.persistence.cassandra.journal"
+    akka.persistence.snapshot-store.plugin = "akka.persistence.cassandra.snapshot"
+    akka.persistence.cassandra.journal.circuit-breaker.call-timeout = 30s
+    akka.persistence.cassandra.events-by-tag.first-time-bucket = "$firstTimeBucket"
     akka.test.single-expect-default = 20s
     akka.test.filter-leeway = 20s
     akka.actor.serialize-messages=on
@@ -125,8 +125,8 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   }
 
   def dropKeyspaces(): Unit = {
-    val journalKeyspace = system.settings.config.getString("cassandra-plugin.journal.keyspace")
-    val snapshotKeyspace = system.settings.config.getString("cassandra-plugin.snapshot.keyspace")
+    val journalKeyspace = system.settings.config.getString("akka.persistence.cassandra.journal.keyspace")
+    val snapshotKeyspace = system.settings.config.getString("akka.persistence.cassandra.snapshot.keyspace")
     val dropped = Try {
       cluster.execute(s"drop keyspace if exists ${journalKeyspace}")
       cluster.execute(s"drop keyspace if exists ${snapshotKeyspace}")

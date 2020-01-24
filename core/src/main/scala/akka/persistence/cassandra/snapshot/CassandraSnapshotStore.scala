@@ -50,6 +50,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String) extends SnapshotStore
   private val snapshotDeserializer = new SnapshotDeserializer(context.system)
   private val statements = new CassandraStatements(settings)
   import statements.snapshotStatements._
+
   private val someMaxLoadAttempts = Some(snapshotSettings.maxLoadAttempts)
   private val session: CassandraSession = CassandraSessionRegistry(context.system)
     .sessionFor(sharedConfigPath, context.dispatcher, ses => statements.executeAllCreateKeyspaceAndTables(ses))
