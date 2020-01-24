@@ -32,7 +32,14 @@ class CassandraSnapshotCleanupSpec extends CassandraSpec {
     private val sessionProvider =
       CqlSessionProvider(system.asInstanceOf[ExtendedActorSystem], system.settings.config.getConfig(configPath))
     override val session: CassandraSession =
-      new CassandraSession(system, sessionProvider, ec, log, systemName, init = _ => Future.successful(Done))
+      new CassandraSession(
+        system,
+        sessionProvider,
+        ec,
+        log,
+        systemName,
+        init = _ => Future.successful(Done),
+        onClose = () => ())
 
   }
 
