@@ -20,6 +20,9 @@ class CassandraSessionSettings private (
 
   def metricsCategory: String = _metricsCategory.getOrElse(configPath)
 
+  def withMetricCategory(value: String): CassandraSessionSettings =
+    copy(metricsCategory = Option(value))
+
   /**
    * Java API:
    *
