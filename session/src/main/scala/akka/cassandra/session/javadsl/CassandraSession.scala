@@ -47,7 +47,8 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
       executionContext: ExecutionContext,
       log: LoggingAdapter,
       metricsCategory: String,
-      init: JFunction[CqlSession, CompletionStage[Done]]) =
+      init: JFunction[CqlSession, CompletionStage[Done]],
+      onClose: java.lang.Runnable) =
     this(
       new akka.cassandra.session.scaladsl.CassandraSession(
         system,
@@ -55,9 +56,12 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
         executionContext,
         log,
         metricsCategory,
-        session => init.apply(session).toScala))
+        session => init.apply(session).toScala,
+        () => onClose.run()))
 
   implicit private val ec = delegate.ec
+
+  def close(): CompletionStage[Done] = delegate.close().toJava
 
   /**
    * The `Session` of the underlying

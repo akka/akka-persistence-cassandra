@@ -37,8 +37,7 @@ final class CassandraSessionRegistry private (delegate: scaladsl.CassandraSessio
    * Get an existing session or start a new one with the given settings,
    * makes it possible to share one session across plugins.
    *
-   * Note that the session must not be stopped manually, it is shut down when the actor system is shutdown,
-   * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
+   * Sessions in the session registry are closed after actor system termination.
    */
   def sessionFor(configPath: String, executionContext: ExecutionContext): CassandraSession =
     new CassandraSession(delegate.sessionFor(configPath, executionContext))
@@ -51,8 +50,7 @@ final class CassandraSessionRegistry private (delegate: scaladsl.CassandraSessio
    * if `sessionFor` is called from multiple places with different `init` it will
    * only execute the first.
    *
-   * Note that the session must not be stopped manually, it is shut down when the actor system is shutdown,
-   * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
+   * Sessions in the session registry are closed after actor system termination.
    */
   def sessionFor(
       configPath: String,

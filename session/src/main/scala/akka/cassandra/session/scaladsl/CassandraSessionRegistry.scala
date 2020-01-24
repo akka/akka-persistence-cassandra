@@ -51,8 +51,7 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    * Get an existing session or start a new one with the given settings,
    * makes it possible to share one session across plugins.
    *
-   * Note that the session must not be stopped manually, it is shut down when the actor system is shutdown,
-   * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
+   * Sessions in the session registry are closed after actor system termination.
    */
   def sessionFor(configPath: String, executionContext: ExecutionContext): CassandraSession =
     sessionFor(configPath, executionContext, _ => Future.successful(Done))
@@ -65,8 +64,7 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    * if `sessionFor` is called from multiple places with different `init` it will
    * only execute the first.
    *
-   * Note that the session must not be stopped manually, it is shut down when the actor system is shutdown,
-   * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
+   * Sessions in the session registry are closed after actor system termination.
    */
   def sessionFor(
       configPath: String,
@@ -92,10 +90,11 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
       onClose = () => sessions.remove(key))
   }
 
-  def close(): Future[Done] = {
+  private def close(): Future[Done] = {
     import system.dispatcher
     val closing = sessions.values().asScala.map(_.close())
     Future.sequence(closing).map(_ => Done)
   }
 
+  system.whenTerminated.foreach(_ => close())(system.dispatcher)
 }

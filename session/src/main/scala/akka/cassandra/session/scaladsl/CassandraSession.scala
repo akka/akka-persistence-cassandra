@@ -65,15 +65,6 @@ final class CassandraSession(
     init(session).map(_ => session)
   }
 
-  def this(
-      system: ActorSystem,
-      sessionProvider: CqlSessionProvider,
-      executionContext: ExecutionContext,
-      log: LoggingAdapter,
-      metricsCategory: String,
-      init: CqlSession => Future[Done]) =
-    this(system, sessionProvider, executionContext, log, metricsCategory, init, onClose = () => ())
-
   /**
    * The `Session` of the underlying
    * <a href="http://datastax.github.io/java-driver/">Datastax Java Driver</a>.
