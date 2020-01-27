@@ -44,7 +44,14 @@ class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.co
         system.asInstanceOf[ExtendedActorSystem],
         system.settings.config.getConfig(PluginSettings.DefaultConfigPath))
     override private[akka] val session: CassandraSession =
-      new CassandraSession(system, sessionProvider, ec, log, systemName, init = _ => Future.successful(Done))
+      new CassandraSession(
+        system,
+        sessionProvider,
+        ec,
+        log,
+        systemName,
+        init = _ => Future.successful(Done),
+        onClose = () => ())
   }
 
   "CassandraEventUpdate" must {

@@ -6,7 +6,7 @@ package akka.cassandra.session.javadsl
 
 import java.util.{ List => JList }
 import java.util.Optional
-import java.util.concurrent.CompletionStage
+import java.util.concurrent.{ CompletionStage, Executor }
 import java.util.function.{ Function => JFunction }
 
 import scala.annotation.varargs
@@ -47,7 +47,8 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
       executionContext: ExecutionContext,
       log: LoggingAdapter,
       metricsCategory: String,
-      init: JFunction[CqlSession, CompletionStage[Done]]) =
+      init: JFunction[CqlSession, CompletionStage[Done]],
+      onClose: java.lang.Runnable) =
     this(
       new akka.cassandra.session.scaladsl.CassandraSession(
         system,
@@ -55,9 +56,16 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
         executionContext,
         log,
         metricsCategory,
-        session => init.apply(session).toScala))
+        session => init.apply(session).toScala,
+        () => onClose.run()))
 
   implicit private val ec = delegate.ec
+
+  /**
+   * Closes the underlying Cassandra session.
+   * @param executor as this might be used after actor system termination, the actor systems dispatcher can't be used
+   */
+  def close(executor: Executor): CompletionStage[Done] = delegate.close(ExecutionContext.fromExecutor(executor)).toJava
 
   /**
    * The `Session` of the underlying
