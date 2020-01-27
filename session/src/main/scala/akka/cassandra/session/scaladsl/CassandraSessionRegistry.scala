@@ -9,9 +9,9 @@ import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.collection.JavaConverters._
-
 import akka.Done
 import akka.actor.ActorSystem
+import akka.actor.CoordinatedShutdown
 import akka.actor.ExtendedActorSystem
 import akka.actor.Extension
 import akka.actor.ExtensionId
@@ -96,5 +96,6 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
     Future.sequence(closing).map(_ => Done)
   }
 
-  system.whenTerminated.foreach(_ => close())(system.dispatcher)
+  CoordinatedShutdown(system)
+    .addTask(CoordinatedShutdown.PhaseBeforeActorSystemTerminate, "Cassandra session registry close")(() => close())
 }
