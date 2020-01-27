@@ -11,7 +11,6 @@ import scala.concurrent.Future
 import scala.collection.JavaConverters._
 import akka.Done
 import akka.actor.ActorSystem
-import akka.actor.CoordinatedShutdown
 import akka.actor.ExtendedActorSystem
 import akka.actor.Extension
 import akka.actor.ExtensionId
@@ -90,12 +89,16 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
       onClose = () => sessions.remove(key))
   }
 
-  private def close(): Future[Done] = {
-    import system.dispatcher
-    val closing = sessions.values().asScala.map(_.close())
-    Future.sequence(closing).map(_ => Done)
+  /**
+   * Closes all registered Cassandra sessions.
+   * @param executionContext when used after actor system termination, a different execution context must be provided
+   */
+  private def close(executionContext: ExecutionContext) = {
+    implicit val ec: ExecutionContext = executionContext
+    val closing = sessions.values().asScala.map(_.close(ec))
+    Future.sequence(closing)
   }
 
-  CoordinatedShutdown(system)
-    .addTask(CoordinatedShutdown.PhaseBeforeActorSystemTerminate, "Cassandra session registry close")(() => close())
+  system.whenTerminated.foreach(_ => close(ExecutionContext.global))(ExecutionContext.global)
+
 }

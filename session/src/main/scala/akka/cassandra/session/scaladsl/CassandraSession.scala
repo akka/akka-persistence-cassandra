@@ -73,7 +73,12 @@ final class CassandraSession(
    */
   def underlying(): Future[CqlSession] = _underlyingSession
 
-  def close(): Future[Done] = {
+  /**
+   * Closes the underlying Cassandra session.
+   * @param executionContext when used after actor system termination, the a different execution context must be provided
+   */
+  def close(executionContext: ExecutionContext): Future[Done] = {
+    implicit val ec: ExecutionContext = executionContext
     onClose()
     _underlyingSession.map(_.closeAsync().toScala).map(_ => Done)
   }
