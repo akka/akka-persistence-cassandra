@@ -18,6 +18,8 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion % Test,
     "org.scalatest" %% "scalatest" % "3.1.0" % Test,
+    "com.novocode" % "junit-interface" % "0.11" % Test,
+    "junit" % "junit" % "4.13" % Test,
     Logback % Test)
 
   val akkaTestDeps = Seq(

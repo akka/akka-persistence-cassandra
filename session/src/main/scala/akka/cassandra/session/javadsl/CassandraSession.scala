@@ -162,6 +162,21 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
     delegate.select(stmt).asJava
 
   /**
+   * Execute a select statement. First you must [[#prepare]] the
+   * statement and bind its parameters.
+   *
+   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
+   *
+   * The configured read consistency level is used if a specific consistency
+   * level has not been set on the `Statement`.
+   *
+   * Note that you have to connect a `Sink` that consumes the messages from
+   * this `Source` and then `run` the stream.
+   */
+  def select(stmt: CompletionStage[Statement[_]]): Source[Row, NotUsed] =
+    delegate.select(stmt.toScala).asJava
+
+  /**
    * Prepare, bind and execute a select statement in one go.
    *
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.

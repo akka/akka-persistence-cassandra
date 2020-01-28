@@ -12,13 +12,48 @@ import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql._
 import org.scalatest._
 
+import scala.collection.JavaConverters._
 import scala.collection.immutable
+import scala.compat.java8.FutureConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.compat.java8.FutureConverters._
 import scala.util.control.NonFatal
 
-trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
+trait CassandraLifecycleBase {
+  def cqlSession: CqlSession
+
+  def execute(cqlSession: CqlSession, statements: immutable.Seq[BatchableStatement[_]]): ResultSet = {
+    val batch = new BatchStatementBuilder(BatchType.LOGGED)
+    statements.foreach { stmt =>
+      batch.addStatement(stmt)
+    }
+    cqlSession.execute(batch.build())
+  }
+
+  def executeCql(cqlSession: CqlSession, statements: immutable.Seq[String]): ResultSet = {
+    execute(cqlSession, statements.map(stmt => SimpleStatement.newInstance(stmt)))
+  }
+
+  def createKeyspace(cqlSession: CqlSession, name: String): Unit =
+    cqlSession.execute(
+      s"""CREATE KEYSPACE $name WITH replication = { 'class': 'SimpleStrategy', 'replication_factor': '1'};""")
+
+  def dropKeyspace(cqlSession: CqlSession, name: String): Unit =
+    cqlSession.execute(s"""DROP KEYSPACE IF EXISTS $name;""")
+
+  def createKeyspace(name: String): Unit = createKeyspace(cqlSession, name)
+
+  def dropKeyspace(name: String): Unit = dropKeyspace(cqlSession, name)
+
+  def execute(statements: immutable.Seq[BatchableStatement[_]]): ResultSet = execute(cqlSession, statements)
+
+  def executeCql(statements: immutable.Seq[String]): ResultSet = executeCql(cqlSession, statements)
+
+  def executeCqlList(statements: java.util.List[String]): ResultSet = executeCql(cqlSession, statements.asScala.toList)
+
+}
+
+trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase with CassandraLifecycleBase {
   this: Suite =>
 
   def port(): Int = 9042
@@ -55,27 +90,6 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
     super.afterAll()
   }
 
-  def createKeyspace(name: String): Unit =
-    cqlSession.execute(
-      s"""CREATE KEYSPACE $name WITH replication = { 'class': 'SimpleStrategy', 'replication_factor': '1'};""")
-
-  def dropKeyspace(name: String): Unit =
-    cqlSession.execute(s"""DROP KEYSPACE IF EXISTS $name;""")
-
-  def execute(cqlSession: CqlSession, statements: immutable.Seq[BatchableStatement[_]]): ResultSet = {
-    val batch = new BatchStatementBuilder(BatchType.LOGGED)
-    statements.foreach { stmt =>
-      batch.addStatement(stmt)
-    }
-    cqlSession.execute(batch.build())
-  }
-
-  def executeCql(cqlSession: CqlSession, statements: immutable.Seq[String]): ResultSet = {
-    execute(cqlSession, statements.map(stmt => SimpleStatement.newInstance(stmt)))
-  }
-
-  def execute(statements: immutable.Seq[BatchableStatement[_]]): ResultSet = execute(cqlSession, statements)
-
-  def executeCql(statements: immutable.Seq[String]): ResultSet = executeCql(cqlSession, statements)
-
 }
+
+class CassandraAccess(val cqlSession: CqlSession) extends CassandraLifecycleBase

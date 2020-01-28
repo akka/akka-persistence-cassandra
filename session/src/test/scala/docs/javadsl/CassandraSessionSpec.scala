@@ -26,7 +26,7 @@ import scala.concurrent.duration._
 final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("CassandraSessionSpec")) {
 
   val log = Logging(system, this.getClass)
-  val sessionRegistry = CassandraSessionRegistry.get(system)
+  val javadslSessionRegistry = CassandraSessionRegistry.get(system)
 
   val data = 1 until 103
 
@@ -59,14 +59,14 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
   val sessionSettings: CassandraSessionSettings = CassandraSessionSettings("alpakka.cassandra")
 
   // testing javadsl to prove delegation works
-  lazy val session: javadsl.CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+  lazy val session: javadsl.CassandraSession = javadslSessionRegistry.sessionFor(sessionSettings, system.dispatcher)
 
   def await[T](cs: CompletionStage[T]): T = cs.toScala.futureValue
 
   "session" must {
 
     "stream the result of a Cassandra statement with one page" in assertAllStagesStopped {
-      val session = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+      val session = javadslSessionRegistry.sessionFor(sessionSettings, system.dispatcher)
       val table = createTableName()
       await(session.executeDDL(s"""
              |CREATE TABLE IF NOT EXISTS $table (

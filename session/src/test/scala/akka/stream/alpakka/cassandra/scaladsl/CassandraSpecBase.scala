@@ -5,6 +5,7 @@
 package akka.stream.alpakka.cassandra.scaladsl
 
 import akka.actor.ActorSystem
+import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.stream.{ ActorMaterializer, Materializer }
 import akka.testkit.TestKit
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach }
@@ -32,5 +33,7 @@ abstract class CassandraSpecBase(_system: ActorSystem)
 
   implicit val defaultPatience: PatienceConfig =
     PatienceConfig(timeout = 2.seconds, interval = 50.millis)
+
+  lazy val sessionRegistry: CassandraSessionRegistry = CassandraSessionRegistry.get(system)
 
 }
