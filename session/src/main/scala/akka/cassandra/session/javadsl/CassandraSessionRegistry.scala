@@ -8,7 +8,7 @@ import java.util.concurrent.CompletionStage
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.cassandra.session.{ javadsl, scaladsl, CassandraSessionSettings }
+import akka.cassandra.session.{ scaladsl, CassandraSessionSettings }
 import com.datastax.oss.driver.api.core.CqlSession
 
 import scala.compat.java8.FutureConverters._
@@ -24,8 +24,8 @@ object CassandraSessionRegistry {
   /**
    * Java API: get the session registry
    */
-  def get(system: ActorSystem): javadsl.CassandraSessionRegistry =
-    new javadsl.CassandraSessionRegistry(scaladsl.CassandraSessionRegistry(system))
+  def get(system: ActorSystem): CassandraSessionRegistry =
+    new CassandraSessionRegistry(scaladsl.CassandraSessionRegistry(system))
 
 }
 
@@ -38,7 +38,7 @@ final class CassandraSessionRegistry private (delegate: scaladsl.CassandraSessio
    * Sessions in the session registry are closed after actor system termination.
    */
   def sessionFor(configPath: String, executionContext: ExecutionContext): CassandraSession =
-    new javadsl.CassandraSession(delegate.sessionFor(configPath, executionContext))
+    new CassandraSession(delegate.sessionFor(configPath, executionContext))
 
   /**
    * Get an existing session or start a new one with the given settings,
@@ -54,13 +54,13 @@ final class CassandraSessionRegistry private (delegate: scaladsl.CassandraSessio
       configPath: String,
       executionContext: ExecutionContext,
       init: java.util.function.Function[CqlSession, CompletionStage[Done]]): CassandraSession =
-    new javadsl.CassandraSession(delegate.sessionFor(configPath, executionContext, ses => init(ses).toScala))
+    new CassandraSession(delegate.sessionFor(configPath, executionContext, ses => init(ses).toScala))
 
   /**
    * Get an existing session or start a new one with the given settings,
    * makes it possible to share one session across plugins.
    */
   def sessionFor(settings: CassandraSessionSettings, executionContext: ExecutionContext): CassandraSession =
-    new javadsl.CassandraSession(delegate.sessionFor(settings, executionContext))
+    new CassandraSession(delegate.sessionFor(settings, executionContext))
 
 }

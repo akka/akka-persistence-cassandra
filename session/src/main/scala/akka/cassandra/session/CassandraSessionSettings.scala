@@ -27,7 +27,7 @@ class CassandraSessionSettings private (
    * Java API:
    *
    * The `init` function will be performed once when the session is created, i.e.
-   * if `sessionFor` is called from multiple places with different `init` it will
+   * if `CassandraSessionRegistry.sessionFor` is called from multiple places with different `init` it will
    * only execute the first.
    */
   def withInit(value: java.util.function.Function[CqlSession, CompletionStage[Done]]): CassandraSessionSettings =
@@ -35,7 +35,7 @@ class CassandraSessionSettings private (
 
   /**
    * The `init` function will be performed once when the session is created, i.e.
-   * if `sessionFor` is called from multiple places with different `init` it will
+   * if `CassandraSessionRegistry.sessionFor` is called from multiple places with different `init` it will
    * only execute the first.
    */
   def withInit(value: CqlSession => Future[Done]): CassandraSessionSettings = copy(init = Some(value))
