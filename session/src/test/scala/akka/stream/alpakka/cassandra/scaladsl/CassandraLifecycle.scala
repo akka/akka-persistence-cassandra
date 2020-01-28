@@ -16,11 +16,10 @@ import scala.collection.immutable
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.compat.java8.FutureConverters._
+import scala.util.control.NonFatal
 
 trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   this: Suite =>
-
-  def systemName: String = getClass.getSimpleName
 
   def port(): Int = 9042
 
@@ -28,11 +27,12 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
     CqlSession
       .builder()
       .withLocalDatacenter("datacenter1")
-      .addContactPoint(new InetSocketAddress("localhost", port()))
+      .addContactPoint(new InetSocketAddress("127.0.0.1", port()))
       .build()
   }
 
-  final val keyspaceName: String = s"$systemName${System.nanoTime()}"
+  def keyspaceNamePrefix: String = getClass.getSimpleName
+  final lazy val keyspaceName: String = s"$keyspaceNamePrefix${System.nanoTime()}"
 
   private val tableNumber = new AtomicInteger()
 
@@ -46,7 +46,12 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   override protected def afterAll(): Unit = {
     shutdown(system, verifySystemShutdown = true)
     dropKeyspace(keyspaceName)
-    Await.result(cqlSession.closeAsync().toScala, 10.seconds)
+    try {
+      Await.result(cqlSession.closeAsync().toScala, 20.seconds)
+    } catch {
+      case NonFatal(e) =>
+        e.printStackTrace(System.err)
+    }
     super.afterAll()
   }
 
@@ -57,7 +62,7 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   def dropKeyspace(name: String): Unit =
     cqlSession.execute(s"""DROP KEYSPACE IF EXISTS $name;""")
 
-  def execute(statements: immutable.Seq[BatchableStatement[_]]): ResultSet = {
+  def execute(cqlSession: CqlSession, statements: immutable.Seq[BatchableStatement[_]]): ResultSet = {
     val batch = new BatchStatementBuilder(BatchType.LOGGED)
     statements.foreach { stmt =>
       batch.addStatement(stmt)
@@ -65,8 +70,12 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
     cqlSession.execute(batch.build())
   }
 
-  def executeCql(statements: immutable.Seq[String]): ResultSet = {
-    execute(statements.map(stmt => SimpleStatement.newInstance(stmt)))
+  def executeCql(cqlSession: CqlSession, statements: immutable.Seq[String]): ResultSet = {
+    execute(cqlSession, statements.map(stmt => SimpleStatement.newInstance(stmt)))
   }
+
+  def execute(statements: immutable.Seq[BatchableStatement[_]]): ResultSet = execute(cqlSession, statements)
+
+  def executeCql(statements: immutable.Seq[String]): ResultSet = executeCql(cqlSession, statements)
 
 }

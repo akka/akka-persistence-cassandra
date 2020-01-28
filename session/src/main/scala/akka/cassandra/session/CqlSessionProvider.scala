@@ -5,15 +5,15 @@
 package akka.cassandra.session
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
-import akka.util.unused
+import akka.event.Logging
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.config.{ DefaultDriverOption, DriverConfigLoader }
 import com.typesafe.config.Config
 
 import scala.collection.immutable
+import scala.compat.java8.FutureConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.Failure
-import scala.compat.java8.FutureConverters._
-import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.driver.api.core.config.{ DefaultDriverOption, DriverConfigLoader }
 
 /**
  * The implementation of the `SessionProvider` is used for creating the
@@ -30,15 +30,19 @@ trait CqlSessionProvider {
   def connect()(implicit ec: ExecutionContext): Future[CqlSession]
 }
 
-class DefaultSessionProvider(@unused system: ActorSystem, config: Config) extends CqlSessionProvider {
+class DefaultSessionProvider(system: ActorSystem, config: Config) extends CqlSessionProvider {
+  private val log = Logging(system, getClass)
+
   override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
     val builder = CqlSession.builder()
     val sessionName = config.getString("session-name")
     (if (sessionName != null && sessionName.nonEmpty) {
+       log.debug(s"Initialising Cassandra session [$sessionName]")
        val overload: DriverConfigLoader =
          DriverConfigLoader.programmaticBuilder().withString(DefaultDriverOption.SESSION_NAME, sessionName).build()
        builder.withConfigLoader(overload)
      } else {
+       log.debug(s"Initialising unnamed Cassandra session")
        builder
      }).buildAsync().toScala
   }

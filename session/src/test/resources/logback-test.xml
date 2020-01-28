@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>target/cassandra.log</file>
+        <append>false</append>
+        <encoder>
+            <pattern>%d{ISO8601} %-5level [%thread] [%logger{36}]  %msg%n</pattern>
+        </encoder>
+    </appender>
+
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <target>System.out</target>
         <encoder>
-            <pattern>%date{MM/dd HH:mm:ss} %-5level[%thread] %logger{1} [%X{akkaSource}] - %m%n%xException</pattern>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%-20.20thread] %-36.36logger{36} [%X{akkaSource}] %msg%n%rEx</pattern>
         </encoder>
     </appender>
 

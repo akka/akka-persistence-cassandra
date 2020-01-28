@@ -6,43 +6,16 @@ package docs.scaladsl
 
 import akka.actor.ActorSystem
 import akka.cassandra.session.CassandraSessionSettings
-import akka.stream.alpakka.cassandra.scaladsl.{ CassandraLifecycle, CassandraSource }
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSource, CassandraSpecBase }
 import akka.stream.scaladsl.Sink
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
-import akka.stream.{ ActorMaterializer, Materializer }
-import akka.testkit.TestKit
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
-import org.scalatest._
-import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.matchers.must.Matchers
-import org.scalatest.wordspec.AnyWordSpecLike
 
-import scala.concurrent.duration._
-
-/**
- * All the tests must be run with a local Cassandra running on default port 9042.
- */
-class CassandraSourceSpec
-    extends TestKit(ActorSystem("CassandraSourceSpec"))
-    with AnyWordSpecLike
-    with ScalaFutures
-    with BeforeAndAfterEach
-    with BeforeAndAfterAll
-    with Matchers
-    with CassandraLifecycle {
+class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSourceSpec")) {
 
   //#element-to-insert
   case class ToInsert(id: Integer, cc: Integer)
   //#element-to-insert
-
-  //#init-mat
-  implicit val mat: Materializer = ActorMaterializer()
-  //#init-mat
-
-  implicit val ec = system.dispatcher
-
-  implicit val defaultPatience =
-    PatienceConfig(timeout = 2.seconds, interval = 50.millis)
 
   val sessionSettings = CassandraSessionSettings("alpakka.cassandra")
   val data = 1 until 103
