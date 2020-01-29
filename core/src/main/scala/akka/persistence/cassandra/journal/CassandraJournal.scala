@@ -238,47 +238,51 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       }
     }
 
-    val writesWithUuids: Seq[Seq[(PersistentRepr, UUID)]] =
-      messages.map(aw => aw.payload.map(pr => (pr, generateUUID(pr))))
+    messages.headOption
+      .map(_.persistenceId)
+      .map { pid =>
+        val writesWithUuids: Seq[Seq[(PersistentRepr, UUID)]] =
+          messages.map(aw => aw.payload.map(pr => (pr, generateUUID(pr))))
 
-    val writeInProgressForPersistentId = Promise[Done]
-    val pid = messages.head.persistenceId
-    writeInProgress.put(pid, writeInProgressForPersistentId.future)
+        val writeInProgressForPersistentId = Promise[Done]
+        writeInProgress.put(pid, writeInProgressForPersistentId.future)
 
-    val toReturn: Future[Nil.type] = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap {
-      serialized: Seq[SerializedAtomicWrite] =>
-        val result: Future[Any] =
-          if (messages.map(_.payload.size).sum <= journalSettings.maxMessageBatchSize) {
-            // optimize for the common case
-            writeMessages(serialized)
-          } else {
+        val toReturn: Future[Nil.type] = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap {
+          serialized: Seq[SerializedAtomicWrite] =>
+            val result: Future[Any] =
+              if (messages.map(_.payload.size).sum <= journalSettings.maxMessageBatchSize) {
+                // optimize for the common case
+                writeMessages(serialized)
+              } else {
 
-            //if presistAll was used, single AtomicWrite can already contain complete batch, so we need to regroup writes correctly
-            val groups: List[List[SerializedAtomicWrite]] = groupedWrites(serialized.toList.reverse, Nil, Nil)
+                //if presistAll was used, single AtomicWrite can already contain complete batch, so we need to regroup writes correctly
+                val groups: List[List[SerializedAtomicWrite]] = groupedWrites(serialized.toList.reverse, Nil, Nil)
 
-            // execute the groups in sequence
-            def rec(todo: List[List[SerializedAtomicWrite]]): Future[Any] =
-              todo match {
-                case write :: remainder =>
-                  writeMessages(write).flatMap(_ => rec(remainder))
-                case Nil => Future.successful(())
+                // execute the groups in sequence
+                def rec(todo: List[List[SerializedAtomicWrite]]): Future[Any] =
+                  todo match {
+                    case write :: remainder =>
+                      writeMessages(write).flatMap(_ => rec(remainder))
+                    case Nil => Future.successful(())
+                  }
+
+                rec(groups)
               }
+            result.map { _ =>
+              tagWrites.foreach(_ ! extractTagWrites(serialized))
+              Nil
+            }
 
-            rec(groups)
-          }
-        result.map { _ =>
-          tagWrites.foreach(_ ! extractTagWrites(serialized))
-          Nil
         }
 
-    }
+        // if the write fails still need to remove state from the map
+        toReturn.onComplete { _ =>
+          sendWriteFinished(pid, writeInProgressForPersistentId)
+        }
 
-    // if the write fails still need to remove state from the map
-    toReturn.onComplete { _ =>
-      sendWriteFinished(pid, writeInProgressForPersistentId)
-    }
-
-    toReturn
+        toReturn
+      }
+      .getOrElse(Future.successful(Nil))
   }
 
   //Regroup batches by payload size
