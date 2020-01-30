@@ -111,8 +111,6 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
   private val tagRecovery =
     new CassandraTagRecovery(system, session, settings, taggedPreparedStatements)
 
-  private val serialization = SerializationExtension(system)
-
   import journalStatements._
 
   private def journalSettings = settings.journalSettings
@@ -134,10 +132,7 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
     log.info("Adding tags column to tabe {}", journalSettings.table)
     for {
       _ <- session.executeWrite(s"ALTER TABLE ${journalSettings.keyspace}.${journalSettings.table} ADD tags set<text>")
-    } yield {
-      log.info("Columns tag added")
-      Done
-    }
+    } yield Done
   }
 
   // TODO might be nice to return a summary of what was done rather than just Done
