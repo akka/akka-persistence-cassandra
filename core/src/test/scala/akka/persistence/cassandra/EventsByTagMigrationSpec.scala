@@ -354,7 +354,7 @@ abstract class AbstractEventsByTagMigrationSpec
        |CREATE KEYSPACE IF NOT EXISTS $journalName WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1 }
      """.stripMargin
 
-  val settings = new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
+  val settings = new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
   val statements = new CassandraJournalStatements(settings)
 
   implicit val materialiser = ActorMaterializer()(system)
