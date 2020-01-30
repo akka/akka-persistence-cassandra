@@ -21,34 +21,34 @@ before_script:
 jobs:
   include:
     - stage: check
-      script: sbt scalafmtCheckAll || { echo "[error] Unformatted code found. Please run 'scalafmtAll' and commit the reformatted code."; false; }
+      script: sbt -jvm-opts .jvmopts-travis scalafmtCheckAll || { echo "[error] Unformatted code found. Please run 'scalafmtAll' and commit the reformatted code."; false; }
       name: Code style check (fixed with `sbt scalafmtAll`)
-    - script: sbt scalafmtSbtCheck || { echo "[error] Unformatted sbt code found. Please run 'scalafmtSbt' and commit the reformatted code."; false; }
+    - script: sbt -jvm-opts .jvmopts-travis scalafmtSbtCheck || { echo "[error] Unformatted sbt code found. Please run 'scalafmtSbt' and commit the reformatted code."; false; }
       name: Build code style check (fixed with `sbt scalafmtSbt`)
-    - script: sbt ++2.13.1 Test/compile
+    - script: sbt -jvm-opts .jvmopts-travis ++2.13.1 Test/compile
       name: Compile all tests (with Scala 2.13)
-    - script: sbt unidoc
+    - script: sbt -jvm-opts .jvmopts-travis unidoc
       name: Create all API docs
-    - script: sbt docs/paradox
+    - script: sbt -jvm-opts .jvmopts-travis docs/paradox
       name: Create site with Paradox
 
     - stage: test
-      script: jabba use adopt@~1.8-0 && java -version && docker-compose up -d cassandra && sbt +test
+      script: jabba use adopt@~1.8-0 && java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis +test
       name: Run all tests with Jdk 8
-    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra && sbt +test
+    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis +test
       name: Run all tests with Jdk 11
-    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra && sbt -Doverride.akka.version="2.6.1" +test
+    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis -Doverride.akka.version="2.6.1" +test
       name: Run all the tests with Akka 2.6
 
     - stage: whitesource
       name: White Source
-      script: git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH" && sbt whitesourceCheckPolicies whitesourceUpdate
+      script: git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH" && sbt -jvm-opts .jvmopts-travis whitesourceCheckPolicies whitesourceUpdate
 
     - stage: publish
-      script: openssl aes-256-cbc -K $encrypted_fb56f898a62a_key -iv $encrypted_fb56f898a62a_iv -in .travis/sign_key.enc -out sign_key -d && gpg --import sign_key && sbt +publish
+      script: openssl aes-256-cbc -K $encrypted_fb56f898a62a_key -iv $encrypted_fb56f898a62a_iv -in .travis/sign_key.enc -out sign_key -d && gpg --import sign_key && sbt -jvm-opts .jvmopts-travis +publish
       name: Publish artifacts
 
-    - script: eval "$(ssh-agent -s)" && cp .travis/id_rsa /tmp/id_rsa && chmod 600 /tmp/id_rsa && ssh-keygen -p -P "$DEPLOY_PASSPHRASE" -N "" -f /tmp/id_rsa && ssh-add /tmp/id_rsa && sbt docs/publishRsync
+    - script: eval "$(ssh-agent -s)" && cp .travis/id_rsa /tmp/id_rsa && chmod 600 /tmp/id_rsa && ssh-keygen -p -P "$DEPLOY_PASSPHRASE" -N "" -f /tmp/id_rsa && ssh-add /tmp/id_rsa && sbt -jvm-opts .jvmopts-travis docs/publishRsync
       name: Publish documentation
 
 

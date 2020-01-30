@@ -87,9 +87,6 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String) extends SnapshotStore
       log.debug("Initialized")
   }
 
-  override def postStop(): Unit =
-    session.close()
-
   override def loadAsync(
       persistenceId: String,
       criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = {

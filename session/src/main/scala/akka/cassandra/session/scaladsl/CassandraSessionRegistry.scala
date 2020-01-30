@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
+import scala.collection.JavaConverters._
 import akka.Done
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
@@ -50,8 +50,7 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    * Get an existing session or start a new one with the given settings,
    * makes it possible to share one session across plugins.
    *
-   * Note that the session must not be stopped manually, it is shut down when the actor system is shutdown,
-   * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
+   * Sessions in the session registry are closed after actor system termination.
    */
   def sessionFor(configPath: String, executionContext: ExecutionContext): CassandraSession =
     sessionFor(configPath, executionContext, _ => Future.successful(Done))
@@ -64,8 +63,7 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    * if `sessionFor` is called from multiple places with different `init` it will
    * only execute the first.
    *
-   * Note that the session must not be stopped manually, it is shut down when the actor system is shutdown,
-   * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
+   * Sessions in the session registry are closed after actor system termination.
    */
   def sessionFor(
       configPath: String,
@@ -81,7 +79,26 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
       executionContext: ExecutionContext): CassandraSession = {
     val sessionProvider = CqlSessionProvider(system, system.settings.config.getConfig(key.configPath))
     val log = Logging(system, classOf[CassandraSession])
-    new CassandraSession(system, sessionProvider, executionContext, log, metricsCategory = key.configPath, init)
+    new CassandraSession(
+      system,
+      sessionProvider,
+      executionContext,
+      log,
+      metricsCategory = key.configPath,
+      init,
+      onClose = () => sessions.remove(key))
   }
+
+  /**
+   * Closes all registered Cassandra sessions.
+   * @param executionContext when used after actor system termination, a different execution context must be provided
+   */
+  private def close(executionContext: ExecutionContext) = {
+    implicit val ec: ExecutionContext = executionContext
+    val closing = sessions.values().asScala.map(_.close(ec))
+    Future.sequence(closing)
+  }
+
+  system.whenTerminated.foreach(_ => close(ExecutionContext.global))(ExecutionContext.global)
 
 }

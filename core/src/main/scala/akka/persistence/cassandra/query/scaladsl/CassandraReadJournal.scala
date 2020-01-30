@@ -186,10 +186,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       byTagWithUpper <- preparedSelectFromTagViewWithUpperBound
     } yield EventByTagStatements(byTagWithUpper)
 
-  system.registerOnTermination {
-    session.close()
-  }
-
   /**
    * Use this as the UUID offset in `eventsByTag` queries when you want all
    * events from the beginning of time.

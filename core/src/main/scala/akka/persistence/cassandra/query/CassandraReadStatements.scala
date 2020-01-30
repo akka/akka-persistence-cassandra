@@ -14,9 +14,10 @@ import akka.persistence.cassandra.PluginSettings
 
   def settings: PluginSettings
   private def journalSettings = settings.journalSettings
+  private def eventsByTagSettings = settings.eventsByTagSettings
 
   private def tableName = s"${journalSettings.keyspace}.${journalSettings.table}"
-  private def tagViewTableName = s"${journalSettings.keyspace}.tag_views"
+  private def tagViewTableName = s"${journalSettings.keyspace}.${eventsByTagSettings.tagTable.name}"
 
   def selectDistinctPersistenceIds =
     s"""

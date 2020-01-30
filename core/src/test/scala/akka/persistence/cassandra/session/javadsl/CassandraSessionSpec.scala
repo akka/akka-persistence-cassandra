@@ -7,7 +7,7 @@ package akka.persistence.cassandra.session.javadsl
 import java.util.Optional
 
 import akka.Done
-import akka.cassandra.session.javadsl.CassandraSession
+import akka.cassandra.session.javadsl
 import akka.cassandra.session.DefaultSessionProvider
 import akka.event.Logging
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
@@ -37,16 +37,20 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
 
   val log = Logging.getLogger(system, this.getClass)
 
-  lazy val session: CassandraSession = {
+  // testing javadsl to prove delegation works
+  lazy val session: javadsl.CassandraSession = {
     val cfg = system.settings.config.withFallback(system.settings.config.getConfig("akka.persistence.cassandra"))
-    new CassandraSession(
+    new javadsl.CassandraSession(
       system,
       new DefaultSessionProvider(system, cfg),
       system.dispatcher,
       log,
       "CassandraSessionSpec-metrics",
       (s: CqlSession) =>
-        s.executeAsync(s"USE ${cfg.getString("journal.keyspace")};").toScala.map(_ => Done.getInstance).toJava)
+        s.executeAsync(s"USE ${cfg.getString("journal.keyspace")};").toScala.map(_ => Done.getInstance).toJava,
+      onClose = new Runnable {
+        override def run(): Unit = {}
+      })
   }
 
   override def beforeAll(): Unit = {
