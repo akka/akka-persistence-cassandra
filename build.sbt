@@ -42,21 +42,10 @@ lazy val core = (project in file("core"))
     testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o")))
   .configs(MultiJvm)
 
-lazy val reconciler = (project in file("reconciler"))
-  .enablePlugins(Common, AutomateHeaderPlugin)
-  .dependsOn(core)
-  .settings(
-    name := "reconciler",
-    libraryDependencies ++= Dependencies.reconcilerDependencies,
-    assemblyJarName in assembly := "akka-persistence-cassandra-reconciler.jar",
-  )
-
-
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .enablePlugins(Common)
   .settings(
     name := "akka-persistence-cassandra-launcher",
-    libraryDependencies ++= Dependencies.reconcilerDependencies,
     managedResourceDirectories in Compile += (target in cassandraBundle).value / "bundle",
     managedResources in Compile += (assembly in cassandraBundle).value)
 

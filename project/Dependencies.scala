@@ -16,15 +16,6 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test)
 
-  val reconcilerDependencies = Seq(
-    ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
-    "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-    "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
-    "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
-    "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
-  )
-
-
   val akkaTestDeps = Seq(
     "com.typesafe.akka" %% "akka-persistence",
     "com.typesafe.akka" %% "akka-persistence-typed",
