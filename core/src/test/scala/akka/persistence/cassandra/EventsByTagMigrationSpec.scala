@@ -23,12 +23,12 @@ import akka.{ Done, NotUsed }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import scala.concurrent.duration._
-import scala.util.Try
 
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.serialization.Serializers
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.datastax.oss.driver.api.core.uuid.Uuids
+import scala.util.control.NonFatal
 
 /**
  */
@@ -391,9 +391,13 @@ abstract class AbstractEventsByTagMigrationSpec
   private lazy val serialization = SerializationExtension(system)
 
   override protected def afterAll(): Unit = {
-    Try {
-      //externalCassandraCleanup()
+    try {
+      externalCassandraCleanup()
       cluster.close()
+    } catch {
+      case NonFatal(e) =>
+        println("Failed to cleanup cassandra")
+        e.printStackTrace()
     }
     super.afterAll()
     shutdown(systemTwo)

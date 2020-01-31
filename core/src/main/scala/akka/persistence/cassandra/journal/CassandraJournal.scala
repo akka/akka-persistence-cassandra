@@ -82,13 +82,11 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
 
   private val taggedPreparedStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
   private val tagRecovery = new CassandraTagRecovery(context.system, session, settings, taggedPreparedStatements)
-
   private val tagWriterSession = TagWritersSession(
     session,
     settings.journalSettings.writeProfile,
     settings.journalSettings.readProfile,
     taggedPreparedStatements)
-
   private val tagWrites: Option[ActorRef] =
     if (settings.eventsByTagSettings.eventsByTagEnabled)
       Some(
@@ -874,5 +872,4 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
         case NonFatal(e) => Future.failed(e)
       }
   }
-
 }
