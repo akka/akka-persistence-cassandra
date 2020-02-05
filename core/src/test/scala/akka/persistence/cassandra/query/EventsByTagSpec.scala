@@ -319,6 +319,27 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       probe2.cancel()
     }
 
+    "include timestamp in EventEnvelope" in {
+      val currentTime = System.currentTimeMillis()
+      val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
+      val probe1 = greenSrc1.runWith(TestSink.probe[EventEnvelope])
+      probe1.request(2)
+
+      val env1 = probe1.expectNext()
+      env1.timestamp should !==(0L)
+      (currentTime - env1.timestamp) should be < 120000L
+      (currentTime - env1.timestamp) should be > 0L
+
+      val env2 = probe1.expectNext()
+      env2.timestamp should !==(0L)
+      (currentTime - env2.timestamp) should be < 120000L
+      (currentTime - env2.timestamp) should be > 0L
+
+      env2.timestamp should be >= env1.timestamp
+
+      probe1.cancel()
+    }
+
     "find existing events that spans several time buckets" in {
       val t1 = today.minusDays(5).toLocalDate.atStartOfDay.plusHours(13)
       val w1 = UUID.randomUUID().toString
@@ -424,6 +445,27 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       })
     }
 
+    "include timestamp in EventEnvelope" in {
+      val currentTime = System.currentTimeMillis()
+      val greenSrc1 = queries.eventsByTag(tag = "green", offset = NoOffset)
+      val probe1 = greenSrc1.runWith(TestSink.probe[EventEnvelope])
+      probe1.request(2)
+
+      val env1 = probe1.expectNext()
+      env1.timestamp should !==(0L)
+      (currentTime - env1.timestamp) should be < 120000L
+      (currentTime - env1.timestamp) should be > 0L
+
+      val env2 = probe1.expectNext()
+      env2.timestamp should !==(0L)
+      (currentTime - env2.timestamp) should be < 120000L
+      (currentTime - env2.timestamp) should be > 0L
+
+      env2.timestamp should be >= env1.timestamp
+
+      probe1.cancel()
+    }
+
     "find new events that spans several time buckets" in {
       val t1 = today.minusDays(5).toLocalDate.atStartOfDay.plusHours(13)
       val w1 = UUID.randomUUID().toString
@@ -472,7 +514,8 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
         probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "p1-e1") => e }
         probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "p2-e1") => e }
-        probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "p1-e2") => e }
+        val e3 = probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "p1-e2") => e }
+        (System.currentTimeMillis() - e3.timestamp) should be < 10000L
       })
     }
 
