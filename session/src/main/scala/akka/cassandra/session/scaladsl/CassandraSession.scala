@@ -51,7 +51,8 @@ final class CassandraSession(
     executionContext: ExecutionContext,
     log: LoggingAdapter,
     metricsCategory: String,
-    init: CqlSession => Future[Done])
+    init: CqlSession => Future[Done],
+    onClose: () => Unit)
     extends NoSerializationVerificationNeeded {
 
   implicit private[akka] val ec = executionContext
@@ -72,7 +73,15 @@ final class CassandraSession(
    */
   def underlying(): Future[CqlSession] = _underlyingSession
 
-  def close(): Unit = _underlyingSession.foreach(_.close())
+  /**
+   * Closes the underlying Cassandra session.
+   * @param executionContext when used after actor system termination, the a different execution context must be provided
+   */
+  def close(executionContext: ExecutionContext): Future[Done] = {
+    implicit val ec: ExecutionContext = executionContext
+    onClose()
+    _underlyingSession.map(_.closeAsync().toScala).map(_ => Done)
+  }
 
   /**
    * This can only be used after successful initialization,

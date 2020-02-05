@@ -208,10 +208,6 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       }
   }
 
-  override def postStop(): Unit = {
-    session.close()
-  }
-
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
     // we need to preserve the order / size of this sequence even though we don't map
     // AtomicWrites 1:1 with a C* insert
