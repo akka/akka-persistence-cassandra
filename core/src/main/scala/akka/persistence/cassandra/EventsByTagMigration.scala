@@ -100,7 +100,7 @@ object EventsByTagMigration {
 class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka.persistence.cassandra") {
   private[akka] val log = Logging.getLogger(system, getClass)
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](pluginConfigPath + ".query")
-  private implicit val materialiser = ActorMaterializer()(system)
+  private implicit val sys: ActorSystem = system
 
   implicit val ec =
     system.dispatchers.lookup(system.settings.config.getString(s"$pluginConfigPath.journal.plugin-dispatcher"))

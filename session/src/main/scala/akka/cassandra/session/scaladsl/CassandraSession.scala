@@ -12,7 +12,6 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
 import akka.event.LoggingAdapter
-import akka.stream.ActorMaterializer
 import akka.stream.Attributes
 import akka.stream.Outlet
 import akka.stream.SourceShape
@@ -56,7 +55,7 @@ final class CassandraSession(
     extends NoSerializationVerificationNeeded {
 
   implicit private[akka] val ec = executionContext
-  private lazy implicit val materializer = ActorMaterializer()(system)
+  private implicit val sys: ActorSystem = system
 
   private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
     session.getMetrics.ifPresent(metrics => {

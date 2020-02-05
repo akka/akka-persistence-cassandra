@@ -26,7 +26,6 @@ import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, T
 import akka.persistence.cassandra.journal.TagWriter.{ TagProgress }
 import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql._
@@ -64,7 +63,7 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
   private val log: LoggingAdapter = Logging(context.system, getClass)
 
   private implicit val ec: ExecutionContext = context.dispatcher
-  private implicit val materializer: ActorMaterializer = ActorMaterializer()(context.system)
+  private implicit val sys: ActorSystem = context.system
 
   // readHighestSequence must be performed after pending write for a persistenceId
   // when the persistent actor is restarted.

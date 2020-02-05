@@ -27,7 +27,6 @@ import akka.serialization.AsyncSerializer
 import akka.serialization.Serialization
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import akka.util.OptionVal
@@ -40,6 +39,7 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String) extends SnapshotStore
 
   import CassandraSnapshotStore._
   implicit val ec: ExecutionContext = context.dispatcher
+  implicit val sys: ActorSystem = context.system
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
@@ -65,8 +65,6 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String) extends SnapshotStore
     session.prepare(selectSnapshotMetadata(limit = None))
   private def preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit: Future[PreparedStatement] =
     session.prepare(selectSnapshotMetadata(limit = Some(snapshotSettings.maxLoadAttempts)))
-
-  private implicit val materializer = ActorMaterializer()
 
   override def preStart(): Unit =
     // eager initialization, but not from constructor

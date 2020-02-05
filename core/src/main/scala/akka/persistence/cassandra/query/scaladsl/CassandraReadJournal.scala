@@ -8,7 +8,7 @@ import java.net.URLEncoder
 import java.util.UUID
 
 import akka.{ Done, NotUsed }
-import akka.actor.ExtendedActorSystem
+import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
@@ -24,16 +24,16 @@ import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
-import akka.stream.{ ActorAttributes, ActorMaterializer }
+import akka.stream.ActorAttributes
 import akka.util.ByteString
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
+
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
-
 import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.CassandraStatements
@@ -120,7 +120,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   private val serialization = SerializationExtension(system)
   implicit private val ec =
     system.dispatchers.lookup(querySettings.pluginDispatcher)
-  implicit private val materializer = ActorMaterializer()(system)
+  implicit private val sys: ActorSystem = system
 
   private val queryStatements: CassandraReadStatements =
     new CassandraReadStatements {

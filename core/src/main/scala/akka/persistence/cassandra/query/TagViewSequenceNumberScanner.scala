@@ -15,12 +15,12 @@ import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.query.TagViewSequenceNumberScanner.Session
-import akka.stream.ActorMaterializer
+import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row }
+
 import scala.concurrent.duration.{ Deadline, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
-
 import akka.persistence.cassandra.BucketSize
 
 @InternalApi
@@ -41,7 +41,7 @@ private[akka] object TagViewSequenceNumberScanner {
 
 @InternalApi
 private[akka] class TagViewSequenceNumberScanner(session: Session)(
-    implicit materializer: ActorMaterializer,
+    implicit materializer: Materializer,
     ec: ExecutionContext) {
   private val log = Logging(materializer.system, getClass)
 
