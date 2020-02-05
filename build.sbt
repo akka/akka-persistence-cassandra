@@ -68,10 +68,6 @@ lazy val dseTest =
     .dependsOn(core % "test->test")
     .settings(libraryDependencies ++= Dependencies.dseTestDependencies)
 
-lazy val akka26Tests = (project in file("akka-26-tests"))
-  .dependsOn(core % "test->test")
-  .settings(libraryDependencies ++= Dependencies.akka26TestDependencies)
-
 lazy val docs = project
   .enablePlugins(Common, AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
   .dependsOn(core)
