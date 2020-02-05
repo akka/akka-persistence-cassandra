@@ -1,3 +1,5 @@
+ThisBuild / resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/")
+
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
