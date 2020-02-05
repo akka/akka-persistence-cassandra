@@ -23,8 +23,10 @@ import scala.concurrent.{ ExecutionContext, Future }
 
 import akka.persistence.cassandra.BucketSize
 
-@InternalApi
-private[akka] object TagViewSequenceNumberScanner {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object TagViewSequenceNumberScanner {
 
   case class Session(session: CassandraSession, selectTagSequenceNumbers: PreparedStatement, profile: String) {
     private[akka] def selectTagSequenceNrs(
@@ -39,8 +41,10 @@ private[akka] object TagViewSequenceNumberScanner {
 
 }
 
-@InternalApi
-private[akka] class TagViewSequenceNumberScanner(session: Session)(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class TagViewSequenceNumberScanner(session: Session)(
     implicit materializer: ActorMaterializer,
     ec: ExecutionContext) {
   private val log = Logging(materializer.system, getClass)

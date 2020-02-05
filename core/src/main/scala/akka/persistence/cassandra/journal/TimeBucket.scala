@@ -11,6 +11,7 @@ import akka.persistence.cassandra.BucketSize
 import akka.util.HashCode
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
+/** INTERNAL API */
 @InternalApi private[akka] object TimeBucket {
 
   def apply(timeuuid: UUID, bucketSize: BucketSize): TimeBucket =
@@ -26,6 +27,7 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
   }
 }
 
+/** INTERNAL API */
 @InternalApi private[akka] final class TimeBucket private (val key: Long, val bucketSize: BucketSize) {
   def inPast: Boolean =
     key < TimeBucket.roundDownBucketSize(System.currentTimeMillis(), bucketSize)

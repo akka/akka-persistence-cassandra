@@ -45,10 +45,10 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
 
   def current(): Source[String, NotUsed] = queries.currentPersistenceIds().filterNot(_ == "persistenceInit")
 
-  private[this] def deleteAllEvents(): Unit =
+  private def deleteAllEvents(): Unit =
     cluster.execute(s"TRUNCATE ${journalSettings.keyspace}.${journalSettings.table}")
 
-  private[this] def setup(persistenceId: String, n: Int): ActorRef = {
+  private def setup(persistenceId: String, n: Int): ActorRef = {
     val ref = system.actorOf(TestActor.props(persistenceId))
     for (i <- 1 to n) {
       ref ! s"$persistenceId-$i"

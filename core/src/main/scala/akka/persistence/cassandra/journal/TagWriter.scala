@@ -23,6 +23,8 @@ import scala.concurrent.duration._
 import akka.actor.ReceiveTimeout
 
 /*
+ * INTERNAL API
+ *
  * Groups writes into un-logged batches for the same partition.
  *
  * For the read stage to work correctly events must be written in order for a given
@@ -92,6 +94,7 @@ import akka.actor.ReceiveTimeout
   }
 }
 
+/** INTERNAL API */
 @InternalApi private[akka] class TagWriter(
     settings: TagWriterSettings,
     session: TagWritersSession,

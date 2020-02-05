@@ -35,8 +35,14 @@ import com.datastax.oss.driver.api.core.cql._
 import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
 import akka.Done
+import akka.annotation.InternalApi
 
-class CassandraSnapshotStore(cfg: Config, cfgPath: String) extends SnapshotStore with ActorLogging {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class CassandraSnapshotStore(cfg: Config, cfgPath: String)
+    extends SnapshotStore
+    with ActorLogging {
 
   import CassandraSnapshotStore._
   implicit val ec: ExecutionContext = context.dispatcher
@@ -323,7 +329,10 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String) extends SnapshotStore
 
 }
 
-private[snapshot] object CassandraSnapshotStore {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object CassandraSnapshotStore {
   private case object Init
 
   private case class Serialized(serialized: ByteBuffer, serManifest: String, serId: Int, meta: Option[SerializedMeta])
