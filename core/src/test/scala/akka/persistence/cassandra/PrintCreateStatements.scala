@@ -18,7 +18,7 @@ object PrintCreateStatements {
 
   def main(args: Array[String]): Unit = {
     val system = ActorSystem("PrintCreateStatements")
-    val statements = new KeyspaceAndTableStatements(system, "akka.persistence.cassandra")
+    val statements = new KeyspaceAndTableStatements(system, "akka.persistence.cassandra", PluginSettings(system))
 
     def withWriter(name: String)(f: PrintWriter => Unit): Unit = {
       val writer: PrintWriter = new PrintWriter(new File(name))

@@ -18,12 +18,12 @@ import akka.cassandra.session._
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.journal.TagWriters._
-import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
 import akka.persistence.query.PersistenceQuery
+import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, TagWritersSession }
+import akka.persistence.cassandra.journal.TagWriter.{ TagProgress }
 import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
 import akka.stream.ActorMaterializer
@@ -650,6 +650,7 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
     log.debug("[{}] asyncReplayMessages from [{}] to [{}]", persistenceId, fromSequenceNr, toSequenceNr)
 
     if (eventsByTagSettings.eventsByTagEnabled) {
+
       val recoveryPrep: Future[Map[String, TagProgress]] = {
         val scanningSeqNrFut = tagRecovery.tagScanningStartingSequenceNr(persistenceId)
         for {
