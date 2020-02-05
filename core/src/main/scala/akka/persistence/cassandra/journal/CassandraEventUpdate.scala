@@ -14,19 +14,19 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import java.lang.{ Long => JLong }
 
-private[akka] trait CassandraEventUpdate extends CassandraJournalStatements {
+private[akka] trait CassandraEventUpdate {
 
   private[akka] val session: CassandraSession
   private[akka] def settings: PluginSettings
   private[akka] implicit val ec: ExecutionContext
   private[akka] val log: LoggingAdapter
 
-  def psUpdateMessage: Future[PreparedStatement] = session.prepare(updateMessagePayloadAndTags)
-  def psSelectTagPidSequenceNr: Future[PreparedStatement] = session.prepare(selectTagPidSequenceNr)
-  def psUpdateTagView: Future[PreparedStatement] = session.prepare(updateMessagePayloadInTagView)
-  def psSelectMessages: Future[PreparedStatement] = session.prepare(selectMessages)
-
   private def journalSettings = settings.journalSettings
+  private lazy val journalStatements = new CassandraJournalStatements(settings)
+  def psUpdateMessage: Future[PreparedStatement] = session.prepare(journalStatements.updateMessagePayloadAndTags)
+  def psSelectTagPidSequenceNr: Future[PreparedStatement] = session.prepare(journalStatements.selectTagPidSequenceNr)
+  def psUpdateTagView: Future[PreparedStatement] = session.prepare(journalStatements.updateMessagePayloadInTagView)
+  def psSelectMessages: Future[PreparedStatement] = session.prepare(journalStatements.selectMessages)
 
   /**
    * Update the given event in the messages table and the tag_views table.

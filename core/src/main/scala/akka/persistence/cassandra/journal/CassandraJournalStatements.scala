@@ -17,10 +17,9 @@ import com.datastax.oss.driver.api.core.CqlSession
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] trait CassandraJournalStatements {
-  private[akka] def settings: PluginSettings
-  private def journalSettings = settings.journalSettings
-  private def eventsByTagSettings = settings.eventsByTagSettings
+@InternalApi private[akka] class CassandraJournalStatements(settings: PluginSettings) {
+  private val journalSettings = settings.journalSettings
+  private val eventsByTagSettings = settings.eventsByTagSettings
 
   private[akka] def createKeyspace =
     s"""

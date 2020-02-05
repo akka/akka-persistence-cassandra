@@ -34,28 +34,26 @@ import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql._
 import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
+import akka.Done
 
-class CassandraSnapshotStore(cfg: Config, cfgPath: String)
-    extends SnapshotStore
-    with CassandraStatements
-    with ActorLogging
-    with CassandraSnapshotCleanup {
+class CassandraSnapshotStore(cfg: Config, cfgPath: String) extends SnapshotStore with ActorLogging {
 
   import CassandraSnapshotStore._
+  implicit val ec: ExecutionContext = context.dispatcher
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
   private val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
-  override val settings = PluginSettings(context.system, sharedConfig)
-  override def snapshotSettings = settings.snapshotSettings
-  val serialization = SerializationExtension(context.system)
-  val snapshotDeserializer = new SnapshotDeserializer(context.system)
-  implicit val ec: ExecutionContext = context.dispatcher
+  private val settings = new PluginSettings(context.system, sharedConfig)
+  private val snapshotSettings = settings.snapshotSettings
+  private val serialization = SerializationExtension(context.system)
+  private val snapshotDeserializer = new SnapshotDeserializer(context.system)
+  private val statements = new CassandraStatements(settings)
+  import statements.snapshotStatements._
 
   private val someMaxLoadAttempts = Some(snapshotSettings.maxLoadAttempts)
-
-  val session: CassandraSession = CassandraSessionRegistry(context.system)
-    .sessionFor(sharedConfigPath, context.dispatcher, ses => executeAllCreateKeyspaceAndTables(ses))
+  private val session: CassandraSession = CassandraSessionRegistry(context.system)
+    .sessionFor(sharedConfigPath, context.dispatcher, ses => statements.executeAllCreateKeyspaceAndTables(ses))
 
   private def preparedWriteSnapshot =
     session.prepare(writeSnapshot(withMeta = false))
@@ -302,6 +300,25 @@ class CassandraSnapshotStore(cfg: Config, cfgPath: String)
       case Some(n) => source.take(n.toLong).runWith(Sink.seq)
       case None    => source.runWith(Sink.seq)
     }
+  }
+
+  def preparedDeleteSnapshot: Future[PreparedStatement] =
+    session.prepare(deleteSnapshot)
+
+  def preparedDeleteAllSnapshotsForPid: Future[PreparedStatement] =
+    session.prepare(deleteAllSnapshotForPersistenceId)
+
+  def preparedDeleteAllSnapshotsForPidAndSequenceNrBetween: Future[PreparedStatement] =
+    session.prepare(deleteAllSnapshotForPersistenceIdAndSequenceNrBetween)
+
+  def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
+    val boundDeleteSnapshot = preparedDeleteSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
+    boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
+  }
+
+  def deleteAllForPersistenceId(pid: String): Future[Done] = {
+    val bound = preparedDeleteAllSnapshotsForPid.map(_.bind(pid))
+    bound.flatMap(session.executeWrite(_)).map(_ => Done)
   }
 
 }

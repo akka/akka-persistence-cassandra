@@ -31,8 +31,8 @@ object Dependencies {
       // Specifying guava dependency because older transitive dependency has security vulnerability
       "com.google.guava" % "guava" % "27.0.1-jre",
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
+      "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
       "org.scalatest" %% "scalatest" % "3.0.8" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,

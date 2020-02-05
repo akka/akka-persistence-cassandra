@@ -23,12 +23,12 @@ import akka.{ Done, NotUsed }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import scala.concurrent.duration._
-import scala.util.Try
 
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.serialization.Serializers
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.datastax.oss.driver.api.core.uuid.Uuids
+import scala.util.control.NonFatal
 
 /**
  */
@@ -39,6 +39,7 @@ object EventsByTagMigrationSpec {
        // disable normal failure logging as tall these tests are related 
        // so if one fails need the logs for all
        akka.loggers = []
+       akka.loglevel = DEBUG
        akka {
          actor.serialize-messages=off
          actor.debug.unhandled = on
@@ -157,7 +158,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     }
 
     "allow adding of the new tags column" in {
-      migrator.addTagsColumn()
+      migrator.addTagsColumn().futureValue shouldEqual Done
     }
 
     "work with the current implementation" in {
@@ -253,7 +254,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       // the tags column existing
       val pidOnePA = systemTwo.actorOf(TestTaggingActor.props(pidOne, Set("blue", "yellow")))
       pidOnePA ! "new-event-1"
-      expectMsg(Ack)
+      expectMsg(1.second, Ack)
       pidOnePA ! "new-event-2"
       expectMsg(Ack)
 
@@ -353,10 +354,8 @@ abstract class AbstractEventsByTagMigrationSpec
        |CREATE KEYSPACE IF NOT EXISTS $journalName WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1 }
      """.stripMargin
 
-  val statements = new CassandraJournalStatements {
-    override def settings: PluginSettings =
-      PluginSettings(system)
-  }
+  val settings = new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
+  val statements = new CassandraJournalStatements(settings)
 
   implicit val materialiser = ActorMaterializer()(system)
   val waitTime = 100.millis
@@ -392,9 +391,13 @@ abstract class AbstractEventsByTagMigrationSpec
   private lazy val serialization = SerializationExtension(system)
 
   override protected def afterAll(): Unit = {
-    Try {
+    try {
       externalCassandraCleanup()
       cluster.close()
+    } catch {
+      case NonFatal(e) =>
+        println("Failed to cleanup cassandra")
+        e.printStackTrace()
     }
     super.afterAll()
     shutdown(systemTwo)

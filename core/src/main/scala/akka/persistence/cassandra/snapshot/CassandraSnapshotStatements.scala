@@ -13,8 +13,7 @@ import akka.cassandra.session.FutureDone
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
 
-trait CassandraSnapshotStatements {
-  def snapshotSettings: SnapshotSettings
+class CassandraSnapshotStatements(snapshotSettings: SnapshotSettings) {
 
   def createKeyspace =
     s"""

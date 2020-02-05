@@ -153,9 +153,7 @@ abstract class AbstractEventsByTagSpec(config: Config)
   val settings = PluginSettings(system)
 
   lazy val preparedWriteMessage = {
-    val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {
-      def settings: PluginSettings = AbstractEventsByTagSpec.this.settings
-    }
+    val writeStatements: CassandraJournalStatements = new CassandraJournalStatements(settings)
     cluster.prepare(writeStatements.writeMessage(withMeta = false))
   }
 

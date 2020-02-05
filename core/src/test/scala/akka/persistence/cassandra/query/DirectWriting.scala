@@ -28,9 +28,7 @@ trait DirectWriting extends BeforeAndAfterAll {
 
   def cluster: CqlSession
 
-  private lazy val writeStatements: CassandraJournalStatements = new CassandraJournalStatements {
-    def settings: PluginSettings = DirectWriting.this.settings
-  }
+  private lazy val writeStatements: CassandraJournalStatements = new CassandraJournalStatements(settings)
 
   private lazy val preparedWriteMessage = cluster.prepare(writeStatements.writeMessage(withMeta = false))
 

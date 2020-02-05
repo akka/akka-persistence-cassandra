@@ -10,32 +10,27 @@ import java.util.{ UUID, HashMap => JHMap, Map => JMap }
 
 import akka.Done
 import akka.actor.SupervisorStrategy.Stop
-import akka.actor.ActorRef
-import akka.actor.ActorSystem
-import akka.actor.CoordinatedShutdown
-import akka.actor.ExtendedActorSystem
-import akka.actor.NoSerializationVerificationNeeded
-import akka.actor.OneForOneStrategy
-import akka.actor.SupervisorStrategy
+import akka.actor._
 import akka.annotation.{ DoNotInherit, InternalApi }
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.{ Logging, LoggingAdapter }
+import akka.cassandra.session._
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, TagWritersSession }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
 import akka.persistence.query.PersistenceQuery
+import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, TagWritersSession }
+import akka.persistence.cassandra.journal.TagWriter.{ TagProgress }
+import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
-import com.datastax.oss.driver.api.core.ConsistencyLevel
-import com.datastax.oss.driver.api.core.retry.RetryPolicy
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
 import scala.annotation.tailrec
@@ -46,43 +41,30 @@ import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
-
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
+import akka.stream.scaladsl.Source
 
 /**
  * Journal implementation of the cassandra plugin.
  * Inheritance is possible but without any guarantees for future source compatibility.
  */
 @DoNotInherit
-class CassandraJournal(cfg: Config, cfgPath: String)
-    extends AsyncWriteJournal
-    with CassandraRecovery
-    with CassandraStatements
-    with NoSerializationVerificationNeeded {
+class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal with NoSerializationVerificationNeeded {
+  import CassandraJournal._
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
   private val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
-  override val settings = PluginSettings(context.system, sharedConfig)
-
-  val serialization = SerializationExtension(context.system)
-  val log: LoggingAdapter = Logging(context.system, getClass)
-
-  // For TagWriters/TagWriter children
-  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
-    case e: Exception =>
-      log.error(e, "Cassandra Journal has experienced an unexpected error and requires an ActorSystem restart.")
-      if (settings.journalSettings.coordinatedShutdownOnError) {
-        CoordinatedShutdown(context.system).run(CassandraJournalUnexpectedError)
-      }
-      context.stop(context.self)
-      Stop
-  }
-
-  import CassandraJournal._
+  private val settings = new PluginSettings(context.system, sharedConfig)
   import settings._
+  private val eventDeserializer: CassandraJournal.EventDeserializer =
+    new CassandraJournal.EventDeserializer(context.system)
 
-  implicit override val ec: ExecutionContext = context.dispatcher
+  private val statements: CassandraStatements = new CassandraStatements(settings)
+  private val serialization = SerializationExtension(context.system)
+  private val log: LoggingAdapter = Logging(context.system, getClass)
+
+  private implicit val ec: ExecutionContext = context.dispatcher
+  private implicit val materializer: ActorMaterializer = ActorMaterializer()(context.system)
 
   // readHighestSequence must be performed after pending write for a persistenceId
   // when the persistent actor is restarted.
@@ -95,66 +77,72 @@ class CassandraJournal(cfg: Config, cfgPath: String)
   // so fine to use an immutable list as the value
   private val pendingDeletes: JMap[String, List[PendingDelete]] = new JHMap
 
-  val session: CassandraSession = CassandraSessionRegistry(context.system)
-    .sessionFor(sharedConfigPath, context.dispatcher, ses => executeAllCreateKeyspaceAndTables(ses))
+  private val session: CassandraSession = CassandraSessionRegistry(context.system)
+    .sessionFor(sharedConfigPath, context.dispatcher, ses => statements.executeAllCreateKeyspaceAndTables(ses))
 
+  private val taggedPreparedStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
+  private val tagRecovery = new CassandraTagRecovery(context.system, session, settings, taggedPreparedStatements)
   private val tagWriterSession = TagWritersSession(
     session,
-    journalSettings.writeProfile,
-    journalSettings.readProfile,
-    () => preparedWriteToTagViewWithoutMeta,
-    () => preparedWriteToTagViewWithMeta,
-    () => preparedWriteToTagProgress,
-    () => preparedWriteTagScanning)
-
-  protected val tagWrites: Option[ActorRef] =
-    if (eventsByTagSettings.eventsByTagEnabled)
+    settings.journalSettings.writeProfile,
+    settings.journalSettings.readProfile,
+    taggedPreparedStatements)
+  private val tagWrites: Option[ActorRef] =
+    if (settings.eventsByTagSettings.eventsByTagEnabled)
       Some(
         context.actorOf(
           TagWriters
-            .props(eventsByTagSettings.tagWriterSettings, tagWriterSession)
+            .props(settings.eventsByTagSettings.tagWriterSettings, tagWriterSession)
             .withDispatcher(context.props.dispatcher),
           "tagWrites"))
     else None
 
-  def preparedWriteMessage =
-    session.prepare(writeMessage(withMeta = false))
-  def preparedSelectDeletedTo: Option[Future[PreparedStatement]] = {
-    if (journalSettings.supportDeletes)
-      Some(session.prepare(selectDeletedTo))
+  private def preparedWriteMessage =
+    session.prepare(statements.journalStatements.writeMessage(withMeta = false))
+  private def preparedSelectDeletedTo: Option[Future[PreparedStatement]] = {
+    if (settings.journalSettings.supportDeletes)
+      Some(session.prepare(statements.journalStatements.selectDeletedTo))
     else
       None
   }
-  def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
-    session.prepare(selectHighestSequenceNr)
+  private def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
+    session.prepare(statements.journalStatements.selectHighestSequenceNr)
 
   private def deletesNotSupportedException: Future[PreparedStatement] =
     Future.failed(new IllegalArgumentException(s"Deletes not supported because config support-deletes=off"))
 
-  def preparedInsertDeletedTo: Future[PreparedStatement] = {
-    if (journalSettings.supportDeletes)
-      session.prepare(insertDeletedTo)
+  private def preparedInsertDeletedTo: Future[PreparedStatement] = {
+    if (settings.journalSettings.supportDeletes)
+      session.prepare(statements.journalStatements.insertDeletedTo)
     else
       deletesNotSupportedException
   }
-  def preparedDeleteMessages: Future[PreparedStatement] = {
-    if (journalSettings.supportDeletes)
-      session.prepare(deleteMessages)
+  private def preparedDeleteMessages: Future[PreparedStatement] = {
+    if (settings.journalSettings.supportDeletes)
+      session.prepare(statements.journalStatements.deleteMessages)
     else
       deletesNotSupportedException
   }
 
-  def preparedWriteMessageWithMeta =
-    session.prepare(writeMessage(withMeta = true))
-  def preparedSelectMessages =
-    session.prepare(selectMessages)
+  private def preparedWriteMessageWithMeta =
+    session.prepare(statements.journalStatements.writeMessage(withMeta = true))
+  private def preparedSelectMessages =
+    session.prepare(statements.journalStatements.selectMessages)
 
-  implicit val materializer: ActorMaterializer =
-    ActorMaterializer()(context.system)
-
-  private[akka] lazy val queries =
+  private lazy val queries: CassandraReadJournal =
     PersistenceQuery(context.system.asInstanceOf[ExtendedActorSystem])
       .readJournalFor[CassandraReadJournal](s"$sharedConfigPath.query")
+
+  // For TagWriters/TagWriter children
+  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
+    case e: Exception =>
+      log.error(e, "Cassandra Journal has experienced an unexpected error and requires an ActorSystem restart.")
+      if (settings.journalSettings.coordinatedShutdownOnError) {
+        CoordinatedShutdown(context.system).run(CassandraJournalUnexpectedError)
+      }
+      context.stop(context.self)
+      Stop
+  }
 
   override def preStart(): Unit = {
     // eager initialization, but not from constructor
@@ -193,20 +181,15 @@ class CassandraJournal(cfg: Config, cfgPath: String)
       preparedWriteMessageWithMeta
       preparedSelectMessages
       preparedSelectHighestSequenceNr
-      if (journalSettings.supportDeletes) {
+      if (settings.journalSettings.supportDeletes) {
         preparedDeleteMessages
         preparedSelectDeletedTo
         preparedInsertDeletedTo
       }
       queries.initialize()
 
-      if (eventsByTagSettings.eventsByTagEnabled) {
-        preparedSelectTagProgress
-        preparedSelectTagProgressForPersistenceId
-        preparedWriteToTagProgress
-        preparedWriteToTagViewWithoutMeta
-        preparedWriteToTagViewWithMeta
-        preparedWriteTagScanning
+      if (settings.eventsByTagSettings.eventsByTagEnabled) {
+        taggedPreparedStatements.init()
       }
   }
 
@@ -230,7 +213,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
               case _ =>
                 (pr, Set.empty[String])
             }
-            serializeEvent(pr2, tags, uuid, eventsByTagSettings.bucketSize, serialization, context.system)
+            serializeEvent(pr2, tags, uuid, settings.eventsByTagSettings.bucketSize, serialization, context.system)
         })
 
       serializedEventsFut.map { serializedEvents =>
@@ -293,7 +276,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     case x :: xs => groupedWrites(xs, List(x), currentGroup +: grouped)
   }
 
-  def sendWriteFinished(pid: String, writeInProgressForPid: Promise[Done]): Unit = {
+  private def sendWriteFinished(pid: String, writeInProgressForPid: Promise[Done]): Unit = {
     self ! WriteFinished(pid, writeInProgressForPid.future)
     writeInProgressForPid.success(Done)
   }
@@ -410,7 +393,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         f.flatMap(_ => asyncReadHighestSequenceNrInternal(persistenceId, fromSequenceNr))
     }
 
-    val toReturn = if (eventsByTagSettings.eventsByTagEnabled) {
+    val toReturn = if (settings.eventsByTagSettings.eventsByTagEnabled) {
 
       // This relies on asyncReadHighestSequenceNr having the correct sender()
       // No other calls into the async journal have this as they are called from Future callbacks
@@ -418,19 +401,19 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
       for {
         seqNr <- highestSequenceNr
-        _ <- sendPersistentActorStarting(persistenceId, persistentActor, tagWrites.get)
+        _ <- tagRecovery.sendPersistentActorStarting(persistenceId, persistentActor, tagWrites.get)
         _ <- if (seqNr == fromSequenceNr && seqNr != 0) {
           log.debug("[{}] snapshot is current so replay won't be required. Calculating tag progress now", persistenceId)
-          val scanningSeqNrFut = tagScanningStartingSequenceNr(persistenceId)
+          val scanningSeqNrFut = tagRecovery.tagScanningStartingSequenceNr(persistenceId)
           for {
-            tp <- lookupTagProgress(persistenceId)
-            _ <- setTagProgress(persistenceId, tp, tagWrites.get)
+            tp <- tagRecovery.lookupTagProgress(persistenceId)
+            _ <- tagRecovery.setTagProgress(persistenceId, tp, tagWrites.get)
             scanningSeqNr <- scanningSeqNrFut
             _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
           } yield seqNr
         } else if (seqNr == 0) {
           log.debug("[{}] New pid. Sending blank tag progress. [{}]", persistenceId, persistentActor)
-          setTagProgress(persistenceId, Map.empty, tagWrites.get)
+          tagRecovery.setTagProgress(persistenceId, Map.empty, tagWrites.get)
         } else {
           Future.successful(())
         }
@@ -444,6 +427,15 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     }
 
     toReturn
+  }
+
+  private def asyncReadHighestSequenceNrInternal(persistenceId: String, fromSequenceNr: Long): Future[Long] = {
+    asyncHighestDeletedSequenceNumber(persistenceId).flatMap { h =>
+      asyncFindHighestSequenceNr(
+        persistenceId,
+        math.max(fromSequenceNr, h),
+        settings.journalSettings.targetPartitionSize)
+    }
   }
 
   /**
@@ -462,14 +454,13 @@ class CassandraJournal(cfg: Config, cfgPath: String)
         delete(persistenceId, toSequenceNr)
         p.future
       case otherDeletes =>
-        if (otherDeletes.length > journalSettings.maxConcurrentDeletes) {
+        if (otherDeletes.length > settings.journalSettings.maxConcurrentDeletes) {
           log.error(
             "[}}] Over [{}] outstanding deletes. Failing delete",
             persistenceId,
-            journalSettings.maxConcurrentDeletes)
-          Future.failed(
-            new RuntimeException(
-              s"Over ${journalSettings.maxConcurrentDeletes} outstanding deletes for persistenceId $persistenceId"))
+            settings.journalSettings.maxConcurrentDeletes)
+          Future.failed(new RuntimeException(
+            s"Over ${settings.journalSettings.maxConcurrentDeletes} outstanding deletes for persistenceId $persistenceId"))
         } else {
           log.debug(
             "[{}] outstanding delete. Delete to seqNr [{}] will be scheduled after previous one finished.",
@@ -593,7 +584,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
             .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
   }
 
-  private[akka] def asyncHighestDeletedSequenceNumber(persistenceId: String): Future[Long] = {
+  private def asyncHighestDeletedSequenceNumber(persistenceId: String): Future[Long] = {
     preparedSelectDeletedTo match {
       case Some(pstmt) =>
         val boundSelectDeletedTo = pstmt.map(_.bind(persistenceId))
@@ -603,31 +594,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     }
   }
 
-  private[akka] def asyncReadLowestSequenceNr(
-      persistenceId: String,
-      fromSequenceNr: Long,
-      highestDeletedSequenceNumber: Long,
-      readConsistency: Option[ConsistencyLevel],
-      retryPolicy: Option[RetryPolicy]): Future[Long] = {
-    queries
-      .eventsByPersistenceId(
-        persistenceId,
-        fromSequenceNr,
-        highestDeletedSequenceNumber,
-        1,
-        None,
-        settings.journalSettings.readProfile,
-        "asyncReadLowestSequenceNr",
-        extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
-      .map(_.sequenceNr)
-      .runWith(Sink.headOption)
-      .map {
-        case Some(sequenceNr) => sequenceNr
-        case None             => fromSequenceNr
-      }
-  }
-
-  private[akka] def asyncFindHighestSequenceNr(
+  private def asyncFindHighestSequenceNr(
       persistenceId: String,
       fromSequenceNr: Long,
       partitionSize: Long): Future[Long] = {
@@ -665,7 +632,7 @@ class CassandraJournal(cfg: Config, cfgPath: String)
     session.underlying().flatMap(_.executeAsync(batch).toScala).map(_ => ())
   }
 
-  def selectOne[T <: Statement[T]](stmt: Statement[T]): Future[Option[Row]] = {
+  private def selectOne[T <: Statement[T]](stmt: Statement[T]): Future[Option[Row]] = {
     session.selectOne(stmt.setExecutionProfileName(journalSettings.readProfile))
   }
 
@@ -674,6 +641,106 @@ class CassandraJournal(cfg: Config, cfgPath: String)
 
   private def execute[T <: Statement[T]](stmt: Statement[T]): Future[Unit] = {
     session.executeWrite(stmt.setExecutionProfileName(journalSettings.writeProfile)).map(_ => ())
+  }
+
+  // TODO this serialises and re-serialises the messages for fixing tag_views
+  // Could have an events by persistenceId stage that has the raw payload
+  override def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)(
+      replayCallback: PersistentRepr => Unit): Future[Unit] = {
+    log.debug("[{}] asyncReplayMessages from [{}] to [{}]", persistenceId, fromSequenceNr, toSequenceNr)
+
+    if (eventsByTagSettings.eventsByTagEnabled) {
+
+      val recoveryPrep: Future[Map[String, TagProgress]] = {
+        val scanningSeqNrFut = tagRecovery.tagScanningStartingSequenceNr(persistenceId)
+        for {
+          tp <- tagRecovery.lookupTagProgress(persistenceId)
+          _ <- tagRecovery.setTagProgress(persistenceId, tp, tagWrites.get)
+          scanningSeqNr <- scanningSeqNrFut
+          _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, max, tp)
+        } yield tp
+      }
+
+      Source
+        .fromFutureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
+          log.debug(
+            "[{}] starting recovery with tag progress: [{}]. From [{}] to [{}]",
+            persistenceId,
+            tp,
+            fromSequenceNr,
+            toSequenceNr)
+          queries
+            .eventsByPersistenceId(
+              persistenceId,
+              fromSequenceNr,
+              toSequenceNr,
+              max,
+              None,
+              settings.journalSettings.readProfile,
+              "asyncReplayMessages",
+              extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
+            .mapAsync(1)(tagRecovery.sendMissingTagWrite(tp, tagWrites.get))
+        }))
+        .map(te => queries.mapEvent(te.pr))
+        .runForeach(replayCallback)
+        .map(_ => ())
+
+    } else {
+      queries
+        .eventsByPersistenceId(
+          persistenceId,
+          fromSequenceNr,
+          toSequenceNr,
+          max,
+          None,
+          settings.journalSettings.readProfile,
+          "asyncReplayMessages",
+          extractor = Extractors.persistentRepr(eventDeserializer, serialization))
+        .map(p => queries.mapEvent(p.persistentRepr))
+        .runForeach(replayCallback)
+        .map(_ => ())
+    }
+  }
+
+  private def sendPreSnapshotTagWrites(
+      minProgressNr: Long,
+      fromSequenceNr: Long,
+      pid: String,
+      max: Long,
+      tp: Map[Tag, TagProgress]): Future[Done] = {
+    if (minProgressNr < fromSequenceNr) {
+      val scanTo = fromSequenceNr - 1
+      log.debug(
+        "[{}], Scanning events before snapshot to recover tag_views: From: [{}] to: [{}]",
+        pid,
+        minProgressNr,
+        scanTo)
+      queries
+        .eventsByPersistenceId(
+          pid,
+          minProgressNr,
+          scanTo,
+          max,
+          None,
+          settings.journalSettings.readProfile,
+          "asyncReplayMessagesPreSnapshot",
+          Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization))
+        .mapAsync(1) { t =>
+          t.tagged match {
+            case OptionVal.Some(tpr) =>
+              tagRecovery.sendMissingTagWrite(tp, tagWrites.get)(tpr)
+            case OptionVal.None => FutureDone // no tags, skip
+          }
+        }
+        .runWith(Sink.ignore)
+    } else {
+      log.debug(
+        "[{}] Recovery is starting before the latest tag writes tag progress. Min progress [{}]. From sequence nr of recovery: [{}]",
+        pid,
+        minProgressNr,
+        fromSequenceNr)
+      FutureDone
+    }
   }
 
 }

@@ -34,9 +34,7 @@ class CassandraSnapshotStoreSpec
   val snapshotSettings =
     new SnapshotSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
 
-  val storeStatements = new CassandraSnapshotStatements {
-    def snapshotSettings = CassandraSnapshotStoreSpec.this.snapshotSettings
-  }
+  val storeStatements = new CassandraSnapshotStatements(snapshotSettings)
 
   import storeStatements._
 

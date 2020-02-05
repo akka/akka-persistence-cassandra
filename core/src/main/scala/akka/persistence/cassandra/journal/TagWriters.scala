@@ -31,13 +31,7 @@ import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
 import akka.util.ByteString
 import akka.util.Timeout
-import com.datastax.oss.driver.api.core.cql.{
-  BatchStatementBuilder,
-  BatchType,
-  BoundStatement,
-  PreparedStatement,
-  Statement
-}
+import com.datastax.oss.driver.api.core.cql.{ BatchStatementBuilder, BatchType, BoundStatement, Statement }
 
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
@@ -51,10 +45,9 @@ import scala.util.Try
       session: CassandraSession,
       writeProfile: String,
       readProfile: String,
-      tagWritePs: () => Future[PreparedStatement],
-      tagWriteWithMetaPs: () => Future[PreparedStatement],
-      tagProgressPs: () => Future[PreparedStatement],
-      tagScanningPs: () => Future[PreparedStatement]) {
+      taggedPreparedStatements: TaggedPreparedStatements) {
+
+    import taggedPreparedStatements._
 
     def executeWrite[T <: Statement[T]](stmt: Statement[T]): Future[Done] = {
       session.executeWrite(stmt.setExecutionProfileName(writeProfile))
@@ -64,8 +57,8 @@ import scala.util.Try
       val batch = new BatchStatementBuilder(BatchType.UNLOGGED)
       batch.setExecutionProfileName(writeProfile)
       val tagWritePSs = for {
-        withMeta <- tagWriteWithMetaPs()
-        withoutMeta <- tagWritePs()
+        withMeta <- taggedPreparedStatements.WriteTagViewWithMeta
+        withoutMeta <- taggedPreparedStatements.WriteTagViewWithoutMeta
       } yield (withMeta, withoutMeta)
 
       tagWritePSs
@@ -107,7 +100,7 @@ import scala.util.Try
 
     def writeProgress(tag: Tag, persistenceId: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)(
         implicit ec: ExecutionContext): Future[Done] = {
-      tagProgressPs()
+      WriteTagProgress
         .map(
           ps =>
             ps.bind(persistenceId, tag, seqNr: JLong, tagPidSequenceNr: JLong, offset)
@@ -375,7 +368,7 @@ import scala.util.Try
             updates.take(maxPrint).mkString(",") + s" ...and ${updates.size - 20} more")
       }
 
-      tagWriterSession.tagScanningPs().foreach { ps =>
+      tagWriterSession.taggedPreparedStatements.WriteTagScanning.foreach { ps =>
         val startTime = System.nanoTime()
 
         def writeTagScanningBatch(group: Seq[(String, Long)]): Future[Done] = {
