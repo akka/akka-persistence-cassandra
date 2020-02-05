@@ -23,12 +23,12 @@ import akka.{ Done, NotUsed }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import scala.concurrent.duration._
-import scala.util.Try
 
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.serialization.Serializers
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.datastax.oss.driver.api.core.uuid.Uuids
+import scala.util.control.NonFatal
 
 /**
  */
@@ -354,7 +354,7 @@ abstract class AbstractEventsByTagMigrationSpec
        |CREATE KEYSPACE IF NOT EXISTS $journalName WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1 }
      """.stripMargin
 
-  val settings = new PluginSettings(system, system.settings.config.getConfig("cassandra-plugin"))
+  val settings = new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
   val statements = new CassandraJournalStatements(settings)
 
   implicit val materialiser = ActorMaterializer()(system)
@@ -391,9 +391,13 @@ abstract class AbstractEventsByTagMigrationSpec
   private lazy val serialization = SerializationExtension(system)
 
   override protected def afterAll(): Unit = {
-    Try {
-      //externalCassandraCleanup()
+    try {
+      externalCassandraCleanup()
       cluster.close()
+    } catch {
+      case NonFatal(e) =>
+        println("Failed to cleanup cassandra")
+        e.printStackTrace()
     }
     super.afterAll()
     shutdown(systemTwo)
