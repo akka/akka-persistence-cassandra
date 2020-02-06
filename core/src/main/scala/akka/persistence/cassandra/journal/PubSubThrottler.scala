@@ -22,7 +22,7 @@ import akka.annotation.InternalApi
   /** The messages we've seen more than once during this interval, and their sender(s). */
   val repeated = collection.mutable.Map.empty[Any, Set[ActorRef]].withDefaultValue(Set.empty)
 
-  val timer = context.system.scheduler.schedule(interval, interval, self, Tick)
+  val timer = context.system.scheduler.scheduleWithFixedDelay(interval, interval, self, Tick)
 
   def receive = {
     case Tick =>
