@@ -6,8 +6,7 @@ object Dependencies {
   val Scala213 = "2.13.1"
   val ScalaVersions = Seq(Scala212, Scala213)
 
-  val AkkaVersion = System.getProperty("override.akka.version", "2.5.23")
-  val Akka26Version = "2.6.1"
+  val AkkaVersion = System.getProperty("override.akka.version", "2.6.3")
   val CassandraVersionInDocs = "4.0"
   val DriverVersion = "4.3.0"
 
@@ -45,6 +44,4 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
     "ch.qos.logback" % "logback-classic" % "1.2.3" % Test)
-
-  val akka26TestDependencies = akkaTestDeps.map(_ % Akka26Version % Test)
 }

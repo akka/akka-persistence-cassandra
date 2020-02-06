@@ -166,28 +166,38 @@ import akka.persistence.cassandra.PluginSettings
       }
 
     private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization, async: Boolean)(
-        implicit ec: ExecutionContext): Future[PersistentRepr] =
-      row.getByteBuffer("message") match {
-        case null =>
-          ed.deserializeEvent(row, async).map { payload =>
-            PersistentRepr(
-              payload,
-              sequenceNr = row.getLong("sequence_nr"),
-              persistenceId = row.getString("persistence_id"),
-              manifest = row.getString("event_manifest"), // manifest for event adapters
-              deleted = false,
-              sender = null,
-              writerUuid = row.getString("writer_uuid"))
-          }
-        case b =>
-          // for backwards compatibility
-          Future.successful(persistentFromByteBuffer(s, b))
+        implicit ec: ExecutionContext): Future[PersistentRepr] = {
+
+      def deserializeEvent(): Future[PersistentRepr] = {
+        ed.deserializeEvent(row, async).map { payload =>
+          PersistentRepr(
+            payload,
+            sequenceNr = row.getLong("sequence_nr"),
+            persistenceId = row.getString("persistence_id"),
+            manifest = row.getString("event_manifest"), // manifest for event adapters
+            deleted = false,
+            sender = null,
+            writerUuid = row.getString("writer_uuid"))
+        }
       }
+
+      if (ed.columnDefinitionCache.hasMessageColumn(row)) {
+        row.getByteBuffer("message") match {
+          case null  => deserializeEvent()
+          case bytes =>
+            // For backwards compatibility, reading serialized PersistentRepr from "message" column.
+            // Used in v0.6 and earlier. In later versions the "event" column is used for the serialized event.
+            Future.successful(persistentFromByteBuffer(s, bytes))
+        }
+      } else {
+        deserializeEvent()
+      }
+    }
 
     private def extractTags(row: Row, ed: EventDeserializer): Set[String] = {
       // TODO can be removed in 1.0, this is only used during migration from the old version on initial recovery
       val oldTags: Set[String] =
-        if (ed.hasOldTagsColumns(row)) {
+        if (ed.columnDefinitionCache.hasOldTagsColumns(row)) {
           (1 to 3).foldLeft(Set.empty[String]) {
             case (acc, i) =>
               val tag = row.getString(s"tag$i")
@@ -197,7 +207,7 @@ import akka.persistence.cassandra.PluginSettings
         } else Set.empty
 
       val newTags: Set[String] =
-        if (ed.hasTagsColumn(row))
+        if (ed.columnDefinitionCache.hasTagsColumn(row))
           row.getSet("tags", classOf[String]).asScala.toSet
         else Set.empty
 

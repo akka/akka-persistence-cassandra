@@ -18,12 +18,13 @@ import akka.cassandra.session._
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.journal.TagWriters._
-import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
 import akka.persistence.query.PersistenceQuery
+import akka.cassandra.session.scaladsl.CassandraSessionRegistry
+import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, TagWritersSession }
+import akka.persistence.cassandra.journal.TagWriter.{ TagProgress }
 import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
 import akka.stream.ActorMaterializer
@@ -650,6 +651,7 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
     log.debug("[{}] asyncReplayMessages from [{}] to [{}]", persistenceId, fromSequenceNr, toSequenceNr)
 
     if (eventsByTagSettings.eventsByTagEnabled) {
+
       val recoveryPrep: Future[Map[String, TagProgress]] = {
         val scanningSeqNrFut = tagRecovery.tagScanningStartingSequenceNr(persistenceId)
         for {
@@ -785,38 +787,13 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
   class EventDeserializer(system: ActorSystem) {
 
     private val serialization = SerializationExtension(system)
-
-    // caching to avoid repeated check via ColumnDefinitions
-    private def hasColumn(column: String, row: Row, cached: Option[Boolean], updateCache: Boolean => Unit): Boolean = {
-      cached match {
-        case Some(b) => b
-        case None =>
-          val b = row.getColumnDefinitions.contains(column)
-          updateCache(b)
-          b
-      }
-    }
-
-    @volatile private var _hasMetaColumns: Option[Boolean] = None
-    private val updateMetaColumnsCache: Boolean => Unit = b => _hasMetaColumns = Some(b)
-    def hasMetaColumns(row: Row): Boolean =
-      hasColumn("meta", row, _hasMetaColumns, updateMetaColumnsCache)
-
-    @volatile private var _hasOldTagsColumns: Option[Boolean] = None
-    private val updateOldTagsColumnsCache: Boolean => Unit = b => _hasOldTagsColumns = Some(b)
-    def hasOldTagsColumns(row: Row): Boolean =
-      hasColumn("tag1", row, _hasOldTagsColumns, updateOldTagsColumnsCache)
-
-    @volatile private var _hasTagsColumn: Option[Boolean] = None
-    private val updateTagsColumnCache: Boolean => Unit = b => _hasTagsColumn = Some(b)
-    def hasTagsColumn(row: Row): Boolean =
-      hasColumn("tags", row, _hasTagsColumn, updateTagsColumnCache)
+    val columnDefinitionCache = new ColumnDefinitionCache
 
     def deserializeEvent(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[Any] =
       try {
 
         def meta: OptionVal[AnyRef] = {
-          if (hasMetaColumns(row)) {
+          if (columnDefinitionCache.hasMetaColumns(row)) {
             row.getByteBuffer("meta") match {
               case null =>
                 OptionVal.None // no meta data

@@ -1,3 +1,5 @@
+ThisBuild / resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/")
+
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
@@ -67,10 +69,6 @@ lazy val dseTest =
   (project in file("dse-test"))
     .dependsOn(core % "test->test")
     .settings(libraryDependencies ++= Dependencies.dseTestDependencies)
-
-lazy val akka26Tests = (project in file("akka-26-tests"))
-  .dependsOn(core % "test->test")
-  .settings(libraryDependencies ++= Dependencies.akka26TestDependencies)
 
 lazy val docs = project
   .enablePlugins(Common, AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)

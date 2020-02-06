@@ -42,7 +42,7 @@ object EventsByTagMigration {
       override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[RawEvent] = {
         // Get the tags from the old location i.e. tag1, tag2, tag3
         val tags: Set[String] =
-          if (ed.hasOldTagsColumns(row)) {
+          if (ed.columnDefinitionCache.hasOldTagsColumns(row)) {
             (1 to 3).foldLeft(Set.empty[String]) {
               case (acc, i) =>
                 val tag = row.getString(s"tag$i")
@@ -56,37 +56,44 @@ object EventsByTagMigration {
 
         val timeUuid = row.getUuid("timestamp")
         val sequenceNr = row.getLong("sequence_nr")
-        val meta = if (ed.hasMetaColumns(row)) {
+        val meta = if (ed.columnDefinitionCache.hasMetaColumns(row)) {
           val m = row.getByteBuffer("meta")
           Option(m).map(SerializedMeta(_, row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
         } else {
           None
         }
 
-        row.getByteBuffer("message") match {
-          case null =>
-            Future.successful(
-              RawEvent(
-                sequenceNr,
-                Serialized(
-                  row.getString("persistence_id"),
-                  row.getLong("sequence_nr"),
-                  row.getByteBuffer("event"),
-                  tags,
-                  row.getString("event_manifest"),
-                  row.getString("ser_manifest"),
-                  row.getInt("ser_id"),
-                  row.getString("writer_uuid"),
-                  meta,
-                  timeUuid,
-                  timeBucket = TimeBucket(timeUuid, bucketSize))))
-          case bytes =>
-            // This is an event from version 0.7 that used to serialise the PersistentRepr in the
-            // message column rather than the event column
-            val pr = serialization.deserialize(Bytes.getArray(bytes), classOf[PersistentRepr]).get
-            serializeEvent(pr, tags, timeUuid, bucketSize, serialization, system).map { serEvent =>
-              RawEvent(sequenceNr, serEvent)
-            }
+        def deserializeEvent(): Future[RawEvent] = {
+          Future.successful(
+            RawEvent(
+              sequenceNr,
+              Serialized(
+                row.getString("persistence_id"),
+                row.getLong("sequence_nr"),
+                row.getByteBuffer("event"),
+                tags,
+                row.getString("event_manifest"),
+                row.getString("ser_manifest"),
+                row.getInt("ser_id"),
+                row.getString("writer_uuid"),
+                meta,
+                timeUuid,
+                timeBucket = TimeBucket(timeUuid, bucketSize))))
+        }
+
+        if (eventDeserializer.columnDefinitionCache.hasMessageColumn(row)) {
+          row.getByteBuffer("message") match {
+            case null  => deserializeEvent()
+            case bytes =>
+              // This is an event from version 0.6 and earlier that used to serialise the PersistentRepr in the
+              // message column rather than the event column
+              val pr = serialization.deserialize(Bytes.getArray(bytes), classOf[PersistentRepr]).get
+              serializeEvent(pr, tags, timeUuid, bucketSize, serialization, system).map { serEvent =>
+                RawEvent(sequenceNr, serEvent)
+              }
+          }
+        } else {
+          deserializeEvent()
         }
       }
     }
