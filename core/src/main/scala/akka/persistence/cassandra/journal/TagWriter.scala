@@ -14,13 +14,13 @@ import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
-import akka.persistence.cassandra.query.UUIDComparator
+
 import scala.concurrent.duration.{ Duration, FiniteDuration }
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.concurrent.duration._
-
 import akka.actor.ReceiveTimeout
+import akka.util.UUIDComparator
 
 /*
  * Groups writes into un-logged batches for the same partition.
