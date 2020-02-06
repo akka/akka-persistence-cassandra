@@ -606,12 +606,17 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
 
   private[this] def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope(Offset.sequence(offset), persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
+      EventEnvelope(
+        Offset.sequence(offset),
+        persistentRepr.persistenceId,
+        persistentRepr.sequenceNr,
+        payload,
+        persistentRepr.timestamp)
     }
 
   private[this] def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
+      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload, persistentRepr.timestamp)
     }
 
   private[this] def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =
