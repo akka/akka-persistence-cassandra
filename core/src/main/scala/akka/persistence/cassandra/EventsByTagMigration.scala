@@ -20,7 +20,7 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query.PersistenceQuery
 import akka.serialization.SerializationExtension
-import akka.stream.{ ActorMaterializer, OverflowStrategy }
+import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
@@ -211,7 +211,7 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
 
         // would be nice to group these up into a TagWrites message but also
         // nice that this reuses the recovery code :-/
-        Source.fromFutureSource {
+        Source.futureSource {
           prereqs.map {
             case (tp, startingSeq) => {
               log.info(

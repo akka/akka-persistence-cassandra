@@ -416,7 +416,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
         Source.failed(e).mapMaterializedValue(_ => Future.failed(e))
       case None =>
         // completed later
-        Source.fromFutureSource(prepStmt.map(ps => source(getSession, ps)))
+        Source.futureSource(prepStmt.map(ps => source(getSession, ps)))
     }
 
   }

@@ -661,7 +661,7 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
       }
 
       Source
-        .fromFutureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
+        .futureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
           log.debug(
             "[{}] starting recovery with tag progress: [{}]. From [{}] to [{}]",
             persistenceId,
