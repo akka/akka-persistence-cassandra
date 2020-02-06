@@ -786,38 +786,13 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
   class EventDeserializer(system: ActorSystem) {
 
     private val serialization = SerializationExtension(system)
-
-    // caching to avoid repeated check via ColumnDefinitions
-    private def hasColumn(column: String, row: Row, cached: Option[Boolean], updateCache: Boolean => Unit): Boolean = {
-      cached match {
-        case Some(b) => b
-        case None =>
-          val b = row.getColumnDefinitions.contains(column)
-          updateCache(b)
-          b
-      }
-    }
-
-    @volatile private var _hasMetaColumns: Option[Boolean] = None
-    private val updateMetaColumnsCache: Boolean => Unit = b => _hasMetaColumns = Some(b)
-    def hasMetaColumns(row: Row): Boolean =
-      hasColumn("meta", row, _hasMetaColumns, updateMetaColumnsCache)
-
-    @volatile private var _hasOldTagsColumns: Option[Boolean] = None
-    private val updateOldTagsColumnsCache: Boolean => Unit = b => _hasOldTagsColumns = Some(b)
-    def hasOldTagsColumns(row: Row): Boolean =
-      hasColumn("tag1", row, _hasOldTagsColumns, updateOldTagsColumnsCache)
-
-    @volatile private var _hasTagsColumn: Option[Boolean] = None
-    private val updateTagsColumnCache: Boolean => Unit = b => _hasTagsColumn = Some(b)
-    def hasTagsColumn(row: Row): Boolean =
-      hasColumn("tags", row, _hasTagsColumn, updateTagsColumnCache)
+    val columnDefinitionCache = new ColumnDefinitionCache
 
     def deserializeEvent(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[Any] =
       try {
 
         def meta: OptionVal[AnyRef] = {
-          if (hasMetaColumns(row)) {
+          if (columnDefinitionCache.hasMetaColumns(row)) {
             row.getByteBuffer("meta") match {
               case null =>
                 OptionVal.None // no meta data
