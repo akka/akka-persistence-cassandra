@@ -14,15 +14,17 @@ import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
-import akka.persistence.cassandra.query.UUIDComparator
+
 import scala.concurrent.duration.{ Duration, FiniteDuration }
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.concurrent.duration._
-
 import akka.actor.ReceiveTimeout
+import akka.util.UUIDComparator
 
 /*
+ * INTERNAL API
+ *
  * Groups writes into un-logged batches for the same partition.
  *
  * For the read stage to work correctly events must be written in order for a given
@@ -92,6 +94,7 @@ import akka.actor.ReceiveTimeout
   }
 }
 
+/** INTERNAL API */
 @InternalApi private[akka] class TagWriter(
     settings: TagWriterSettings,
     session: TagWritersSession,

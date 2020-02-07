@@ -26,18 +26,22 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 
 package object cassandra {
   private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
-  def formatOffset(uuid: UUID): String = {
+
+  /** INTERNAL API */
+  @InternalApi private[akka] def formatOffset(uuid: UUID): String = {
     val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(Uuids.unixTimestamp(uuid)), ZoneOffset.UTC)
     s"$uuid (${timestampFormatter.format(time)})"
   }
 
-  def formatUnixTime(unixTime: Long): String = {
+  /** INTERNAL API */
+  @InternalApi private[akka] def formatUnixTime(unixTime: Long): String = {
     val time =
       LocalDateTime.ofInstant(Instant.ofEpochMilli(unixTime), ZoneOffset.UTC)
     timestampFormatter.format(time)
   }
 
-  def serializeEvent(
+  /** INTERNAL API */
+  @InternalApi private[akka] def serializeEvent(
       p: PersistentRepr,
       tags: Set[String],
       uuid: UUID,
@@ -111,16 +115,12 @@ package object cassandra {
       case NonFatal(e) => Future.failed(e)
     }
 
-  /**
-   * INTERNAL API
-   */
+  /** INTERNAL API */
   @InternalApi private[akka] def indent(stmt: String, prefix: String): String =
     stmt.split('\n').mkString("\n" + prefix)
 
-  /**
-   * INTERNAL API
-   */
-  @InternalApi private[cassandra] def getListFromConfig(config: Config, key: String): List[String] = {
+  /** INTERNAL API */
+  @InternalApi private[akka] def getListFromConfig(config: Config, key: String): List[String] = {
     config.getValue(key).valueType() match {
       case ConfigValueType.LIST => config.getStringList(key).asScala.toList
       // case ConfigValueType.OBJECT is needed to handle dot notation (x.0=y x.1=z) due to Typesafe Config implementation quirk.

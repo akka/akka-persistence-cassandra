@@ -181,6 +181,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       ps3 <- preparedSelectDeletedTo
     } yield CombinedEventsByPersistenceIdStmts(ps1, ps2, ps3)
 
+  /** INTERNAL API */
   @InternalApi private[akka] def combinedEventsByTagStmts: Future[EventByTagStatements] =
     for {
       byTagWithUpper <- preparedSelectFromTagViewWithUpperBound
@@ -268,7 +269,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       .mapMaterializedValue(_ => NotUsed)
       .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
 
-  private[akka] def eventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def eventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
     if (!eventsByTagSettings.eventsByTagEnabled)
       Source.failed(new IllegalStateException("Events by tag queries are disabled"))
     else {
@@ -435,7 +439,12 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
       .mapConcat(r => toEventEnvelope(r.persistentRepr, TimeBasedUUID(r.offset)))
       .named("eventsByTag-" + URLEncoder.encode(tag, ByteString.UTF_8))
 
-  private[akka] def currentEventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def currentEventsByTagInternal(
+      tag: String,
+      offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
     if (!eventsByTagSettings.eventsByTagEnabled)
       Source.failed(new IllegalStateException("Events by tag queries are disabled"))
     else {
@@ -604,17 +613,17 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   @InternalApi private[akka] def mapEvent(persistentRepr: PersistentRepr): PersistentRepr =
     persistentRepr
 
-  private[this] def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
+  private def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
       EventEnvelope(Offset.sequence(offset), persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
     }
 
-  private[this] def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
+  private def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
       EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
     }
 
-  private[this] def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =
+  private def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =
     offset match {
       case TimeBasedUUID(uuid) => (uuid, true)
       case NoOffset            => (firstOffset, false)
@@ -660,7 +669,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   override def currentPersistenceIds(): Source[String, NotUsed] =
     persistenceIds(None, "currentPersistenceIds")
 
-  private[this] def persistenceIds(refreshInterval: Option[FiniteDuration], name: String): Source[String, NotUsed] =
+  private def persistenceIds(refreshInterval: Option[FiniteDuration], name: String): Source[String, NotUsed] =
     createSource[String, PreparedStatement](
       preparedSelectDistinctPersistenceIds,
       (s, ps) =>

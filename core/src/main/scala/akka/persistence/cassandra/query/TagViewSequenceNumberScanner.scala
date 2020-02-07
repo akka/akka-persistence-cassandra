@@ -4,7 +4,7 @@
 
 package akka.persistence.cassandra.query
 
-import java.lang.{ Long => JLong }
+import java.lang.{Long => JLong}
 import java.util.UUID
 
 import akka.NotUsed
@@ -17,14 +17,16 @@ import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.query.TagViewSequenceNumberScanner.Session
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
-import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row }
+import com.datastax.oss.driver.api.core.cql.{PreparedStatement, Row}
 
-import scala.concurrent.duration.{ Deadline, FiniteDuration }
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.duration.{Deadline, FiniteDuration}
+import scala.concurrent.{ExecutionContext, Future}
 import akka.persistence.cassandra.BucketSize
 
-@InternalApi
-private[akka] object TagViewSequenceNumberScanner {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object TagViewSequenceNumberScanner {
 
   case class Session(session: CassandraSession, selectTagSequenceNumbers: PreparedStatement, profile: String) {
     private[akka] def selectTagSequenceNrs(
@@ -39,8 +41,10 @@ private[akka] object TagViewSequenceNumberScanner {
 
 }
 
-@InternalApi
-private[akka] class TagViewSequenceNumberScanner(session: Session)(
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class TagViewSequenceNumberScanner(session: Session)(
     implicit materializer: Materializer,
     ec: ExecutionContext) {
   private val log = Logging(materializer.system, getClass)

@@ -8,20 +8,26 @@ import java.time.format.DateTimeFormatter
 import java.time.{ LocalDateTime, ZoneId, ZoneOffset }
 import java.util.UUID
 
+import akka.annotation.InternalApi
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
 package object query {
 
-  val firstBucketFormat = "yyyyMMdd'T'HH:mm"
-  val firstBucketFormatter: DateTimeFormatter =
+  /** INTERNAL API */
+  @InternalApi private[akka] val firstBucketFormat = "yyyyMMdd'T'HH:mm"
+
+  /** INTERNAL API */
+  @InternalApi private[akka] val firstBucketFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern(firstBucketFormat).withZone(ZoneOffset.UTC)
 
-  def isExhausted(rs: AsyncResultSet): Boolean = {
+  /** INTERNAL API */
+  @InternalApi private[akka] def isExhausted(rs: AsyncResultSet): Boolean = {
     rs.remaining() == 0 && !rs.hasMorePages
   }
 
-  def uuid(timestamp: Long): UUID = {
+  /** INTERNAL API */
+  @InternalApi private[akka] def uuid(timestamp: Long): UUID = {
     def makeMsb(time: Long): Long = {
       // copied from Uuids.makeMsb
       // UUID v1 timestamp must be in 100-nanoseconds interval since 00:00:00.000 15 Oct 1582.

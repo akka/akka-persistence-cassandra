@@ -27,8 +27,6 @@ import com.datastax.oss.driver.api.core.CqlSession
      |WITH REPLICATION = { 'class' : ${journalSettings.replicationStrategy} }
     """.stripMargin.trim
 
-  // message is the serialized PersistentRepr that was used in v0.6 and earlier
-  // event is the serialized application event that is used in v0.7 and later
   // The event's serialization manifest is stored in ser_manifest and the
   // PersistentRepr.manifest is stored in event_manifest (sorry for naming confusion).
   // PersistentRepr.manifest is used by the event adapters (in akka-persistence).
@@ -49,7 +47,6 @@ import com.datastax.oss.driver.api.core.CqlSession
       |  meta_ser_id int,
       |  meta_ser_manifest text,
       |  meta blob,
-      |  message blob,
       |  tags set<text>,
       |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
       |  WITH gc_grace_seconds =${journalSettings.gcGraceSeconds}

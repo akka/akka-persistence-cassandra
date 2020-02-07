@@ -39,6 +39,9 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
+/**
+ * INTERNAL API
+ */
 @InternalApi private[akka] object TagWriters {
 
   private[akka] case class TagWritersSession(
@@ -157,6 +160,7 @@ import scala.util.Try
 }
 
 /**
+ * INTERNAL API
  * Manages all the tag writers.
  */
 @InternalApi private[akka] class TagWriters(settings: TagWriterSettings, tagWriterSession: TagWritersSession)

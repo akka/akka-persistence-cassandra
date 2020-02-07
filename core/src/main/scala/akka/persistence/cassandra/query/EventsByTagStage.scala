@@ -25,6 +25,7 @@ import java.lang.{ Long => JLong }
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
+import akka.util.UUIDComparator
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
 import com.datastax.oss.driver.api.core.cql.Row
@@ -34,6 +35,7 @@ import com.github.ghik.silencer.silent
 import scala.compat.java8.FutureConverters._
 
 /**
+ * INTERNAL API
  * Walks the tag_views table.
  *
  * For current queries:
@@ -200,6 +202,7 @@ import scala.compat.java8.FutureConverters._
 
 }
 
+/** INTERNAL API */
 @InternalApi private[akka] class EventsByTagStage(
     session: TagStageSession,
     initialQueryOffset: UUID,

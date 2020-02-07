@@ -11,7 +11,7 @@ import java.util.{ UUID, HashMap => JHMap, Map => JMap }
 import akka.Done
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
-import akka.annotation.{ DoNotInherit, InternalApi }
+import akka.annotation.InternalApi
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.{ Logging, LoggingAdapter }
 import akka.cassandra.session._
@@ -43,11 +43,13 @@ import scala.compat.java8.FutureConverters._
 import akka.stream.scaladsl.Source
 
 /**
+ * INTERNAL API
+ *
  * Journal implementation of the cassandra plugin.
- * Inheritance is possible but without any guarantees for future source compatibility.
  */
-@DoNotInherit
-class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal with NoSerializationVerificationNeeded {
+@InternalApi private[akka] final class CassandraJournal(cfg: Config, cfgPath: String)
+    extends AsyncWriteJournal
+    with NoSerializationVerificationNeeded {
   import CassandraJournal._
   import context.system
 
@@ -785,38 +787,13 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
   class EventDeserializer(system: ActorSystem) {
 
     private val serialization = SerializationExtension(system)
-
-    // caching to avoid repeated check via ColumnDefinitions
-    private def hasColumn(column: String, row: Row, cached: Option[Boolean], updateCache: Boolean => Unit): Boolean = {
-      cached match {
-        case Some(b) => b
-        case None =>
-          val b = row.getColumnDefinitions.contains(column)
-          updateCache(b)
-          b
-      }
-    }
-
-    @volatile private var _hasMetaColumns: Option[Boolean] = None
-    private val updateMetaColumnsCache: Boolean => Unit = b => _hasMetaColumns = Some(b)
-    def hasMetaColumns(row: Row): Boolean =
-      hasColumn("meta", row, _hasMetaColumns, updateMetaColumnsCache)
-
-    @volatile private var _hasOldTagsColumns: Option[Boolean] = None
-    private val updateOldTagsColumnsCache: Boolean => Unit = b => _hasOldTagsColumns = Some(b)
-    def hasOldTagsColumns(row: Row): Boolean =
-      hasColumn("tag1", row, _hasOldTagsColumns, updateOldTagsColumnsCache)
-
-    @volatile private var _hasTagsColumn: Option[Boolean] = None
-    private val updateTagsColumnCache: Boolean => Unit = b => _hasTagsColumn = Some(b)
-    def hasTagsColumn(row: Row): Boolean =
-      hasColumn("tags", row, _hasTagsColumn, updateTagsColumnCache)
+    val columnDefinitionCache = new ColumnDefinitionCache
 
     def deserializeEvent(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[Any] =
       try {
 
         def meta: OptionVal[AnyRef] = {
-          if (hasMetaColumns(row)) {
+          if (columnDefinitionCache.hasMetaColumns(row)) {
             row.getByteBuffer("meta") match {
               case null =>
                 OptionVal.None // no meta data
