@@ -18,7 +18,6 @@ import akka.persistence.cassandra.journal.TagWriters.{
   TagWrite
 }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
-import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 
@@ -37,6 +36,7 @@ private[akka] class CassandraTagRecovery(
     settings: PluginSettings,
     statements: TaggedPreparedStatements) {
 
+  private implicit val sys: ActorSystem = system
   private val log: LoggingAdapter = Logging(system, classOf[CassandraTagRecovery])
   private val serialization = SerializationExtension(system)
 
@@ -48,8 +48,7 @@ private[akka] class CassandraTagRecovery(
   // No other writes for this pid should be taking place during recovery
   // The result set size will be the number of distinct tags that this pid has used, expecting
   // that to be small (<10) so call to all should be safe
-  def lookupTagProgress(
-      persistenceId: String)(implicit ec: ExecutionContext, mat: Materializer): Future[Map[Tag, TagProgress]] =
+  def lookupTagProgress(persistenceId: String)(implicit ec: ExecutionContext): Future[Map[Tag, TagProgress]] =
     SelectTagProgressForPersistenceId
       .map(_.bind(persistenceId).setExecutionProfileName(settings.journalSettings.readProfile))
       .flatMap(stmt => {

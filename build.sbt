@@ -44,6 +44,14 @@ lazy val core = (project in file("core"))
     testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o")))
   .configs(MultiJvm)
 
+lazy val reconciler = (project in file("reconciler"))
+  .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
+  .dependsOn(core, session)
+  .settings(
+    libraryDependencies ++= Dependencies.reconcilerDependencies
+  )
+
+
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .enablePlugins(Common)
   .settings(
