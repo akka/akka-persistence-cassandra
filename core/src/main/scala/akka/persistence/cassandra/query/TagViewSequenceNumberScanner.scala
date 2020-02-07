@@ -4,7 +4,7 @@
 
 package akka.persistence.cassandra.query
 
-import java.lang.{Long => JLong}
+import java.lang.{ Long => JLong }
 import java.util.UUID
 
 import akka.NotUsed
@@ -17,10 +17,10 @@ import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.query.TagViewSequenceNumberScanner.Session
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
-import com.datastax.oss.driver.api.core.cql.{PreparedStatement, Row}
+import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row }
 
-import scala.concurrent.duration.{Deadline, FiniteDuration}
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration.{ Deadline, FiniteDuration }
+import scala.concurrent.{ ExecutionContext, Future }
 import akka.persistence.cassandra.BucketSize
 
 /**
