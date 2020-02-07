@@ -9,11 +9,15 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.Done
+import akka.annotation.InternalApi
 import akka.cassandra.session.FutureDone
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
 
-class CassandraSnapshotStatements(snapshotSettings: SnapshotSettings) {
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class CassandraSnapshotStatements(snapshotSettings: SnapshotSettings) {
 
   def createKeyspace =
     s"""

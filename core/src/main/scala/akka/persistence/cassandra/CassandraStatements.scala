@@ -14,6 +14,9 @@ import akka.persistence.cassandra.snapshot.CassandraSnapshotStatements
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.Row
 
+/**
+ * INTERNAL API
+ */
 @InternalApi
 private[akka] class CassandraStatements(val settings: PluginSettings) {
 

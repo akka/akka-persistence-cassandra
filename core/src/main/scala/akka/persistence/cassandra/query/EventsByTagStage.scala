@@ -35,6 +35,7 @@ import com.github.ghik.silencer.silent
 import scala.compat.java8.FutureConverters._
 
 /**
+ * INTERNAL API
  * Walks the tag_views table.
  *
  * For current queries:
@@ -201,6 +202,7 @@ import scala.compat.java8.FutureConverters._
 
 }
 
+/** INTERNAL API */
 @InternalApi private[akka] class EventsByTagStage(
     session: TagStageSession,
     initialQueryOffset: UUID,
