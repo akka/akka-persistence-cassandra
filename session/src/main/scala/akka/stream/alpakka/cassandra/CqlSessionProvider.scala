@@ -5,11 +5,9 @@
 package akka.stream.alpakka.cassandra
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
-import akka.event.Logging
 import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.driver.api.core.config.{ DefaultDriverOption, DriverConfigLoader }
 import com.typesafe.config.Config
-
+import com.typesafe.config.ConfigFactory
 import scala.collection.immutable
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.{ ExecutionContext, Future }
@@ -30,22 +28,23 @@ trait CqlSessionProvider {
   def connect()(implicit ec: ExecutionContext): Future[CqlSession]
 }
 
+/**
+ * Builds a `CqlSession` from the given `config` via [[DriverConfigLoaderFromConfig]].
+ *
+ * The configuration for the driver is typically the `datastax-java-driver` section of the ActorSystem's
+ * configuration, but it's possible to use other configuration. The configuration path of the
+ * driver's configuration can be defined with `datastax-java-driver-config` property in the
+ * given `config`.
+ */
 class DefaultSessionProvider(system: ActorSystem, config: Config) extends CqlSessionProvider {
-  private val log = Logging(system, getClass)
 
   override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
     val builder = CqlSession.builder()
-    val sessionName = config.getString("session-name")
-    (if (sessionName != null && sessionName.nonEmpty) {
-       log.debug("Initialising Cassandra session [{}]", sessionName)
-       val overload: DriverConfigLoader =
-         DriverConfigLoader.programmaticBuilder().withString(DefaultDriverOption.SESSION_NAME, sessionName).build()
-       builder.withConfigLoader(overload)
-     } else {
-       log.debug(s"Initialising unnamed Cassandra session")
-       builder
-     }).buildAsync().toScala
+    val driverConfig = CqlSessionProvider.driverConfig(system, config)
+    val driverConfigLoader = DriverConfigLoaderFromConfig.fromConfig(driverConfig)
+    builder.withConfigLoader(driverConfigLoader).buildAsync().toScala
   }
+
 }
 
 object CqlSessionProvider {
@@ -78,5 +77,18 @@ object CqlSessionProvider {
               ex))
       }
       .get
+  }
+
+  /**
+   * The `Config` for the `datastax-java-driver`. The configuration path of the
+   * driver's configuration can be defined with `datastax-java-driver-config` property in the
+   * given `config`. `datastax-java-driver` configuration section is also used as fallback.
+   */
+  def driverConfig(system: ActorSystem, config: Config): Config = {
+    val driverConfigPath = config.getString("datastax-java-driver-config")
+    system.settings.config
+      .getConfig(driverConfigPath)
+      .withFallback(if (driverConfigPath == "datastax-java-driver") ConfigFactory.empty()
+      else system.settings.config.getConfig("datastax-java-driver"))
   }
 }

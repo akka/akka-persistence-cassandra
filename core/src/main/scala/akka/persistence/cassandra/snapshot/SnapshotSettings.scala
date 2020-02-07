@@ -6,7 +6,6 @@ package akka.persistence.cassandra.snapshot
 
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
-import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.PluginSettings.getReplicationStrategy
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
 import akka.persistence.cassandra.getListFromConfig
@@ -18,9 +17,6 @@ import com.typesafe.config.Config
 
   val writeProfile: String = snapshotConfig.getString("write-profile")
   val readProfile: String = snapshotConfig.getString("read-profile")
-
-  PluginSettings.checkProfile(system, readProfile)
-  PluginSettings.checkProfile(system, writeProfile)
 
   val keyspaceAutoCreate: Boolean = snapshotConfig.getBoolean("keyspace-autocreate")
   val tablesAutoCreate: Boolean = snapshotConfig.getBoolean("tables-autocreate")

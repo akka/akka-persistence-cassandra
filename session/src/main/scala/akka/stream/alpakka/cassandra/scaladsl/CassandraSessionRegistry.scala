@@ -6,18 +6,21 @@ package akka.stream.alpakka.cassandra.scaladsl
 
 import java.util.concurrent.ConcurrentHashMap
 
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.collection.JavaConverters._
+
 import akka.Done
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
 import akka.actor.Extension
 import akka.actor.ExtensionId
 import akka.actor.ExtensionIdProvider
+import akka.annotation.InternalStableApi
 import akka.event.Logging
 import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, CqlSessionProvider, FutureDone }
 import com.datastax.oss.driver.api.core.CqlSession
+import com.typesafe.config.Config
 
 /**
  * This Cassandra session registry makes it possible to share Cassandra sessions between multiple use sites
@@ -82,15 +85,27 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
    */
   def sessionFor(settings: CassandraSessionSettings, executionContext: ExecutionContext): CassandraSession = {
+    sessionFor(settings, executionContext, system.settings.config.getConfig(settings.configPath))
+  }
+
+  /**
+   * INTERNAL API: Possibility to initialize the `SessionProvider` with a custom `Config`
+   * that is different from the ActorSystem's config section for the `configPath`.
+   */
+  @InternalStableApi private[akka] def sessionFor(
+      settings: CassandraSessionSettings,
+      executionContext: ExecutionContext,
+      sessionProviderConfig: Config): CassandraSession = {
     val key = sessionKey(settings)
-    sessions.computeIfAbsent(key, _ => startSession(settings, key, executionContext))
+    sessions.computeIfAbsent(key, _ => startSession(settings, key, executionContext, sessionProviderConfig))
   }
 
   private def startSession(
       settings: CassandraSessionSettings,
       key: SessionKey,
-      executionContext: ExecutionContext): CassandraSession = {
-    val sessionProvider = CqlSessionProvider(system, system.settings.config.getConfig(key.configPath))
+      executionContext: ExecutionContext,
+      sessionProviderConfig: Config): CassandraSession = {
+    val sessionProvider = CqlSessionProvider(system, sessionProviderConfig)
     val log = Logging(system, classOf[CassandraSession])
     new CassandraSession(
       system,

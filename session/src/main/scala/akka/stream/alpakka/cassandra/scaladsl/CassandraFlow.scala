@@ -11,7 +11,7 @@ import akka.stream.scaladsl.{ Flow, FlowWithContext }
 import com.datastax.oss.driver.api.core.cql.{ BatchStatement, BatchType, BoundStatement, PreparedStatement }
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.Future
 
 /**
  * Scala API to create Cassandra flows.
