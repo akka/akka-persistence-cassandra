@@ -49,6 +49,7 @@ import akka.stream.scaladsl.Source
 @DoNotInherit
 class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal with NoSerializationVerificationNeeded {
   import CassandraJournal._
+  import context.system
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
@@ -63,7 +64,6 @@ class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal w
   private val log: LoggingAdapter = Logging(context.system, getClass)
 
   private implicit val ec: ExecutionContext = context.dispatcher
-  private implicit val sys: ActorSystem = context.system
 
   // readHighestSequence must be performed after pending write for a persistenceId
   // when the persistent actor is restarted.
