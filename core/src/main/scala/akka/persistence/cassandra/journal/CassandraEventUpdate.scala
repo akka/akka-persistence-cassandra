@@ -14,7 +14,10 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import java.lang.{ Long => JLong }
 
-private[akka] trait CassandraEventUpdate {
+import akka.annotation.InternalApi
+
+/** INTERNAL API */
+@InternalApi private[akka] trait CassandraEventUpdate {
 
   private[akka] val session: CassandraSession
   private[akka] def settings: PluginSettings

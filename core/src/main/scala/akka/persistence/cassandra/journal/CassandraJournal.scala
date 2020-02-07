@@ -11,7 +11,7 @@ import java.util.{ UUID, HashMap => JHMap, Map => JMap }
 import akka.Done
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
-import akka.annotation.{ DoNotInherit, InternalApi }
+import akka.annotation.InternalApi
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.{ Logging, LoggingAdapter }
 import akka.cassandra.session._
@@ -44,11 +44,13 @@ import scala.compat.java8.FutureConverters._
 import akka.stream.scaladsl.Source
 
 /**
+ * INTERNAL API
+ *
  * Journal implementation of the cassandra plugin.
- * Inheritance is possible but without any guarantees for future source compatibility.
  */
-@DoNotInherit
-class CassandraJournal(cfg: Config, cfgPath: String) extends AsyncWriteJournal with NoSerializationVerificationNeeded {
+@InternalApi private[akka] final class CassandraJournal(cfg: Config, cfgPath: String)
+    extends AsyncWriteJournal
+    with NoSerializationVerificationNeeded {
   import CassandraJournal._
 
   // shared config is one level above the journal specific

@@ -5,11 +5,16 @@
 package akka.persistence.cassandra.journal
 
 import com.datastax.oss.driver.api.core.cql.PreparedStatement
-
 import scala.concurrent.{ ExecutionContext, Future }
 
-class TaggedPreparedStatements(statements: CassandraJournalStatements, prepare: String => Future[PreparedStatement])(
-    implicit val ec: ExecutionContext) {
+import akka.annotation.InternalApi
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[akka] class TaggedPreparedStatements(
+    statements: CassandraJournalStatements,
+    prepare: String => Future[PreparedStatement])(implicit val ec: ExecutionContext) {
 
   def init(): Unit = {
     WriteTagViewWithoutMeta
