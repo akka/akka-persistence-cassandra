@@ -421,7 +421,7 @@ import scala.compat.java8.FutureConverters._
         }
 
         def optionallySchedule(key: Any, duration: Option[FiniteDuration]): Unit = {
-          duration.foreach(fd => scheduleWithFixedDelay(key, FiniteDuration(0L, SECONDS), fd))
+          duration.foreach(fd => scheduleWithFixedDelay(key, fd, fd))
         }
 
         optionallySchedule(PersistenceIdsCleanup, eventsByTagSettings.cleanUpPersistenceIds)
