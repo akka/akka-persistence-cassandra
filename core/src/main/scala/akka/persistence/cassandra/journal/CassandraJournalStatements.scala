@@ -165,9 +165,32 @@ import com.datastax.oss.driver.api.core.CqlSession
      """
 
   def deleteTag: String =
+    s"""
+       DELETE FROM $tagTableName WHERE tag_name = ? and timebucket = ? and timestamp = ? and persistence_id = ? and tag_pid_sequence_nr = ?
     """
-       DELETE FROM tag_view WHERE tag_name = ? and timebucket = ? and timestamp = ? and persistence_id = ? and tag_pid_sequence_nr = ?
-    """
+
+  def deleteTagProgress: String =
+    s"""
+       DELETE FROM $tagProgressTableName WHERE persistence_id = ? and tag = ?
+     """
+
+  def deleteTagScanning: String =
+    s"""
+       DELETE FROM $tagScanningTableName WHERE persistence_id = ?
+     """
+
+  def truncateTagViews: String = 
+    s"TRUNCATE $tagTableName"
+  def truncateTagProgress: String = 
+    s"TRUNCATE $tagProgressTableName"
+  def truncateTagScanning: String = 
+    s"TRUNCATE $tagScanningTableName"
+
+  def selectAllTagProgress: String = {
+    s"""
+      SELECT tag FROM $tagProgressTableName 
+     """
+  }
 
   def updateMessagePayloadInTagView =
     s"""

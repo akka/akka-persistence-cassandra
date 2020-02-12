@@ -7,32 +7,48 @@ package akka.persistence.cassandra.reconciler
 import akka.persistence.cassandra.CassandraSpec
 import akka.persistence.cassandra.TestTaggingActor
 import akka.persistence.cassandra.TestTaggingActor.Ack
+import akka.testkit.TestProbe
+import akka.persistence.RecoveryCompleted
+import akka.actor.PoisonPill
 
+/**
+ * These tests depend on the output of each other, can't be run separately
+ */
 class DeleteTagViewForPersistenceIdSpec extends CassandraSpec("""
 
 """) {
 
   // FIXME use nextId once https://github.com/akka/akka-persistence-cassandra/pull/681/is merged
-  //
-
   "Deleting " should {
+    val tag = "tag1"
+    val pid1 = "p1"
+    val pid2 = "p2"
 
-    "work" in {
-      val tag = "tag1"
-      val pid = "p1"
-      val ref = system.actorOf(TestTaggingActor.props(pid, Set(tag)))
+    "only delete for the provided persistence id" in {
+      writeEventsFor(tag, pid1, 3)
+      writeEventsFor(tag, pid2, 3)
 
-      for (i <- 1 to 3) {
-        ref ! s"event-$i"
-        expectMsg(Ack)
-      }
+      eventsByTag(tag)
+        .request(10)
+        .expectNextN(List("p1 event-1", "p1 event-2", "p1 event-3", "p2 event-1", "p2 event-2", "p2 event-3"))
+        .expectNoMessage()
+        .cancel()
+      Reconciliation(system).deleteTagViewForPersistenceIds(Set(pid2), tag).futureValue
+      eventsByTag(tag).request(5).expectNextN(List("p1 event-1", "p1 event-2", "p1 event-3")).expectNoMessage().cancel()
 
-      eventsByTag(tag).request(5).expectNextN(List("event-1", "event-2", "event-3")).expectNoMessage().cancel()
-
-      Reconciliation(system).deleteTagViewForPersistenceId(pid).futureValue
-
-      eventsByTag(tag).request(5).expectNextN(Nil).expectNoMessage().cancel()
     }
+
+    "recover the tagged events if persistence id is started again" in {
+      val probe = TestProbe()
+      system.actorOf(TestTaggingActor.props(pid2, Set(tag), Some(probe.ref)))
+      probe.expectMsg(RecoveryCompleted)
+      eventsByTag(tag)
+        .request(10)
+        .expectNextN(List("p1 event-1", "p1 event-2", "p1 event-3", "p2 event-1", "p2 event-2", "p2 event-3"))
+        .expectNoMessage()
+        .cancel()
+    }
+
   }
 
 }

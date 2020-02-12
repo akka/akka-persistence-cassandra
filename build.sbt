@@ -3,7 +3,7 @@ ThisBuild / resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/")
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
-  .aggregate(core, cassandraLauncher, session)
+  .aggregate(core, cassandraLauncher, session, reconciler)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
 lazy val session = (project in file("session"))

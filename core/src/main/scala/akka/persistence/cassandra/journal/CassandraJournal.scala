@@ -666,7 +666,7 @@ import akka.stream.scaladsl.Source
 
       Source
         .fromFutureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
-          log.debug(
+          log.info(
             "[{}] starting recovery with tag progress: [{}]. From [{}] to [{}]",
             persistenceId,
             tp,
