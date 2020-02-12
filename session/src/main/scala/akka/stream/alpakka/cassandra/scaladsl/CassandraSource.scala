@@ -18,19 +18,23 @@ object CassandraSource {
   /**
    * Prepare, bind and execute a select statement in one go.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    */
   def apply(cqlStatement: String, bindValues: AnyRef*)(implicit session: CassandraSession): Source[Row, NotUsed] =
     session.select(cqlStatement, bindValues: _*)
 
   /**
    * Create a [[akka.stream.scaladsl.Source Source]] from a given statement.
+   *
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    */
   def apply(stmt: Statement[_])(implicit session: CassandraSession): Source[Row, NotUsed] =
     session.select(stmt)
 
   /**
    * Create a [[akka.stream.scaladsl.Source Source]] from a given statement.
+   *
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    */
   def fromFuture(stmt: Future[Statement[_]])(implicit session: CassandraSession): Source[Row, NotUsed] =
     session.select(stmt)

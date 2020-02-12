@@ -19,6 +19,8 @@ object CassandraSource {
 
   /**
    * Prepare, bind and execute a select statement in one go.
+   *
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    */
   @varargs
   def create(session: CassandraSession, cqlStatement: String, bindValues: AnyRef*): Source[Row, NotUsed] =
@@ -26,12 +28,16 @@ object CassandraSource {
 
   /**
    * Create a [[akka.stream.javadsl.Source Source]] from a given statement.
+   *
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    */
   def create(session: CassandraSession, stmt: Statement[_]): Source[Row, NotUsed] =
     session.select(stmt)
 
   /**
    * Create a [[akka.stream.javadsl.Source Source]] from a given statement.
+   *
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    */
   def fromCompletionStage(session: CassandraSession, stmt: CompletionStage[Statement[_]]): Source[Row, NotUsed] =
     session.select(stmt)

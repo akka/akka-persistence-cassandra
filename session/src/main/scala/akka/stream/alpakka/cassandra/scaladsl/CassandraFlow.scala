@@ -87,6 +87,13 @@ object CassandraFlow {
    * resolve to one write internally in Cassandra, boosting write performance.
    *
    * Be aware that this stage does NOT preserve the upstream order.
+   *
+   * @param session Cassandra session from `CassandraSessionRegistry`
+   * @param writeSettings settings to configure the write operation
+   * @param cqlStatement raw CQL statement
+   * @param statementBinder function to bind data from the stream element to the prepared statement
+   * @tparam T stream element type
+   * @tparam K extracted key type for grouping into batches
    */
   def createUnloggedBatch[T, K](
       session: CassandraSession,

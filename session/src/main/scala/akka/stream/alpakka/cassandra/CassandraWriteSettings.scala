@@ -9,6 +9,7 @@ import akka.util.JavaDurationConverters._
 import scala.concurrent.duration._
 
 class CassandraWriteSettings private (val parallelism: Int, val maxBatchSize: Int, val maxBatchWait: FiniteDuration) {
+  require(parallelism > 0, s"Invalid value for parallelism: $parallelism. It should be > 0.")
   require(maxBatchSize > 0, s"Invalid value for maxBatchSize: $maxBatchSize. It should be > 0.")
 
   /**
@@ -16,12 +17,21 @@ class CassandraWriteSettings private (val parallelism: Int, val maxBatchSize: In
    */
   def withParallelism(value: Int): CassandraWriteSettings = copy(parallelism = value)
 
+  /**
+   * Batch size for `CassandraFlow.createUnloggedBatch`.
+   */
   def withMaxBatchSize(maxBatchSize: Int): CassandraWriteSettings =
     copy(maxBatchSize = maxBatchSize)
 
+  /**
+   * Batch grouping time for `CassandraFlow.createUnloggedBatch`.
+   */
   def withMaxBatchWait(maxBatchWait: FiniteDuration): CassandraWriteSettings =
     copy(maxBatchWait = maxBatchWait)
 
+  /**
+   * Java API: Batch grouping time for `CassandraFlow.createUnloggedBatch`.
+   */
   def withMaxBatchWait(maxBatchWait: java.time.Duration): CassandraWriteSettings =
     copy(maxBatchWait = maxBatchWait.asScala)
 

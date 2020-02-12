@@ -37,8 +37,10 @@ import scala.compat.java8.FutureConverters._
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
- * <a href="http://docs.datastax.com/en/cql/3.3/cql/cqlIntro.html">Cassandra Query Language</a>
+ * <a href="https://cassandra.apache.org/doc/latest/cql/">Apache Cassandra Query Language</a>
  * (CQL) syntax.
+ *
+ * See even <a href="https://docs.datastax.com/en/dse/6.7/cql/">CQL for Datastax Enterprise</a>.
  *
  * The `init` hook is called before the underlying session is used by other methods,
  * so it can be used for things like creating the keyspace and tables.
@@ -67,7 +69,7 @@ final class CassandraSession(
 
   /**
    * The `Session` of the underlying
-   * <a href="http://datastax.github.io/java-driver/">Datastax Java Driver</a>.
+   * <a href="https://docs.datastax.com/en/developer/java-driver/">Datastax Java Driver</a>.
    * Can be used in case you need to do something that is not provided by the
    * API exposed by this class. Be careful to not use blocking calls.
    */
@@ -96,7 +98,7 @@ final class CassandraSession(
     }
 
   /**
-   * Execute <a href=https://docs.datastax.com/en/archived/cql/3.3/cql/cql_reference/cqlCommandsTOC.html">CQL commands</a>
+   * Execute <a href="https://docs.datastax.com/en/dse/6.7/cql/">CQL commands</a>
    * to manage database resources (create, replace, alter, and drop tables, indexes, user-defined types, etc).
    *
    * The returned `Future` is completed when the command is done, or if the statement fails.
@@ -108,7 +110,7 @@ final class CassandraSession(
     } yield Done
 
   /**
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useCreateTableTOC.html">Creating a table</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/useCreateTable.html">Creating a table</a>.
    *
    * The returned `Future` is completed when the table has been created,
    * or if the statement fails.
@@ -126,10 +128,10 @@ final class CassandraSession(
     }
 
   /**
-   * Execute several statements in a batch. First you must [[#prepare]] the
+   * Execute several statements in a batch. First you must `prepare` the
    * statements and bind its parameters.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useBatchTOC.html">Batching data insertion and updates</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/useBatchTOC.html">Batching data insertion and updates</a>.
    *
    * The configured write consistency level is used if a specific consistency
    * level has not been set on the `BatchStatement`.
@@ -141,10 +143,10 @@ final class CassandraSession(
     executeWrite(batch)
 
   /**
-   * Execute one statement. First you must [[#prepare]] the
+   * Execute one statement. First you must `prepare` the
    * statement and bind its parameters.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
    *
    * The configured write consistency level is used if a specific consistency
    * level has not been set on the `Statement`.
@@ -161,7 +163,7 @@ final class CassandraSession(
   /**
    * Prepare, bind and execute one statement in one go.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
    *
    * The configured write consistency level is used.
    *
@@ -188,10 +190,10 @@ final class CassandraSession(
   }
 
   /**
-   * Execute a select statement. First you must [[#prepare]] the
+   * Execute a select statement. First you must `prepare` the
    * statement and bind its parameters.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    *
    * The configured read consistency level is used if a specific consistency
    * level has not been set on the `Statement`.
@@ -204,9 +206,9 @@ final class CassandraSession(
   }
 
   /**
-   * Execute a select statement created by [[#prepare]].
+   * Execute a select statement created by `prepare`.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    *
    * The configured read consistency level is used if a specific consistency
    * level has not been set on the `Statement`.
@@ -221,7 +223,7 @@ final class CassandraSession(
   /**
    * Prepare, bind and execute a select statement in one go.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    *
    * The configured read consistency level is used.
    *
@@ -237,7 +239,7 @@ final class CassandraSession(
   }
 
   /**
-   * Execute a select statement. First you must [[#prepare]] the statement and
+   * Execute a select statement. First you must `prepare` the statement and
    * bind its parameters. Only use this method when you know that the result
    * is small, e.g. includes a `LIMIT` clause. Otherwise you should use the
    * `select` method that returns a `Source`.
@@ -272,7 +274,7 @@ final class CassandraSession(
   }
 
   /**
-   * Execute a select statement that returns one row. First you must [[#prepare]] the
+   * Execute a select statement that returns one row. First you must `prepare` the
    * statement and bind its parameters.
    *
    * The configured read consistency level is used if a specific consistency

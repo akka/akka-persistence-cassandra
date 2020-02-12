@@ -64,4 +64,34 @@ object CassandraFlow {
       .asJava
   }
 
+  /**
+   * Creates a flow that batches using an unlogged batch. Use this when most of the elements in the stream
+   * share the same partition key. Cassandra unlogged batches that share the same partition key will only
+   * resolve to one write internally in Cassandra, boosting write performance.
+   *
+   * Be aware that this stage does NOT preserve the upstream order.
+   *
+   * @param session Cassandra session from `CassandraSessionRegistry`
+   * @param writeSettings settings to configure the write operation
+   * @param cqlStatement raw CQL statement
+   * @param statementBinder function to bind data from the stream element to the prepared statement
+   * @tparam T stream element type
+   * @tparam K extracted key type for grouping into batches
+   */
+  def createUnloggedBatch[T, K](
+      session: CassandraSession,
+      writeSettings: CassandraWriteSettings,
+      cqlStatement: String,
+      statementBinder: (T, PreparedStatement) => BoundStatement,
+      partitionKey: akka.japi.Function[T, K]): Flow[T, T, NotUsed] = {
+    scaladsl.CassandraFlow
+      .createUnloggedBatch(
+        session.delegate,
+        writeSettings,
+        cqlStatement,
+        (t, preparedStatement) => statementBinder.apply(t, preparedStatement),
+        t => partitionKey.apply(t))
+      .asJava
+  }
+
 }
