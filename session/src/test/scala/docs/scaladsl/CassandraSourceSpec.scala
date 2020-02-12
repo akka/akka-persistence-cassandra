@@ -4,6 +4,7 @@
 
 package docs.scaladsl
 
+import akka.Done
 import akka.actor.ActorSystem
 import akka.stream.alpakka.cassandra.CassandraSessionSettings
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSource, CassandraSpecBase }
@@ -20,17 +21,19 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
   val sessionSettings = CassandraSessionSettings("alpakka.cassandra")
   val data = 1 until 103
 
+  override val lifecycleSession: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+
   "CassandraSourceSpec" must {
     implicit val session: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
 
     "stream the result of a Cassandra statement with one page" in assertAllStagesStopped {
 
       val table = createTableName()
-      cqlSession.execute(s"""
+      lifecycleSession.executeDDL(s"""
                          |CREATE TABLE IF NOT EXISTS $table (
                          |    id int PRIMARY KEY
-                         |);""".stripMargin)
-      executeCql(data.map(i => s"INSERT INTO $table(id) VALUES ($i)"))
+                         |);""".stripMargin).futureValue mustBe Done
+      executeCql(data.map(i => s"INSERT INTO $table(id) VALUES ($i)")).futureValue mustBe Done
 
       val rows = CassandraSource(s"SELECT * FROM $table").runWith(Sink.seq).futureValue
 
@@ -39,11 +42,11 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
 
     "support parameters" in assertAllStagesStopped {
       val table = createTableName()
-      cqlSession.execute(s"""
-                         |CREATE TABLE IF NOT EXISTS $table (
-                         |    id int PRIMARY KEY
-                         |);""".stripMargin)
-      executeCql(data.map(i => s"INSERT INTO $table(id) VALUES ($i)"))
+      lifecycleSession.executeDDL(s"""
+                                   |CREATE TABLE IF NOT EXISTS $table (
+                                   |    id int PRIMARY KEY
+                                   |);""".stripMargin).futureValue mustBe Done
+      executeCql(data.map(i => s"INSERT INTO $table(id) VALUES ($i)")).futureValue mustBe Done
 
       val rows =
         CassandraSource(s"SELECT * FROM $table WHERE id = ?", Int.box(5)).runWith(Sink.seq).futureValue
@@ -53,11 +56,11 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
 
     "stream the result of a Cassandra statement with several pages" in assertAllStagesStopped {
       val table = createTableName()
-      cqlSession.execute(s"""
-                             |CREATE TABLE IF NOT EXISTS $table (
-                             |    id int PRIMARY KEY
-                             |);""".stripMargin)
-      executeCql(data.map(i => s"INSERT INTO $table(id) VALUES ($i)"))
+      lifecycleSession.executeDDL(s"""
+                                   |CREATE TABLE IF NOT EXISTS $table (
+                                   |    id int PRIMARY KEY
+                                   |);""".stripMargin).futureValue mustBe Done
+      executeCql(data.map(i => s"INSERT INTO $table(id) VALUES ($i)")).futureValue mustBe Done
 
       //#statement
       val stmt = SimpleStatement.newInstance(s"SELECT * FROM $table").setPageSize(20)
@@ -72,11 +75,11 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
 
     "allow prepared statements" in assertAllStagesStopped {
       val table = createTableName()
-      cqlSession.execute(s"""
-                             |CREATE TABLE IF NOT EXISTS $table (
-                             |    id int PRIMARY KEY
-                             |);""".stripMargin)
-      executeCql(data.map(i => s"INSERT INTO $table(id) VALUES ($i)"))
+      lifecycleSession.executeDDL(s"""
+                                   |CREATE TABLE IF NOT EXISTS $table (
+                                   |    id int PRIMARY KEY
+                                   |);""".stripMargin).futureValue mustBe Done
+      executeCql(data.map(i => s"INSERT INTO $table(id) VALUES ($i)")).futureValue mustBe Done
 
       val stmt = session.prepare(s"SELECT * FROM $table").map(_.bind())
       val rows = CassandraSource.fromFuture(stmt).runWith(Sink.seq)

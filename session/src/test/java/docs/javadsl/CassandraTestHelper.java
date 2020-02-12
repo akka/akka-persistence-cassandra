@@ -7,43 +7,58 @@ package docs.javadsl;
 import akka.actor.ActorSystem;
 import akka.stream.ActorMaterializer;
 import akka.stream.Materializer;
+import akka.stream.alpakka.cassandra.CassandraSessionSettings;
+import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
+import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
 import akka.stream.alpakka.cassandra.scaladsl.CassandraAccess;
 import akka.testkit.javadsl.TestKit;
-import com.datastax.oss.driver.api.core.CqlSession;
+import scala.concurrent.Await;
+import scala.concurrent.duration.FiniteDuration;
 
-import java.net.InetSocketAddress;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class CassandraTestHelper {
-     ActorSystem system;
-     Materializer materializer;
-     CqlSession cqlSession;
-     CassandraAccess cassandraAccess;
-     String keyspaceName;
-    final  AtomicInteger tableNumber = new AtomicInteger();
+    final ActorSystem system;
+    final Materializer materializer;
+    final CassandraSession cassandraSession;
+    final CassandraAccess cassandraAccess;
+    final String keyspaceName;
+    final AtomicInteger tableNumber = new AtomicInteger();
 
     public CassandraTestHelper(String TEST_NAME) {
         system = ActorSystem.create(TEST_NAME);
         materializer = ActorMaterializer.create(system);
-        cqlSession = CqlSession
-                .builder()
-                .withLocalDatacenter("datacenter1")
-                .addContactPoint(new InetSocketAddress("127.0.0.1", 9042))
-                .build();
-        cassandraAccess = new CassandraAccess(cqlSession);
-        keyspaceName = TEST_NAME+System.nanoTime();
-        cassandraAccess.createKeyspace(keyspaceName);
+        CassandraSessionRegistry sessionRegistry = CassandraSessionRegistry.get(system);
+        CassandraSessionSettings sessionSettings = CassandraSessionSettings.create("alpakka.cassandra");
+        cassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher());
 
+        cassandraAccess = new CassandraAccess(cassandraSession.delegate());
+        keyspaceName = TEST_NAME + System.nanoTime();
+        try {
+            Await.result(cassandraAccess.createKeyspace(keyspaceName), FiniteDuration.create(2, TimeUnit.SECONDS));
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (TimeoutException e) {
+            e.printStackTrace();
+        }
     }
 
     public void shutdown() {
-        TestKit.shutdownActorSystem(system);
+        // `cassandraAccess` uses the system dispatcher through `cassandraSession`
         cassandraAccess.dropKeyspace(keyspaceName);
-        cqlSession.close();
+        TestKit.shutdownActorSystem(system);
     }
-
 
     public String createTableName() {
         return keyspaceName + "." + "test" + tableNumber.incrementAndGet();
     }
+
+    public static <T> T await(CompletionStage<T> cs) throws InterruptedException, ExecutionException, TimeoutException {
+        return cs.toCompletableFuture().get(10, TimeUnit.SECONDS);
+    }
+
 }

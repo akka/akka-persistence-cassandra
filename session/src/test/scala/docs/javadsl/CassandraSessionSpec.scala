@@ -12,6 +12,7 @@ import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.stream.alpakka.cassandra.CassandraSessionSettings
 import akka.stream.alpakka.cassandra.javadsl.{ CassandraSession, CassandraSessionRegistry }
+import akka.stream.alpakka.cassandra.scaladsl
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSpecBase
 import akka.stream.javadsl.Sink
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
@@ -36,13 +37,13 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
   lazy val dataTable = s"$keyspaceName.$dataTableName"
 
   def insertDataTable() = {
-    cqlSession.execute(s"""CREATE TABLE IF NOT EXISTS $dataTable (
+    lifecycleSession.executeDDL(s"""CREATE TABLE IF NOT EXISTS $dataTable (
                           |  partition text,
                           |  key text,
                           |  count bigint,
                           |  PRIMARY KEY (partition, key)
                           |)
-                          |""".stripMargin)
+                          |""".stripMargin).futureValue mustBe Done
     executeCql(
       immutable.Seq(
         s"INSERT INTO $dataTable (partition, key, count) VALUES ('A', 'a', 1);",
@@ -59,6 +60,8 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
   }
 
   val sessionSettings: CassandraSessionSettings = CassandraSessionSettings("alpakka.cassandra")
+  override val lifecycleSession: scaladsl.CassandraSession =
+    sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
 
   // testing javadsl to prove delegation works
   lazy val session: CassandraSession = javadslSessionRegistry.sessionFor(sessionSettings, system.dispatcher)

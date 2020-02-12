@@ -22,15 +22,17 @@ class CassandraFlowSpec extends CassandraSpecBase(ActorSystem("CassandraFlowSpec
   val sessionSettings = CassandraSessionSettings("alpakka.cassandra")
   val data = 1 until 103
 
+  override val lifecycleSession: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+
   "CassandraFlow" must {
     implicit val session: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
 
     "update with simple prepared statement" in assertAllStagesStopped {
       val table = createTableName()
-      cqlSession.execute(s"""
+      lifecycleSession.executeDDL(s"""
                          |CREATE TABLE IF NOT EXISTS $table (
                          |    id int PRIMARY KEY
-                         |);""".stripMargin)
+                         |);""".stripMargin).futureValue mustBe Done
 
       val written = Source(data)
         .via(
@@ -48,12 +50,12 @@ class CassandraFlowSpec extends CassandraSpecBase(ActorSystem("CassandraFlowSpec
 
     "update with prepared statement" in assertAllStagesStopped {
       val table = createTableName()
-      cqlSession.execute(s"""
+      lifecycleSession.executeDDL(s"""
                          |CREATE TABLE IF NOT EXISTS $table (
                          |    id int PRIMARY KEY,
                          |    name text,
                          |    city text
-                         |);""".stripMargin)
+                         |);""".stripMargin).futureValue mustBe Done
 
       case class Person(id: Int, name: String, city: String)
 

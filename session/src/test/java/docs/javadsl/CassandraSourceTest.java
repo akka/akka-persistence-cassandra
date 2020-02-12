@@ -4,12 +4,9 @@
 
 package docs.javadsl;
 
-import akka.stream.alpakka.cassandra.CassandraSessionSettings;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
-import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSource;
 import akka.stream.javadsl.Sink;
-import com.datastax.oss.driver.api.core.cql.Row;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -23,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static docs.javadsl.CassandraTestHelper.await;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -41,16 +39,14 @@ public class CassandraSourceTest {
         helper.shutdown();
     }
 
-    CassandraSessionRegistry sessionRegistry = CassandraSessionRegistry.get(helper.system);
-    CassandraSessionSettings sessionSettings = CassandraSessionSettings.create("alpakka.cassandra");
-    CassandraSession cassandraSession = sessionRegistry.sessionFor(sessionSettings, helper.system.dispatcher());
+    CassandraSession cassandraSession = helper.cassandraSession;
 
     @Test
     public void select() throws InterruptedException, ExecutionException, TimeoutException {
         String table = helper.createTableName();
-        helper.cqlSession.execute("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY);");
+        await(cassandraSession.executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY);"));
         List<Integer> data = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8);
-        helper.cassandraAccess.executeCqlList(data.stream().map(i -> "INSERT INTO " + table + "(id) VALUES (" + i + ")").collect(Collectors.toList()));
+        await(helper.cassandraAccess.executeCqlList(data.stream().map(i -> "INSERT INTO " + table + "(id) VALUES (" + i + ")").collect(Collectors.toList())));
 
         CompletionStage<List<Integer>> select = CassandraSource.create(cassandraSession, "SELECT * FROM " + table).map(r -> r.getInt("id")).runWith(Sink.seq(), helper.materializer);
         List<Integer> rows = select.toCompletableFuture().get(10, TimeUnit.SECONDS);

@@ -5,11 +5,9 @@
 package docs.javadsl;
 
 import akka.Done;
-import akka.stream.alpakka.cassandra.CassandraSessionSettings;
 import akka.stream.alpakka.cassandra.CassandraWriteSettings;
 import akka.stream.alpakka.cassandra.javadsl.CassandraFlow;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
-import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSource;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
@@ -23,10 +21,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.hamcrest.CoreMatchers.*;
+import static docs.javadsl.CassandraTestHelper.await;
+import static org.hamcrest.CoreMatchers.hasItems;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public class CassandraFlowTest {
@@ -44,14 +43,12 @@ public class CassandraFlowTest {
         helper.shutdown();
     }
 
-    CassandraSessionRegistry sessionRegistry = CassandraSessionRegistry.get(helper.system);
-    CassandraSessionSettings sessionSettings = CassandraSessionSettings.create("alpakka.cassandra");
-    CassandraSession cassandraSession = sessionRegistry.sessionFor(sessionSettings, helper.system.dispatcher());
+    CassandraSession cassandraSession = helper.cassandraSession;
 
     @Test
     public void simpleUpdate() throws InterruptedException, ExecutionException, TimeoutException {
         String table = helper.createTableName();
-        helper.cqlSession.execute("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY);");
+        await(cassandraSession.executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY);"));
         List<Integer> data = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8);
 
         CompletionStage<Done> written = Source
@@ -64,13 +61,13 @@ public class CassandraFlowTest {
                                 (element, preparedStatement) -> preparedStatement.bind(element)))
                 .runWith(Sink.ignore(), helper.materializer);
 
-        assertThat(written.toCompletableFuture().get(4, TimeUnit.SECONDS), is(Done.done()));
+        assertThat(await(written), is(Done.done()));
 
         CompletionStage<List<Integer>> select = CassandraSource
                 .create(cassandraSession, "SELECT * FROM " + table)
                 .map(row -> row.getInt("id"))
                 .runWith(Sink.seq(), helper.materializer);
-        List<Integer> rows = select.toCompletableFuture().get(10, TimeUnit.SECONDS);
+        List<Integer> rows = await(select);
         assertThat(new ArrayList<>(rows), hasItems(data.toArray()));
     }
 
@@ -78,7 +75,7 @@ public class CassandraFlowTest {
     @Test
     public void typedUpdate() throws InterruptedException, ExecutionException, TimeoutException {
         String table = helper.createTableName();
-        helper.cqlSession.execute("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY, name text, city text);");
+        await(cassandraSession.executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY, name text, city text);"));
 
         List<Person> persons = Arrays.asList(
                 new Person(12, "John", "London"),
@@ -95,12 +92,12 @@ public class CassandraFlowTest {
                 ))
                 .runWith(Sink.ignore(), helper.materializer);
 
-        assertThat(written.toCompletableFuture().get(10, TimeUnit.SECONDS), is(Done.done()));
+        assertThat(await(written), is(Done.done()));
 
         CompletionStage<List<Person>> select = CassandraSource.create(cassandraSession, "SELECT * FROM " + table)
                 .map(row -> new Person(row.getInt("id"), row.getString("name"), row.getString("city")))
                 .runWith(Sink.seq(), helper.materializer);
-        List<Person> rows = select.toCompletableFuture().get(10, TimeUnit.SECONDS);
+        List<Person> rows = await(select);
         assertThat(new ArrayList<>(rows), hasItems(persons.toArray()));
     }
 
