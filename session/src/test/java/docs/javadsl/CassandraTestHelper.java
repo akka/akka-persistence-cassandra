@@ -39,11 +39,11 @@ public class CassandraTestHelper {
         cassandraAccess = new CassandraAccess(cassandraSession.delegate());
         keyspaceName = TEST_NAME + System.nanoTime();
         try {
-            Await.result(cassandraAccess.createKeyspace(keyspaceName), FiniteDuration.create(2, TimeUnit.SECONDS));
+            Await.result(cassandraAccess.createKeyspace(keyspaceName), FiniteDuration.create(10, TimeUnit.SECONDS));
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         } catch (TimeoutException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 
