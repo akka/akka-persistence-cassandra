@@ -6,8 +6,8 @@ package akka.stream.alpakka.cassandra.scaladsl
 
 import akka.NotUsed
 import akka.dispatch.ExecutionContexts
-import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, CassandraWriteSettings }
-import akka.stream.scaladsl.Flow
+import akka.stream.alpakka.cassandra.CassandraWriteSettings
+import akka.stream.scaladsl.{ Flow, FlowWithContext }
 import com.datastax.oss.driver.api.core.cql.{ BatchStatement, BatchType, BoundStatement, PreparedStatement }
 
 import scala.collection.JavaConverters._
@@ -19,54 +19,66 @@ import scala.concurrent.{ ExecutionContext, Future }
 class CassandraFlow {
 
   /**
+   * A flow writing to Cassandra for every stream element.
+   * The element is emitted unchanged.
    *
-   * @param sessionSettings
-   * @param writeSettings
-   * @param stmt CQL statement
-   * @param statementBinder
-   * @tparam T
-   * @return
+   * @param session Cassandra session from `CassandraSessionRegistry`
+   * @param writeSettings settings to configure the write operation
+   * @param cqlStatement raw CQL statement
+   * @param statementBinder function to bind data from the stream element to the prepared statement
+   * @tparam T stream element type
    */
-  def createWithPassThrough[T](
-      sessionSettings: CassandraSessionSettings,
+  def create[T](
+      session: CassandraSession,
       writeSettings: CassandraWriteSettings,
-      stmt: String,
-      statementBinder: (T, PreparedStatement) => BoundStatement): Flow[T, T, NotUsed] =
+      cqlStatement: String,
+      statementBinder: (T, PreparedStatement) => BoundStatement): Flow[T, T, NotUsed] = {
     Flow
       .setup { (materializer, _) =>
         implicit val executionContext: ExecutionContext = materializer.system.dispatcher
-        val session = CassandraSessionRegistry(materializer.system).sessionFor(sessionSettings, executionContext)
-        val prepareStatement: Future[T => Future[T]] =
-          session.prepare(stmt).map(s => executePrepared(session, s, statementBinder)(_))
-        Flow[T].mapAsync(writeSettings.parallelism) { t =>
-          prepareStatement.flatMap(executeWriteForElement => executeWriteForElement(t))
+        val prepareStatement = session.prepare(cqlStatement)
+        Flow[T].mapAsync(writeSettings.parallelism) { element =>
+          prepareStatement
+            .flatMap { preparedStatement =>
+              session.executeWrite(statementBinder(element, preparedStatement))
+            }
+            .map(_ => element)(ExecutionContexts.sameThreadExecutionContext)
         }
       }
       .mapMaterializedValue(_ => NotUsed)
-
-  /**
-   *
-   * @param session
-   * @param writeSettings
-   * @param stmt
-   * @param statementBinder
-   * @tparam T
-   * @return
-   */
-  def createWithPassThrough[T](
-      session: CassandraSession,
-      writeSettings: CassandraWriteSettings,
-      stmt: PreparedStatement,
-      statementBinder: (T, PreparedStatement) => BoundStatement): Flow[T, T, NotUsed] = {
-    val executeWriteForElement: T => Future[T] = executePrepared(session, stmt, statementBinder)
-    Flow[T].mapAsync(writeSettings.parallelism)(t => executeWriteForElement(t))
   }
 
-  private def executePrepared[T](
+  /**
+   * A flow writing to Cassandra for every stream element, passing context along.
+   * The element and context are emitted unchanged.
+   *
+   * @param session Cassandra session from `CassandraSessionRegistry`
+   * @param writeSettings settings to configure the write operation
+   * @param cqlStatement raw CQL statement
+   * @param statementBinder function to bind data from the stream element to the prepared statement
+   * @tparam T stream element type
+   * @tparam Ctx context type
+   */
+  def withContext[T, Ctx](
       session: CassandraSession,
-      stmt: PreparedStatement,
-      statementBinder: (T, PreparedStatement) => BoundStatement)(t: T) = {
-    session.executeWrite(statementBinder(t, stmt)).map(_ => t)(ExecutionContexts.sameThreadExecutionContext)
+      writeSettings: CassandraWriteSettings,
+      cqlStatement: String,
+      statementBinder: (T, PreparedStatement) => BoundStatement): FlowWithContext[T, Ctx, T, Ctx, NotUsed] = {
+    FlowWithContext.fromTuples(
+      Flow
+        .setup { (materializer, _) =>
+          implicit val executionContext: ExecutionContext = materializer.system.dispatcher
+          val prepareStatement = session.prepare(cqlStatement)
+          Flow[(T, Ctx)].mapAsync(writeSettings.parallelism) {
+            case tuple @ (element, _) =>
+              prepareStatement
+                .flatMap { preparedStatement =>
+                  session.executeWrite(statementBinder(element, preparedStatement))
+                }
+                .map(_ => tuple)(ExecutionContexts.sameThreadExecutionContext)
+          }
+        }
+        .mapMaterializedValue(_ => NotUsed))
   }
 
   /**
@@ -76,24 +88,23 @@ class CassandraFlow {
    *
    * Be aware that this stage does NOT preserve the upstream order.
    */
-  def createUnloggedBatchWithPassThrough[T, K](
-      sessionSettings: CassandraSessionSettings,
+  def createUnloggedBatch[T, K](
+      session: CassandraSession,
       writeSettings: CassandraWriteSettings,
-      stmt: String,
+      cqlStatement: String,
       statementBinder: (T, PreparedStatement) => BoundStatement,
       partitionKey: T => K): Flow[T, T, NotUsed] =
     Flow
       .setup { (materializer, _) =>
         implicit val executionContext: ExecutionContext = materializer.system.dispatcher
-        val session = CassandraSessionRegistry(materializer.system).sessionFor(sessionSettings, executionContext)
-        val stmtFut: Future[PreparedStatement] = session.prepare(stmt)
+        val prepareStatement: Future[PreparedStatement] = session.prepare(cqlStatement)
         Flow[T]
           .groupedWithin(writeSettings.maxBatchSize, writeSettings.maxBatchWait)
           .map(_.groupBy(partitionKey).values.toList)
           .mapConcat(identity)
           .mapAsyncUnordered(writeSettings.parallelism)(list =>
-            stmtFut.flatMap { statement =>
-              val boundStatements = list.map(t => statementBinder(t, statement))
+            prepareStatement.flatMap { preparedStatement =>
+              val boundStatements = list.map(t => statementBinder(t, preparedStatement))
               val batchStatement = BatchStatement.newInstance(BatchType.UNLOGGED).addAll(boundStatements.asJava)
               session.executeWriteBatch(batchStatement).map(_ => list)(ExecutionContexts.sameThreadExecutionContext)
             })

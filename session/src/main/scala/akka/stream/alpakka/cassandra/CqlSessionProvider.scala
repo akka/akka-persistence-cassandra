@@ -37,7 +37,7 @@ class DefaultSessionProvider(system: ActorSystem, config: Config) extends CqlSes
     val builder = CqlSession.builder()
     val sessionName = config.getString("session-name")
     (if (sessionName != null && sessionName.nonEmpty) {
-       log.debug(s"Initialising Cassandra session [$sessionName]")
+       log.debug("Initialising Cassandra session [{}]", sessionName)
        val overload: DriverConfigLoader =
          DriverConfigLoader.programmaticBuilder().withString(DefaultDriverOption.SESSION_NAME, sessionName).build()
        builder.withConfigLoader(overload)
