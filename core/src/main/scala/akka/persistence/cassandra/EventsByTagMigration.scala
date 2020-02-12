@@ -14,8 +14,8 @@ import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.persistence.cassandra.journal.TagWriters.{ AllFlushed, FlushAllTagWriters, TagWritersSession }
 import akka.persistence.cassandra.journal._
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
+import akka.persistence.cassandra.Extractors.RawEvent
+import akka.persistence.cassandra.Extractors.Extractor
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query.PersistenceQuery
@@ -34,15 +34,17 @@ object EventsByTagMigration {
     new EventsByTagMigration(system)
 
   // Extracts a Cassandra Row, assuming the pre 0.80 schema into a [[RawEvent]]
-  def rawPayloadOldTagSchemaExtractor(
-      bucketSize: BucketSize,
-      ed: EventDeserializer,
-      system: ActorSystem): Extractor[RawEvent] =
-    new Extractor[RawEvent](ed, SerializationExtension(system)) {
+  def rawPayloadOldTagSchemaExtractor(bucketSize: BucketSize, system: ActorSystem): Extractor[RawEvent] =
+    new Extractor[RawEvent] {
+
+      // TODO check this is only created once
+      val columnDefinitionCache = new ColumnDefinitionCache
+      val serialization = SerializationExtension(system)
+
       override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[RawEvent] = {
         // Get the tags from the old location i.e. tag1, tag2, tag3
         val tags: Set[String] =
-          if (ed.columnDefinitionCache.hasOldTagsColumns(row)) {
+          if (columnDefinitionCache.hasOldTagsColumns(row)) {
             (1 to 3).foldLeft(Set.empty[String]) {
               case (acc, i) =>
                 val tag = row.getString(s"tag$i")
@@ -56,7 +58,7 @@ object EventsByTagMigration {
 
         val timeUuid = row.getUuid("timestamp")
         val sequenceNr = row.getLong("sequence_nr")
-        val meta = if (ed.columnDefinitionCache.hasMetaColumns(row)) {
+        val meta = if (columnDefinitionCache.hasMetaColumns(row)) {
           val m = row.getByteBuffer("meta")
           Option(m).map(SerializedMeta(_, row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
         } else {
@@ -81,7 +83,7 @@ object EventsByTagMigration {
                 timeBucket = TimeBucket(timeUuid, bucketSize))))
         }
 
-        if (eventDeserializer.columnDefinitionCache.hasMessageColumn(row)) {
+        if (columnDefinitionCache.hasMessageColumn(row)) {
           row.getByteBuffer("message") match {
             case null  => deserializeEvent()
             case bytes =>
@@ -196,9 +198,6 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
       TagWritersSession(session, journalSettings.writeProfile, journalSettings.readProfile, taggedPreparedStatements)
     val tagWriters = system.actorOf(TagWriters.props(eventsByTagSettings.tagWriterSettings, tagWriterSession))
 
-    val eventDeserializer: CassandraJournal.EventDeserializer =
-      new CassandraJournal.EventDeserializer(system)
-
     implicit val timeout: Timeout = flushTimeout
 
     val allPids = src
@@ -235,8 +234,8 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
                   None,
                   settings.querySettings.readProfile,
                   s"migrateToTag-$pid",
-                  extractor = EventsByTagMigration
-                    .rawPayloadOldTagSchemaExtractor(eventsByTagSettings.bucketSize, eventDeserializer, system))
+                  extractor =
+                    EventsByTagMigration.rawPayloadOldTagSchemaExtractor(eventsByTagSettings.bucketSize, system))
                 .map(tagRecovery.sendMissingTagWriteRaw(tp, tagWriters, actorRunning = false))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
                 .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])

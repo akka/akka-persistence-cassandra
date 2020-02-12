@@ -18,7 +18,7 @@ import akka.cassandra.session._
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
+import akka.persistence.cassandra.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
 import akka.persistence.query.PersistenceQuery

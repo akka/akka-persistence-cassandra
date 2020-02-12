@@ -12,7 +12,7 @@ import akka.event.Logging
 import akka.event.Logging.{ LogEvent, StdOutLogger }
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
+import akka.persistence.cassandra.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
@@ -239,7 +239,7 @@ abstract class CassandraSpec(
       .run()
       .futureValue
 
-  def events(pid: String): immutable.Seq[EventsByPersistenceIdStage.TaggedPersistentRepr] =
+  def events(pid: String): immutable.Seq[Extractors.TaggedPersistentRepr] =
     queries
       .eventsByPersistenceId(
         pid,

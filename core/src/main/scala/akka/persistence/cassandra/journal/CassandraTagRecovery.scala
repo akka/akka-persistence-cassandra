@@ -17,7 +17,7 @@ import akka.persistence.cassandra.journal.TagWriters.{
   TagProcessAck,
   TagWrite
 }
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
+import akka.persistence.cassandra.Extractors.RawEvent
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 import scala.concurrent.{ ExecutionContext, Future }
@@ -27,7 +27,7 @@ import akka.actor.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.TaggedPersistentRepr
+import akka.persistence.cassandra.Extractors.TaggedPersistentRepr
 import akka.serialization.SerializationExtension
 import akka.persistence.cassandra._
 

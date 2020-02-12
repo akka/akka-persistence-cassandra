@@ -46,7 +46,7 @@ lazy val core = (project in file("core"))
 
 lazy val reconciler = (project in file("reconciler"))
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
-  .dependsOn(core, session)
+  .dependsOn(core % "test->test;compile->compile", session)
   .settings(
     libraryDependencies ++= Dependencies.reconcilerDependencies
   )

@@ -4,4 +4,29 @@
 
 package akka.persistence.cassandra.reconciler
 
-class BuildTagViewForPersisetceIdSpec extends CassandraSpec {}
+import akka.persistence.cassandra.CassandraSpec
+
+class BuildTagViewForPersisetceIdSpec extends CassandraSpec("""
+
+akka.persistence.cassandra {
+ events-by-tag {
+   # enabled = false
+ } 
+}
+
+""") {
+
+  "BuildTagViewForPersistenceId" should {
+
+    "build from scratch" in {
+      pending
+
+    }
+
+    "build partially" in {
+      pending
+
+    }
+
+  }
+}
