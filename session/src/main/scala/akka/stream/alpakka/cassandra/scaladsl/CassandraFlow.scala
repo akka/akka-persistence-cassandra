@@ -16,7 +16,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 /**
  * Scala API to create Cassandra flows.
  */
-class CassandraFlow {
+object CassandraFlow {
 
   /**
    * A flow writing to Cassandra for every stream element.

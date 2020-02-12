@@ -16,6 +16,8 @@
         </encoder>
     </appender>
 
+    <logger name="akka" level="INFO" />
+    <logger name="akka.stream.alpakka" level="DEBUG" />
     <logger name="org.apache.cassandra" level="ERROR" />
     <logger name="com.datastax" level="INFO" />
     <logger name="io.netty" level="ERROR" />
