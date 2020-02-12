@@ -21,17 +21,17 @@ object CassandraSource {
    * Prepare, bind and execute a select statement in one go.
    */
   @varargs
-  def create(session: CassandraSession, stmt: String, bindValues: AnyRef*): Source[Row, NotUsed] =
-    session.select(stmt, bindValues: _*)
+  def create(session: CassandraSession, cqlStatement: String, bindValues: AnyRef*): Source[Row, NotUsed] =
+    session.select(cqlStatement, bindValues: _*)
 
   /**
-   * Create a [[akka.stream.scaladsl.Source Source]] from a given statement.
+   * Create a [[akka.stream.javadsl.Source Source]] from a given statement.
    */
   def create(session: CassandraSession, stmt: Statement[_]): Source[Row, NotUsed] =
     session.select(stmt)
 
   /**
-   * Create a [[akka.stream.scaladsl.Source Source]] from a given statement.
+   * Create a [[akka.stream.javadsl.Source Source]] from a given statement.
    */
   def fromCompletionStage(session: CassandraSession, stmt: CompletionStage[Statement[_]]): Source[Row, NotUsed] =
     session.select(stmt)

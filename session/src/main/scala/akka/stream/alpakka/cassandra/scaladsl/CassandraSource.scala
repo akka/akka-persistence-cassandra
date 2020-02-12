@@ -20,8 +20,8 @@ object CassandraSource {
    *
    * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
    */
-  def apply(stmt: String, bindValues: AnyRef*)(implicit session: CassandraSession): Source[Row, NotUsed] =
-    session.select(stmt, bindValues: _*)
+  def apply(cqlStatement: String, bindValues: AnyRef*)(implicit session: CassandraSession): Source[Row, NotUsed] =
+    session.select(cqlStatement, bindValues: _*)
 
   /**
    * Create a [[akka.stream.scaladsl.Source Source]] from a given statement.
