@@ -17,6 +17,7 @@ import scala.concurrent.ExecutionContext
 import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
+import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
 import akka.stream.alpakka.cassandra.{ scaladsl, CqlSessionProvider }
 import akka.stream.javadsl.Source
@@ -36,7 +37,7 @@ import com.datastax.oss.driver.api.core.cql.Statement
  *
  * All methods are non-blocking.
  */
-final class CassandraSession(delegate: scaladsl.CassandraSession) {
+final class CassandraSession(@InternalApi private[akka] val delegate: scaladsl.CassandraSession) {
 
   /**
    * Use this constructor if you want to create a stand-alone `CassandraSession`.
