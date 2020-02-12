@@ -5,7 +5,6 @@
 package akka.stream.alpakka.cassandra.scaladsl
 
 import akka.NotUsed
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.stream.scaladsl.Source
 import com.datastax.oss.driver.api.core.cql.{ Row, Statement }
 

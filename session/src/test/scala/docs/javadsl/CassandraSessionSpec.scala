@@ -4,17 +4,19 @@
 
 package docs.javadsl
 
+import java.util
 import java.util.concurrent.CompletionStage
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.cassandra.session.javadsl.CassandraSessionRegistry
-import akka.cassandra.session.{ javadsl, CassandraSessionSettings }
 import akka.event.Logging
+import akka.stream.alpakka.cassandra.CassandraSessionSettings
+import akka.stream.alpakka.cassandra.javadsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSpecBase
 import akka.stream.javadsl.Sink
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.TestSink
+import com.datastax.oss.driver.api.core.cql.Row
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -59,7 +61,7 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
   val sessionSettings: CassandraSessionSettings = CassandraSessionSettings("alpakka.cassandra")
 
   // testing javadsl to prove delegation works
-  lazy val session: javadsl.CassandraSession = javadslSessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+  lazy val session: CassandraSession = javadslSessionRegistry.sessionFor(sessionSettings, system.dispatcher)
 
   def await[T](cs: CompletionStage[T]): T = cs.toScala.futureValue
 
@@ -79,7 +81,8 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
         .map(_ => Done)
         .futureValue mustBe Done
 
-      val rows = session.select(s"SELECT * FROM $table").runWith(Sink.seq, materializer).toScala.futureValue
+      val sink: Sink[Row, CompletionStage[util.List[Row]]] = Sink.seq
+      val rows = session.select(s"SELECT * FROM $table").runWith(sink, materializer).toScala.futureValue
       rows.asScala.map(_.getInt("id")) must contain theSameElementsAs data
     }
 

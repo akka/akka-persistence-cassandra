@@ -2,7 +2,7 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session.scaladsl
+package akka.stream.alpakka.cassandra.scaladsl
 
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
@@ -29,7 +29,7 @@ import com.datastax.oss.driver.api.core.ProtocolVersion
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.cql.Statement
 import akka.annotation.InternalApi
-import akka.cassandra.session._
+import akka.stream.alpakka.cassandra.{ CassandraMetricsRegistry, CqlSessionProvider }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
 

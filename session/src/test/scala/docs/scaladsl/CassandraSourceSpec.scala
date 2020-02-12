@@ -5,9 +5,8 @@
 package docs.scaladsl
 
 import akka.actor.ActorSystem
-import akka.cassandra.session.CassandraSessionSettings
-import akka.cassandra.session.scaladsl.CassandraSession
-import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSource, CassandraSpecBase }
+import akka.stream.alpakka.cassandra.CassandraSessionSettings
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSource, CassandraSpecBase }
 import akka.stream.scaladsl.Sink
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import com.datastax.oss.driver.api.core.cql.SimpleStatement

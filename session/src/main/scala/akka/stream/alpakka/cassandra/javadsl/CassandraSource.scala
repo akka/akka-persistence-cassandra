@@ -7,7 +7,6 @@ package akka.stream.alpakka.cassandra.javadsl
 import java.util.concurrent.CompletionStage
 
 import akka.NotUsed
-import akka.cassandra.session.javadsl.CassandraSession
 import akka.stream.javadsl.Source
 import com.datastax.oss.driver.api.core.cql.{ Row, Statement }
 

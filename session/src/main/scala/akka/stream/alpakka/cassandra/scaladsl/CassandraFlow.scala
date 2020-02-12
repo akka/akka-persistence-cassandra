@@ -5,9 +5,8 @@
 package akka.stream.alpakka.cassandra.scaladsl
 
 import akka.NotUsed
-import akka.cassandra.session.scaladsl.{ CassandraSession, CassandraSessionRegistry }
-import akka.cassandra.session.{ CassandraSessionSettings, CassandraWriteSettings }
 import akka.dispatch.ExecutionContexts
+import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, CassandraWriteSettings }
 import akka.stream.scaladsl.Flow
 import com.datastax.oss.driver.api.core.cql.{ BatchStatement, BatchType, BoundStatement, PreparedStatement }
 

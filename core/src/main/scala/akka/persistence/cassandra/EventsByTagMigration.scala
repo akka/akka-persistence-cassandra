@@ -5,7 +5,6 @@
 package akka.persistence.cassandra
 
 import scala.concurrent.ExecutionContext
-
 import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.event.Logging
@@ -17,15 +16,16 @@ import akka.persistence.cassandra.journal._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query.PersistenceQuery
 import akka.serialization.SerializationExtension
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.{ ActorMaterializer, OverflowStrategy }
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.protocol.internal.util.Bytes
+
 import scala.concurrent.Future
 import scala.concurrent.duration._
 

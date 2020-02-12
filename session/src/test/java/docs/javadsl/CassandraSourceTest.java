@@ -5,9 +5,9 @@
 package docs.javadsl;
 
 import akka.actor.ActorSystem;
-import akka.cassandra.session.CassandraSessionSettings;
-import akka.cassandra.session.javadsl.CassandraSession;
-import akka.cassandra.session.javadsl.CassandraSessionRegistry;
+import akka.stream.alpakka.cassandra.CassandraSessionSettings;
+import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
+import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
 import akka.stream.ActorMaterializer;
 import akka.stream.Materializer;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSource;

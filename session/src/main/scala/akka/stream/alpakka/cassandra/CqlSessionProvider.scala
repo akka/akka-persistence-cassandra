@@ -2,7 +2,7 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session
+package akka.stream.alpakka.cassandra
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import akka.event.Logging

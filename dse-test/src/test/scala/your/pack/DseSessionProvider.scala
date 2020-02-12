@@ -1,6 +1,6 @@
 package your.pack
 
-import akka.cassandra.session.CqlSessionProvider
+import akka.stream.alpakka.cassandra.CqlSessionProvider
 import com.datastax.dse.driver.api.core.DseSession
 import com.datastax.oss.driver.api.core.CqlSession
 

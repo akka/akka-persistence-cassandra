@@ -5,7 +5,6 @@
 package akka.stream.alpakka.cassandra.scaladsl
 
 import akka.actor.ActorSystem
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.stream.{ ActorMaterializer, Materializer }
 import akka.testkit.TestKit
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach }

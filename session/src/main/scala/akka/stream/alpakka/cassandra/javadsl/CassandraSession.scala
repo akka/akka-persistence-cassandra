@@ -2,7 +2,7 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session.javadsl
+package akka.stream.alpakka.cassandra.javadsl
 
 import java.util.{ List => JList }
 import java.util.Optional
@@ -17,8 +17,8 @@ import scala.concurrent.ExecutionContext
 import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.cassandra.session.CqlSessionProvider
 import akka.event.LoggingAdapter
+import akka.stream.alpakka.cassandra.{ scaladsl, CqlSessionProvider }
 import akka.stream.javadsl.Source
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.BatchStatement
@@ -36,7 +36,7 @@ import com.datastax.oss.driver.api.core.cql.Statement
  *
  * All methods are non-blocking.
  */
-final class CassandraSession(delegate: akka.cassandra.session.scaladsl.CassandraSession) {
+final class CassandraSession(delegate: scaladsl.CassandraSession) {
 
   /**
    * Use this constructor if you want to create a stand-alone `CassandraSession`.
@@ -50,7 +50,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
       init: JFunction[CqlSession, CompletionStage[Done]],
       onClose: java.lang.Runnable) =
     this(
-      new akka.cassandra.session.scaladsl.CassandraSession(
+      new scaladsl.CassandraSession(
         system,
         sessionProvider,
         executionContext,

@@ -8,12 +8,12 @@ import java.lang.{ Long => JLong }
 import java.lang.{ Integer => JInteger }
 import java.nio.ByteBuffer
 
-import akka.cassandra.session.CassandraMetricsRegistry
 import akka.persistence.SnapshotProtocol._
 import akka.persistence._
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.SnapshotWithMetaData
 import akka.persistence.snapshot.SnapshotStoreSpec
+import akka.stream.alpakka.cassandra.CassandraMetricsRegistry
 import akka.testkit.TestProbe
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.typesafe.config.ConfigFactory

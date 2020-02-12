@@ -2,13 +2,13 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session.javadsl
+package akka.stream.alpakka.cassandra.javadsl
 
 import java.util.concurrent.CompletionStage
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.cassandra.session.{ scaladsl, CassandraSessionSettings }
+import akka.stream.alpakka.cassandra.{ scaladsl, CassandraSessionSettings }
 import com.datastax.oss.driver.api.core.CqlSession
 
 import scala.compat.java8.FutureConverters._

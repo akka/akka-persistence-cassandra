@@ -2,7 +2,7 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session.scaladsl
+package akka.stream.alpakka.cassandra.scaladsl
 
 import java.util.concurrent.ConcurrentHashMap
 
@@ -15,8 +15,8 @@ import akka.actor.ExtendedActorSystem
 import akka.actor.Extension
 import akka.actor.ExtensionId
 import akka.actor.ExtensionIdProvider
-import akka.cassandra.session.{ CassandraSessionSettings, CqlSessionProvider, FutureDone }
 import akka.event.Logging
+import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, CqlSessionProvider, FutureDone }
 import com.datastax.oss.driver.api.core.CqlSession
 
 /**
