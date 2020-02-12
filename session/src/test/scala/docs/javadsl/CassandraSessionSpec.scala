@@ -124,7 +124,7 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
 
     "selectOne empty" in {
       val row = await(session.selectOne(s"SELECT count FROM $dataTable WHERE partition = ? and key = ?", "A", "x"))
-      row mustBe empty
+      row.asScala mustBe empty
     }
 
     "create indexes" in {
