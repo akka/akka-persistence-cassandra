@@ -34,16 +34,15 @@ object CassandraFlow {
       cqlStatement: String,
       statementBinder: (T, PreparedStatement) => BoundStatement): Flow[T, T, NotUsed] = {
     Flow
-      .setup { (materializer, _) =>
-        implicit val executionContext: ExecutionContext = materializer.system.dispatcher
-        val prepareStatement = session.prepare(cqlStatement)
-        Flow[T].mapAsync(writeSettings.parallelism) { element =>
-          prepareStatement
-            .flatMap { preparedStatement =>
-              session.executeWrite(statementBinder(element, preparedStatement))
-            }
-            .map(_ => element)(ExecutionContexts.sameThreadExecutionContext)
-        }
+      .futureFlow {
+        val prepare = session.prepare(cqlStatement)
+        prepare.map { preparedStatement =>
+          Flow[T].mapAsync(writeSettings.parallelism) { element =>
+            session
+              .executeWrite(statementBinder(element, preparedStatement))
+              .map(_ => element)(ExecutionContexts.sameThreadExecutionContext)
+          }
+        }(session.ec)
       }
       .mapMaterializedValue(_ => NotUsed)
   }
@@ -64,21 +63,21 @@ object CassandraFlow {
       writeSettings: CassandraWriteSettings,
       cqlStatement: String,
       statementBinder: (T, PreparedStatement) => BoundStatement): FlowWithContext[T, Ctx, T, Ctx, NotUsed] = {
-    FlowWithContext.fromTuples(
+    FlowWithContext.fromTuples {
       Flow
-        .setup { (materializer, _) =>
-          implicit val executionContext: ExecutionContext = materializer.system.dispatcher
-          val prepareStatement = session.prepare(cqlStatement)
-          Flow[(T, Ctx)].mapAsync(writeSettings.parallelism) {
-            case tuple @ (element, _) =>
-              prepareStatement
-                .flatMap { preparedStatement =>
-                  session.executeWrite(statementBinder(element, preparedStatement))
-                }
-                .map(_ => tuple)(ExecutionContexts.sameThreadExecutionContext)
-          }
+        .futureFlow {
+          val prepare = session.prepare(cqlStatement)
+          prepare.map { preparedStatement =>
+            Flow[(T, Ctx)].mapAsync(writeSettings.parallelism) {
+              case tuple @ (element, _) =>
+                session
+                  .executeWrite(statementBinder(element, preparedStatement))
+                  .map(_ => tuple)(ExecutionContexts.sameThreadExecutionContext)
+            }
+          }(session.ec)
         }
-        .mapMaterializedValue(_ => NotUsed))
+        .mapMaterializedValue(_ => NotUsed)
+    }
   }
 
   /**
@@ -100,22 +99,23 @@ object CassandraFlow {
       writeSettings: CassandraWriteSettings,
       cqlStatement: String,
       statementBinder: (T, PreparedStatement) => BoundStatement,
-      partitionKey: T => K): Flow[T, T, NotUsed] =
+      partitionKey: T => K): Flow[T, T, NotUsed] = {
     Flow
-      .setup { (materializer, _) =>
-        implicit val executionContext: ExecutionContext = materializer.system.dispatcher
+      .futureFlow {
         val prepareStatement: Future[PreparedStatement] = session.prepare(cqlStatement)
-        Flow[T]
-          .groupedWithin(writeSettings.maxBatchSize, writeSettings.maxBatchWait)
-          .map(_.groupBy(partitionKey).values.toList)
-          .mapConcat(identity)
-          .mapAsyncUnordered(writeSettings.parallelism)(list =>
-            prepareStatement.flatMap { preparedStatement =>
+        prepareStatement.map { preparedStatement =>
+          Flow[T]
+            .groupedWithin(writeSettings.maxBatchSize, writeSettings.maxBatchWait)
+            .map(_.groupBy(partitionKey).values.toList)
+            .mapConcat(identity)
+            .mapAsyncUnordered(writeSettings.parallelism) { list =>
               val boundStatements = list.map(t => statementBinder(t, preparedStatement))
               val batchStatement = BatchStatement.newInstance(BatchType.UNLOGGED).addAll(boundStatements.asJava)
               session.executeWriteBatch(batchStatement).map(_ => list)(ExecutionContexts.sameThreadExecutionContext)
-            })
-          .mapConcat(_.toList)
+            }
+            .mapConcat(_.toList)
+        }(session.ec)
       }
       .mapMaterializedValue(_ => NotUsed)
+  }
 }
