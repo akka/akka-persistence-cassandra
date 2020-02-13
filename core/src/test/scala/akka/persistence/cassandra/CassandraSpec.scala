@@ -108,6 +108,7 @@ abstract class CassandraSpec(
 
   def this() = this(CassandraLifecycle.config)
 
+  private var failed = false
   lazy val randomPort = SocketUtil.temporaryLocalPort()
 
   val shortWait = 10.millis
@@ -116,7 +117,9 @@ abstract class CassandraSpec(
 
   def keyspaces(): Set[String] = Set(journalName, snapshotName)
 
-  private var failed = false
+  private val ids = new AtomicInteger(0)
+
+  def nextId(): String = s"pid-${ids.incrementAndGet()}"
 
   override protected def withFixture(test: NoArgTest): Outcome = {
     // When filtering just collects events into this var (yeah, it's a hack to do that in a filter).
