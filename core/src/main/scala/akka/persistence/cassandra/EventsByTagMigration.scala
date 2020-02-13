@@ -4,7 +4,6 @@
 
 package akka.persistence.cassandra
 
-import scala.concurrent.ExecutionContext
 import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.event.Logging
@@ -19,13 +18,14 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.PersistenceQuery
 import akka.serialization.SerializationExtension
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
-import akka.stream.{ ActorMaterializer, OverflowStrategy }
+import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.protocol.internal.util.Bytes
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -107,7 +107,7 @@ object EventsByTagMigration {
 class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka.persistence.cassandra") {
   private[akka] val log = Logging.getLogger(system, getClass)
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](pluginConfigPath + ".query")
-  private implicit val materialiser = ActorMaterializer()(system)
+  private implicit val sys: ActorSystem = system
 
   implicit val ec =
     system.dispatchers.lookup(system.settings.config.getString(s"$pluginConfigPath.journal.plugin-dispatcher"))
@@ -218,7 +218,7 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
 
         // would be nice to group these up into a TagWrites message but also
         // nice that this reuses the recovery code :-/
-        Source.fromFutureSource {
+        Source.futureSource {
           prereqs.map {
             case (tp, startingSeq) => {
               log.info(

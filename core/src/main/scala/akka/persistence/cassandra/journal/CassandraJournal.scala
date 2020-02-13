@@ -24,7 +24,6 @@ import akka.persistence.query.PersistenceQuery
 import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, TagWritersSession }
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
-import akka.stream.ActorMaterializer
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
@@ -52,6 +51,7 @@ import akka.stream.scaladsl.Source
     extends AsyncWriteJournal
     with NoSerializationVerificationNeeded {
   import CassandraJournal._
+  import context.system
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
@@ -66,7 +66,6 @@ import akka.stream.scaladsl.Source
   private val log: LoggingAdapter = Logging(context.system, getClass)
 
   private implicit val ec: ExecutionContext = context.dispatcher
-  private implicit val materializer: ActorMaterializer = ActorMaterializer()(context.system)
 
   // readHighestSequence must be performed after pending write for a persistenceId
   // when the persistent actor is restarted.
@@ -664,7 +663,7 @@ import akka.stream.scaladsl.Source
       }
 
       Source
-        .fromFutureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
+        .futureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
           log.debug(
             "[{}] starting recovery with tag progress: [{}]. From [{}] to [{}]",
             persistenceId,
