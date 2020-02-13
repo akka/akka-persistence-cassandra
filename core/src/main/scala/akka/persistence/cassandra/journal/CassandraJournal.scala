@@ -12,9 +12,8 @@ import akka.Done
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
 import akka.annotation.InternalApi
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.{ Logging, LoggingAdapter }
-import akka.cassandra.session._
+import akka.stream.alpakka.cassandra._
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
@@ -23,16 +22,17 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
 import akka.persistence.query.PersistenceQuery
 import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, TagWritersSession }
-import akka.persistence.cassandra.journal.TagWriter.{ TagProgress }
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
+import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
 import akka.stream.ActorMaterializer
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable

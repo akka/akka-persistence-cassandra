@@ -9,7 +9,6 @@ import java.util.UUID
 
 import akka.NotUsed
 import akka.annotation.InternalApi
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TimeBucket
@@ -18,10 +17,11 @@ import akka.persistence.cassandra.query.TagViewSequenceNumberScanner.Session
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row }
+
 import scala.concurrent.duration.{ Deadline, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
-
 import akka.persistence.cassandra.BucketSize
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 /**
  * INTERNAL API

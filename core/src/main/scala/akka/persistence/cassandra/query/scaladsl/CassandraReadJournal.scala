@@ -18,7 +18,6 @@ import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Ex
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
 import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
@@ -28,16 +27,16 @@ import akka.stream.{ ActorAttributes, ActorMaterializer }
 import akka.util.ByteString
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
+
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
-
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.CassandraStatements
 import akka.serialization.SerializationExtension
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
