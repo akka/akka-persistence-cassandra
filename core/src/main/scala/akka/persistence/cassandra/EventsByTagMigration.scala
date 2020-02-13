@@ -117,8 +117,12 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
     new PluginSettings(system, system.settings.config.getConfig(pluginConfigPath))
   private val journalStatements = new CassandraJournalStatements(settings)
   private val taggedPreparedStatements = new TaggedPreparedStatements(journalStatements, session.prepare)
+  private val tagWriterSession =
+    TagWritersSession(session, journalSettings.writeProfile, journalSettings.readProfile, taggedPreparedStatements)
+  private val tagWriters = system.actorOf(TagWriters.props(eventsByTagSettings.tagWriterSettings, tagWriterSession))
+
   private val tagRecovery =
-    new CassandraTagRecovery(system, session, settings, taggedPreparedStatements)
+    new CassandraTagRecovery(system, session, settings, taggedPreparedStatements, tagWriters)
 
   import journalStatements._
 
@@ -194,9 +198,6 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
       periodicFlush: Int,
       flushTimeout: Timeout): Future[Done] = {
     log.info("Beginning migration of data to tag_views table in keyspace {}", journalSettings.keyspace)
-    val tagWriterSession =
-      TagWritersSession(session, journalSettings.writeProfile, journalSettings.readProfile, taggedPreparedStatements)
-    val tagWriters = system.actorOf(TagWriters.props(eventsByTagSettings.tagWriterSettings, tagWriterSession))
 
     implicit val timeout: Timeout = flushTimeout
 
@@ -210,7 +211,7 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
           val startingSeqFut = tagRecovery.tagScanningStartingSequenceNr(pid)
           for {
             tp <- tagRecovery.lookupTagProgress(pid)
-            _ <- tagRecovery.setTagProgress(pid, tp, tagWriters)
+            _ <- tagRecovery.setTagProgress(pid, tp)
             startingSeq <- startingSeqFut
           } yield (tp, startingSeq)
         }
@@ -236,9 +237,9 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
                   s"migrateToTag-$pid",
                   extractor =
                     EventsByTagMigration.rawPayloadOldTagSchemaExtractor(eventsByTagSettings.bucketSize, system))
-                .map(tagRecovery.sendMissingTagWriteRaw(tp, tagWriters, actorRunning = false))
+                .map(tagRecovery.sendMissingTagWriteRaw(tp, actorRunning = false))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
-                .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])
+                .mapAsync(1)(_ => tagRecovery.flush(timeout))
             }
           }
         }

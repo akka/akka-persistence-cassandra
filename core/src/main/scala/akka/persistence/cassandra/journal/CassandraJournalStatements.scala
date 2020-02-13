@@ -179,11 +179,11 @@ import com.datastax.oss.driver.api.core.CqlSession
        DELETE FROM $tagScanningTableName WHERE persistence_id = ?
      """
 
-  def truncateTagViews: String = 
+  def truncateTagViews: String =
     s"TRUNCATE $tagTableName"
-  def truncateTagProgress: String = 
+  def truncateTagProgress: String =
     s"TRUNCATE $tagProgressTableName"
-  def truncateTagScanning: String = 
+  def truncateTagScanning: String =
     s"TRUNCATE $tagScanningTableName"
 
   def selectAllTagProgress: String = {

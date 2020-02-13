@@ -11,11 +11,6 @@ import akka.Done
 import akka.persistence.cassandra.CassandraStatements
 import akka.cassandra.session.scaladsl.CassandraSession
 import akka.cassandra.session.scaladsl.CassandraSessionRegistry
-import akka.persistence.cassandra.journal.TagWriters._
-import akka.persistence.cassandra.journal.TagWriters
-import akka.persistence.cassandra.journal.TagWriter.TagProgress
-import akka.pattern.ask
-import scala.concurrent.duration._
 import scala.concurrent.Future
 import akka.stream.scaladsl.Source
 import akka.actor.ExtendedActorSystem
@@ -33,6 +28,10 @@ import scala.concurrent.ExecutionContext
 import java.util.UUID
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
+import akka.persistence.cassandra.journal.CassandraTagRecovery
+import akka.persistence.cassandra.journal.TaggedPreparedStatements
+import akka.persistence.cassandra.journal.TagWriters
+import akka.persistence.cassandra.journal.TagWriters._
 
 /**
  * Database actions for reconciliation
@@ -57,22 +56,39 @@ final class ReconciliationSession(session: CassandraSession, statements: Cassand
       session.executeWrite(ps.bind(tag, bucket.key: JLong, timestamp, persistenceId, tagPidSequenceNr: JLong)))
   }
 
+  /**
+   * Delete entries in the tag_writes_progress table for the tag and persistence id
+   */
   def deleteTagProgress(tag: String, persistenceId: String): Future[Done] = {
     deleteTagProgress.flatMap(ps => session.executeWrite(ps.bind(persistenceId, tag)))
   }
 
+  /**
+   * Delete the tag scanning for the persistence id. Will slow down recovery for the
+   * persistence id next time it starts if it has a snapshot as it will need to scan
+   * the pre-snapshot events for tags.
+   */
   def deleteTagScannning(persistenceId: String): Future[Done] = {
     deleteTagScanning.flatMap(ps => session.executeWrite(ps.bind(persistenceId)))
   }
 
+  /**
+   * Return the entire tag progress table. A very inefficient query but can be used to get all the
+   * current tag names.
+   */
   def selectAllTagProgress(): Source[Row, NotUsed] = {
     Source.future(selectAllTagProgressPs.map(ps => session.select(ps.bind()))).flatMapConcat(identity)
   }
 
+  /**
+   * Caution: this removes all data from all tag related tables
+   */
   def truncateAll(): Future[Done] = {
     val tagViews = session.executeWrite(SimpleStatement.newInstance(statements.journalStatements.truncateTagViews))
-    val tagProgress = session.executeWrite(SimpleStatement.newInstance(statements.journalStatements.truncateTagProgress))
-    val tagScanning = session.executeWrite(SimpleStatement.newInstance(statements.journalStatements.truncateTagScanning))
+    val tagProgress =
+      session.executeWrite(SimpleStatement.newInstance(statements.journalStatements.truncateTagProgress))
+    val tagScanning =
+      session.executeWrite(SimpleStatement.newInstance(statements.journalStatements.truncateTagScanning))
 
     for {
       _ <- tagViews
@@ -83,20 +99,48 @@ final class ReconciliationSession(session: CassandraSession, statements: Cassand
 }
 
 /**
- * API likely to change
+ * For reconciling with tag_views table with the messages table. Can be used to fix data issues causes
+ * by split brains or persistence ids running in multiple locations.
+ *
+ * Should not be run at the same time as an application.
+ *
+ * To support running in the same system as a journal the tag writers actor would need to be shared
+ * and all the interleavings of the actor running at the same be considered.
+ *
+ * API likely to change when a java/scaladsl is added.
  */
 @ApiMayChange
 final class Reconciliation(system: ActorSystem) extends Extension {
   import system.dispatcher
 
-  // TODO make session configurable?
+  // TODO make session configurable
   private val session = CassandraSessionRegistry(system).sessionFor("akka.persistence.cassandra", system.dispatcher)
   private val settings = PluginSettings(system)
   private val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
   private val statements = new CassandraStatements(settings)
   private val recSession = new ReconciliationSession(session, statements)
+  private val tagStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
 
+  // Plugin
+  // TODO profile from config
+  private val tagWriterSession: TagWriters.TagWritersSession =
+    new TagWritersSession(
+      session,
+      "akka-persistence-cassandra-profile",
+      "akka-persistence-cassandra-profile",
+      tagStatements)
+  private val tagWriters =
+    system.actorOf(
+      TagWriters.props(settings.eventsByTagSettings.tagWriterSettings, tagWriterSession),
+      "reconciliation-tag-writers")
+  private val recovery = new CassandraTagRecovery(system, session, settings, tagStatements, tagWriters)
+
+  /**
+   * Scans the given tag and deletes all events for the provided persistence ids.
+   * All events for a persistence id have to be deleted as not to leave gaps in the
+   * tag pid sequence numbers.
+   */
   def deleteTagViewForPersistenceIds(persistenceId: Set[String], tag: String): Future[Done] =
     new DeleteTagViewForPersistenceId(persistenceId, tag, system, recSession, settings, queries).execute()
 
@@ -104,8 +148,12 @@ final class Reconciliation(system: ActorSystem) extends Extension {
    * Assumes that the tag views table contains no elements for the given persistence ids
    * Either because tag_views and tag_progress have truncated for this given persistence id
    * or tag writing has never been enabled
+   *
+   * TODO fail fast if there are already events there?
+   * TODO support resuming?
    */
-  def rebuildTagViewForPersistenceIds(persisnteceId: String): Future[Done] = ???
+  def rebuildTagViewForPersistenceIds(persistenceId: String): Future[Done] =
+    new BuildTagViewForPersisetceId(persistenceId, system, recovery, settings).reconcile()
 
   /**
    * Returns all the tags in the journal. This is not an efficient query for Cassandra so it is better
@@ -114,77 +162,18 @@ final class Reconciliation(system: ActorSystem) extends Extension {
   def allTags(): Source[String, NotUsed] = new AllTags(recSession).execute()
 
   /**
-   * Drop tags vies table and all metadata so that it can be rebuilt
+   * Truncate all tables and all metadata so that it can be rebuilt
    */
-  def truncateTagViews(): Future[Done] = ???
+  def truncateTagView(): Future[Done] = recSession.truncateAll()
 
 }
 
-// Java/Scala dsl?
+/**
+ * An extension for reconciling the tag_views table with the messages table
+ */
 object Reconciliation extends ExtensionId[Reconciliation] with ExtensionIdProvider {
-
   def createExtension(system: ExtendedActorSystem): Reconciliation = new Reconciliation(system)
   override def lookup(): Reconciliation.type = Reconciliation
   override def get(system: ActorSystem): Reconciliation = super.get(system)
   override def get(system: ClassicActorSystemProvider): Reconciliation = super.get(system)
 }
-/*
-class BuildTagViewForPersisetceId(
-    persistenceId: String,
-    system: ActorSystem,
-    session: CassandraSession,
-    settings: PluginSettings) {
-
-  import system.dispatcher
-
-  val log = Logging(system, classOf[BuildTagViewForPersisetceId])
-
-  // FIXME config path
-  private val queries: CassandraReadJournal =
-    PersistenceQuery(system.asInstanceOf[ExtendedActorSystem])
-      .readJournalFor[CassandraReadJournal]("cassandra-plugin.query")
-
-  private val serialization = SerializationExtension(system)
-  private val eventDeserializer: CassandraJournal.EventDeserializer =
-    new CassandraJournal.EventDeserializer(system)
-
-  private val statements = new CassandraStatements(settings)
-  private val tagStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
-  private val recovery = new CassandraTagRecovery(system, session, settings, tagStatements)
-  private val tagWriterSession: TagWriters.TagWritersSession =
-    new TagWritersSession(session, "cassandra-plugin", "cassandra-plugin", tagStatements)
-  private val tagWriters =
-    system.actorOf(TagWriters.props(settings.eventsByTagSettings.tagWriterSettings, tagWriterSession))
-
-  // FIXME config
-  implicit val timeout = Timeout(5.seconds)
-
-  def reconcile(flushEvery: Int = 1000): Future[Done] = {
-
-    val recoveryPrep = for {
-      tp <- recovery.lookupTagProgress(persistenceId)
-      _ <- recovery.setTagProgress(persistenceId, tp, tagWriters)
-    } yield tp
-
-    val what = Source.fromFutureSource(recoveryPrep.map((tp: Map[String, TagProgress]) => {
-      log.debug("[{}] Rebuilding tag view table from: [{}]", persistenceId, tp)
-      queries
-        .eventsByPersistenceId(
-          persistenceId,
-          0,
-          Long.MaxValue,
-          Long.MaxValue,
-          None,
-          settings.journalSettings.readProfile,
-          "BuildTagViewForPersistenceId",
-          extractor = Extractors.rawEvent(settings.eventsByTagSettings.bucketSize))
-        .map(recovery.sendMissingTagWriteRaw(tp, tagWriters, actorRunning = false))
-        .buffer(flushEvery, OverflowStrategy.backpressure)
-        .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])
-    }))
-
-    Future.successful(Done)
-  }
-
-}
- */

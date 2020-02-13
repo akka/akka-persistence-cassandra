@@ -84,12 +84,13 @@ import akka.stream.scaladsl.Source
     .sessionFor(sharedConfigPath, context.dispatcher, ses => statements.executeAllCreateKeyspaceAndTables(ses))
 
   private val taggedPreparedStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
-  private val tagRecovery = new CassandraTagRecovery(context.system, session, settings, taggedPreparedStatements)
   private val tagWriterSession = TagWritersSession(
     session,
     settings.journalSettings.writeProfile,
     settings.journalSettings.readProfile,
     taggedPreparedStatements)
+
+  // TODO move all tag related things into a class that no-ops to remove these options
   private val tagWrites: Option[ActorRef] =
     if (settings.eventsByTagSettings.eventsByTagEnabled)
       Some(
@@ -99,6 +100,9 @@ import akka.stream.scaladsl.Source
             .withDispatcher(context.props.dispatcher),
           "tagWrites"))
     else None
+
+  private val tagRecovery: Option[CassandraTagRecovery] =
+    tagWrites.map(ref => new CassandraTagRecovery(context.system, session, settings, taggedPreparedStatements, ref))
 
   private def preparedWriteMessage =
     session.prepare(statements.journalStatements.writeMessage(withMeta = false))
@@ -396,33 +400,34 @@ import akka.stream.scaladsl.Source
         f.flatMap(_ => asyncReadHighestSequenceNrInternal(persistenceId, fromSequenceNr))
     }
 
-    val toReturn = if (settings.eventsByTagSettings.eventsByTagEnabled) {
-
-      // This relies on asyncReadHighestSequenceNr having the correct sender()
-      // No other calls into the async journal have this as they are called from Future callbacks
-      val persistentActor = sender()
-
-      for {
-        seqNr <- highestSequenceNr
-        _ <- tagRecovery.sendPersistentActorStarting(persistenceId, persistentActor, tagWrites.get)
-        _ <- if (seqNr == fromSequenceNr && seqNr != 0) {
-          log.debug("[{}] snapshot is current so replay won't be required. Calculating tag progress now", persistenceId)
-          val scanningSeqNrFut = tagRecovery.tagScanningStartingSequenceNr(persistenceId)
-          for {
-            tp <- tagRecovery.lookupTagProgress(persistenceId)
-            _ <- tagRecovery.setTagProgress(persistenceId, tp, tagWrites.get)
-            scanningSeqNr <- scanningSeqNrFut
-            _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp)
-          } yield seqNr
-        } else if (seqNr == 0) {
-          log.debug("[{}] New pid. Sending blank tag progress. [{}]", persistenceId, persistentActor)
-          tagRecovery.setTagProgress(persistenceId, Map.empty, tagWrites.get)
-        } else {
-          Future.successful(())
-        }
-      } yield seqNr
-    } else {
-      highestSequenceNr
+    val toReturn = tagRecovery match {
+      case Some(tr) =>
+        // This relies on asyncReadHighestSequenceNr having the correct sender()
+        // No other calls into the async journal have this as they are called from Future callbacks
+        val persistentActor = sender()
+        for {
+          seqNr <- highestSequenceNr
+          _ <- tagRecovery.get.sendPersistentActorStarting(persistenceId, persistentActor)
+          _ <- if (seqNr == fromSequenceNr && seqNr != 0) {
+            log.debug(
+              "[{}] snapshot is current so replay won't be required. Calculating tag progress now",
+              persistenceId)
+            val scanningSeqNrFut = tr.tagScanningStartingSequenceNr(persistenceId)
+            for {
+              tp <- tr.lookupTagProgress(persistenceId)
+              _ <- tr.setTagProgress(persistenceId, tp)
+              scanningSeqNr <- scanningSeqNrFut
+              _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp, tr)
+            } yield seqNr
+          } else if (seqNr == 0) {
+            log.debug("[{}] New pid. Sending blank tag progress. [{}]", persistenceId, persistentActor)
+            tr.setTagProgress(persistenceId, Map.empty)
+          } else {
+            Future.successful(())
+          }
+        } yield seqNr
+      case None =>
+        highestSequenceNr
     }
 
     toReturn.onComplete { highestSeq =>
@@ -652,56 +657,56 @@ import akka.stream.scaladsl.Source
       replayCallback: PersistentRepr => Unit): Future[Unit] = {
     log.debug("[{}] asyncReplayMessages from [{}] to [{}]", persistenceId, fromSequenceNr, toSequenceNr)
 
-    if (eventsByTagSettings.eventsByTagEnabled) {
+    tagRecovery match {
+      case Some(tr) =>
+        val recoveryPrep: Future[Map[String, TagProgress]] = {
+          val scanningSeqNrFut = tr.tagScanningStartingSequenceNr(persistenceId)
+          for {
+            tp <- tr.lookupTagProgress(persistenceId)
+            _ <- tr.setTagProgress(persistenceId, tp)
+            scanningSeqNr <- scanningSeqNrFut
+            _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, max, tp, tr)
+          } yield tp
+        }
 
-      val recoveryPrep: Future[Map[String, TagProgress]] = {
-        val scanningSeqNrFut = tagRecovery.tagScanningStartingSequenceNr(persistenceId)
-        for {
-          tp <- tagRecovery.lookupTagProgress(persistenceId)
-          _ <- tagRecovery.setTagProgress(persistenceId, tp, tagWrites.get)
-          scanningSeqNr <- scanningSeqNrFut
-          _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, max, tp)
-        } yield tp
-      }
-
-      Source
-        .fromFutureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
-          log.info(
-            "[{}] starting recovery with tag progress: [{}]. From [{}] to [{}]",
-            persistenceId,
-            tp,
-            fromSequenceNr,
-            toSequenceNr)
-          queries
-            .eventsByPersistenceId(
+        Source
+          .fromFutureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
+            log.info(
+              "[{}] starting recovery with tag progress: [{}]. From [{}] to [{}]",
               persistenceId,
+              tp,
               fromSequenceNr,
-              toSequenceNr,
-              max,
-              None,
-              settings.journalSettings.readProfile,
-              "asyncReplayMessages",
-              extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
-            .mapAsync(1)(tagRecovery.sendMissingTagWrite(tp, tagWrites.get))
-        }))
-        .map(te => queries.mapEvent(te.pr))
-        .runForeach(replayCallback)
-        .map(_ => ())
+              toSequenceNr)
+            queries
+              .eventsByPersistenceId(
+                persistenceId,
+                fromSequenceNr,
+                toSequenceNr,
+                max,
+                None,
+                settings.journalSettings.readProfile,
+                "asyncReplayMessages",
+                extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
+              .mapAsync(1)(tr.sendMissingTagWrite(tp))
+          }))
+          .map(te => queries.mapEvent(te.pr))
+          .runForeach(replayCallback)
+          .map(_ => ())
 
-    } else {
-      queries
-        .eventsByPersistenceId(
-          persistenceId,
-          fromSequenceNr,
-          toSequenceNr,
-          max,
-          None,
-          settings.journalSettings.readProfile,
-          "asyncReplayMessages",
-          extractor = Extractors.persistentRepr(eventDeserializer, serialization))
-        .map(p => queries.mapEvent(p.persistentRepr))
-        .runForeach(replayCallback)
-        .map(_ => ())
+      case None =>
+        queries
+          .eventsByPersistenceId(
+            persistenceId,
+            fromSequenceNr,
+            toSequenceNr,
+            max,
+            None,
+            settings.journalSettings.readProfile,
+            "asyncReplayMessages",
+            extractor = Extractors.persistentRepr(eventDeserializer, serialization))
+          .map(p => queries.mapEvent(p.persistentRepr))
+          .runForeach(replayCallback)
+          .map(_ => ())
     }
   }
 
@@ -710,7 +715,8 @@ import akka.stream.scaladsl.Source
       fromSequenceNr: Long,
       pid: String,
       max: Long,
-      tp: Map[Tag, TagProgress]): Future[Done] = {
+      tp: Map[Tag, TagProgress],
+      tr: CassandraTagRecovery): Future[Done] = {
     if (minProgressNr < fromSequenceNr) {
       val scanTo = fromSequenceNr - 1
       log.debug(
@@ -731,7 +737,7 @@ import akka.stream.scaladsl.Source
         .mapAsync(1) { t =>
           t.tagged match {
             case OptionVal.Some(tpr) =>
-              tagRecovery.sendMissingTagWrite(tp, tagWrites.get)(tpr)
+              tr.sendMissingTagWrite(tp)(tpr)
             case OptionVal.None => FutureDone // no tags, skip
           }
         }

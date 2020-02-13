@@ -102,6 +102,21 @@ event for that persistence id.
 This adds a delay each time a new persistence id is found by an offset query when the first event doesn't have a sequenceNr of `1`. 
 If this is an issue it can be set to 0s. If events are found out of order due to this the stage will fail.  
 
+## Events by tag reconciliation
+
+In the event that the `tag_views` table gets corrupted there is a @apidoc[Reconciliation] extension that can help fix it.
+It can only be run while the application is offline but per persistence id operations can be used if it is known that
+the persistence id is not running.
+
+It supports:
+
+* Deleting all events in the tag view for a given persistence id
+* Re-building the tag view for a persistence id for a tag
+* Query for all tags (inefficient query)
+* Truncate the tag view and all metadata so it can be re-built
+
+After deleting the tag views they will be automatically re-built next time the persistence id starts or with an explicit rebuild.
+
 ## Other tuning
 
 ### Setting a bucket size

@@ -157,7 +157,7 @@ final class CassandraSession(
       s.executeAsync(stmt).toScala.map(_ => Done)
     }
   }
- 
+
   /**
    * Prepare, bind and execute one statement in one go.
    *
