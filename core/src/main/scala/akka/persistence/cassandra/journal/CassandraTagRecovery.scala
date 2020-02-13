@@ -21,16 +21,16 @@ import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
 import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
+
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
-
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.TaggedPersistentRepr
 import akka.serialization.SerializationExtension
 import akka.persistence.cassandra._
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 /**
  * INTERNAL API

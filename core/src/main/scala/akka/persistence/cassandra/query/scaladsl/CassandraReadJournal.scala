@@ -18,7 +18,6 @@ import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Ex
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
 import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
@@ -34,10 +33,10 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.CassandraStatements
 import akka.serialization.SerializationExtension
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
@@ -219,6 +218,17 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    */
   def timestampFrom(offset: TimeBasedUUID): Long =
     Uuids.unixTimestamp(offset.value)
+
+  /**
+   * Convert a `TimeBasedUUID` to a unix timestamp (as returned by
+   * `System#currentTimeMillis`. If it's not a `TimeBasedUUID` it
+   * will return 0.
+   */
+  private def timestampFrom(offset: Offset): Long =
+    offset match {
+      case t: TimeBasedUUID => timestampFrom(t)
+      case _                => 0
+    }
 
   /**
    * `eventsByTag` is used for retrieving events that were marked with
@@ -620,7 +630,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
 
   private def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
+      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload, timestampFrom(offset))
     }
 
   private def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =

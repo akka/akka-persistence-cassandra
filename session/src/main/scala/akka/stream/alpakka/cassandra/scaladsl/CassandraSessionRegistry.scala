@@ -2,7 +2,7 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session.scaladsl
+package akka.stream.alpakka.cassandra.scaladsl
 
 import java.util.concurrent.ConcurrentHashMap
 
@@ -15,8 +15,8 @@ import akka.actor.ExtendedActorSystem
 import akka.actor.Extension
 import akka.actor.ExtensionId
 import akka.actor.ExtensionIdProvider
-import akka.cassandra.session.CqlSessionProvider
 import akka.event.Logging
+import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, CqlSessionProvider, FutureDone }
 import com.datastax.oss.driver.api.core.CqlSession
 
 /**
@@ -37,12 +37,15 @@ object CassandraSessionRegistry extends ExtensionId[CassandraSessionRegistry] wi
 
   override def lookup(): ExtensionId[CassandraSessionRegistry] = this
 
+  /** Hash key for `sessions`. */
   private case class SessionKey(configPath: String)
+
+  private def sessionKey(settings: CassandraSessionSettings) = SessionKey(settings.configPath)
 }
 
 final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extension {
 
-  import CassandraSessionRegistry.SessionKey
+  import CassandraSessionRegistry._
 
   private val sessions = new ConcurrentHashMap[SessionKey, CassandraSession]
 
@@ -53,7 +56,7 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    * Sessions in the session registry are closed after actor system termination.
    */
   def sessionFor(configPath: String, executionContext: ExecutionContext): CassandraSession =
-    sessionFor(configPath, executionContext, _ => Future.successful(Done))
+    sessionFor(CassandraSessionSettings(configPath), executionContext)
 
   /**
    * Get an existing session or start a new one with the given settings,
@@ -68,14 +71,24 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
   def sessionFor(
       configPath: String,
       executionContext: ExecutionContext,
-      init: CqlSession => Future[Done]): CassandraSession = {
-    val key = SessionKey(configPath)
-    sessions.computeIfAbsent(key, _ => startSession(key, init, executionContext))
+      init: CqlSession => Future[Done]): CassandraSession =
+    sessionFor(CassandraSessionSettings(configPath, init), executionContext)
+
+  /**
+   * Get an existing session or start a new one with the given settings,
+   * makes it possible to share one session across plugins.
+   *
+   * Note that the session must not be stopped manually, it is shut down when the actor system is shutdown,
+   * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
+   */
+  def sessionFor(settings: CassandraSessionSettings, executionContext: ExecutionContext): CassandraSession = {
+    val key = sessionKey(settings)
+    sessions.computeIfAbsent(key, _ => startSession(settings, key, executionContext))
   }
 
   private def startSession(
+      settings: CassandraSessionSettings,
       key: SessionKey,
-      init: CqlSession => Future[Done],
       executionContext: ExecutionContext): CassandraSession = {
     val sessionProvider = CqlSessionProvider(system, system.settings.config.getConfig(key.configPath))
     val log = Logging(system, classOf[CassandraSession])
@@ -84,8 +97,8 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
       sessionProvider,
       executionContext,
       log,
-      metricsCategory = key.configPath,
-      init,
+      metricsCategory = settings.metricsCategory,
+      init = settings.init.getOrElse(_ => FutureDone),
       onClose = () => sessions.remove(key))
   }
 

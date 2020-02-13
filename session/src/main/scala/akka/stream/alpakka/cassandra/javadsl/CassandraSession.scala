@@ -2,7 +2,7 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session.javadsl
+package akka.stream.alpakka.cassandra.javadsl
 
 import java.util.{ List => JList }
 import java.util.Optional
@@ -17,8 +17,9 @@ import scala.concurrent.ExecutionContext
 import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.cassandra.session.CqlSessionProvider
+import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
+import akka.stream.alpakka.cassandra.{ scaladsl, CqlSessionProvider }
 import akka.stream.javadsl.Source
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.BatchStatement
@@ -28,15 +29,17 @@ import com.datastax.oss.driver.api.core.cql.Statement
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
- * <a href="http://docs.datastax.com/en/cql/3.3/cql/cqlIntro.html">Cassandra Query Language</a>
+ * <a href="https://cassandra.apache.org/doc/latest/cql/">Apache Cassandra Query Language</a>
  * (CQL) syntax.
+ *
+ * See even <a href="https://docs.datastax.com/en/dse/6.7/cql/">CQL for Datastax Enterprise</a>.
  *
  * The `init` hook is called before the underlying session is used by other methods,
  * so it can be used for things like creating the keyspace and tables.
  *
  * All methods are non-blocking.
  */
-final class CassandraSession(delegate: akka.cassandra.session.scaladsl.CassandraSession) {
+final class CassandraSession(@InternalApi private[akka] val delegate: scaladsl.CassandraSession) {
 
   /**
    * Use this constructor if you want to create a stand-alone `CassandraSession`.
@@ -50,7 +53,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
       init: JFunction[CqlSession, CompletionStage[Done]],
       onClose: java.lang.Runnable) =
     this(
-      new akka.cassandra.session.scaladsl.CassandraSession(
+      new scaladsl.CassandraSession(
         system,
         sessionProvider,
         executionContext,
@@ -69,7 +72,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
 
   /**
    * The `Session` of the underlying
-   * <a href="http://datastax.github.io/java-driver/">Datastax Java Driver</a>.
+   * <a href="https://docs.datastax.com/en/developer/java-driver/">Datastax Java Driver</a>.
    * Can be used in case you need to do something that is not provided by the
    * API exposed by this class. Be careful to not use blocking calls.
    */
@@ -77,7 +80,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
     delegate.underlying().toJava
 
   /**
-   * Execute <a href=https://docs.datastax.com/en/archived/cql/3.3/cql/cql_reference/cqlCommandsTOC.html">CQL commands</a>
+   * Execute <a href="https://docs.datastax.com/en/dse/6.7/cql/">CQL commands</a>
    * to manage database resources (create, replace, alter, and drop tables, indexes, user-defined types, etc).
    *
    * The returned `CompletionStage` is completed when the command is done, or if the statement fails.
@@ -86,7 +89,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
     delegate.executeDDL(stmt).toJava
 
   /**
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useCreateTableTOC.html">Creating a table</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/useCreateTable.html">Creating a table</a>.
    *
    * The returned `CompletionStage` is completed when the table has been created,
    * or if the statement fails.
@@ -103,10 +106,10 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
     delegate.prepare(stmt).toJava
 
   /**
-   * Execute several statements in a batch. First you must [[#prepare]] the
+   * Execute several statements in a batch. First you must `prepare` the
    * statements and bind its parameters.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useBatchTOC.html">Batching data insertion and updates</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/useBatchTOC.html">Batching data insertion and updates</a>.
    *
    * The configured write consistency level is used if a specific consistency
    * level has not been set on the `BatchStatement`.
@@ -118,10 +121,10 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
     delegate.executeWriteBatch(batch).toJava
 
   /**
-   * Execute one statement. First you must [[#prepare]] the
+   * Execute one statement. First you must `prepare` the
    * statement and bind its parameters.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
    *
    * The configured write consistency level is used if a specific consistency
    * level has not been set on the `Statement`.
@@ -135,7 +138,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
   /**
    * Prepare, bind and execute one statement in one go.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/useInsertDataTOC.html">Inserting and updating data</a>.
    *
    * The configured write consistency level is used.
    *
@@ -147,10 +150,10 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
     delegate.executeWrite(stmt, bindValues: _*).toJava
 
   /**
-   * Execute a select statement. First you must [[#prepare]] the
+   * Execute a select statement. First you must `prepare` the
    * statement and bind its parameters.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    *
    * The configured read consistency level is used if a specific consistency
    * level has not been set on the `Statement`.
@@ -162,9 +165,24 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
     delegate.select(stmt).asJava
 
   /**
+   * Execute a select statement. First you must `prepare` the
+   * statement and bind its parameters.
+   *
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
+   *
+   * The configured read consistency level is used if a specific consistency
+   * level has not been set on the `Statement`.
+   *
+   * Note that you have to connect a `Sink` that consumes the messages from
+   * this `Source` and then `run` the stream.
+   */
+  def select(stmt: CompletionStage[Statement[_]]): Source[Row, NotUsed] =
+    delegate.select(stmt.toScala).asJava
+
+  /**
    * Prepare, bind and execute a select statement in one go.
    *
-   * See <a href="http://docs.datastax.com/en/cql/3.3/cql/cql_using/useQueryDataTOC.html">Querying tables</a>.
+   * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/queriesTOC.html">Querying data</a>.
    *
    * The configured read consistency level is used.
    *
@@ -176,7 +194,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
     delegate.select(stmt, bindValues: _*).asJava
 
   /**
-   * Execute a select statement. First you must [[#prepare]] the statement and
+   * Execute a select statement. First you must `prepare` the statement and
    * bind its parameters. Only use this method when you know that the result
    * is small, e.g. includes a `LIMIT` clause. Otherwise you should use the
    * `select` method that returns a `Source`.
@@ -203,7 +221,7 @@ final class CassandraSession(delegate: akka.cassandra.session.scaladsl.Cassandra
     delegate.selectAll(stmt, bindValues: _*).map(_.asJava).toJava
 
   /**
-   * Execute a select statement that returns one row. First you must [[#prepare]] the
+   * Execute a select statement that returns one row. First you must `prepare` the
    * statement and bind its parameters.
    *
    * The configured read consistency level is used if a specific consistency

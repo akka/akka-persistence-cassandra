@@ -9,18 +9,16 @@ import java.nio.ByteBuffer
 import java.util.NoSuchElementException
 
 import akka.NotUsed
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
-import akka.cassandra.session.scaladsl.CassandraSession
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.AsyncSerializer
@@ -35,6 +33,7 @@ import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
 import akka.Done
 import akka.annotation.InternalApi
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 
 /**
  * INTERNAL API
