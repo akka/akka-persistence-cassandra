@@ -10,7 +10,7 @@ object Dependencies {
   val AkkaVersion = "2.5.29"
   val CassandraVersionInDocs = "4.0"
 
-  val silencerVersion = "1.4.1"
+  val silencerVersion = "1.4.4"
 
   val akkaPersistenceCassandraDependencies = Seq(
     "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.2",

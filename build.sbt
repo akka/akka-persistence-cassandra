@@ -19,8 +19,9 @@ lazy val core = (project in file("core"))
   .settings({
     Seq(
       libraryDependencies ++= Seq(
-          compilerPlugin("com.github.ghik" %% "silencer-plugin" % Dependencies.silencerVersion),
-          "com.github.ghik" %% "silencer-lib" % Dependencies.silencerVersion % Provided),
+          compilerPlugin(
+            ("com.github.ghik" %% "silencer-plugin" % Dependencies.silencerVersion).cross(CrossVersion.patch)),
+          ("com.github.ghik" %% "silencer-lib" % Dependencies.silencerVersion % Provided).cross(CrossVersion.patch)),
       // Hack because 'provided' dependencies by default are not picked up by the multi-jvm plugin:
       managedClasspath in MultiJvm ++= (managedClasspath in Compile).value.filter(_.data.name.contains("silencer-lib")))
   })
