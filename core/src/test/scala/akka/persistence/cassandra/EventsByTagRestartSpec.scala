@@ -10,7 +10,6 @@ import java.time.{ LocalDateTime, ZoneOffset }
 import akka.persistence.cassandra.TestTaggingActor.{ Ack, Stop }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ EventEnvelope, NoOffset, PersistenceQuery }
-import akka.stream.ActorMaterializer
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
@@ -41,8 +40,6 @@ object EventsByTagRestartSpec {
 }
 
 class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config) with Matchers {
-
-  implicit val materialiser = ActorMaterializer()(system)
 
   val waitTime = 100.milliseconds
 

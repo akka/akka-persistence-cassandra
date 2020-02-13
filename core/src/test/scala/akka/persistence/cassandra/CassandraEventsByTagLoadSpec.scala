@@ -7,7 +7,6 @@ package akka.persistence.cassandra
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ NoOffset, PersistenceQuery }
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
@@ -32,7 +31,6 @@ object CassandraEventsByTagLoadSpec {
 
 class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoadSpec.config) {
 
-  implicit val materializer = ActorMaterializer()(system)
   implicit override val patienceConfig = PatienceConfig(timeout = Span(60, Seconds), interval = Span(5, Seconds))
 
   val nrPersistenceIds = 50L
