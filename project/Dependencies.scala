@@ -3,14 +3,14 @@ import Keys._
 
 object Dependencies {
   val Scala211 = "2.11.12"
-  val Scala212 = "2.12.8"
-  val Scala213 = "2.13.0"
+  val Scala212 = "2.12.10"
+  val Scala213 = "2.13.1"
   val ScalaVersions = Seq(Scala211, Scala212, Scala213)
 
-  val AkkaVersion = "2.5.23"
+  val AkkaVersion = "2.5.29"
   val CassandraVersionInDocs = "4.0"
 
-  val silencerVersion = "1.4.1"
+  val silencerVersion = "1.4.4"
 
   val akkaPersistenceCassandraDependencies = Seq(
     "com.datastax.cassandra" % "cassandra-driver-core" % "3.7.2",
