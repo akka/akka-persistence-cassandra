@@ -58,7 +58,7 @@ public class CassandraTestHelper {
         return cs.toCompletableFuture().get(10, TimeUnit.SECONDS);
     }
 
-    private <T> T await(Future<T> future) {
+    public static <T> T await(Future<T> future) {
         int seconds = 10;
         try {
             return Await.result(future, FiniteDuration.create(seconds, TimeUnit.SECONDS));

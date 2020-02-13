@@ -9,6 +9,7 @@ import akka.stream.alpakka.cassandra.CassandraWriteSettings;
 import akka.stream.alpakka.cassandra.javadsl.CassandraFlow;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSource;
+import akka.stream.alpakka.cassandra.scaladsl.CassandraAccess;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import org.junit.AfterClass;
@@ -21,12 +22,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static docs.javadsl.CassandraTestHelper.await;
-import static org.hamcrest.CoreMatchers.hasItems;
-import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.assertThat;
+
+import static docs.javadsl.CassandraTestHelper.await;
 
 public class CassandraFlowTest {
     static final String TEST_NAME = "CassandraFlowTest";
@@ -44,11 +46,12 @@ public class CassandraFlowTest {
     }
 
     CassandraSession cassandraSession = helper.cassandraSession;
+    CassandraAccess cassandraAccess = helper.cassandraAccess;
 
     @Test
     public void simpleUpdate() throws InterruptedException, ExecutionException, TimeoutException {
         String table = helper.createTableName();
-        await(cassandraSession.executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY);"));
+        await(cassandraAccess.withSchemaMetadataDisabled(() -> cassandraAccess.lifecycleSession().executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY);")));
         List<Integer> data = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8);
 
         CompletionStage<Done> written = Source
@@ -75,7 +78,7 @@ public class CassandraFlowTest {
     @Test
     public void typedUpdate() throws InterruptedException, ExecutionException, TimeoutException {
         String table = helper.createTableName();
-        await(cassandraSession.executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY, name text, city text);"));
+        await(cassandraAccess.withSchemaMetadataDisabled(() -> cassandraAccess.lifecycleSession().executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY, name text, city text);")));
 
         List<Person> persons = Arrays.asList(
                 new Person(12, "John", "London"),

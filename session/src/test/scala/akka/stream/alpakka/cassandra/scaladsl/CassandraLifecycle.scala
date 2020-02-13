@@ -37,20 +37,21 @@ trait CassandraLifecycleBase {
 
   private val keyspaceTimeout = java.time.Duration.ofSeconds(10)
 
-  def createKeyspace(session: CassandraSession, name: String): Future[Done] =
+  def createKeyspace(session: CassandraSession, name: String): Future[Done] = {
     session.executeWrite(
       new SimpleStatementBuilder(
         s"""CREATE KEYSPACE $name WITH replication = { 'class': 'SimpleStrategy', 'replication_factor': '1'};""")
         .setTimeout(keyspaceTimeout)
         .build())
+  }
 
   def dropKeyspace(session: CassandraSession, name: String): Future[Done] =
     session.executeWrite(
       new SimpleStatementBuilder(s"""DROP KEYSPACE IF EXISTS $name;""").setTimeout(keyspaceTimeout).build())
 
-  def createKeyspace(name: String): Future[Done] = createKeyspace(lifecycleSession, name)
+  def createKeyspace(name: String): Future[Done] = withSchemaMetadataDisabled(createKeyspace(lifecycleSession, name))
 
-  def dropKeyspace(name: String): Future[Done] = dropKeyspace(lifecycleSession, name)
+  def dropKeyspace(name: String): Future[Done] = withSchemaMetadataDisabled(dropKeyspace(lifecycleSession, name))
 
   def execute(statements: immutable.Seq[BatchableStatement[_]]): Future[Done] = execute(lifecycleSession, statements)
 
@@ -58,6 +59,20 @@ trait CassandraLifecycleBase {
 
   def executeCqlList(statements: java.util.List[String]): CompletionStage[Done] =
     executeCql(lifecycleSession, statements.asScala.toList).toJava
+
+  def withSchemaMetadataDisabled(block: => Future[Done]): Future[Done] = {
+    implicit val ec = lifecycleSession.ec
+    lifecycleSession.underlying().flatMap { cqlSession =>
+      cqlSession.setSchemaMetadataEnabled(false)
+      val blockResult =
+        block.map { res =>
+          cqlSession.setSchemaMetadataEnabled(null)
+          res
+        }
+      blockResult.failed.foreach(_ => cqlSession.setSchemaMetadataEnabled(null))
+      blockResult
+    }
+  }
 
 }
 

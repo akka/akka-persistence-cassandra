@@ -29,10 +29,12 @@ class CassandraFlowSpec extends CassandraSpecBase(ActorSystem("CassandraFlowSpec
 
     "update with simple prepared statement" in assertAllStagesStopped {
       val table = createTableName()
-      lifecycleSession.executeDDL(s"""
+      withSchemaMetadataDisabled {
+        lifecycleSession.executeDDL(s"""
                          |CREATE TABLE IF NOT EXISTS $table (
                          |    id int PRIMARY KEY
-                         |);""".stripMargin).futureValue mustBe Done
+                         |);""".stripMargin)
+      }.futureValue mustBe Done
 
       val written = Source(data)
         .via(
@@ -50,12 +52,14 @@ class CassandraFlowSpec extends CassandraSpecBase(ActorSystem("CassandraFlowSpec
 
     "update with prepared statement" in assertAllStagesStopped {
       val table = createTableName()
-      lifecycleSession.executeDDL(s"""
+      withSchemaMetadataDisabled {
+        lifecycleSession.executeDDL(s"""
                          |CREATE TABLE IF NOT EXISTS $table (
                          |    id int PRIMARY KEY,
                          |    name text,
                          |    city text
-                         |);""".stripMargin).futureValue mustBe Done
+                         |);""".stripMargin)
+      }.futureValue mustBe Done
 
       case class Person(id: Int, name: String, city: String)
 

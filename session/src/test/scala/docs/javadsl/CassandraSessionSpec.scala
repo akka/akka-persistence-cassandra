@@ -37,21 +37,25 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
   lazy val dataTable = s"$keyspaceName.$dataTableName"
 
   def insertDataTable() = {
-    lifecycleSession.executeDDL(s"""CREATE TABLE IF NOT EXISTS $dataTable (
-                          |  partition text,
-                          |  key text,
-                          |  count bigint,
-                          |  PRIMARY KEY (partition, key)
-                          |)
-                          |""".stripMargin).futureValue mustBe Done
-    executeCql(
-      immutable.Seq(
-        s"INSERT INTO $dataTable (partition, key, count) VALUES ('A', 'a', 1);",
-        s"INSERT INTO $dataTable (partition, key, count) VALUES ('A', 'b', 2);",
-        s"INSERT INTO $dataTable (partition, key, count) VALUES ('A', 'c', 3);",
-        s"INSERT INTO $dataTable (partition, key, count) VALUES ('A', 'd', 4);",
-        s"INSERT INTO $dataTable (partition, key, count) VALUES ('B', 'e', 5);",
-        s"INSERT INTO $dataTable (partition, key, count) VALUES ('B', 'f', 6);"))
+    withSchemaMetadataDisabled {
+      for {
+        _ <- lifecycleSession.executeDDL(s"""CREATE TABLE IF NOT EXISTS $dataTable (
+               |  partition text,
+               |  key text,
+               |  count bigint,
+               |  PRIMARY KEY (partition, key)
+               |)
+               |""".stripMargin)
+        _ <- executeCql(
+          immutable.Seq(
+            s"INSERT INTO $dataTable (partition, key, count) VALUES ('A', 'a', 1);",
+            s"INSERT INTO $dataTable (partition, key, count) VALUES ('A', 'b', 2);",
+            s"INSERT INTO $dataTable (partition, key, count) VALUES ('A', 'c', 3);",
+            s"INSERT INTO $dataTable (partition, key, count) VALUES ('A', 'd', 4);",
+            s"INSERT INTO $dataTable (partition, key, count) VALUES ('B', 'e', 5);",
+            s"INSERT INTO $dataTable (partition, key, count) VALUES ('B', 'f', 6);"))
+      } yield Done
+    }.futureValue mustBe Done
   }
 
   override def beforeAll(): Unit = {
@@ -73,17 +77,17 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
     "stream the result of a Cassandra statement with one page" in assertAllStagesStopped {
       val session = javadslSessionRegistry.sessionFor(sessionSettings, system.dispatcher)
       val table = createTableName()
-      await(session.executeDDL(s"""
-             |CREATE TABLE IF NOT EXISTS $table (
-             |    id int PRIMARY KEY
-             |);""".stripMargin))
-      Future
-        .sequence(data.map { i =>
-          session.executeWrite(s"INSERT INTO $table(id) VALUES ($i)").toScala
-        })
-        .map(_ => Done)
-        .futureValue mustBe Done
-
+      withSchemaMetadataDisabled {
+        for {
+          _ <- lifecycleSession.executeDDL(s"""
+               |CREATE TABLE IF NOT EXISTS $table (
+               |    id int PRIMARY KEY
+               |);""".stripMargin)
+          _ <- Future.sequence(data.map { i =>
+            lifecycleSession.executeWrite(s"INSERT INTO $table(id) VALUES ($i)")
+          })
+        } yield Done
+      }.futureValue mustBe Done
       val sink: Sink[Row, CompletionStage[util.List[Row]]] = Sink.seq
       val rows = session.select(s"SELECT * FROM $table").runWith(sink, materializer).toScala.futureValue
       rows.asScala.map(_.getInt("id")) must contain theSameElementsAs data
@@ -131,7 +135,8 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
     }
 
     "create indexes" in {
-      await(session.executeDDL(s"CREATE INDEX IF NOT EXISTS count_idx ON $dataTable(count)"))
+      withSchemaMetadataDisabled(lifecycleSession.executeDDL(
+        s"CREATE INDEX IF NOT EXISTS count_idx ON $dataTable(count)")).futureValue mustBe Done
       val row =
         await(
           session.selectOne("SELECT * FROM system_schema.indexes WHERE table_name = ? ALLOW FILTERING", dataTableName))

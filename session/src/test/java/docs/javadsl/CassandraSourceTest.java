@@ -6,6 +6,7 @@ package docs.javadsl;
 
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSource;
+import akka.stream.alpakka.cassandra.scaladsl.CassandraAccess;
 import akka.stream.javadsl.Sink;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -40,11 +41,14 @@ public class CassandraSourceTest {
     }
 
     CassandraSession cassandraSession = helper.cassandraSession;
+    CassandraAccess cassandraAccess = helper.cassandraAccess;
 
     @Test
     public void select() throws InterruptedException, ExecutionException, TimeoutException {
         String table = helper.createTableName();
-        await(cassandraSession.executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY);"));
+        await(cassandraAccess.withSchemaMetadataDisabled(() ->
+            cassandraAccess.lifecycleSession().executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY);")
+        ));
         List<Integer> data = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8);
         await(helper.cassandraAccess.executeCqlList(data.stream().map(i -> "INSERT INTO " + table + "(id) VALUES (" + i + ")").collect(Collectors.toList())));
 
