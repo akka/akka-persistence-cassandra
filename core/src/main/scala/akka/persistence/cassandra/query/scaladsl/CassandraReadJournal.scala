@@ -221,6 +221,17 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
     Uuids.unixTimestamp(offset.value)
 
   /**
+   * Convert a `TimeBasedUUID` to a unix timestamp (as returned by
+   * `System#currentTimeMillis`. If it's not a `TimeBasedUUID` it
+   * will return 0.
+   */
+  private def timestampFrom(offset: Offset): Long =
+    offset match {
+      case t: TimeBasedUUID => timestampFrom(t)
+      case _                => 0
+    }
+
+  /**
    * `eventsByTag` is used for retrieving events that were marked with
    * a given tag, e.g. all events of an Aggregate Root type.
    *
@@ -620,7 +631,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
 
   private def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
+      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload, timestampFrom(offset))
     }
 
   private def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =
