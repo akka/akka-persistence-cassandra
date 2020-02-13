@@ -7,7 +7,6 @@ package akka.stream.alpakka.cassandra.scaladsl
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.util.Success
 import akka.Done
 import akka.NotUsed
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
@@ -63,6 +62,12 @@ final class CassandraSession(
   log.debug("Starting CassandraSession [{}]", metricsCategory)
 
   private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
+    if (log.isDebugEnabled) {
+      val version = session.getContext.getProtocolVersion
+      log.debug(
+        "Underlying CqlSession established, using protocol version " +
+        s"[$version code=${version.getCode} beta=${version.isBeta} name=${version.name()}]")
+    }
     session.getMetrics.ifPresent(metrics => {
       CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)
     })
@@ -88,16 +93,10 @@ final class CassandraSession(
   }
 
   /**
-   * This can only be used after successful initialization,
-   * otherwise throws `IllegalStateException`.
+   * The `ProtocolVersion` used by the driver to communicate with the server.
    */
-  def protocolVersion: ProtocolVersion =
-    underlying().value match {
-      case Some(Success(s)) =>
-        s.getContext.getProtocolVersion
-      case _ =>
-        throw new IllegalStateException("protocolVersion can only be accessed after successful init")
-    }
+  def protocolVersion: Future[ProtocolVersion] =
+    underlying().map(_.getContext.getProtocolVersion)
 
   /**
    * Execute <a href="https://docs.datastax.com/en/dse/6.7/cql/">CQL commands</a>

@@ -16,10 +16,6 @@ import com.typesafe.config.Config
  */
 @InternalApi private[akka] class PluginSettings(system: ActorSystem, config: Config) {
 
-  // TODO this is now only used when deciding how to delete, remove this config and just
-  // query what version of cassandra we're connected to and do the right thing
-  val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
-
   val journalSettings: JournalSettings = new JournalSettings(system, config)
 
   val eventsByTagSettings: EventsByTagSettings = new EventsByTagSettings(system, config)

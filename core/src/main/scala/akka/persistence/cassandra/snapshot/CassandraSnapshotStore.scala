@@ -33,6 +33,7 @@ import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
 import akka.Done
 import akka.annotation.InternalApi
+import com.datastax.oss.driver.api.core.ProtocolVersion
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 
 /**
@@ -83,7 +84,10 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       preparedWriteSnapshotWithMeta
       preparedDeleteSnapshot
       preparedDeleteAllSnapshotsForPid
-      if (!settings.cassandra2xCompat) preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
+      session.protocolVersion.foreach { version =>
+        if (version != ProtocolVersion.V3)
+          preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
+      }
       preparedSelectSnapshot
       preparedSelectSnapshotMetadata
       preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
@@ -206,35 +210,36 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
    * range deletion on the sequence number is used instead, except if timestamp constraints are specified, which still
    * requires the original two step routine.*/
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
-    if (settings.cassandra2xCompat
-        || 0L < criteria.minTimestamp
-        || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
-      preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
-        // this meta query gets slower than slower if snapshots are deleted without a criteria.minSequenceNr as
-        // all previous tombstones are scanned in the meta data query
-        metadata(snapshotMetaPs, persistenceId, criteria, limit = None).flatMap {
-          mds: immutable.Seq[SnapshotMetadata] =>
-            val boundStatementBatches = mds
-              .map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
-              .grouped(0xFFFF - 1)
-            if (boundStatementBatches.nonEmpty) {
-              Future
-                .sequence(
-                  boundStatementBatches.map(
-                    boundStatements =>
+    session.protocolVersion.flatMap { version =>
+      if (version == ProtocolVersion.V3
+          || 0L < criteria.minTimestamp
+          || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
+        preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
+          // this meta query gets slower than slower if snapshots are deleted without a criteria.minSequenceNr as
+          // all previous tombstones are scanned in the meta data query
+          metadata(snapshotMetaPs, persistenceId, criteria, limit = None).flatMap {
+            mds: immutable.Seq[SnapshotMetadata] =>
+              val boundStatementBatches = mds
+                .map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
+                .grouped(0xFFFF - 1)
+              if (boundStatementBatches.nonEmpty) {
+                Future
+                  .sequence(
+                    boundStatementBatches.map(boundStatements =>
                       Future
                         .sequence(boundStatements)
                         .flatMap(stmts => executeBatch(batch => stmts.foreach(batch.addStatement)))))
-                .map(_ => ())
-            } else {
-              Future.successful(())
-            }
+                  .map(_ => ())
+              } else {
+                Future.successful(())
+              }
+          }
         }
+      } else {
+        val boundDeleteSnapshot = preparedDeleteAllSnapshotsForPidAndSequenceNrBetween.map(
+          _.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong))
+        boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
       }
-    } else {
-      val boundDeleteSnapshot = preparedDeleteAllSnapshotsForPidAndSequenceNrBetween.map(
-        _.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong))
-      boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
     }
   }
 

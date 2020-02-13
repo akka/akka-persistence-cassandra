@@ -40,7 +40,9 @@ import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
+
 import akka.stream.scaladsl.Source
+import com.datastax.oss.driver.api.core.ProtocolVersion
 
 /**
  * INTERNAL API
@@ -123,9 +125,12 @@ import akka.stream.scaladsl.Source
       deletesNotSupportedException
   }
   private def preparedDeleteMessages: Future[PreparedStatement] = {
-    if (settings.journalSettings.supportDeletes)
-      session.prepare(statements.journalStatements.deleteMessages)
-    else
+    if (settings.journalSettings.supportDeletes) {
+      session.protocolVersion.flatMap { version =>
+        val cassandra2xCompat = version == ProtocolVersion.V3
+        session.prepare(statements.journalStatements.deleteMessages(cassandra2xCompat))
+      }
+    } else
       deletesNotSupportedException
   }
 
@@ -482,59 +487,67 @@ import akka.stream.scaladsl.Source
   private def delete(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
 
     def physicalDelete(lowestPartition: Long, highestPartition: Long, toSeqNr: Long): Future[Done] = {
-      if (settings.cassandra2xCompat) {
-        def asyncDeleteMessages(partitionNr: Long, messageIds: Seq[MessageId]): Future[Unit] = {
-          val boundStatements = messageIds.map(mid =>
-            preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
-          Future.sequence(boundStatements).flatMap { stmts =>
-            executeBatch(batch => stmts.foldLeft(batch) { case (acc, next) => acc.add(next) })
+      session.protocolVersion.flatMap { version =>
+        if (version == ProtocolVersion.V3) {
+          physicalDelete2xCompat(lowestPartition, highestPartition, toSeqNr)
+        } else {
+          val deleteResult =
+            Future.sequence((lowestPartition to highestPartition).map { partitionNr =>
+              val boundDeleteMessages =
+                preparedDeleteMessages.map(_.bind(persistenceId, partitionNr: JLong, toSeqNr: JLong))
+              boundDeleteMessages.flatMap(execute(_))
+            })
+          deleteResult.failed.foreach { e =>
+            log.warning(
+              "Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+              "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+              "Caused by: [{}: {}]",
+              persistenceId,
+              toSequenceNr,
+              e.getClass.getName,
+              e.getMessage)
           }
+          deleteResult.map(_ => Done)
         }
-
-        val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
-        val deleteResult =
-          Future.sequence(partitionInfos.map(future =>
-            future.flatMap(pi => {
-              Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(journalSettings.maxMessageBatchSize).map {
-                group =>
-                  {
-                    val groupDeleteResult =
-                      asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
-                    groupDeleteResult.failed.foreach { e =>
-                      log.warning(
-                        s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-                        "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-                        "Caused by: [{}: {}]",
-                        persistenceId,
-                        toSequenceNr,
-                        e.getClass.getName,
-                        e.getMessage)
-                    }
-                    groupDeleteResult
-                  }
-              })
-            })))
-        deleteResult.map(_ => Done)
-
-      } else {
-        val deleteResult =
-          Future.sequence((lowestPartition to highestPartition).map { partitionNr =>
-            val boundDeleteMessages =
-              preparedDeleteMessages.map(_.bind(persistenceId, partitionNr: JLong, toSeqNr: JLong))
-            boundDeleteMessages.flatMap(execute(_))
-          })
-        deleteResult.failed.foreach { e =>
-          log.warning(
-            "Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
-            "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
-            "Caused by: [{}: {}]",
-            persistenceId,
-            toSequenceNr,
-            e.getClass.getName,
-            e.getMessage)
-        }
-        deleteResult.map(_ => Done)
       }
+    }
+
+    def physicalDelete2xCompat(
+        lowestPartition: TagPidSequenceNr,
+        highestPartition: TagPidSequenceNr,
+        toSeqNr: TagPidSequenceNr): Future[Done] = {
+      def asyncDeleteMessages(partitionNr: TagPidSequenceNr, messageIds: Seq[MessageId]): Future[Unit] = {
+        val boundStatements = messageIds.map(mid =>
+          preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
+        Future.sequence(boundStatements).flatMap { stmts =>
+          executeBatch(batch => stmts.foldLeft(batch) { case (acc, next) => acc.add(next) })
+        }
+      }
+
+      val partitionInfos = (lowestPartition to highestPartition).map(partitionInfo(persistenceId, _, toSeqNr))
+      val deleteResult =
+        Future.sequence(partitionInfos.map(future =>
+          future.flatMap(pi => {
+            Future.sequence((pi.minSequenceNr to pi.maxSequenceNr).grouped(journalSettings.maxMessageBatchSize).map {
+              group =>
+                {
+                  val groupDeleteResult =
+                    asyncDeleteMessages(pi.partitionNr, group.map(MessageId(persistenceId, _)))
+                  groupDeleteResult.failed.foreach { e =>
+                    log.warning(
+                      s"Unable to complete deletes for persistence id {}, toSequenceNr {}. " +
+                      "The plugin will continue to function correctly but you will need to manually delete the old messages. " +
+                      "Caused by: [{}: {}]",
+                      persistenceId,
+                      toSequenceNr,
+                      e.getClass.getName,
+                      e.getMessage)
+                  }
+                  groupDeleteResult
+                }
+            })
+          })))
+      deleteResult.map(_ => Done)
     }
 
     /**
