@@ -11,7 +11,7 @@ import akka.Done
 import akka.testkit.TestKitBase
 import com.datastax.oss.driver.api.core.cql._
 import org.scalatest._
-import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.concurrent.{ PatienceConfiguration, ScalaFutures }
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -35,12 +35,18 @@ trait CassandraLifecycleBase {
     execute(session, statements.map(stmt => SimpleStatement.newInstance(stmt)))
   }
 
+  private val keyspaceTimeout = java.time.Duration.ofSeconds(10)
+
   def createKeyspace(session: CassandraSession, name: String): Future[Done] =
-    session.executeDDL(
-      s"""CREATE KEYSPACE $name WITH replication = { 'class': 'SimpleStrategy', 'replication_factor': '1'};""")
+    session.executeWrite(
+      new SimpleStatementBuilder(
+        s"""CREATE KEYSPACE $name WITH replication = { 'class': 'SimpleStrategy', 'replication_factor': '1'};""")
+        .setTimeout(keyspaceTimeout)
+        .build())
 
   def dropKeyspace(session: CassandraSession, name: String): Future[Done] =
-    session.executeDDL(s"""DROP KEYSPACE IF EXISTS $name;""")
+    session.executeWrite(
+      new SimpleStatementBuilder(s"""DROP KEYSPACE IF EXISTS $name;""").setTimeout(keyspaceTimeout).build())
 
   def createKeyspace(name: String): Future[Done] = createKeyspace(lifecycleSession, name)
 
@@ -78,8 +84,9 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase with Cassand
   }
 
   override protected def afterAll(): Unit = {
-    // `dropKeyspace` uses the system dispatcher through `cassandraSession`
-    dropKeyspace(keyspaceName).futureValue
+    // `dropKeyspace` uses the system dispatcher through `cassandraSession`,
+    // so needs to run before the actor system is shut down
+    dropKeyspace(keyspaceName).futureValue(PatienceConfiguration.Timeout(15.seconds))
     shutdown(system, verifySystemShutdown = true)
     try {
       Await.result(lifecycleSession.close(scala.concurrent.ExecutionContext.global), 20.seconds)

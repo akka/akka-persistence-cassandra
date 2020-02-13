@@ -4,6 +4,7 @@
 
 package docs.javadsl;
 
+import akka.Done;
 import akka.actor.ActorSystem;
 import akka.stream.ActorMaterializer;
 import akka.stream.Materializer;
@@ -13,6 +14,7 @@ import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
 import akka.stream.alpakka.cassandra.scaladsl.CassandraAccess;
 import akka.testkit.javadsl.TestKit;
 import scala.concurrent.Await;
+import scala.concurrent.Future;
 import scala.concurrent.duration.FiniteDuration;
 
 import java.util.concurrent.CompletionStage;
@@ -38,18 +40,13 @@ public class CassandraTestHelper {
 
         cassandraAccess = new CassandraAccess(cassandraSession.delegate());
         keyspaceName = TEST_NAME + System.nanoTime();
-        try {
-            Await.result(cassandraAccess.createKeyspace(keyspaceName), FiniteDuration.create(10, TimeUnit.SECONDS));
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        } catch (TimeoutException e) {
-            throw new RuntimeException(e);
-        }
+        await(cassandraAccess.createKeyspace(keyspaceName));
     }
 
     public void shutdown() {
-        // `cassandraAccess` uses the system dispatcher through `cassandraSession`
-        cassandraAccess.dropKeyspace(keyspaceName);
+        // `dropKeyspace` uses the system dispatcher through `cassandraSession`,
+        // so needs to run before the actor system is shut down
+        await(cassandraAccess.dropKeyspace(keyspaceName));
         TestKit.shutdownActorSystem(system);
     }
 
@@ -59,6 +56,17 @@ public class CassandraTestHelper {
 
     public static <T> T await(CompletionStage<T> cs) throws InterruptedException, ExecutionException, TimeoutException {
         return cs.toCompletableFuture().get(10, TimeUnit.SECONDS);
+    }
+
+    private <T> T await(Future<T> future) {
+        int seconds = 10;
+        try {
+            return Await.result(future, FiniteDuration.create(seconds, TimeUnit.SECONDS));
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            throw new RuntimeException("timeout " + seconds + "s hit", e);
+        }
     }
 
 }
