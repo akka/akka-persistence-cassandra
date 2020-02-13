@@ -23,7 +23,9 @@ import akka.testkit.{ EventFilter, ImplicitSender, SocketUtil, TestKitBase }
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Milliseconds, Seconds, Span }
-import org.scalatest.{ Matchers, Outcome, Suite, WordSpecLike }
+import org.scalatest.{ Outcome, Suite }
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -99,7 +101,7 @@ abstract class CassandraSpec(
     extends TestKitBase
     with Suite
     with ImplicitSender
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with CassandraLifecycle
     with ScalaFutures {

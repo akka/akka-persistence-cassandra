@@ -14,12 +14,14 @@ import akka.persistence.cassandra.journal.TagWriters._
 import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import akka.util.Timeout
 import com.datastax.oss.driver.api.core.uuid.Uuids
-import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 import scala.concurrent.duration._
 
 class TagWritersSpec
     extends TestKit(ActorSystem("TagWriterSpec"))
-    with WordSpecLike
+    with AnyWordSpecLike
     with BeforeAndAfterAll
     with ImplicitSender
     with Matchers {

@@ -8,8 +8,8 @@ import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
-import org.scalatest.MustMatchers
-import org.scalatest.WordSpecLike
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.must.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks._
 import scala.util.Random
 
@@ -17,8 +17,8 @@ import akka.persistence.cassandra.journal.JournalSettings
 
 class CassandraPluginSettingsSpec
     extends TestKit(ActorSystem("CassandraPluginConfigSpec"))
-    with WordSpecLike
-    with MustMatchers
+    with AnyWordSpecLike
+    with Matchers
     with BeforeAndAfterAll {
 
   lazy val defaultConfig = ConfigFactory.load().getConfig("akka.persistence.cassandra")

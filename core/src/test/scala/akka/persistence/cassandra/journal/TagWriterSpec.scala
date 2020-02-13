@@ -22,7 +22,8 @@ import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Statement }
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.github.ghik.silencer.silent
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach, WordSpecLike }
+import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach }
+import org.scalatest.wordspec.AnyWordSpecLike
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.control.NoStackTrace
@@ -55,7 +56,7 @@ object TagWriterSpec {
 @silent // re-write to use lazy list
 class TagWriterSpec
     extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.config))
-    with WordSpecLike
+    with AnyWordSpecLike
     with BeforeAndAfterEach
     with ImplicitSender
     with BeforeAndAfterAll {
