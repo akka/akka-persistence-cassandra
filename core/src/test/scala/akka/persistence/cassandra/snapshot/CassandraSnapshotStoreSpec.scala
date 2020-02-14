@@ -24,6 +24,12 @@ object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(s"""
        akka.persistence.cassandra.journal.keyspace=CassandraSnapshotStoreSpec
        akka.persistence.cassandra.snapshot.keyspace=CassandraSnapshotStoreSpecSnapshot
+       datastax-java-driver {
+         basic.session-name = CassandraSnapshotStoreSpec
+         advanced.metrics {
+           session.enabled = [ "bytes-sent", "cql-requests"]
+         }
+       }
     """).withFallback(CassandraLifecycle.config)
 }
 
@@ -50,8 +56,10 @@ class CassandraSnapshotStoreSpec
   "A Cassandra snapshot store" must {
     "insert Cassandra metrics to Cassandra Metrics Registry" in {
       val registry = CassandraMetricsRegistry(system).getRegistry
-      val snapshots = registry.getNames.toArray()
-      snapshots.length should be > 0
+      val metricsNames = registry.getNames.toArray.toSet
+      // metrics category is the configPath of the plugin + the session-name
+      metricsNames should contain("akka.persistence.cassandra.CassandraSnapshotStoreSpec.bytes-sent")
+      metricsNames should contain("akka.persistence.cassandra.CassandraSnapshotStoreSpec.cql-requests")
     }
 
     "make up to 3 snapshot loading attempts" in {

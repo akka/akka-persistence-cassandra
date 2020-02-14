@@ -60,6 +60,8 @@ final class CassandraSession(
   implicit private[akka] val ec = executionContext
   private lazy implicit val materializer = ActorMaterializer()(system)
 
+  log.debug("Starting CassandraSession [{}]", metricsCategory)
+
   private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
     session.getMetrics.ifPresent(metrics => {
       CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)

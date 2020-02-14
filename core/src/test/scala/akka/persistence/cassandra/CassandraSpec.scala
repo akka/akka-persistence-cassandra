@@ -48,7 +48,6 @@ object CassandraSpec {
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
     ConfigFactory.parseString(s"""
       akka.persistence.cassandra {
-        session-name = $journalKeyspace
         journal.keyspace = $journalKeyspace
         # FIXME this is not the way to configure port. Do we need port config in tests?
         port = $port
