@@ -6,6 +6,7 @@ package akka.stream.alpakka.cassandra
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import akka.discovery.Discovery
+import akka.dispatch.ExecutionContexts
 import akka.util.unused
 import akka.util.JavaDurationConverters._
 import akka.event.Logging
@@ -91,22 +92,22 @@ class AkkaDiscoverySessionProvider(system: ActorSystem, config: Config) extends 
    */
   private def readNodes(serviceName: String, lookupTimeout: FiniteDuration)(
       implicit system: ActorSystem): Future[immutable.Seq[String]] = {
-    import system.dispatcher
-    val discovery = Discovery(system).discovery
-    discovery.lookup(serviceName, lookupTimeout).map { resolved =>
-      resolved.addresses.map(addr => addr.host + ":" + addr.port)
-    }
+    Discovery(system).discovery
+      .lookup(serviceName, lookupTimeout)
+      .map { resolved =>
+        resolved.addresses.map(target => target.host + ":" + target.port)
+      }(ExecutionContexts.sameThreadExecutionContext)
   }
 
   /**
    * Expect a `service` section in Config and use Akka Discovery to read the addresses for `name` within `lookup-timeout`.
    */
-  private def readNodes(config: Config)(implicit system: ActorSystem): Future[immutable.Seq[String]] =
-    if (config.hasPath("service")) {
-      val serviceName = config.getString("service.name")
-      val lookupTimeout = config.getDuration("service.lookup-timeout").asScala
-      readNodes(serviceName, lookupTimeout)
-    } else throw new IllegalArgumentException(s"config $config does not contain `service` section")
+  private def readNodes(config: Config)(implicit system: ActorSystem): Future[immutable.Seq[String]] = {
+    val serviceConfig = config.getConfig("service")
+    val serviceName = serviceConfig.getString("name")
+    val lookupTimeout = serviceConfig.getDuration("lookup-timeout").asScala
+    readNodes(serviceName, lookupTimeout)
+  }
 
   override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
     val sessionName = config.getString("session-name")
