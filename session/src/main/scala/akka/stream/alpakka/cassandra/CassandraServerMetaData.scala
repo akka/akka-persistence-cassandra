@@ -1,0 +1,14 @@
+/*
+ * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
+ */
+
+package akka.stream.alpakka.cassandra
+
+class CassandraServerMetaData(val clusterName: String, val dataCenter: String, val version: String) {
+
+  val isVersion2: Boolean = version.startsWith("2.")
+
+  override def toString: String =
+    s"CassandraServerMetaData($clusterName,$dataCenter,$version)"
+
+}

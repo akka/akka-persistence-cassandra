@@ -20,6 +20,7 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
+import akka.stream.alpakka.cassandra.CassandraServerMetaData
 import akka.stream.alpakka.cassandra.{ scaladsl, CqlSessionProvider }
 import akka.stream.javadsl.Source
 import com.datastax.oss.driver.api.core.CqlSession
@@ -77,6 +78,12 @@ final class CassandraSession(@InternalApi private[akka] val delegate: scaladsl.C
    */
   def protocolVersion: CompletionStage[ProtocolVersion] =
     delegate.protocolVersion.toJava
+
+  /**
+   * Meta data about the Cassandra server, such as its version.
+   */
+  def serverMetaData: CompletionStage[CassandraServerMetaData] =
+    delegate.serverMetaData.toJava
 
   /**
    * The `Session` of the underlying

@@ -33,7 +33,6 @@ import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
 import akka.Done
 import akka.annotation.InternalApi
-import com.datastax.oss.driver.api.core.ProtocolVersion
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 
 /**
@@ -84,8 +83,8 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       preparedWriteSnapshotWithMeta
       preparedDeleteSnapshot
       preparedDeleteAllSnapshotsForPid
-      session.protocolVersion.foreach { version =>
-        if (version != ProtocolVersion.V3)
+      session.serverMetaData.foreach { meta =>
+        if (!meta.isVersion2)
           preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
       }
       preparedSelectSnapshot
@@ -210,8 +209,8 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
    * range deletion on the sequence number is used instead, except if timestamp constraints are specified, which still
    * requires the original two step routine.*/
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
-    session.protocolVersion.flatMap { version =>
-      if (version == ProtocolVersion.V3
+    session.serverMetaData.flatMap { meta =>
+      if (meta.isVersion2
           || 0L < criteria.minTimestamp
           || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
         preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>

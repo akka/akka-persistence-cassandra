@@ -42,7 +42,6 @@ import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
 
 import akka.stream.scaladsl.Source
-import com.datastax.oss.driver.api.core.ProtocolVersion
 
 /**
  * INTERNAL API
@@ -126,9 +125,8 @@ import com.datastax.oss.driver.api.core.ProtocolVersion
   }
   private def preparedDeleteMessages: Future[PreparedStatement] = {
     if (settings.journalSettings.supportDeletes) {
-      session.protocolVersion.flatMap { version =>
-        val cassandra2xCompat = version == ProtocolVersion.V3
-        session.prepare(statements.journalStatements.deleteMessages(cassandra2xCompat))
+      session.serverMetaData.flatMap { meta =>
+        session.prepare(statements.journalStatements.deleteMessages(meta.isVersion2))
       }
     } else
       deletesNotSupportedException
@@ -487,8 +485,8 @@ import com.datastax.oss.driver.api.core.ProtocolVersion
   private def delete(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
 
     def physicalDelete(lowestPartition: Long, highestPartition: Long, toSeqNr: Long): Future[Done] = {
-      session.protocolVersion.flatMap { version =>
-        if (version == ProtocolVersion.V3) {
+      session.serverMetaData.flatMap { meta =>
+        if (meta.isVersion2) {
           physicalDelete2xCompat(lowestPartition, highestPartition, toSeqNr)
         } else {
           val deleteResult =
