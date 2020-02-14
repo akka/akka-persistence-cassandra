@@ -15,6 +15,7 @@ object Dependencies {
   val akkaCassandraSessionDependencies = Seq(
     ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
     "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-discovery" % AkkaVersion % Provided,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion % Test,
     "org.scalatest" %% "scalatest" % "3.1.0" % Test,

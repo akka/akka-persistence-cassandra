@@ -6,8 +6,8 @@ package akka.stream.alpakka.cassandra
 
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import com.datastax.oss.driver.api.core.CqlSession
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{ Config, ConfigFactory }
+
 import scala.collection.immutable
 import scala.compat.java8.FutureConverters._
 import scala.concurrent.{ ExecutionContext, Future }
@@ -44,7 +44,6 @@ class DefaultSessionProvider(system: ActorSystem, config: Config) extends CqlSes
     val driverConfigLoader = DriverConfigLoaderFromConfig.fromConfig(driverConfig)
     builder.withConfigLoader(driverConfigLoader).buildAsync().toScala
   }
-
 }
 
 object CqlSessionProvider {
@@ -86,9 +85,9 @@ object CqlSessionProvider {
    */
   def driverConfig(system: ActorSystem, config: Config): Config = {
     val driverConfigPath = config.getString("datastax-java-driver-config")
-    system.settings.config
-      .getConfig(driverConfigPath)
-      .withFallback(if (driverConfigPath == "datastax-java-driver") ConfigFactory.empty()
-      else system.settings.config.getConfig("datastax-java-driver"))
+    system.settings.config.getConfig(driverConfigPath).withFallback {
+      if (driverConfigPath == "datastax-java-driver") ConfigFactory.empty()
+      else system.settings.config.getConfig("datastax-java-driver")
+    }
   }
 }
