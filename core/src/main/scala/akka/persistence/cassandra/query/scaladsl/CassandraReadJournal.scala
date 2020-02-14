@@ -5,6 +5,7 @@
 package akka.persistence.cassandra.query.scaladsl
 
 import java.net.URLEncoder
+import java.util.Collections
 import java.util.UUID
 
 import akka.{ Done, NotUsed }
@@ -40,6 +41,7 @@ import akka.stream.alpakka.cassandra.CassandraSessionSettings
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
+import com.typesafe.config.ConfigFactory
 
 object CassandraReadJournal {
 
@@ -77,7 +79,7 @@ object CassandraReadJournal {
  * absolute path corresponding to the identifier, which is `"akka.persistence.cassandra.query"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  */
-class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: String)
+class CassandraReadJournal(system: ExtendedActorSystem, queryConfig: Config, cfgPath: String)
     extends ReadJournal
     with PersistenceIdsQuery
     with CurrentPersistenceIdsQuery
@@ -90,9 +92,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
 
   private val log = Logging.getLogger(system, getClass)
 
+  private val fullConfig =
+    ConfigFactory.parseMap(Collections.singletonMap(cfgPath, queryConfig.root())).withFallback(system.settings.config)
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.query$""", "")
-  private val sharedConfig = system.settings.config.getConfig(sharedConfigPath)
+  private val sharedConfig = fullConfig.getConfig(sharedConfigPath)
   private val settings = new PluginSettings(system, sharedConfig)
   private val statements = new CassandraStatements(settings)
 

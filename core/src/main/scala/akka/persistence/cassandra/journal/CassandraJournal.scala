@@ -6,6 +6,7 @@ package akka.persistence.cassandra.journal
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
+import java.util.Collections
 import java.util.{ UUID, HashMap => JHMap, Map => JMap }
 
 import akka.Done
@@ -31,7 +32,6 @@ import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -40,14 +40,16 @@ import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
+
 import akka.stream.scaladsl.Source
+import com.typesafe.config.ConfigFactory
 
 /**
  * INTERNAL API
  *
  * Journal implementation of the cassandra plugin.
  */
-@InternalApi private[akka] final class CassandraJournal(cfg: Config, cfgPath: String)
+@InternalApi private[akka] final class CassandraJournal(journalConfig: Config, cfgPath: String)
     extends AsyncWriteJournal
     with NoSerializationVerificationNeeded {
   import CassandraJournal._
@@ -55,7 +57,11 @@ import akka.stream.scaladsl.Source
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
-  private val sharedConfig = context.system.settings.config.getConfig(sharedConfigPath)
+  private val fullConfig =
+    ConfigFactory
+      .parseMap(Collections.singletonMap(cfgPath, journalConfig.root()))
+      .withFallback(context.system.settings.config)
+  private val sharedConfig = fullConfig.getConfig(sharedConfigPath)
   private val settings = new PluginSettings(context.system, sharedConfig)
   import settings._
   private val eventDeserializer: CassandraJournal.EventDeserializer =
@@ -132,7 +138,7 @@ import akka.stream.scaladsl.Source
 
   private lazy val queries: CassandraReadJournal =
     PersistenceQuery(context.system.asInstanceOf[ExtendedActorSystem])
-      .readJournalFor[CassandraReadJournal](s"$sharedConfigPath.query")
+      .readJournalFor[CassandraReadJournal](s"$sharedConfigPath.query", fullConfig)
 
   // For TagWriters/TagWriter children
   override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
