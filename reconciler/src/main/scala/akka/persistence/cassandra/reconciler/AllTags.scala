@@ -27,8 +27,8 @@ private[akka] final class AllTags(session: ReconciliationSession) {
       .selectAllTagProgress()
       .map(_.getString("tag"))
       .statefulMapConcat(() => {
+        var seen = Set.empty[String]
         tag =>
-          var seen = Set.empty[String]
           if (!seen.contains(tag)) {
             seen += tag
             List(tag)

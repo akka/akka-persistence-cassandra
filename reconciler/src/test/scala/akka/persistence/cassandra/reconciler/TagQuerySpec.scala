@@ -18,7 +18,7 @@ class TagQuerySpec extends CassandraSpec with Eventually {
       val tag2 = "tag2"
       val tag3 = "tag3"
       Reconciliation(system).allTags().runWith(Sink.seq).futureValue shouldEqual Nil
-      writeEventsFor(tag1, pid1, 3)
+      writeEventsFor(Set(tag1, tag2), pid1, 3)
       writeEventsFor(Set(tag2, tag3), pid2, 3)
       eventually {
         val allTags = Reconciliation(system).allTags().runWith(Sink.seq).futureValue
