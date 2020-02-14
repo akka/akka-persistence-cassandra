@@ -24,7 +24,7 @@ import scala.concurrent.Future
  * INTERNAL API
  */
 @InternalApi
-private[akka] class DeleteTagViewForPersistenceId(
+private[akka] final class DeleteTagViewForPersistenceId(
     persistenceIds: Set[String],
     tag: String,
     system: ActorSystem,

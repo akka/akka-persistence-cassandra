@@ -25,7 +25,8 @@ import akka.annotation.InternalApi
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class BuildTagViewForPersisetceId(
+@InternalApi
+private[akka] final class BuildTagViewForPersisetceId(
     persistenceId: String,
     system: ActorSystem,
     recovery: CassandraTagRecovery,

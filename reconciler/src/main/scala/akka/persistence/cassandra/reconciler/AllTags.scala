@@ -20,7 +20,7 @@ import akka.NotUsed
  * INTERNAL API
  */
 @InternalApi
-private[akka] class AllTags(session: ReconciliationSession) {
+private[akka] final class AllTags(session: ReconciliationSession) {
 
   def execute(): Source[String, NotUsed] = {
     session
