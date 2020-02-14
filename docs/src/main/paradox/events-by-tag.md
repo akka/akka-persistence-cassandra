@@ -104,7 +104,7 @@ If this is an issue it can be set to 0s. If events are found out of order due to
 
 ## Events by tag reconciliation
 
-In the event that the `tag_views` table gets corrupted there is a @apidoc[Reconciliation] extension that can help fix it.
+In the event that the `tag_views` table gets corrupted there is a Reconciliation extension that can help fix it.
 It can only be run while the application is offline but per persistence id operations can be used if it is known that
 the persistence id is not running.
 
@@ -116,6 +116,10 @@ It supports:
 * Truncate the tag view and all metadata so it can be re-built
 
 After deleting the tag views they will be automatically re-built next time the persistence id starts or with an explicit rebuild.
+
+For example, to rebuild the data for a persistence id:
+
+@@snip [reconciler](/reconciler/src/test/scala/doc/reconciler/ReconciliationCompileOnly.scala) { #imports #reconcile}                                                                                                                                
 
 ## Other tuning
 

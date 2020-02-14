@@ -51,7 +51,6 @@ lazy val reconciler = (project in file("reconciler"))
     libraryDependencies ++= Dependencies.reconcilerDependencies
   )
 
-
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .enablePlugins(Common)
   .settings(

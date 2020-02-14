@@ -4,34 +4,36 @@
 
 package akka.persistence.cassandra.reconciler
 
-import java.lang.{ Long => JLong }
-import akka.actor.ActorSystem
-import akka.persistence.cassandra.PluginSettings
 import akka.Done
-import akka.persistence.cassandra.CassandraStatements
-import akka.cassandra.session.scaladsl.CassandraSession
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
-import scala.concurrent.Future
+import akka.NotUsed
+import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
 import akka.actor.ExtendedActorSystem
-import akka.persistence.query.PersistenceQuery
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.actor.Extension
 import akka.actor.ExtensionId
 import akka.actor.ExtensionIdProvider
 import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
-import akka.NotUsed
+import akka.stream.scaladsl.Sink
+import akka.persistence.query.PersistenceQuery
+import akka.cassandra.session.scaladsl.CassandraSession
+import akka.cassandra.session.scaladsl.CassandraSessionRegistry
+import akka.persistence.cassandra.CassandraStatements
+import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.journal.TimeBucket
-import scala.concurrent.ExecutionContext
-import java.util.UUID
-import com.datastax.oss.driver.api.core.cql.Row
-import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import akka.persistence.cassandra.journal.CassandraTagRecovery
 import akka.persistence.cassandra.journal.TaggedPreparedStatements
 import akka.persistence.cassandra.journal.TagWriters
 import akka.persistence.cassandra.journal.TagWriters._
+import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
+import com.datastax.oss.driver.api.core.cql.Row
+import com.datastax.oss.driver.api.core.cql.SimpleStatement
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import java.util.UUID
+import java.lang.{ Long => JLong }
 
 /**
  * Database actions for reconciliation
@@ -45,6 +47,8 @@ final class ReconciliationSession(session: CassandraSession, statements: Cassand
   private val deleteTagProgress = session.prepare(statements.journalStatements.deleteTagProgress)
   private val deleteTagScanning = session.prepare(statements.journalStatements.deleteTagScanning)
   private val selectAllTagProgressPs = session.prepare(statements.journalStatements.selectAllTagProgress)
+  private val selectTagProgressForPersistenceId =
+    session.prepare(statements.journalStatements.selectTagProgressForPersistenceId)
 
   def deleteFromTagView(
       tag: String,
@@ -80,6 +84,13 @@ final class ReconciliationSession(session: CassandraSession, statements: Cassand
     Source.future(selectAllTagProgressPs.map(ps => session.select(ps.bind()))).flatMapConcat(identity)
   }
 
+  def selectTagProgress(persistenceId: String): Source[String, NotUsed] = {
+    Source
+      .future(
+        selectTagProgressForPersistenceId.map(ps => session.select(ps.bind(persistenceId)).map(_.getString("tag"))))
+      .flatMapConcat(identity)
+  }
+
   /**
    * Caution: this removes all data from all tag related tables
    */
@@ -112,9 +123,10 @@ final class ReconciliationSession(session: CassandraSession, statements: Cassand
 @ApiMayChange
 final class Reconciliation(system: ActorSystem) extends Extension {
   import system.dispatcher
-
-  // TODO make session configurable
-  private val session = CassandraSessionRegistry(system).sessionFor("akka.persistence.cassandra", system.dispatcher)
+  private implicit val sys = system
+  private val recSettings = new ReconciliationSettings(
+    system.settings.config.getConfig("akka.persistence.cassandra.reconciler"))
+  private val session = CassandraSessionRegistry(system).sessionFor(recSettings.pluginLocation, system.dispatcher)
   private val settings = PluginSettings(system)
   private val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
@@ -122,14 +134,8 @@ final class Reconciliation(system: ActorSystem) extends Extension {
   private val recSession = new ReconciliationSession(session, statements)
   private val tagStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
 
-  // Plugin
-  // TODO profile from config
   private val tagWriterSession: TagWriters.TagWritersSession =
-    new TagWritersSession(
-      session,
-      "akka-persistence-cassandra-profile",
-      "akka-persistence-cassandra-profile",
-      tagStatements)
+    new TagWritersSession(session, recSettings.writeProfile, recSettings.readProfile, tagStatements)
   private val tagWriters =
     system.actorOf(
       TagWriters.props(settings.eventsByTagSettings.tagWriterSettings, tagWriterSession),
@@ -140,17 +146,16 @@ final class Reconciliation(system: ActorSystem) extends Extension {
    * Scans the given tag and deletes all events for the provided persistence ids.
    * All events for a persistence id have to be deleted as not to leave gaps in the
    * tag pid sequence numbers.
+   *
+   * As this has to scan the tag views table for the given tag it is more efficient to
    */
   def deleteTagViewForPersistenceIds(persistenceId: Set[String], tag: String): Future[Done] =
     new DeleteTagViewForPersistenceId(persistenceId, tag, system, recSession, settings, queries).execute()
 
   /**
    * Assumes that the tag views table contains no elements for the given persistence ids
-   * Either because tag_views and tag_progress have truncated for this given persistence id
+   *  Either because tag_views and tag_progress have truncated for this given persistence id
    * or tag writing has never been enabled
-   *
-   * TODO fail fast if there are already events there?
-   * TODO support resuming?
    */
   def rebuildTagViewForPersistenceIds(persistenceId: String): Future[Done] =
     new BuildTagViewForPersisetceId(persistenceId, system, recovery, settings).reconcile()
@@ -158,8 +163,17 @@ final class Reconciliation(system: ActorSystem) extends Extension {
   /**
    * Returns all the tags in the journal. This is not an efficient query for Cassandra so it is better
    * to calculate tags for calls to deleteTagViewForPersistenceId another way.
+   *
+   * Prefer to do batches of persistence ids at a time getting the tags just for that persistence id.
    */
   def allTags(): Source[String, NotUsed] = new AllTags(recSession).execute()
+
+  /**
+   * Select all the tags for the given persistence id. This may not return tags that
+   * have just been used for the first time.
+   */
+  def tagsForPersistenceId(persistenceId: String): Future[Set[String]] =
+    recSession.selectTagProgress(persistenceId).runWith(Sink.seq).map(_.toSet)
 
   /**
    * Truncate all tables and all metadata so that it can be rebuilt

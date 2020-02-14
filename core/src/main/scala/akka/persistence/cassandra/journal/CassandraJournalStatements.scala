@@ -185,12 +185,8 @@ import com.datastax.oss.driver.api.core.CqlSession
     s"TRUNCATE $tagProgressTableName"
   def truncateTagScanning: String =
     s"TRUNCATE $tagScanningTableName"
-
-  def selectAllTagProgress: String = {
-    s"""
-      SELECT tag FROM $tagProgressTableName 
-     """
-  }
+  def selectAllTagProgress: String =
+    s"""SELECT tag FROM $tagProgressTableName"""
 
   def updateMessagePayloadInTagView =
     s"""
