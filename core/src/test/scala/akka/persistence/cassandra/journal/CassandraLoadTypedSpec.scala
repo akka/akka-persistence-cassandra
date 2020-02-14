@@ -14,7 +14,8 @@ import akka.persistence.cassandra.CassandraSpec
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
-import org.scalatest._
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object CassandraLoadTypedSpec {
 
@@ -104,7 +105,7 @@ object CassandraLoadTypedSpec {
 
 }
 
-class CassandraLoadTypedSpec extends CassandraSpec with WordSpecLike with Matchers {
+class CassandraLoadTypedSpec extends CassandraSpec with AnyWordSpecLike with Matchers {
 
   import CassandraLoadTypedSpec._
 

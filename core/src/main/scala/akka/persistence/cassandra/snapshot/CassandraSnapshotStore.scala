@@ -9,25 +9,22 @@ import java.nio.ByteBuffer
 import java.util.NoSuchElementException
 
 import akka.NotUsed
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
-import akka.cassandra.session.scaladsl.CassandraSession
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.AsyncSerializer
 import akka.serialization.Serialization
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import akka.util.OptionVal
@@ -36,6 +33,7 @@ import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
 import akka.Done
 import akka.annotation.InternalApi
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 
 /**
  * INTERNAL API
@@ -46,6 +44,7 @@ import akka.annotation.InternalApi
 
   import CassandraSnapshotStore._
   implicit val ec: ExecutionContext = context.dispatcher
+  implicit val sys: ActorSystem = context.system
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
@@ -71,8 +70,6 @@ import akka.annotation.InternalApi
     session.prepare(selectSnapshotMetadata(limit = None))
   private def preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit: Future[PreparedStatement] =
     session.prepare(selectSnapshotMetadata(limit = Some(snapshotSettings.maxLoadAttempts)))
-
-  private implicit val materializer = ActorMaterializer()
 
   override def preStart(): Unit =
     // eager initialization, but not from constructor

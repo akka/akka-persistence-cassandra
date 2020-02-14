@@ -13,6 +13,7 @@ import akka.annotation.InternalApi
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
+import akka.stream.alpakka.cassandra.FutureDone
 
 /**
  * INTERNAL API
@@ -316,7 +317,6 @@ import com.datastax.oss.driver.api.core.CqlSession
    * reduce the risk of (annoying) "Column family ID mismatch" exception.
    */
   def executeCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
-    import akka.cassandra.session._
 
     def tagStatements: Future[Done] =
       if (eventsByTagSettings.eventsByTagEnabled) {

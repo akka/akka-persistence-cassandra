@@ -2,19 +2,17 @@
  * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package akka.cassandra.session.javadsl
+package akka.stream.alpakka.cassandra.javadsl
 
 import java.util.concurrent.CompletionStage
-import java.util.function.{ Function => JFunction }
-
-import scala.compat.java8.FutureConverters._
-import scala.concurrent.ExecutionContext
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.cassandra.session.javadsl
-import akka.cassandra.session.scaladsl
+import akka.stream.alpakka.cassandra.{ scaladsl, CassandraSessionSettings }
 import com.datastax.oss.driver.api.core.CqlSession
+
+import scala.compat.java8.FutureConverters._
+import scala.concurrent.ExecutionContext
 
 /**
  * This Cassandra session registry makes it possible to share Cassandra sessions between multiple use sites
@@ -27,7 +25,7 @@ object CassandraSessionRegistry {
    * Java API: get the session registry
    */
   def get(system: ActorSystem): CassandraSessionRegistry =
-    new javadsl.CassandraSessionRegistry(scaladsl.CassandraSessionRegistry(system))
+    new CassandraSessionRegistry(scaladsl.CassandraSessionRegistry(system))
 
 }
 
@@ -55,7 +53,14 @@ final class CassandraSessionRegistry private (delegate: scaladsl.CassandraSessio
   def sessionFor(
       configPath: String,
       executionContext: ExecutionContext,
-      init: JFunction[CqlSession, CompletionStage[Done]]): CassandraSession = {
+      init: java.util.function.Function[CqlSession, CompletionStage[Done]]): CassandraSession =
     new CassandraSession(delegate.sessionFor(configPath, executionContext, ses => init(ses).toScala))
-  }
+
+  /**
+   * Get an existing session or start a new one with the given settings,
+   * makes it possible to share one session across plugins.
+   */
+  def sessionFor(settings: CassandraSessionSettings, executionContext: ExecutionContext): CassandraSession =
+    new CassandraSession(delegate.sessionFor(settings, executionContext))
+
 }

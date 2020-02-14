@@ -17,8 +17,6 @@ import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.stream.scaladsl.Sink
 import akka.persistence.query.PersistenceQuery
-import akka.cassandra.session.scaladsl.CassandraSession
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.cassandra.CassandraStatements
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.journal.TimeBucket
@@ -29,6 +27,8 @@ import akka.persistence.cassandra.journal.TagWriters._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -81,14 +81,14 @@ final class ReconciliationSession(session: CassandraSession, statements: Cassand
    * current tag names.
    */
   def selectAllTagProgress(): Source[Row, NotUsed] = {
-    Source.future(selectAllTagProgressPs.map(ps => session.select(ps.bind()))).flatMapConcat(identity)
+    Source.futureSource(selectAllTagProgressPs.map(ps => session.select(ps.bind()))).mapMaterializedValue(_ => NotUsed)
   }
 
   def selectTagProgress(persistenceId: String): Source[String, NotUsed] = {
     Source
-      .future(
+      .futureSource(
         selectTagProgressForPersistenceId.map(ps => session.select(ps.bind(persistenceId)).map(_.getString("tag"))))
-      .flatMapConcat(identity)
+      .mapMaterializedValue(_ => NotUsed)
   }
 
   /**

@@ -50,7 +50,7 @@ import akka.annotation.InternalApi
     } yield tp
 
     Source
-      .fromFutureSource(recoveryPrep.map((tp: Map[String, TagProgress]) => {
+      .futureSource(recoveryPrep.map((tp: Map[String, TagProgress]) => {
         log.debug("[{}] Rebuilding tag view table from: [{}]", persistenceId, tp)
         queries
           .eventsByPersistenceId(

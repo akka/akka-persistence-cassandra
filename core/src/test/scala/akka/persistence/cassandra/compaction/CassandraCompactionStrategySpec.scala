@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, PluginSettings }
 import com.typesafe.config.ConfigFactory
-import org.scalatest.WordSpecLike
+import org.scalatest.wordspec.AnyWordSpecLike
 
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(s"""
@@ -17,7 +17,9 @@ object CassandraCompactionStrategySpec {
     """.stripMargin).withFallback(CassandraLifecycle.config)
 }
 
-class CassandraCompactionStrategySpec extends CassandraSpec(CassandraCompactionStrategySpec.config) with WordSpecLike {
+class CassandraCompactionStrategySpec
+    extends CassandraSpec(CassandraCompactionStrategySpec.config)
+    with AnyWordSpecLike {
 
   val cassandraPluginSettings = PluginSettings(system)
 

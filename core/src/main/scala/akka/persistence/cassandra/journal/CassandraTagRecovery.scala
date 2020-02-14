@@ -20,18 +20,17 @@ import akka.persistence.cassandra.journal.TagWriters.{
 import akka.persistence.cassandra.Extractors.RawEvent
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
+
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
-
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.cassandra.Extractors.TaggedPersistentRepr
 import akka.serialization.SerializationExtension
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.TagWriters.FlushAllTagWriters
-import akka.persistence.cassandra.journal.TagWriters.AllFlushed
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 /**
  * INTERNAL API

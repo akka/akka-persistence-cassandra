@@ -6,19 +6,14 @@ package akka.persistence.cassandra.reconciler
 
 import akka.persistence.cassandra.CassandraSpec
 import akka.persistence.cassandra.TestTaggingActor
-import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.testkit.TestProbe
 import akka.persistence.RecoveryCompleted
-import akka.actor.PoisonPill
 
 /**
  * These tests depend on the output of each other, can't be run separately
  */
-class DeleteTagViewForPersistenceIdSpec extends CassandraSpec("""
+class DeleteTagViewForPersistenceIdSpec extends CassandraSpec {
 
-""") {
-
-  // FIXME use nextId once https://github.com/akka/akka-persistence-cassandra/pull/681/is merged
   "Deleting " should {
     val tag = "tag1"
     val pid1 = "p1"

@@ -23,7 +23,9 @@ import akka.testkit.{ EventFilter, ImplicitSender, SocketUtil, TestKitBase }
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Milliseconds, Seconds, Span }
-import org.scalatest.{ Matchers, Outcome, Suite, WordSpecLike }
+import org.scalatest.{ Outcome, Suite }
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -50,7 +52,6 @@ object CassandraSpec {
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
     ConfigFactory.parseString(s"""
       akka.persistence.cassandra {
-        session-name = $journalKeyspace
         journal.keyspace = $journalKeyspace
         # FIXME this is not the way to configure port. Do we need port config in tests?
         port = $port
@@ -101,7 +102,7 @@ abstract class CassandraSpec(
     extends TestKitBase
     with Suite
     with ImplicitSender
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with CassandraLifecycle
     with ScalaFutures {
@@ -110,6 +111,7 @@ abstract class CassandraSpec(
 
   def this() = this(CassandraLifecycle.config)
 
+  private var failed = false
   lazy val randomPort = SocketUtil.temporaryLocalPort()
 
   val shortWait = 10.millis
@@ -118,7 +120,9 @@ abstract class CassandraSpec(
 
   def keyspaces(): Set[String] = Set(journalName, snapshotName)
 
-  private var failed = false
+  private val ids = new AtomicInteger(0)
+
+  def nextId(): String = s"pid-${ids.incrementAndGet()}"
 
   override protected def withFixture(test: NoArgTest): Outcome = {
     // When filtering just collects events into this var (yeah, it's a hack to do that in a filter).

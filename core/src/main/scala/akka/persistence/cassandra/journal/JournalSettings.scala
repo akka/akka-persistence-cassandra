@@ -7,7 +7,6 @@ package akka.persistence.cassandra.journal
 import akka.actor.ActorSystem
 import akka.actor.NoSerializationVerificationNeeded
 import akka.annotation.InternalApi
-import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.PluginSettings.getReplicationStrategy
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
 import akka.persistence.cassandra.getListFromConfig
@@ -21,9 +20,6 @@ import com.typesafe.config.Config
 
   val writeProfile: String = config.getString("write-profile")
   val readProfile: String = config.getString("read-profile")
-
-  PluginSettings.checkProfile(system, writeProfile)
-  PluginSettings.checkProfile(system, readProfile)
 
   val keyspaceAutoCreate: Boolean = journalConfig.getBoolean("keyspace-autocreate")
   val tablesAutoCreate: Boolean = journalConfig.getBoolean("tables-autocreate")

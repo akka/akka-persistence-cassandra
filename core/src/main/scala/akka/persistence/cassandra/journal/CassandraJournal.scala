@@ -12,9 +12,8 @@ import akka.Done
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
 import akka.annotation.InternalApi
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.{ Logging, LoggingAdapter }
-import akka.cassandra.session._
+import akka.stream.alpakka.cassandra._
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
@@ -22,18 +21,17 @@ import akka.persistence.cassandra.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
 import akka.persistence.query.PersistenceQuery
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, TagWritersSession }
-import akka.persistence.cassandra.journal.TagWriter.{ TagProgress }
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
+import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
-import akka.stream.ActorMaterializer
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -53,6 +51,7 @@ import akka.stream.scaladsl.Source
     extends AsyncWriteJournal
     with NoSerializationVerificationNeeded {
   import CassandraJournal._
+  import context.system
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.journal$""", "")
@@ -67,7 +66,6 @@ import akka.stream.scaladsl.Source
   private val log: LoggingAdapter = Logging(context.system, getClass)
 
   private implicit val ec: ExecutionContext = context.dispatcher
-  private implicit val materializer: ActorMaterializer = ActorMaterializer()(context.system)
 
   // readHighestSequence must be performed after pending write for a persistenceId
   // when the persistent actor is restarted.
@@ -670,13 +668,14 @@ import akka.stream.scaladsl.Source
         }
 
         Source
-          .fromFutureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
-            log.info(
+          .futureSource(recoveryPrep.map((tp: Map[Tag, TagProgress]) => {
+            log.debug(
               "[{}] starting recovery with tag progress: [{}]. From [{}] to [{}]",
               persistenceId,
               tp,
               fromSequenceNr,
               toSequenceNr)
+
             queries
               .eventsByPersistenceId(
                 persistenceId,

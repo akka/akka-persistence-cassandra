@@ -8,7 +8,7 @@ import java.net.URLEncoder
 import java.util.UUID
 
 import akka.{ Done, NotUsed }
-import akka.actor.ExtendedActorSystem
+import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
@@ -18,13 +18,12 @@ import akka.persistence.cassandra.Extractors.Extractor
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
 import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
 import akka.persistence.{ Persistence, PersistentRepr }
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
-import akka.stream.{ ActorAttributes, ActorMaterializer }
+import akka.stream.ActorAttributes
 import akka.util.ByteString
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
@@ -34,10 +33,11 @@ import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
 
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.CassandraStatements
 import akka.serialization.SerializationExtension
+import akka.stream.alpakka.cassandra.CassandraSessionSettings
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
@@ -120,7 +120,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   private val serialization = SerializationExtension(system)
   implicit private val ec =
     system.dispatchers.lookup(querySettings.pluginDispatcher)
-  implicit private val materializer = ActorMaterializer()(system)
+  implicit private val sys: ActorSystem = system
 
   private val queryStatements: CassandraReadStatements =
     new CassandraReadStatements {
@@ -130,11 +130,12 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
   /**
    * Data Access Object for arbitrary queries or updates.
    */
-  val session: CassandraSession =
+  val session: CassandraSession = {
     CassandraSessionRegistry(system).sessionFor(
-      sharedConfigPath,
+      CassandraSessionSettings(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses)),
       ec,
-      ses => statements.executeAllCreateKeyspaceAndTables(ses))
+      sharedConfig)
+  }
 
   /**
    * Initialize connection to Cassandra and prepared statements.
@@ -219,6 +220,17 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
    */
   def timestampFrom(offset: TimeBasedUUID): Long =
     Uuids.unixTimestamp(offset.value)
+
+  /**
+   * Convert a `TimeBasedUUID` to a unix timestamp (as returned by
+   * `System#currentTimeMillis`. If it's not a `TimeBasedUUID` it
+   * will return 0.
+   */
+  private def timestampFrom(offset: Offset): Long =
+    offset match {
+      case t: TimeBasedUUID => timestampFrom(t)
+      case _                => 0
+    }
 
   /**
    * `eventsByTag` is used for retrieving events that were marked with
@@ -420,7 +432,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
         Source.failed(e).mapMaterializedValue(_ => Future.failed(e))
       case None =>
         // completed later
-        Source.fromFutureSource(prepStmt.map(ps => source(getSession, ps)))
+        Source.futureSource(prepStmt.map(ps => source(getSession, ps)))
     }
 
   }
@@ -615,12 +627,12 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
 
   private def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope(Offset.sequence(offset), persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
+      EventEnvelope(Offset.sequence(offset), persistentRepr.persistenceId, persistentRepr.sequenceNr, payload, 0L)
     }
 
   private def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload)
+      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload, timestampFrom(offset))
     }
 
   private def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =
