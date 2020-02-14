@@ -14,7 +14,8 @@ import akka.stream.ActorMaterializer
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{ Matchers, WordSpecLike }
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 object EventsByTagMultiJvmSpec extends MultiNodeConfig {
   // No way to start and distribute the port so hard coding
@@ -57,7 +58,7 @@ class EventsByTagSpecMultiJvmNode3 extends EventsByTagMultiJvmSpec
 abstract class EventsByTagMultiJvmSpec
     extends MultiNodeSpec(EventsByTagMultiJvmSpec)
     with MultiNodeClusterSpec
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers {
 
   import EventsByTagMultiJvmSpec._

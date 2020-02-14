@@ -6,15 +6,16 @@ package akka.persistence.cassandra.journal
 
 import scala.concurrent.duration.DurationInt
 
-import org.scalatest.{ MustMatchers, WordSpecLike }
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import akka.actor.{ ActorSystem, Props }
 import akka.testkit.{ TestKit, TestProbe }
 
 class PubSubThrottlerSpec
     extends TestKit(ActorSystem("CassandraConfigCheckerSpec"))
-    with WordSpecLike
-    with MustMatchers {
+    with AnyWordSpecLike
+    with Matchers {
   "PubSubThrottler" should {
     "eat up duplicate messages that arrive within the same [interval] window" in {
       val delegate = TestProbe()

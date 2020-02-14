@@ -16,7 +16,7 @@ import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 import akka.actor.PoisonPill
-import org.scalatest.Matchers
+import org.scalatest.matchers.should.Matchers
 
 object EventsByTagRestartSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)

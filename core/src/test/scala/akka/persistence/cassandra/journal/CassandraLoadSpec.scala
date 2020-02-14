@@ -12,7 +12,8 @@ import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.CassandraSpec
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
-import org.scalatest._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 object CassandraLoadSpec {
   val config = ConfigFactory.parseString(s"""
@@ -108,7 +109,7 @@ object CassandraLoadSpec {
 class CassandraLoadSpec
     extends CassandraSpec(CassandraLoadSpec.config)
     with ImplicitSender
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers {
 
   import CassandraLoadSpec._

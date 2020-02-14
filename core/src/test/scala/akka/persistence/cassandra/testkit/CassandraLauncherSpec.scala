@@ -10,7 +10,8 @@ import java.net.InetSocketAddress
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import com.datastax.oss.driver.api.core.CqlSession
-import org.scalatest.{ Matchers, WordSpecLike }
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 import org.scalatest.BeforeAndAfterAll
@@ -18,7 +19,7 @@ import org.scalatest.BeforeAndAfterAll
 class CassandraLauncherSpec
     extends TestKit(ActorSystem("CassandraLauncherSpec"))
     with Matchers
-    with WordSpecLike
+    with AnyWordSpecLike
     with BeforeAndAfterAll {
 
   override protected def afterAll(): Unit = {

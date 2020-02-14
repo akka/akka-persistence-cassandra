@@ -7,9 +7,10 @@ package akka.persistence.cassandra.journal
 import akka.persistence.cassandra.Day
 import akka.persistence.cassandra.Hour
 import akka.persistence.cassandra.Minute
-import org.scalatest.{ Matchers, WordSpec }
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
 
-class TimeBucketSpec extends WordSpec with Matchers {
+class TimeBucketSpec extends AnyWordSpec with Matchers {
   "TimeBucket sizes" must {
     "support day" in {
       val epochTime = 1409545135047L
