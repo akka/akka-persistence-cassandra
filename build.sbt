@@ -47,9 +47,7 @@ lazy val core = (project in file("core"))
 lazy val reconciler = (project in file("reconciler"))
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
   .dependsOn(core % "test->test;compile->compile", session)
-  .settings(
-    libraryDependencies ++= Dependencies.reconcilerDependencies
-  )
+  .settings(libraryDependencies ++= Dependencies.reconcilerDependencies)
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .enablePlugins(Common)
