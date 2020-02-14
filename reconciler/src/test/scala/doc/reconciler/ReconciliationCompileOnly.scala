@@ -14,7 +14,8 @@ import akka.Done
 class ReconciliationCompileOnly {
 
   //#reconcile
-  // System should have the same configuration as your application
+  // System should have the same caassandra plugin configuration as your application
+  // but be careful to remove seed nodes so this doesn't join the cluster
   val system = ActorSystem()
   import system.dispatcher
 

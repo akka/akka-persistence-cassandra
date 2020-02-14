@@ -21,6 +21,7 @@ import akka.util.Timeout
 import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Sink
 import akka.annotation.InternalApi
+import akka.serialization.SerializationExtension
 
 /**
  * INTERNAL API
@@ -36,6 +37,7 @@ private[akka] final class BuildTagViewForPersisetceId(
 
   private implicit val sys = system
   private val log = Logging(system, classOf[BuildTagViewForPersisetceId])
+  private val serialization = SerializationExtension(system)
 
   private val queries: CassandraReadJournal =
     PersistenceQuery(system.asInstanceOf[ExtendedActorSystem])
@@ -62,7 +64,7 @@ private[akka] final class BuildTagViewForPersisetceId(
             None,
             settings.journalSettings.readProfile,
             "BuildTagViewForPersistenceId",
-            extractor = Extractors.rawEvent(settings.eventsByTagSettings.bucketSize))
+            extractor = Extractors.rawEvent(settings.eventsByTagSettings.bucketSize, serialization, system))
           .map(recovery.sendMissingTagWriteRaw(tp, actorRunning = false))
           .buffer(flushEvery, OverflowStrategy.backpressure)
           .mapAsync(1)(_ => recovery.flush(flushTimeout))

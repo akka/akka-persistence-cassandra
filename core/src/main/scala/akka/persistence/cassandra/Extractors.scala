@@ -17,6 +17,7 @@ import akka.serialization.Serialization
 import scala.collection.JavaConverters._
 import java.nio.ByteBuffer
 import com.datastax.oss.protocol.internal.util.Bytes
+import akka.actor.ActorSystem
 
 /**
  * An Extractor takes reads a row from the messages table. There are different extractors
@@ -52,6 +53,57 @@ import com.datastax.oss.protocol.internal.util.Bytes
     def sequenceNr: Long = persistentRepr.sequenceNr
   }
 
+  private[akka] def deserializeRawEvent(
+      system: ActorSystem,
+      bucketSize: BucketSize,
+      columnDefinitionCache: ColumnDefinitionCache,
+      tags: Set[String],
+      serialization: Serialization,
+      row: Row): Future[RawEvent] = {
+    import system._
+    val timeUuid = row.getUuid("timestamp")
+    val sequenceNr = row.getLong("sequence_nr")
+    val meta = if (columnDefinitionCache.hasMetaColumns(row)) {
+      val m = row.getByteBuffer("meta")
+      Option(m).map(SerializedMeta(_, row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
+    } else {
+      None
+    }
+
+    def deserializeEvent(): Future[RawEvent] = {
+      Future.successful(
+        RawEvent(
+          sequenceNr,
+          Serialized(
+            row.getString("persistence_id"),
+            row.getLong("sequence_nr"),
+            row.getByteBuffer("event"),
+            tags,
+            row.getString("event_manifest"),
+            row.getString("ser_manifest"),
+            row.getInt("ser_id"),
+            row.getString("writer_uuid"),
+            meta,
+            timeUuid,
+            timeBucket = TimeBucket(timeUuid, bucketSize))))
+    }
+
+    if (columnDefinitionCache.hasMessageColumn(row)) {
+      row.getByteBuffer("message") match {
+        case null  => deserializeEvent()
+        case bytes =>
+          // This is an event from version 0.6 and earlier that used to serialise the PersistentRepr in the
+          // message column rather than the event column
+          val pr = serialization.deserialize(Bytes.getArray(bytes), classOf[PersistentRepr]).get
+          serializeEvent(pr, tags, timeUuid, bucketSize, serialization, system).map { serEvent =>
+            RawEvent(sequenceNr, serEvent)
+          }
+      }
+    } else {
+      deserializeEvent()
+    }
+  }
+
   /**
    * Extractor that does not de-serialize the event.
    * It does not support versions older than 0.60 that serialized
@@ -59,7 +111,7 @@ import com.datastax.oss.protocol.internal.util.Bytes
    *
    * @param bucketSize for calculating which bucket each event should
    */
-  def rawEvent(bucketSize: BucketSize): Extractor[RawEvent] = {
+  def rawEvent(bucketSize: BucketSize, serialization: Serialization, system: ActorSystem): Extractor[RawEvent] = {
     new Extractor[RawEvent] {
 
       // Could  make this an extension? Too global?
@@ -67,30 +119,7 @@ import com.datastax.oss.protocol.internal.util.Bytes
 
       override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[RawEvent] = {
         val tags = extractTags(row, columnDefinitionCache)
-        val timeUuid = row.getUuid("timestamp")
-        val sequenceNr = row.getLong("sequence_nr")
-        val meta = if (columnDefinitionCache.hasMetaColumns(row)) {
-          val m = row.getByteBuffer("meta")
-          Option(m).map(SerializedMeta(_, row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
-        } else {
-          None
-        }
-
-        Future.successful(
-          RawEvent(
-            sequenceNr,
-            Serialized(
-              row.getString("persistence_id"),
-              row.getLong("sequence_nr"),
-              row.getByteBuffer("event"),
-              tags,
-              row.getString("event_manifest"),
-              row.getString("ser_manifest"),
-              row.getInt("ser_id"),
-              row.getString("writer_uuid"),
-              meta,
-              timeUuid,
-              timeBucket = TimeBucket(timeUuid, bucketSize))))
+        deserializeRawEvent(system, bucketSize, columnDefinitionCache, tags, serialization, row)
       }
     }
   }

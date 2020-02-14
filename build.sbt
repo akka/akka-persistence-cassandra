@@ -47,7 +47,12 @@ lazy val core = (project in file("core"))
 lazy val reconciler = (project in file("reconciler"))
   .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
   .dependsOn(core % "test->test;compile->compile", session)
-  .settings(libraryDependencies ++= Dependencies.reconcilerDependencies)
+  .settings(
+    name := "akka-persistence-cassandra-reconciler",
+    Compile / packageBin / packageOptions += Package.ManifestAttributes(
+        "Automatic-Module-Name" -> "akka.persistence.cassandra.reconciler"),
+    libraryDependencies ++= Dependencies.reconcilerDependencies,
+    testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o")))
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .enablePlugins(Common)

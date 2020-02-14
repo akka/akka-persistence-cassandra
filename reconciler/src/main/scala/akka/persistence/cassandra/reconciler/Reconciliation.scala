@@ -41,7 +41,7 @@ import java.lang.{ Long => JLong }
  * INTERNAL API
  */
 @InternalApi
-final class ReconciliationSession(session: CassandraSession, statements: CassandraStatements)(
+final private[akka] class ReconciliationSession(session: CassandraSession, statements: CassandraStatements)(
     implicit ec: ExecutionContext) {
   private val deleteTagView = session.prepare(statements.journalStatements.deleteTag)
   private val deleteTagProgress = session.prepare(statements.journalStatements.deleteTagProgress)
