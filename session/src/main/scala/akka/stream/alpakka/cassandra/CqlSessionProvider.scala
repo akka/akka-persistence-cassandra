@@ -110,19 +110,22 @@ class AkkaDiscoverySessionProvider(system: ActorSystem, config: Config) extends 
   }
 
   override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
-    val sessionName = config.getString("session-name")
-    require(sessionName != null && sessionName.nonEmpty, s"config needs to set a non-empty `session-name`")
-    val contactPoints = readNodes(config)(system)
-    contactPoints.flatMap { contactPoints =>
-      val overload: DriverConfigLoader =
-        DriverConfigLoader
-          .programmaticBuilder()
-          .withString(DefaultDriverOption.SESSION_NAME, sessionName)
-          .withStringList(DefaultDriverOption.CONTACT_POINTS, contactPoints.asJava)
-          .build()
-      CqlSession.builder().withConfigLoader(overload).buildAsync().toScala
+    val driverConfig = CqlSessionProvider.driverConfig(system, config)
+    val sessionName =
+      if (driverConfig.hasPath("basic.session-name")) driverConfig.getString("basic.session-name")
+      else ""
+    require(sessionName != null && sessionName.nonEmpty, s"driver config needs to set a non-empty `basic.session-name`")
+
+    readNodes(config)(system).flatMap { contactPoints =>
+      val driverConfigWithContactPoints = ConfigFactory.parseString(s"""
+        basic.contact-points = [${contactPoints.mkString("\"", "\", \"", "\"")}]
+        """).withFallback(driverConfig)
+
+      val driverConfigLoader = DriverConfigLoaderFromConfig.fromConfig(driverConfigWithContactPoints)
+      CqlSession.builder().withConfigLoader(driverConfigLoader).buildAsync().toScala
     }
   }
+
 }
 
 object CqlSessionProvider {
@@ -164,9 +167,9 @@ object CqlSessionProvider {
    */
   def driverConfig(system: ActorSystem, config: Config): Config = {
     val driverConfigPath = config.getString("datastax-java-driver-config")
-    system.settings.config
-      .getConfig(driverConfigPath)
-      .withFallback(if (driverConfigPath == "datastax-java-driver") ConfigFactory.empty()
-      else system.settings.config.getConfig("datastax-java-driver"))
+    system.settings.config.getConfig(driverConfigPath).withFallback {
+      if (driverConfigPath == "datastax-java-driver") ConfigFactory.empty()
+      else system.settings.config.getConfig("datastax-java-driver")
+    }
   }
 }
