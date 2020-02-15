@@ -36,19 +36,11 @@ import akka.persistence.cassandra.PluginSettings
  */
 @InternalApi private[akka] object EventsByPersistenceIdStage {
 
-  private[akka] case class TaggedPersistentRepr(pr: PersistentRepr, tags: Set[String], offset: UUID) {
-    def sequenceNr: Long = pr.sequenceNr
-  }
-
-  private[akka] case class OptionalTagged(sequenceNr: Long, tagged: OptionVal[TaggedPersistentRepr])
-
-  private[akka] case class RawEvent(sequenceNr: Long, serialized: Serialized)
-
   // materialized value
   trait Control {
 
     /**
-     * Trigger a request to fetch more eventEvens.
+     * Trigger a request to fetch more events.
      */
     def poll(knownSeqNr: Long): Unit
 
@@ -112,111 +104,6 @@ import akka.persistence.cassandra.PluginSettings
   private final case class QueryResult(resultSet: AsyncResultSet, empty: Boolean, switchPartition: Boolean)
       extends QueryState {
     override def toString: String = s"QueryResult($switchPartition)"
-  }
-
-  object Extractors {
-
-    abstract class Extractor[T](val eventDeserializer: EventDeserializer, val serialization: Serialization) {
-      def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[T]
-    }
-
-    final case class SeqNrValue(sequenceNr: Long)
-
-    final case class PersistentReprValue(persistentRepr: PersistentRepr) {
-      def sequenceNr: Long = persistentRepr.sequenceNr
-    }
-
-    def persistentRepr(ed: EventDeserializer, s: Serialization): Extractor[PersistentReprValue] =
-      new Extractor[PersistentReprValue](ed, s) {
-        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[PersistentReprValue] =
-          extractPersistentRepr(row, ed, s, async).map(PersistentReprValue.apply)
-      }
-
-    def taggedPersistentRepr(ed: EventDeserializer, s: Serialization): Extractor[TaggedPersistentRepr] =
-      new Extractor[TaggedPersistentRepr](ed, s) {
-        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[TaggedPersistentRepr] =
-          extractPersistentRepr(row, ed, s, async).map { persistentRepr =>
-            val tags = extractTags(row, ed)
-            TaggedPersistentRepr(persistentRepr, tags, row.getUuid("timestamp"))
-          }
-      }
-
-    def optionalTaggedPersistentRepr(ed: EventDeserializer, s: Serialization): Extractor[OptionalTagged] =
-      new Extractor[OptionalTagged](ed, s) {
-        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[OptionalTagged] = {
-          val seqNr = row.getLong("sequence_nr")
-          val tags = extractTags(row, ed)
-          if (tags.isEmpty) {
-            // no tags, no need to extract more
-            Future.successful(OptionalTagged(seqNr, OptionVal.None))
-          } else {
-            extractPersistentRepr(row, ed, s, async).map { persistentRepr =>
-              val tagged = TaggedPersistentRepr(persistentRepr, tags, row.getUuid("timestamp"))
-              OptionalTagged(seqNr, OptionVal.Some(tagged))
-            }
-          }
-        }
-      }
-
-    // TODO performance improvement could be to use another query that is not "select *"
-    def sequenceNumber(ed: EventDeserializer, s: Serialization): Extractor[SeqNrValue] =
-      new Extractor[SeqNrValue](ed, s) {
-        override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[SeqNrValue] =
-          Future.successful(SeqNrValue(row.getLong("sequence_nr")))
-      }
-
-    private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization, async: Boolean)(
-        implicit ec: ExecutionContext): Future[PersistentRepr] = {
-
-      def deserializeEvent(): Future[PersistentRepr] = {
-        ed.deserializeEvent(row, async).map { payload =>
-          PersistentRepr(
-            payload,
-            sequenceNr = row.getLong("sequence_nr"),
-            persistenceId = row.getString("persistence_id"),
-            manifest = row.getString("event_manifest"), // manifest for event adapters
-            deleted = false,
-            sender = null,
-            writerUuid = row.getString("writer_uuid"))
-        }
-      }
-
-      if (ed.columnDefinitionCache.hasMessageColumn(row)) {
-        row.getByteBuffer("message") match {
-          case null  => deserializeEvent()
-          case bytes =>
-            // For backwards compatibility, reading serialized PersistentRepr from "message" column.
-            // Used in v0.6 and earlier. In later versions the "event" column is used for the serialized event.
-            Future.successful(persistentFromByteBuffer(s, bytes))
-        }
-      } else {
-        deserializeEvent()
-      }
-    }
-
-    private def extractTags(row: Row, ed: EventDeserializer): Set[String] = {
-      // TODO can be removed in 1.0, this is only used during migration from the old version on initial recovery
-      val oldTags: Set[String] =
-        if (ed.columnDefinitionCache.hasOldTagsColumns(row)) {
-          (1 to 3).foldLeft(Set.empty[String]) {
-            case (acc, i) =>
-              val tag = row.getString(s"tag$i")
-              if (tag != null) acc + tag
-              else acc
-          }
-        } else Set.empty
-
-      val newTags: Set[String] =
-        if (ed.columnDefinitionCache.hasTagsColumn(row))
-          row.getSet("tags", classOf[String]).asScala.toSet
-        else Set.empty
-
-      oldTags.union(newTags)
-    }
-
-    def persistentFromByteBuffer(serialization: Serialization, b: ByteBuffer): PersistentRepr =
-      // we know that such old rows can't have meta data because that feature was added later
-      serialization.deserialize(Bytes.getArray(b), classOf[PersistentRepr]).get
   }
 }
 

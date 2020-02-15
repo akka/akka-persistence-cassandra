@@ -12,7 +12,7 @@ import akka.event.Logging
 import akka.event.Logging.{ LogEvent, StdOutLogger }
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
+import akka.persistence.cassandra.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ NoOffset, PersistenceQuery }
 import akka.stream.ActorMaterializer
@@ -33,6 +33,8 @@ import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
 
 import scala.util.control.NonFatal
+import akka.persistence.cassandra.TestTaggingActor.Ack
+import akka.actor.PoisonPill
 
 object CassandraSpec {
   def getCallerName(clazz: Class[_]): String = {
@@ -235,6 +237,20 @@ abstract class CassandraSpec(
   lazy val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
+  def writeEventsFor(tag: String, persistenceId: String, nrEvents: Int): Unit =
+    writeEventsFor(Set(tag), persistenceId, nrEvents)
+
+  def writeEventsFor(tags: Set[String], persistenceId: String, nrEvents: Int): Unit = {
+    val ref = system.actorOf(TestTaggingActor.props(persistenceId, tags))
+    for (i <- 1 to nrEvents) {
+      ref ! s"$persistenceId event-$i"
+      expectMsg(Ack)
+    }
+    watch(ref)
+    ref ! PoisonPill
+    expectTerminated(ref)
+  }
+
   def eventsPayloads(pid: String): Seq[Any] =
     queries
       .currentEventsByPersistenceId(pid, 0, Long.MaxValue)
@@ -243,7 +259,7 @@ abstract class CassandraSpec(
       .run()
       .futureValue
 
-  def events(pid: String): immutable.Seq[EventsByPersistenceIdStage.TaggedPersistentRepr] =
+  def events(pid: String): immutable.Seq[Extractors.TaggedPersistentRepr] =
     queries
       .eventsByPersistenceId(
         pid,

@@ -13,8 +13,8 @@ import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
 import akka.persistence.cassandra.journal._
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
+import akka.persistence.cassandra.Extractors
+import akka.persistence.cassandra.Extractors.Extractor
 import akka.persistence.cassandra.query.EventsByTagStage.TagStageSession
 import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements

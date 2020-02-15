@@ -3,7 +3,7 @@ ThisBuild / resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/")
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
-  .aggregate(core, cassandraLauncher, session)
+  .aggregate(core, cassandraLauncher, session, reconciler)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
 lazy val session = (project in file("session"))
@@ -43,6 +43,16 @@ lazy val core = (project in file("core"))
     OsgiKeys.privatePackage := Nil,
     testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o")))
   .configs(MultiJvm)
+
+lazy val reconciler = (project in file("reconciler"))
+  .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
+  .dependsOn(core % "test->test;compile->compile", session)
+  .settings(
+    name := "akka-persistence-cassandra-reconciler",
+    Compile / packageBin / packageOptions += Package.ManifestAttributes(
+        "Automatic-Module-Name" -> "akka.persistence.cassandra.reconciler"),
+    libraryDependencies ++= Dependencies.reconcilerDependencies,
+    testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o")))
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .enablePlugins(Common)
@@ -99,6 +109,7 @@ lazy val docs = project
         "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
         "scaladoc.akka.persistence.cassandra.base_url" -> s"/${(Preprocess / siteSubdirName).value}/"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
+    ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,
     publishRsyncArtifact := makeSite.value -> "www/",
     publishRsyncHost := "akkarepo@gustav.akka.io")

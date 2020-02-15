@@ -23,6 +23,11 @@ object Dependencies {
     "junit" % "junit" % "4.13" % Test,
     Logback % Test)
 
+  val reconcilerDependencies = Seq(
+    ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
+    "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
+    "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test)
+
   val akkaTestDeps = Seq(
     "com.typesafe.akka" %% "akka-persistence",
     "com.typesafe.akka" %% "akka-persistence-typed",
