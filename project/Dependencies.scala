@@ -13,7 +13,7 @@ object Dependencies {
   val DriverVersionInDocs = DriverVersion.take(3)
 
   // Performance dropped by ~40% when the driver upgraded to latest netty version
-  // override for now
+  // override for now https://datastax-oss.atlassian.net/browse/JAVA-2676
   val OverrideNettyVersion = "4.1.39.Final"
 
   val AlpakkaVersion = "2.0.0-M3"
