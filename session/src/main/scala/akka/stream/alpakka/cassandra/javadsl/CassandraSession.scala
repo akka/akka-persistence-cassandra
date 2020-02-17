@@ -24,7 +24,6 @@ import akka.stream.alpakka.cassandra.CassandraServerMetaData
 import akka.stream.alpakka.cassandra.{ scaladsl, CqlSessionProvider }
 import akka.stream.javadsl.Source
 import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.driver.api.core.ProtocolVersion
 import com.datastax.oss.driver.api.core.cql.BatchStatement
 import com.datastax.oss.driver.api.core.cql.PreparedStatement
 import com.datastax.oss.driver.api.core.cql.Row
@@ -72,12 +71,6 @@ final class CassandraSession(@InternalApi private[akka] val delegate: scaladsl.C
    * @param executor as this might be used after actor system termination, the actor systems dispatcher can't be used
    */
   def close(executor: Executor): CompletionStage[Done] = delegate.close(ExecutionContext.fromExecutor(executor)).toJava
-
-  /**
-   * The `ProtocolVersion` used by the driver to communicate with the server.
-   */
-  def protocolVersion: CompletionStage[ProtocolVersion] =
-    delegate.protocolVersion.toJava
 
   /**
    * Meta data about the Cassandra server, such as its version.

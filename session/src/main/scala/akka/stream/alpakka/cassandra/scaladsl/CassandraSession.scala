@@ -25,7 +25,6 @@ import akka.stream.stage.OutHandler
 import com.datastax.oss.driver.api.core.cql.BatchStatement
 import com.datastax.oss.driver.api.core.cql.BoundStatement
 import com.datastax.oss.driver.api.core.cql.PreparedStatement
-import com.datastax.oss.driver.api.core.ProtocolVersion
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.cql.Statement
 import akka.annotation.InternalApi
@@ -68,12 +67,6 @@ final class CassandraSession(
   private var cachedServerMetaData: OptionVal[Future[CassandraServerMetaData]] = OptionVal.None
 
   private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
-    if (log.isDebugEnabled) {
-      val version = session.getContext.getProtocolVersion
-      log.debug(
-        "Underlying CqlSession established, using protocol version " +
-        s"[$version code=${version.getCode} beta=${version.isBeta} name=${version.name()}]")
-    }
     session.getMetrics.ifPresent(metrics => {
       CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)
     })
@@ -97,12 +90,6 @@ final class CassandraSession(
     onClose()
     _underlyingSession.map(_.closeAsync().toScala).map(_ => Done)
   }
-
-  /**
-   * The `ProtocolVersion` used by the driver to communicate with the server.
-   */
-  def protocolVersion: Future[ProtocolVersion] =
-    underlying().map(_.getContext.getProtocolVersion)
 
   /**
    * Meta data about the Cassandra server, such as its version.
