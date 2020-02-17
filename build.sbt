@@ -6,9 +6,8 @@ lazy val root = (project in file("."))
   .aggregate(core, cassandraLauncher, session, reconciler)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
-lazy val session = (project in file("session"))
+lazy val session = project
   .enablePlugins(Common, AutomateHeaderPlugin)
-  .dependsOn(cassandraLauncher % Test)
   .settings(
     name := "akka-cassandra-session",
     libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies,
