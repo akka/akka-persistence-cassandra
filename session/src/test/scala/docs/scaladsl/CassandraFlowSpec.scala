@@ -39,7 +39,6 @@ class CassandraFlowSpec extends CassandraSpecBase(ActorSystem("CassandraFlowSpec
       val written = Source(data)
         .via(
           CassandraFlow.create(
-            session,
             CassandraWriteSettings.defaults,
             s"INSERT INTO $table(id) VALUES (?)",
             (element, preparedStatement) => preparedStatement.bind(Int.box(element))))
@@ -67,10 +66,43 @@ class CassandraFlowSpec extends CassandraSpecBase(ActorSystem("CassandraFlowSpec
         immutable.Seq(Person(12, "John", "London"), Person(43, "Umberto", "Roma"), Person(56, "James", "Chicago"))
       val written = Source(persons)
         .via(CassandraFlow.create(
-          session,
           CassandraWriteSettings.defaults,
           s"INSERT INTO $table(id, name, city) VALUES (?, ?, ?)",
           (person, preparedStatement) => preparedStatement.bind(Int.box(person.id), person.name, person.city)))
+        .runWith(Sink.ignore)
+      written.futureValue mustBe Done
+
+      val rows = CassandraSource(s"SELECT * FROM $table")
+        .map { row =>
+          Person(row.getInt("id"), row.getString("name"), row.getString("city"))
+        }
+        .runWith(Sink.seq)
+        .futureValue
+      rows must contain theSameElementsAs persons
+    }
+
+    "allow unlogged batches" in assertAllStagesStopped {
+      val table = createTableName()
+      withSchemaMetadataDisabled {
+        lifecycleSession.executeDDL(s"""
+                         |CREATE TABLE IF NOT EXISTS $table (
+                         |    id int PRIMARY KEY,
+                         |    name text,
+                         |    city text
+                         |);""".stripMargin)
+      }.futureValue mustBe Done
+
+      case class Person(id: Int, name: String, city: String)
+
+      val persons =
+        immutable.Seq(Person(12, "John", "London"), Person(43, "Umberto", "Roma"), Person(56, "James", "Chicago"))
+      val written = Source(persons)
+        .via(CassandraFlow.createUnloggedBatch(
+          CassandraWriteSettings.defaults,
+          s"INSERT INTO $table(id, name, city) VALUES (?, ?, ?)",
+          statementBinder = (person, preparedStatement) =>
+            preparedStatement.bind(Int.box(person.id), person.name, person.city),
+          partitionKey = person => person.id))
         .runWith(Sink.ignore)
       written.futureValue mustBe Done
 
