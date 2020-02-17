@@ -7,7 +7,6 @@ package akka.persistence.cassandra
 import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.event.Logging
-import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.persistence.cassandra.journal.TagWriters.{ AllFlushed, FlushAllTagWriters, TagWritersSession }
@@ -23,7 +22,6 @@ import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
 import com.datastax.oss.driver.api.core.cql.Row
-import com.datastax.oss.protocol.internal.util.Bytes
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
