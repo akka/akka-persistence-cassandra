@@ -4,7 +4,7 @@
 
 package akka.stream.alpakka.cassandra
 
-class CassandraServerMetaData(val clusterName: String, val dataCenter: String, val version: String) {
+final class CassandraServerMetaData(val clusterName: String, val dataCenter: String, val version: String) {
 
   val isVersion2: Boolean = version.startsWith("2.")
 
