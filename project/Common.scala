@@ -49,7 +49,7 @@ object Common extends AutoPlugin {
         (baseDirectory in ThisBuild).value.toString,
         "-doc-source-url", {
           val branch = if (isSnapshot.value) "master" else s"v${version.value}"
-          s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH}.scala#L1"
+          s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
         },
         "-skip-packages",
         "akka.pattern" // for some reason Scaladoc creates this
@@ -61,7 +61,7 @@ object Common extends AutoPlugin {
         HeaderLicense.Custom("""Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>""")),
     Test / logBuffered := System.getProperty("akka.logBufferedTests", "false").toBoolean,
     // show full stack traces and test case durations
-    Test / testOptions += Tests.Argument("-oDF"),
+    Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
     // -a Show stack traces and exception class name for AssertionErrors.
     // -v Log "test run started" / "test started" / "test run finished" events on log level "info" instead of "debug".
     // -q Suppress stdout for successful tests.

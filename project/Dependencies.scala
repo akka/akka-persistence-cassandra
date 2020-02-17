@@ -12,6 +12,11 @@ object Dependencies {
 
   val Logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
 
+  val silencerVersion = "1.4.4"
+  val silencer = Seq(
+    compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
+    ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).cross(CrossVersion.patch))
+
   val akkaCassandraSessionDependencies = Seq(
     ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
     "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
