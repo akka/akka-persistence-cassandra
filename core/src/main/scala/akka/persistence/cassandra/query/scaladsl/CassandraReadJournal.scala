@@ -61,6 +61,14 @@ object CassandraReadJournal {
       preparedSelectDeletedTo: PreparedStatement)
 
   @InternalApi private[akka] case class EventByTagStatements(byTagWithUpperLimit: PreparedStatement)
+
+  // shared config is one level above the query plugin specific
+  private def sharedConfigPath(system: ExtendedActorSystem, queryConfigPath: String): String =
+    queryConfigPath.replaceAll("""\.query$""", "")
+
+  // shared config is one level above the query plugin specific
+  private def sharedConfig(system: ExtendedActorSystem, queryConfigPath: String): Config =
+    system.settings.config.getConfig(sharedConfigPath(system, queryConfigPath))
 }
 
 /**
@@ -77,7 +85,11 @@ object CassandraReadJournal {
  * absolute path corresponding to the identifier, which is `"akka.persistence.cassandra.query"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
  */
-class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: String)
+class CassandraReadJournal protected (
+    system: ExtendedActorSystem,
+    sharedConfig: Config,
+    sharedConfigPath: String,
+    viaNormalConstructor: Boolean)
     extends ReadJournal
     with PersistenceIdsQuery
     with CurrentPersistenceIdsQuery
@@ -86,13 +98,18 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config, cfgPath: St
     with EventsByTagQuery
     with CurrentEventsByTagQuery {
 
+  // This is the constructor that will be used when creating the instance from config
+  def this(system: ExtendedActorSystem, cfg: Config, cfgPath: String) =
+    this(
+      system,
+      CassandraReadJournal.sharedConfig(system, cfgPath),
+      CassandraReadJournal.sharedConfigPath(system, cfgPath),
+      viaNormalConstructor = true)
+
   import CassandraReadJournal.CombinedEventsByPersistenceIdStmts
 
   private val log = Logging.getLogger(system, getClass)
 
-  // shared config is one level above the journal specific
-  private val sharedConfigPath = cfgPath.replaceAll("""\.query$""", "")
-  private val sharedConfig = system.settings.config.getConfig(sharedConfigPath)
   private val settings = new PluginSettings(system, sharedConfig)
   private val statements = new CassandraStatements(settings)
 

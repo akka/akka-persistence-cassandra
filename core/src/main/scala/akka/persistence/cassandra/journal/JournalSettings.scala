@@ -7,12 +7,14 @@ package akka.persistence.cassandra.journal
 import akka.actor.ActorSystem
 import akka.actor.NoSerializationVerificationNeeded
 import akka.annotation.InternalApi
+import akka.annotation.InternalStableApi
 import akka.persistence.cassandra.PluginSettings.getReplicationStrategy
 import akka.persistence.cassandra.compaction.CassandraCompactionStrategy
 import akka.persistence.cassandra.getListFromConfig
 import com.typesafe.config.Config
 
 /** INTERNAL API */
+@InternalStableApi
 @InternalApi private[akka] class JournalSettings(system: ActorSystem, config: Config)
     extends NoSerializationVerificationNeeded {
 

@@ -9,12 +9,14 @@ import scala.concurrent.duration._
 import akka.actor.ActorSystem
 import akka.actor.NoSerializationVerificationNeeded
 import akka.annotation.InternalApi
+import akka.annotation.InternalStableApi
 import akka.persistence.cassandra.EventsByTagSettings
 import com.typesafe.config.Config
 
 /**
  * INTERNAL API
  */
+@InternalStableApi
 @InternalApi private[akka] class QuerySettings(
     system: ActorSystem,
     config: Config,

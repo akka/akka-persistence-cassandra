@@ -6,6 +6,7 @@ package akka.persistence.cassandra
 
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
+import akka.annotation.InternalStableApi
 import akka.persistence.cassandra.journal.JournalSettings
 import akka.persistence.cassandra.query.QuerySettings
 import akka.persistence.cassandra.snapshot.SnapshotSettings
@@ -28,6 +29,7 @@ import com.typesafe.config.Config
 /**
  * INTERNAL API
  */
+@InternalStableApi
 @InternalApi private[akka] object PluginSettings {
 
   val DefaultConfigPath = "akka.persistence.cassandra"
