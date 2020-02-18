@@ -34,11 +34,6 @@ object CassandraJournalConfiguration {
     akka.persistence.cassandra.snapshot.keyspace=CassandraJournalPerfSpecSnapshot
     """).withFallback(config)
 
-  lazy val compat2Config = ConfigFactory.parseString(s"""
-      akka.persistence.cassandra.cassandra-2x-compat = on
-      akka.persistence.cassandra.journal.keyspace=CassandraJournalCompat2Spec
-      akka.persistence.cassandra.snapshot.keyspace=CassandraJournalCompat2Spec
-    """).withFallback(config)
 }
 
 // Can't use CassandraSpec so needs to do its own clean up
@@ -79,16 +74,6 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
       probe.expectMsg(replayedMessage(5))
     }
   }
-}
-
-class CassandraJournalCompat2Spec
-    extends JournalSpec(CassandraJournalConfiguration.compat2Config)
-    with CassandraLifecycle {
-
-  override def systemName: String = "CassandraJournalCompat2Spec"
-
-  override def supportsRejectingNonSerializableObjects = false
-
 }
 
 class CassandraJournalPerfSpec

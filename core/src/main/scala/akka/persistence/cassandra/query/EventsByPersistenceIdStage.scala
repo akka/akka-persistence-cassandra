@@ -5,27 +5,19 @@
 package akka.persistence.cassandra.query
 
 import java.lang.{ Long => JLong }
-import java.nio.ByteBuffer
-import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
 
 import akka.Done
 import akka.annotation.InternalApi
-import akka.persistence.PersistentRepr
-import akka.persistence.cassandra.journal.CassandraJournal.{ EventDeserializer, Serialized }
-import akka.serialization.Serialization
 import akka.stream.{ Attributes, Outlet, SourceShape }
 import akka.stream.stage._
 import com.datastax.oss.driver.api.core.cql._
 import scala.annotation.tailrec
-import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.concurrent.duration.{ FiniteDuration, _ }
 import scala.util.{ Failure, Success, Try }
 
-import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.protocol.internal.util.Bytes
 import com.github.ghik.silencer.silent
 import scala.compat.java8.FutureConverters._
 

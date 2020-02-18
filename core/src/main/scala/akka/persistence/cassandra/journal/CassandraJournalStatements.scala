@@ -258,8 +258,8 @@ import akka.stream.alpakka.cassandra.FutureDone
         sequence_nr = ?
     """
 
-  def deleteMessages =
-    if (settings.cassandra2xCompat)
+  def deleteMessages(cassandra2xCompat: Boolean) =
+    if (cassandra2xCompat)
       s"""
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND

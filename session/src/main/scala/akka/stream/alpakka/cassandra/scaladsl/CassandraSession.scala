@@ -7,7 +7,7 @@ package akka.stream.alpakka.cassandra.scaladsl
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.util.Success
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
@@ -25,15 +25,17 @@ import akka.stream.stage.OutHandler
 import com.datastax.oss.driver.api.core.cql.BatchStatement
 import com.datastax.oss.driver.api.core.cql.BoundStatement
 import com.datastax.oss.driver.api.core.cql.PreparedStatement
-import com.datastax.oss.driver.api.core.ProtocolVersion
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.cql.Statement
 import akka.annotation.InternalApi
 import akka.stream.alpakka.cassandra.{ CassandraMetricsRegistry, CqlSessionProvider }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
-
 import scala.compat.java8.FutureConverters._
+
+import akka.stream.alpakka.cassandra.CassandraServerMetaData
+import akka.util.OptionVal
+import com.datastax.oss.driver.api.core.servererrors.InvalidQueryException
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
@@ -62,6 +64,8 @@ final class CassandraSession(
 
   log.debug("Starting CassandraSession [{}]", metricsCategory)
 
+  private var cachedServerMetaData: OptionVal[Future[CassandraServerMetaData]] = OptionVal.None
+
   private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
     session.getMetrics.ifPresent(metrics => {
       CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)
@@ -88,16 +92,37 @@ final class CassandraSession(
   }
 
   /**
-   * This can only be used after successful initialization,
-   * otherwise throws `IllegalStateException`.
+   * Meta data about the Cassandra server, such as its version.
    */
-  def protocolVersion: ProtocolVersion =
-    underlying().value match {
-      case Some(Success(s)) =>
-        s.getContext.getProtocolVersion
-      case _ =>
-        throw new IllegalStateException("protocolVersion can only be accessed after successful init")
+  def serverMetaData: Future[CassandraServerMetaData] = {
+    cachedServerMetaData match {
+      case OptionVal.Some(cached) =>
+        cached
+      case OptionVal.None =>
+        val result = selectOne("select cluster_name, data_center, release_version from system.local").map {
+          case Some(row) =>
+            new CassandraServerMetaData(
+              row.getString("cluster_name"),
+              row.getString("data_center"),
+              row.getString("release_version"))
+          case None =>
+            log.warning("Couldn't retrieve serverMetaData from system.local table. No rows found.")
+            new CassandraServerMetaData("", "", "")
+        }
+
+        result.foreach { meta =>
+          cachedServerMetaData = OptionVal.Some(Future.successful(meta))
+        }
+        result.failed.foreach {
+          case e: InvalidQueryException =>
+            log.warning("Couldn't retrieve serverMetaData from system.local table: [{}]", e.getMessage)
+            cachedServerMetaData = OptionVal.Some(Future.successful(new CassandraServerMetaData("", "", "")))
+          case _ => // don't cache other problems, like connection errors
+        }
+
+        result
     }
+  }
 
   /**
    * Execute <a href="https://docs.datastax.com/en/dse/6.7/cql/">CQL commands</a>

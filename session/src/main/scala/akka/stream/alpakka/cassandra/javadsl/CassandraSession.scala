@@ -14,11 +14,13 @@ import scala.collection.JavaConverters._
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
+import akka.stream.alpakka.cassandra.CassandraServerMetaData
 import akka.stream.alpakka.cassandra.{ scaladsl, CqlSessionProvider }
 import akka.stream.javadsl.Source
 import com.datastax.oss.driver.api.core.CqlSession
@@ -69,6 +71,12 @@ final class CassandraSession(@InternalApi private[akka] val delegate: scaladsl.C
    * @param executor as this might be used after actor system termination, the actor systems dispatcher can't be used
    */
   def close(executor: Executor): CompletionStage[Done] = delegate.close(ExecutionContext.fromExecutor(executor)).toJava
+
+  /**
+   * Meta data about the Cassandra server, such as its version.
+   */
+  def serverMetaData: CompletionStage[CassandraServerMetaData] =
+    delegate.serverMetaData.toJava
 
   /**
    * The `Session` of the underlying
