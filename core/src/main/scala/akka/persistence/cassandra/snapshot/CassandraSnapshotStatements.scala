@@ -12,7 +12,7 @@ import akka.Done
 import akka.annotation.InternalApi
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
-import akka.stream.alpakka.cassandra.FutureDone
+import akka.persistence.cassandra.FutureDone
 
 /**
  * INTERNAL API

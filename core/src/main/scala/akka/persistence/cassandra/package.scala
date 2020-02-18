@@ -9,6 +9,7 @@ import java.time.{ Instant, LocalDateTime, ZoneOffset }
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
+import akka.Done
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, SerializedMeta }
 import akka.serialization.Serialization
@@ -25,6 +26,10 @@ import akka.annotation.InternalApi
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
 package object cassandra {
+
+  /** INTERNAL API */
+  @InternalApi private[akka] val FutureDone: Future[Done] = Future.successful(Done)
+
   private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
 
   /** INTERNAL API */

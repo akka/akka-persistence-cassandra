@@ -18,7 +18,7 @@ import akka.actor.ExtensionId
 import akka.actor.ExtensionIdProvider
 import akka.annotation.InternalStableApi
 import akka.event.Logging
-import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, CqlSessionProvider, FutureDone }
+import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, CqlSessionProvider }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.Config
 
@@ -113,7 +113,7 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
       executionContext,
       log,
       metricsCategory = settings.metricsCategory,
-      init = settings.init.getOrElse(_ => FutureDone),
+      init = settings.init.getOrElse(_ => Future.successful(Done)),
       onClose = () => sessions.remove(key))
   }
 
