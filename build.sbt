@@ -13,7 +13,7 @@ lazy val session = (project in file("session"))
     name := "akka-cassandra-session",
     libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies,
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
-        "Automatic-Module-Name" -> "akka.cassandra.session"))
+        "Automatic-Module-Name" -> "akka.stream.alpakka.cassandra"))
 
 lazy val dumpSchema = taskKey[Unit]("Dumps cassandra schema for docs")
 dumpSchema := (core / runMain in (Test)).toTask(" akka.persistence.cassandra.PrintCreateStatements").value
