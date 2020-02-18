@@ -31,11 +31,8 @@ object CassandraFlow {
       cqlStatement: String,
       statementBinder: akka.japi.Function2[T, PreparedStatement, BoundStatement]): Flow[T, T, NotUsed] =
     scaladsl.CassandraFlow
-      .create(
-        session.delegate,
-        writeSettings,
-        cqlStatement,
-        (t, preparedStatement) => statementBinder.apply(t, preparedStatement))
+      .create(writeSettings, cqlStatement, (t, preparedStatement) => statementBinder.apply(t, preparedStatement))(
+        session.delegate)
       .asJava
 
   /**
@@ -56,11 +53,8 @@ object CassandraFlow {
       statementBinder: akka.japi.Function2[T, PreparedStatement, BoundStatement])
       : FlowWithContext[T, Ctx, T, Ctx, NotUsed] = {
     scaladsl.CassandraFlow
-      .withContext(
-        session.delegate,
-        writeSettings,
-        cqlStatement,
-        (t, preparedStatement) => statementBinder.apply(t, preparedStatement))
+      .withContext(writeSettings, cqlStatement, (t, preparedStatement) => statementBinder.apply(t, preparedStatement))(
+        session.delegate)
       .asJava
   }
 
@@ -86,11 +80,10 @@ object CassandraFlow {
       partitionKey: akka.japi.Function[T, K]): Flow[T, T, NotUsed] = {
     scaladsl.CassandraFlow
       .createUnloggedBatch(
-        session.delegate,
         writeSettings,
         cqlStatement,
         (t, preparedStatement) => statementBinder.apply(t, preparedStatement),
-        t => partitionKey.apply(t))
+        t => partitionKey.apply(t))(session.delegate)
       .asJava
   }
 
