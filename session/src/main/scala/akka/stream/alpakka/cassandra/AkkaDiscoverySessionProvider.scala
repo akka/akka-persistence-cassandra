@@ -17,15 +17,10 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ ExecutionContext, Future }
 
 /**
- * A [[CqlSessionProvider]] implementation which builds a `CqlSession` from the given `config`
- * with contact points provided via [[https://doc.akka.io/docs/akka/current/discovery/index.html Akka Discovery]].
+ * [[https://doc.akka.io/docs/akka/current/discovery/index.html Akka Discovery]]
+ * is enabled by setting the `service-discovery.name` in the given `CassandraSession` config.
  *
- * The configuration for the driver is typically the `datastax-java-driver` section of the ActorSystem's
- * configuration, but it's possible to use other configuration. The configuration path of the
- * driver's configuration can be defined with `datastax-java-driver-config` property in the
- * given `config`.
- *
- * Akka Discovery overwrites the `basic.contact-points` from the configuration with addresses
+ * Akka Discovery overwrites the basic.contact-points` from the configuration with addresses
  * provided by the configured Akka Discovery mechanism.
  *
  * Example using config-based Akka Discovery:
@@ -47,16 +42,8 @@ import scala.concurrent.{ ExecutionContext, Future }
  *     ]
  *   }
  * }
- * my-cassandra-session {
- *   session-provider = "akka.cassandra.session.AkkaDiscoverySessionProvider"
- *   service {
- *     name = "cassandra-service"
- *     lookup-timeout = 1 s
- *   }
- *   # Full config path to the Datastax Java driver's configuration section.
- *   # When connecting to more than one Cassandra cluster different session configuration can be
- *   # defined with this property.
- *   datastax-java-driver-config = "datastax-java-driver"
+ * alpakka.cassandra {
+ *   service-discovery.name ="cassandra-service"
  * }
  * ```
  *
@@ -64,10 +51,30 @@ import scala.concurrent.{ ExecutionContext, Future }
  * ```
  * CassandraSessionRegistry
  *   .get(system)
- *   .sessionFor(CassandraSessionSettings.create("my-cassandra-session"), system.dispatcher)
+ *   .sessionFor(CassandraSessionSettings.create("alpakka.cassandra"), system.dispatcher)
  * ```
  */
-class AkkaDiscoverySessionProvider(system: ActorSystem, config: Config) extends CqlSessionProvider {
+private[cassandra] object AkkaDiscoverySessionProvider {
+
+  def connect(system: ActorSystem, config: Config)(implicit ec: ExecutionContext): Future[CqlSession] = {
+    readNodes(config)(system).flatMap { contactPoints =>
+      val driverConfigWithContactPoints = ConfigFactory.parseString(s"""
+        basic.contact-points = [${contactPoints.mkString("\"", "\", \"", "\"")}]
+        """).withFallback(CqlSessionProvider.driverConfig(system, config))
+      val driverConfigLoader = DriverConfigLoaderFromConfig.fromConfig(driverConfigWithContactPoints)
+      CqlSession.builder().withConfigLoader(driverConfigLoader).buildAsync().toScala
+    }
+  }
+
+  /**
+   * Expect a `service` section in Config and use Akka Discovery to read the addresses for `name` within `lookup-timeout`.
+   */
+  private def readNodes(config: Config)(implicit system: ActorSystem): Future[immutable.Seq[String]] = {
+    val serviceConfig = config.getConfig("service-discovery")
+    val serviceName = serviceConfig.getString("name")
+    val lookupTimeout = serviceConfig.getDuration("lookup-timeout").asScala
+    readNodes(serviceName, lookupTimeout)
+  }
 
   /**
    * Use Akka Discovery to read the addresses for `serviceName` within `lookupTimeout`.
@@ -79,33 +86,6 @@ class AkkaDiscoverySessionProvider(system: ActorSystem, config: Config) extends 
       .map { resolved =>
         resolved.addresses.map(target => target.host + ":" + target.port)
       }(ExecutionContexts.sameThreadExecutionContext)
-  }
-
-  /**
-   * Expect a `service` section in Config and use Akka Discovery to read the addresses for `name` within `lookup-timeout`.
-   */
-  private def readNodes(config: Config)(implicit system: ActorSystem): Future[immutable.Seq[String]] = {
-    val serviceConfig = config.getConfig("service")
-    val serviceName = serviceConfig.getString("name")
-    val lookupTimeout = serviceConfig.getDuration("lookup-timeout").asScala
-    readNodes(serviceName, lookupTimeout)
-  }
-
-  override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
-    val driverConfig = CqlSessionProvider.driverConfig(system, config)
-    val sessionName =
-      if (driverConfig.hasPath("basic.session-name")) driverConfig.getString("basic.session-name")
-      else ""
-    require(sessionName != null && sessionName.nonEmpty, s"driver config needs to set a non-empty `basic.session-name`")
-
-    readNodes(config)(system).flatMap { contactPoints =>
-      val driverConfigWithContactPoints = ConfigFactory.parseString(s"""
-        basic.contact-points = [${contactPoints.mkString("\"", "\", \"", "\"")}]
-        """).withFallback(driverConfig)
-
-      val driverConfigLoader = DriverConfigLoaderFromConfig.fromConfig(driverConfigWithContactPoints)
-      CqlSession.builder().withConfigLoader(driverConfigLoader).buildAsync().toScala
-    }
   }
 
 }
