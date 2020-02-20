@@ -49,5 +49,13 @@ class AkkaDiscoverySpec extends CassandraSpecBase(ActorSystem("AkkaDiscoverySpec
       exception.getCause mustBe a[com.datastax.oss.driver.api.core.AllNodesFailedException]
     }
 
+    "fail when the port is missing" in assertAllStagesStopped {
+      val sessionSettings = CassandraSessionSettings("with-akka-discovery-no-port")
+      val session = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+      val result = session.select(s"SELECT * FROM fsdfsd").runWith(Sink.head)
+      val exception = result.failed.futureValue
+      exception mustBe a[akka.ConfigurationException]
+    }
+
   }
 }
