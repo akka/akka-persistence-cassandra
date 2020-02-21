@@ -142,7 +142,7 @@ class CassandraFlowSpec extends CassandraSpecBase(ActorSystem("CassandraFlowSpec
         }
         .runWith(Sink.seq)
         .futureValue
-      rows must contain theSameElementsAs persons
+      rows must contain theSameElementsAs persons.map(_._1)
     }
 
     "allow unlogged batches" in assertAllStagesStopped {
