@@ -38,11 +38,20 @@ trait CqlSessionProvider {
  */
 class DefaultSessionProvider(system: ActorSystem, config: Config) extends CqlSessionProvider {
 
+  /**
+   * Check if Akka Discovery service lookup should be used. It is part of this class so it
+   * doesn't trigger the [[AkkaDiscoverySessionProvider]] class to be loaded.
+   */
+  private def useAkkaDiscovery(config: Config): Boolean = config.getString("service-discovery.name").nonEmpty
+
   override def connect()(implicit ec: ExecutionContext): Future[CqlSession] = {
-    val builder = CqlSession.builder()
-    val driverConfig = CqlSessionProvider.driverConfig(system, config)
-    val driverConfigLoader = DriverConfigLoaderFromConfig.fromConfig(driverConfig)
-    builder.withConfigLoader(driverConfigLoader).buildAsync().toScala
+    if (useAkkaDiscovery(config)) {
+      AkkaDiscoverySessionProvider.connect(system, config)
+    } else {
+      val driverConfig = CqlSessionProvider.driverConfig(system, config)
+      val driverConfigLoader = DriverConfigLoaderFromConfig.fromConfig(driverConfig)
+      CqlSession.builder().withConfigLoader(driverConfigLoader).buildAsync().toScala
+    }
   }
 }
 
