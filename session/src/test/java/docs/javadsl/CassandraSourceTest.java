@@ -16,8 +16,10 @@ import akka.stream.alpakka.cassandra.javadsl.CassandraSource;
 // #cql
 import akka.stream.alpakka.cassandra.scaladsl.CassandraAccess;
 import akka.stream.javadsl.Sink;
+// #statement
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
+// #statement
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -90,6 +92,7 @@ public class CassandraSourceTest {
     public void select() throws InterruptedException, ExecutionException, TimeoutException {
         Materializer materializer = helper.materializer;
         // #cql
+
         CompletionStage<List<Integer>> select =
                 CassandraSource
                         .create(cassandraSession, "SELECT id FROM " + idtable + ";")
@@ -121,6 +124,7 @@ public class CassandraSourceTest {
         Materializer materializer = helper.materializer;
         int value = 5;
         // #statement
+
         Statement<?> stmt = SimpleStatement.newInstance("SELECT * FROM " + idtable + ";").setPageSize(20);
 
         CompletionStage<List<Integer>> select =

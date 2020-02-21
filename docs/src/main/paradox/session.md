@@ -8,7 +8,7 @@ Apache Cassandra is a free and open-source, distributed, wide column store, NoSQ
 
 @@@
 
-Alpakka Cassandra offers an @extref:[Akka Streams](akka:/streams/index.html) API on top of a wrapper of the `CqlSession` from the @extref:[Datastax Java Driver](java-driver:) version 4.0+. The @extref:[driver configuration](java-driver:/manual/core/configuration/#quick-overview) is provided in the same config format as Akka uses.
+Alpakka Cassandra offers an @extref:[Akka Streams](akka:/streams/index.html) API on top of a @javadoc[CqlSession](com.datastax.oss.driver.api.core.CqlSession) from the @extref:[Datastax Java Driver](java-driver:) version 4.0+. The @ref:[driver configuration](#custom-session-creation) is provided in the same config format as Akka uses and can be placed in the same `application.conf` as your Akka settings.
 
 @@project-info{ projectId="core" }
 
@@ -53,7 +53,7 @@ Java
 : @@snip [snip](/session/src/test/java/docs/javadsl/CassandraSourceTest.java) { #cql }
 
 
-If the statement requires specific settings, 
+If the statement requires specific settings, you may pass any @javadoc[com.datastax.oss.driver.api.core.cql.Statement](com.datastax.oss.driver.api.core.cql.Statement).
 
 Scala
 : @@snip [snip](/session/src/test/scala/docs/scaladsl/CassandraSourceSpec.scala) { #statement }
@@ -67,7 +67,7 @@ Here we used a basic sink to complete the stream by collecting all of the stream
 
 ## Updating Cassandra
 
-@apidoc[CassandraFlow] provides factory methods to get Akka Streams flows to run CQL updated statements. Alpakka Cassandra creates a `PreparedStatement` and for every stream element the `statementBinder` function binds the CQL placeholders to data.
+@apidoc[CassandraFlow] provides factory methods to get Akka Streams flows to run CQL update statements. Alpakka Cassandra creates a @javadoc[PreparedStatement](com.datastax.oss.driver.api.core.cql.PreparedStatement) and for every stream element the `statementBinder` function binds the CQL placeholders to data.
 
 The incoming elements are emitted unchanged for further processing. 
 
@@ -77,6 +77,7 @@ Scala
 Java
 : @@snip [snip](/session/src/test/java/docs/javadsl/CassandraFlowTest.java) { #prepared }
 
+### Update flows with context
 
 Alpakka Cassandra flows offer **"With Context"**-support which integrates nicely with some other Alpakka connectors.
 
@@ -89,9 +90,27 @@ Java
 
 ## Custom Session creation
 
-# TODO
+Session creation and configuration is controlled via settings in `application.conf`. The @apidoc[CassandraSessionSettings] accept a full path to a configuration section which needs to specify a `session-provider` setting. The @apidoc[CassandraSessionRegistry] expects a fully qualified class name to a class implementing @apidoc[CqlSessionProvider].
 
-See @apidoc[CqlSessionProvider]
+Alpakka Cassandra includes a default implementation @apidoc[DefaultSessionProvider], which is referenced in the default configuration `alpakka.cassandra`.
+
+The @apidoc[DefaultSessionProvider] config section must contain
+
+* a settings section `service-discovery` which may be used to discover Cassandra contact points via @ref:[Akka Discovery](#using-akka-discovery),
+* and a reference to a Casssandra config section in `datastax-java-driver-config` which is used to configure the Cassandra client. For details see the @extref:[Datastax Java Driver configuration](java-driver:manual/core/configuration/#quick-overview) and the driver's @extref:[`reference.conf`](java-driver:manual/core/configuration/reference/).
+
+reference.conf
+: @@snip [snip](/session/src/main/resources/reference.conf)
+
+In simple cases your `datastax-java-driver` section will need to define `contact-points` and `load-balancing-policy.local-datacenter`.
 
 application.conf
-: @@snip [snip](/session/src/main/resources/reference.conf)
+: @@snip [snip](/session/src/test/resources/application.conf) { #datastax-sample }
+
+
+### Using Akka Discovery
+
+To enable @extref[Akka Discovery](akka:discovery/) with the @apidoc[DefaultSessionProvider], set up the desired service name in the discovery mechanism of your choice and pass that name in `service-discovery.name`. The example below extends the `alpakka.cassandra` config section and only overwrites the service name.
+
+application.conf
+: @@snip [snip](/session/src/test/resources/application.conf) { #akka-discovery-docs }

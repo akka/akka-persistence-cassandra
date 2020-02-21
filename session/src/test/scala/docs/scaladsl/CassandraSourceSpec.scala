@@ -6,11 +6,9 @@ package docs.scaladsl
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.stream.alpakka.cassandra.CassandraSessionSettings
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSource, CassandraSpecBase }
 import akka.stream.scaladsl.Sink
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
-import com.datastax.oss.driver.api.core.cql.{ Row, SimpleStatement }
 
 import scala.collection.immutable
 import scala.concurrent.Future
@@ -21,7 +19,7 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
   case class ToInsert(id: Integer, cc: Integer)
   //#element-to-insert
 
-  val sessionSettings = CassandraSessionSettings()
+  val sessionSettings = akka.stream.alpakka.cassandra.CassandraSessionSettings()
   val data = 1 until 103
   def intTable = keyspaceName + ".idtable"
 
@@ -62,6 +60,8 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
 
     "stream the result of a Cassandra statement with one page" in assertAllStagesStopped {
       // #cql
+      import akka.stream.alpakka.cassandra.scaladsl.CassandraSource
+
       val ids: Future[immutable.Seq[Int]] =
         CassandraSource(s"SELECT id FROM $intTable").map(row => row.getInt("id")).runWith(Sink.seq)
 
@@ -80,6 +80,8 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
 
     "stream the result of a Cassandra statement with several pages" in assertAllStagesStopped {
       // #statement
+      import com.datastax.oss.driver.api.core.cql.{ Row, SimpleStatement }
+
       val stmt = SimpleStatement.newInstance(s"SELECT * FROM $intTable").setPageSize(20)
 
       val rows: Future[immutable.Seq[Row]] = CassandraSource(stmt).runWith(Sink.seq)
