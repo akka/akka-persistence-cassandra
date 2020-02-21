@@ -20,7 +20,8 @@ before_script:
 
 jobs:
   include:
-    - script: sbt -jvm-opts .jvmopts-travis verifyCodeStyle
+    - stage: check
+      script: sbt -jvm-opts .jvmopts-travis verifyCodeStyle
       name: "Code style check. Run locally with: sbt verifyCodeStyle"
     - script: sbt -jvm-opts .jvmopts-travis ++2.13.1 Test/compile
       name: Compile all tests (with Scala 2.13)
