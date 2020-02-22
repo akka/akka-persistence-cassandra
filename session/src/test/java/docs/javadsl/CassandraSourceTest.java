@@ -5,6 +5,7 @@
 package docs.javadsl;
 
 // #init-session
+
 import akka.actor.ActorSystem;
 import akka.stream.Materializer;
 import akka.stream.alpakka.cassandra.CassandraSessionSettings;
@@ -76,7 +77,7 @@ public class CassandraSourceTest {
                 helper.materializer;
         // #init-session
         CassandraSessionSettings sessionSettings = CassandraSessionSettings.create();
-        CassandraSession cassandraSession  =
+        CassandraSession cassandraSession =
                 CassandraSessionRegistry.get(system).sessionFor(sessionSettings, system.dispatcher());
 
         CompletionStage<String> version =
@@ -134,6 +135,16 @@ public class CassandraSourceTest {
                         .runWith(Sink.seq(), materializer);
         // #statement
         assertThat(new ArrayList<>(await(select)), hasItems(data.toArray()));
+    }
+
+    public void compileOnlyDiscovery() {
+        ActorSystem system = helper.system;
+        // #discovery
+        CassandraSessionSettings sessionSettings = CassandraSessionSettings.create("example-with-akka-discovery");
+        CassandraSession session = CassandraSessionRegistry.get(system).sessionFor(sessionSettings, system.dispatcher());
+        // #discovery
+        session.close(system.dispatcher());
+
     }
 
 }

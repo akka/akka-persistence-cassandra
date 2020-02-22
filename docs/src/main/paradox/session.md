@@ -110,7 +110,25 @@ application.conf
 
 ### Using Akka Discovery
 
+To use @extref[Akka Discovery](akka:discovery/) make sure the `akka-discovery` dependency is on you classpath.
+
+@@dependency [sbt,Maven,Gradle] {
+  symbolAkka=AkkaVersion
+  valueAkka="$akka.version$"
+  group="com.typesafe.akka"
+  artifact="akka-discovery_$scala.binary.version$"
+  version=AkkaVersion
+}
+
 To enable @extref[Akka Discovery](akka:discovery/) with the @apidoc[DefaultSessionProvider], set up the desired service name in the discovery mechanism of your choice and pass that name in `service-discovery.name`. The example below extends the `alpakka.cassandra` config section and only overwrites the service name.
 
 application.conf
 : @@snip [snip](/session/src/test/resources/application.conf) { #akka-discovery-docs }
+
+Use the full config section path to create the @apidoc[CassandraSessionSettings$].
+
+Scala
+: @@snip [snip](/session/src/test/scala/docs/scaladsl/AkkaDiscoverySpec.scala) { #discovery }
+
+Java
+: @@snip [snip](/session/src/test/java/docs/javadsl/CassandraSourceTest.java) { #discovery }

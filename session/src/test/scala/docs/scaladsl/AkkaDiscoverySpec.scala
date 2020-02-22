@@ -7,7 +7,7 @@ package docs.scaladsl
 import akka.Done
 import akka.actor.ActorSystem
 import akka.stream.alpakka.cassandra.CassandraSessionSettings
-import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSpecBase }
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry, CassandraSpecBase }
 import akka.stream.scaladsl.Sink
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 
@@ -55,6 +55,14 @@ class AkkaDiscoverySpec extends CassandraSpecBase(ActorSystem("AkkaDiscoverySpec
       val result = session.select(s"SELECT * FROM fsdfsd").runWith(Sink.head)
       val exception = result.failed.futureValue
       exception mustBe a[akka.ConfigurationException]
+    }
+
+    "show referencing config in docs" in {
+      // #discovery
+      val sessionSettings = CassandraSessionSettings("example-with-akka-discovery")
+      implicit val session = CassandraSessionRegistry.get(system).sessionFor(sessionSettings, system.dispatcher)
+      // #discovery
+      session.close(system.dispatcher)
     }
 
   }
