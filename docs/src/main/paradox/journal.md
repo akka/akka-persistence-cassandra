@@ -53,6 +53,22 @@ One important setting is to configure the database driver to retry the initial c
 
 It is not enabled automatically as it is in the driver's reference.conf and is not overridable in a profile.
 
+#### Target partition size
+
+The messages table that stores the events is partitioned by `(persistence_id, partition_nr)`. The `partition_nr` is an
+artificial partition key to ensure that the Cassandra partition does not get too large if there are a lot of events for
+a single `persistence_id`.
+
+`akka.persistence.cassandra.journal.target-partition-size` controls the number of events that the journal tries to put
+in each Cassandra partition. It is a target as `persistAll` calls will have all the events in the same partition
+even if it will exceed the target partition size to ensure atomicity.
+
+It is not possible to change the value once you have data so consider if the default of 50000 is right for your
+application before deploying to production. Multiply the value by your expected serialized event size to roughly work
+out how large the Cassandra partition will grow to. See [wide partitions in
+Cassandra](https://thelastpickle.com/blog/2019/01/11/wide-partitions-cassandra-3-11.html) for a summary of how large a
+partition should be depending on the version of Cassandra you are using. 
+
 #### Consistency
 
 By default the journal uses `QUORUM` for all reads and writes.
