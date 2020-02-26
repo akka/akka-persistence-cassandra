@@ -87,6 +87,27 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
   override def keyspaces(): Set[String] = super.keyspaces().union(Set("DeletionSpecMany"))
 
   "Cassandra deletion" must {
+    "allow recovery after delete without snapshot" in {
+      val deleteSuccess = TestProbe()
+      val deleteFail = TestProbe()
+      val pid = nextId()
+      val p1 = system.actorOf(Props(new PAThatDeletes(pid, deleteSuccess.ref, deleteFail.ref)))
+      watch(p1)
+      (1 to 3).foreach { i =>
+        p1 ! PersistMe(i)
+        expectMsgType[Ack]
+      }
+      p1 ! DeleteTo(2)
+      deleteSuccess.expectMsg(Deleted(2))
+
+      p1 ! PoisonPill
+      expectTerminated(p1)
+
+      val p1Strike2 = system.actorOf(Props(new PAThatDeletes(pid, deleteSuccess.ref, deleteFail.ref)))
+      p1Strike2 ! GetRecoveredEvents
+      expectMsg(RecoveredEvents(List(PersistMe(3), RecoveryCompleted)))
+    }
+
     "allow concurrent deletes" in {
       val deleteSuccess = TestProbe()
       val deleteFail = TestProbe()

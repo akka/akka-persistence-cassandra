@@ -17,20 +17,20 @@ import akka.persistence.cassandra.journal.TagWriters.{
   TagProcessAck,
   TagWrite
 }
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
-import akka.stream.Materializer
+import akka.persistence.cassandra.Extractors.RawEvent
 import akka.stream.scaladsl.Sink
 import akka.util.Timeout
+
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
-
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
-import akka.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.TaggedPersistentRepr
+import akka.persistence.cassandra.Extractors.TaggedPersistentRepr
 import akka.serialization.SerializationExtension
 import akka.persistence.cassandra._
+import akka.persistence.cassandra.journal.TagWriters.FlushAllTagWriters
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 /**
  * INTERNAL API
@@ -39,8 +39,10 @@ import akka.persistence.cassandra._
     system: ActorSystem,
     session: CassandraSession,
     settings: PluginSettings,
-    statements: TaggedPreparedStatements) {
+    statements: TaggedPreparedStatements,
+    tagWriters: ActorRef) {
 
+  private implicit val sys: ActorSystem = system
   private val log: LoggingAdapter = Logging(system, classOf[CassandraTagRecovery])
   private val serialization = SerializationExtension(system)
 
@@ -52,8 +54,7 @@ import akka.persistence.cassandra._
   // No other writes for this pid should be taking place during recovery
   // The result set size will be the number of distinct tags that this pid has used, expecting
   // that to be small (<10) so call to all should be safe
-  def lookupTagProgress(
-      persistenceId: String)(implicit ec: ExecutionContext, mat: Materializer): Future[Map[Tag, TagProgress]] =
+  def lookupTagProgress(persistenceId: String)(implicit ec: ExecutionContext): Future[Map[Tag, TagProgress]] =
     SelectTagProgressForPersistenceId
       .map(_.bind(persistenceId).setExecutionProfileName(settings.journalSettings.readProfile))
       .flatMap(stmt => {
@@ -79,8 +80,7 @@ import akka.persistence.cassandra._
         case None      => 1L
       }
 
-  def sendMissingTagWrite(tagProgress: Map[Tag, TagProgress], tagWriters: ActorRef)(
-      tpr: TaggedPersistentRepr): Future[TaggedPersistentRepr] =
+  def sendMissingTagWrite(tagProgress: Map[Tag, TagProgress])(tpr: TaggedPersistentRepr): Future[TaggedPersistentRepr] =
     if (tpr.tags.isEmpty) Future.successful(tpr)
     else {
       val completed: List[Future[Done]] =
@@ -123,8 +123,7 @@ import akka.persistence.cassandra._
       Future.sequence(completed).map(_ => tpr)
     }
 
-  def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], to: ActorRef, actorRunning: Boolean = true)(
-      rawEvent: RawEvent): RawEvent = {
+  def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], actorRunning: Boolean = true)(rawEvent: RawEvent): RawEvent = {
     rawEvent.serialized.tags.foreach(tag => {
       tp.get(tag) match {
         case None =>
@@ -133,7 +132,7 @@ import akka.persistence.cassandra._
             rawEvent.serialized.persistenceId,
             tag,
             rawEvent.sequenceNr)
-          to ! TagWrite(tag, rawEvent.serialized :: Nil, actorRunning)
+          tagWriters ! TagWrite(tag, rawEvent.serialized :: Nil, actorRunning)
         case Some(progress) =>
           if (rawEvent.sequenceNr > progress.sequenceNr) {
             log.debug(
@@ -141,23 +140,27 @@ import akka.persistence.cassandra._
               rawEvent.serialized.persistenceId,
               tag,
               rawEvent.sequenceNr)
-            to ! TagWrite(tag, rawEvent.serialized :: Nil, actorRunning)
+            tagWriters ! TagWrite(tag, rawEvent.serialized :: Nil, actorRunning)
           }
       }
     })
     rawEvent
   }
 
+  def flush(timeout: Timeout): Future[Done] = {
+    (tagWriters ? FlushAllTagWriters(timeout))(Timeout(timeout.duration * 2)).map(_ => Done)
+  }
+
   /**
    * Before starting to process tagged messages then a [SetTagProgress] is sent to the
    * [TagWriters] to initialise the sequence numbers for each tag.
    */
-  def setTagProgress(pid: String, tagProgress: Map[Tag, TagProgress], tagWriters: ActorRef): Future[Done] = {
+  def setTagProgress(pid: String, tagProgress: Map[Tag, TagProgress]): Future[Done] = {
     log.debug("[{}] Recovery sending tag progress: [{}]", pid, tagProgress)
     (tagWriters ? SetTagProgress(pid, tagProgress)).mapTo[TagProcessAck.type].map(_ => Done)
   }
 
-  def sendPersistentActorStarting(pid: String, persistentActor: ActorRef, tagWriters: ActorRef): Future[Done] = {
+  def sendPersistentActorStarting(pid: String, persistentActor: ActorRef): Future[Done] = {
     log.debug("[{}] Persistent actor starting [{}]", pid, persistentActor)
     (tagWriters ? PersistentActorStarting(pid, persistentActor)).mapTo[PersistentActorStartingAck.type].map(_ => Done)
   }

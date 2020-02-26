@@ -9,25 +9,22 @@ import java.nio.ByteBuffer
 import java.util.NoSuchElementException
 
 import akka.NotUsed
+
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.actor._
 import akka.persistence._
 import akka.persistence.cassandra._
-import akka.cassandra.session.scaladsl.CassandraSession
-import akka.cassandra.session.scaladsl.CassandraSessionRegistry
 import akka.persistence.serialization.Snapshot
 import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.AsyncSerializer
 import akka.serialization.Serialization
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import akka.util.OptionVal
@@ -36,6 +33,7 @@ import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
 import akka.Done
 import akka.annotation.InternalApi
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 
 /**
  * INTERNAL API
@@ -46,6 +44,7 @@ import akka.annotation.InternalApi
 
   import CassandraSnapshotStore._
   implicit val ec: ExecutionContext = context.dispatcher
+  implicit val sys: ActorSystem = context.system
 
   // shared config is one level above the journal specific
   private val sharedConfigPath = cfgPath.replaceAll("""\.snapshot""", "")
@@ -72,8 +71,6 @@ import akka.annotation.InternalApi
   private def preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit: Future[PreparedStatement] =
     session.prepare(selectSnapshotMetadata(limit = Some(snapshotSettings.maxLoadAttempts)))
 
-  private implicit val materializer = ActorMaterializer()
-
   override def preStart(): Unit =
     // eager initialization, but not from constructor
     self ! CassandraSnapshotStore.Init
@@ -86,7 +83,10 @@ import akka.annotation.InternalApi
       preparedWriteSnapshotWithMeta
       preparedDeleteSnapshot
       preparedDeleteAllSnapshotsForPid
-      if (!settings.cassandra2xCompat) preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
+      session.serverMetaData.foreach { meta =>
+        if (!meta.isVersion2)
+          preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
+      }
       preparedSelectSnapshot
       preparedSelectSnapshotMetadata
       preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
@@ -209,35 +209,36 @@ import akka.annotation.InternalApi
    * range deletion on the sequence number is used instead, except if timestamp constraints are specified, which still
    * requires the original two step routine.*/
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
-    if (settings.cassandra2xCompat
-        || 0L < criteria.minTimestamp
-        || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
-      preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
-        // this meta query gets slower than slower if snapshots are deleted without a criteria.minSequenceNr as
-        // all previous tombstones are scanned in the meta data query
-        metadata(snapshotMetaPs, persistenceId, criteria, limit = None).flatMap {
-          mds: immutable.Seq[SnapshotMetadata] =>
-            val boundStatementBatches = mds
-              .map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
-              .grouped(0xFFFF - 1)
-            if (boundStatementBatches.nonEmpty) {
-              Future
-                .sequence(
-                  boundStatementBatches.map(
-                    boundStatements =>
+    session.serverMetaData.flatMap { meta =>
+      if (meta.isVersion2
+          || 0L < criteria.minTimestamp
+          || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
+        preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
+          // this meta query gets slower than slower if snapshots are deleted without a criteria.minSequenceNr as
+          // all previous tombstones are scanned in the meta data query
+          metadata(snapshotMetaPs, persistenceId, criteria, limit = None).flatMap {
+            mds: immutable.Seq[SnapshotMetadata] =>
+              val boundStatementBatches = mds
+                .map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
+                .grouped(0xFFFF - 1)
+              if (boundStatementBatches.nonEmpty) {
+                Future
+                  .sequence(
+                    boundStatementBatches.map(boundStatements =>
                       Future
                         .sequence(boundStatements)
                         .flatMap(stmts => executeBatch(batch => stmts.foreach(batch.addStatement)))))
-                .map(_ => ())
-            } else {
-              Future.successful(())
-            }
+                  .map(_ => ())
+              } else {
+                Future.successful(())
+              }
+          }
         }
+      } else {
+        val boundDeleteSnapshot = preparedDeleteAllSnapshotsForPidAndSequenceNrBetween.map(
+          _.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong))
+        boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
       }
-    } else {
-      val boundDeleteSnapshot = preparedDeleteAllSnapshotsForPidAndSequenceNrBetween.map(
-        _.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong))
-      boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
     }
   }
 

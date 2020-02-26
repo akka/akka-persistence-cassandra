@@ -11,12 +11,14 @@ import akka.persistence.cassandra.EventsByTagSettings.Fixed
 import akka.persistence.cassandra.EventsByTagSettings.Max
 import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
-import org.scalatest.WordSpec
-import org.scalatest.{ BeforeAndAfterAll, Matchers, WordSpecLike }
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
 
 class CassandraQueryJournalSettingsSpec
     extends TestKit(ActorSystem("CassandraReadJournalConfigSpec"))
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with BeforeAndAfterAll {
 
@@ -90,7 +92,7 @@ class CassandraQueryJournalSettingsSpec
   }
 }
 
-class BackTrackConfigSpec extends WordSpec with Matchers {
+class BackTrackConfigSpec extends AnyWordSpec with Matchers {
   import scala.concurrent.duration._
   val currentTime = 100
   "BackTrack config" should {

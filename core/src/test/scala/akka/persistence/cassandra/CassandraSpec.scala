@@ -11,11 +11,8 @@ import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.event.Logging.{ LogEvent, StdOutLogger }
 import akka.persistence.cassandra.CassandraSpec._
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ NoOffset, PersistenceQuery }
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Keep, Sink }
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
@@ -23,7 +20,9 @@ import akka.testkit.{ EventFilter, ImplicitSender, SocketUtil, TestKitBase }
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{ Milliseconds, Seconds, Span }
-import org.scalatest.{ Matchers, Outcome, Suite, WordSpecLike }
+import org.scalatest.{ Outcome, Suite }
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -31,6 +30,8 @@ import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
 
 import scala.util.control.NonFatal
+import akka.persistence.cassandra.TestTaggingActor.Ack
+import akka.actor.PoisonPill
 
 object CassandraSpec {
   def getCallerName(clazz: Class[_]): String = {
@@ -48,7 +49,6 @@ object CassandraSpec {
   def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
     ConfigFactory.parseString(s"""
       akka.persistence.cassandra {
-        session-name = $journalKeyspace
         journal.keyspace = $journalKeyspace
         # FIXME this is not the way to configure port. Do we need port config in tests?
         port = $port
@@ -99,7 +99,7 @@ abstract class CassandraSpec(
     extends TestKitBase
     with Suite
     with ImplicitSender
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with CassandraLifecycle
     with ScalaFutures {
@@ -108,6 +108,7 @@ abstract class CassandraSpec(
 
   def this() = this(CassandraLifecycle.config)
 
+  private var failed = false
   lazy val randomPort = SocketUtil.temporaryLocalPort()
 
   val shortWait = 10.millis
@@ -116,7 +117,9 @@ abstract class CassandraSpec(
 
   def keyspaces(): Set[String] = Set(journalName, snapshotName)
 
-  private var failed = false
+  private val ids = new AtomicInteger(0)
+
+  def nextId(): String = s"pid-${ids.incrementAndGet()}"
 
   override protected def withFixture(test: NoArgTest): Outcome = {
     // When filtering just collects events into this var (yeah, it's a hack to do that in a filter).
@@ -219,8 +222,6 @@ abstract class CassandraSpec(
 
   final override def systemName = system.name
 
-  implicit val mat = ActorMaterializer()(system)
-
   implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
 
   val pidCounter = new AtomicInteger()
@@ -231,6 +232,20 @@ abstract class CassandraSpec(
   lazy val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
+  def writeEventsFor(tag: String, persistenceId: String, nrEvents: Int): Unit =
+    writeEventsFor(Set(tag), persistenceId, nrEvents)
+
+  def writeEventsFor(tags: Set[String], persistenceId: String, nrEvents: Int): Unit = {
+    val ref = system.actorOf(TestTaggingActor.props(persistenceId, tags))
+    for (i <- 1 to nrEvents) {
+      ref ! s"$persistenceId event-$i"
+      expectMsg(Ack)
+    }
+    watch(ref)
+    ref ! PoisonPill
+    expectTerminated(ref)
+  }
+
   def eventsPayloads(pid: String): Seq[Any] =
     queries
       .currentEventsByPersistenceId(pid, 0, Long.MaxValue)
@@ -239,7 +254,7 @@ abstract class CassandraSpec(
       .run()
       .futureValue
 
-  def events(pid: String): immutable.Seq[EventsByPersistenceIdStage.TaggedPersistentRepr] =
+  def events(pid: String): immutable.Seq[Extractors.TaggedPersistentRepr] =
     queries
       .eventsByPersistenceId(
         pid,

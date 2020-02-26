@@ -6,6 +6,7 @@ package akka.persistence.cassandra
 
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
+import akka.annotation.InternalStableApi
 import akka.persistence.cassandra.journal.JournalSettings
 import akka.persistence.cassandra.query.QuerySettings
 import akka.persistence.cassandra.snapshot.SnapshotSettings
@@ -15,10 +16,6 @@ import com.typesafe.config.Config
  * INTERNAL API
  */
 @InternalApi private[akka] class PluginSettings(system: ActorSystem, config: Config) {
-
-  // TODO this is now only used when deciding how to delete, remove this config and just
-  // query what version of cassandra we're connected to and do the right thing
-  val cassandra2xCompat: Boolean = config.getBoolean("cassandra-2x-compat")
 
   val journalSettings: JournalSettings = new JournalSettings(system, config)
 
@@ -32,6 +29,7 @@ import com.typesafe.config.Config
 /**
  * INTERNAL API
  */
+@InternalStableApi
 @InternalApi private[akka] object PluginSettings {
 
   val DefaultConfigPath = "akka.persistence.cassandra"
@@ -41,12 +39,6 @@ import com.typesafe.config.Config
 
   def apply(system: ActorSystem, config: Config): PluginSettings =
     new PluginSettings(system, config)
-
-  private[akka] def checkProfile(system: ActorSystem, profile: String) = {
-    require(
-      system.settings.config.hasPath(s"datastax-java-driver.profiles.$profile"),
-      s"profile $profile does not exist in `datastax-java-driver.profiles`")
-  }
 
   val keyspaceNameRegex =
     """^("[a-zA-Z]{1}[\w]{0,47}"|[a-zA-Z]{1}[\w]{0,47})$"""

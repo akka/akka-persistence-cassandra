@@ -10,7 +10,6 @@ import java.net.URLEncoder
 import java.util.UUID
 
 import scala.concurrent.Promise
-
 import akka.Done
 import akka.actor.SupervisorStrategy.Escalate
 import akka.pattern.ask
@@ -24,11 +23,11 @@ import akka.actor.Props
 import akka.actor.SupervisorStrategy
 import akka.actor.Timers
 import akka.annotation.InternalApi
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
 import akka.persistence.cassandra.journal.TagWriters._
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.util.ByteString
 import akka.util.Timeout
 import com.datastax.oss.driver.api.core.cql.{ BatchStatementBuilder, BatchType, BoundStatement, Statement }

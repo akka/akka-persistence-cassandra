@@ -13,6 +13,7 @@ import akka.annotation.InternalApi
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
+import akka.persistence.cassandra.FutureDone
 
 /**
  * INTERNAL API
@@ -21,7 +22,7 @@ import com.datastax.oss.driver.api.core.CqlSession
   private val journalSettings = settings.journalSettings
   private val eventsByTagSettings = settings.eventsByTagSettings
 
-  private[akka] def createKeyspace =
+  def createKeyspace =
     s"""
      |CREATE KEYSPACE IF NOT EXISTS ${journalSettings.keyspace}
      |WITH REPLICATION = { 'class' : ${journalSettings.replicationStrategy} }
@@ -31,7 +32,7 @@ import com.datastax.oss.driver.api.core.CqlSession
   // PersistentRepr.manifest is stored in event_manifest (sorry for naming confusion).
   // PersistentRepr.manifest is used by the event adapters (in akka-persistence).
   // ser_manifest together with ser_id is used for the serialization of the event (payload).
-  private[akka] def createTable =
+  def createTable =
     s"""
       |CREATE TABLE IF NOT EXISTS ${tableName} (
       |  persistence_id text,
@@ -53,7 +54,7 @@ import com.datastax.oss.driver.api.core.CqlSession
       |  AND compaction = ${indent(journalSettings.tableCompactionStrategy.asCQL, "    ")}
     """.stripMargin.trim
 
-  private[akka] def createTagsTable =
+  def createTagsTable =
     s"""
       |CREATE TABLE IF NOT EXISTS ${tagTableName} (
       |  tag_name text,
@@ -97,7 +98,7 @@ import com.datastax.oss.driver.api.core.CqlSession
      |  PRIMARY KEY (persistence_id))
      """.stripMargin.trim
 
-  private[akka] def createMetadataTable =
+  def createMetadataTable =
     s"""
      |CREATE TABLE IF NOT EXISTS $metadataTableName(
      |  persistence_id text PRIMARY KEY,
@@ -105,7 +106,7 @@ import com.datastax.oss.driver.api.core.CqlSession
      |  properties map<text,text>)
     """.stripMargin.trim
 
-  private[akka] def writeMessage(withMeta: Boolean) =
+  def writeMessage(withMeta: Boolean) =
     s"""
       INSERT INTO $tableName (persistence_id, partition_nr, sequence_nr, timestamp, timebucket, writer_uuid, ser_id, ser_manifest, event_manifest, event,
         ${if (withMeta) "meta_ser_id, meta_ser_manifest, meta," else ""}
@@ -115,7 +116,7 @@ import com.datastax.oss.driver.api.core.CqlSession
 
   // could just use the write tags Statement if we're going to update all the fields.
   // Fields that are not updated atm: writer_uuid and metadata fields
-  private[akka] def updateMessagePayloadAndTags: String =
+  def updateMessagePayloadAndTags: String =
     s"""
        UPDATE $tableName
        SET
@@ -132,7 +133,7 @@ import com.datastax.oss.driver.api.core.CqlSession
         timebucket = ?
      """
 
-  private[akka] def addTagsToMessagesTable: String =
+  def addTagsToMessagesTable: String =
     s"""
        UPDATE $tableName
        SET tags = tags + ?
@@ -144,7 +145,7 @@ import com.datastax.oss.driver.api.core.CqlSession
         timebucket = ?
      """
 
-  private[akka] def writeTags(withMeta: Boolean): String =
+  def writeTags(withMeta: Boolean): String =
     s"""
        INSERT INTO $tagTableName(
         tag_name,
@@ -164,7 +165,31 @@ import com.datastax.oss.driver.api.core.CqlSession
         ?)
      """
 
-  private[akka] def updateMessagePayloadInTagView =
+  def deleteTag: String =
+    s"""
+       DELETE FROM $tagTableName WHERE tag_name = ? and timebucket = ? and timestamp = ? and persistence_id = ? and tag_pid_sequence_nr = ?
+    """
+
+  def deleteTagProgress: String =
+    s"""
+       DELETE FROM $tagProgressTableName WHERE persistence_id = ? and tag = ?
+     """
+
+  def deleteTagScanning: String =
+    s"""
+       DELETE FROM $tagScanningTableName WHERE persistence_id = ?
+     """
+
+  def truncateTagViews: String =
+    s"TRUNCATE $tagTableName"
+  def truncateTagProgress: String =
+    s"TRUNCATE $tagProgressTableName"
+  def truncateTagScanning: String =
+    s"TRUNCATE $tagScanningTableName"
+  def selectAllTagProgress: String =
+    s"""SELECT tag FROM $tagProgressTableName"""
+
+  def updateMessagePayloadInTagView =
     s"""
        UPDATE $tagTableName
        SET
@@ -180,7 +205,7 @@ import com.datastax.oss.driver.api.core.CqlSession
         tag_pid_sequence_nr = ?
      """
 
-  private[akka] def selectTagPidSequenceNr =
+  def selectTagPidSequenceNr =
     s"""
        SELECT tag_pid_sequence_nr
        FROM $tagTableName WHERE
@@ -190,7 +215,7 @@ import com.datastax.oss.driver.api.core.CqlSession
        persistence_id = ?
      """.stripMargin
 
-  private[akka] def writeTagProgress =
+  def writeTagProgress =
     s"""
        INSERT INTO $tagProgressTableName(
         persistence_id,
@@ -200,32 +225,32 @@ import com.datastax.oss.driver.api.core.CqlSession
         offset) VALUES (?, ?, ?, ?, ?)
      """
 
-  private[akka] def selectTagProgress =
+  def selectTagProgress =
     s"""
        SELECT * from $tagProgressTableName WHERE
        persistence_id = ? AND
        tag = ?
      """
 
-  private[akka] def selectTagProgressForPersistenceId =
+  def selectTagProgressForPersistenceId =
     s"""
        SELECT * from $tagProgressTableName WHERE
        persistence_id = ?
      """
 
-  private[akka] def writeTagScanning =
+  def writeTagScanning =
     s"""
        INSERT INTO $tagScanningTableName(
          persistence_id, sequence_nr) VALUES (?, ?)
      """
 
-  private[akka] def selectTagScanningForPersistenceId =
+  def selectTagScanningForPersistenceId =
     s"""
        SELECT sequence_nr from $tagScanningTableName WHERE
        persistence_id = ?
      """
 
-  private[akka] def deleteMessage =
+  def deleteMessage =
     s"""
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND
@@ -233,8 +258,8 @@ import com.datastax.oss.driver.api.core.CqlSession
         sequence_nr = ?
     """
 
-  private[akka] def deleteMessages =
-    if (settings.cassandra2xCompat)
+  def deleteMessages(cassandra2xCompat: Boolean) =
+    if (cassandra2xCompat)
       s"""
       DELETE FROM ${tableName} WHERE
         persistence_id = ? AND
@@ -250,7 +275,7 @@ import com.datastax.oss.driver.api.core.CqlSession
         sequence_nr <= ?
     """
 
-  private[akka] def selectMessages =
+  def selectMessages =
     s"""
       SELECT * FROM ${tableName} WHERE
         persistence_id = ? AND
@@ -259,7 +284,7 @@ import com.datastax.oss.driver.api.core.CqlSession
         sequence_nr <= ?
     """
 
-  private[akka] def selectHighestSequenceNr =
+  def selectHighestSequenceNr =
     s"""
      SELECT sequence_nr FROM ${tableName} WHERE
        persistence_id = ? AND
@@ -268,13 +293,13 @@ import com.datastax.oss.driver.api.core.CqlSession
        DESC LIMIT 1
    """
 
-  private[akka] def selectDeletedTo =
+  def selectDeletedTo =
     s"""
       SELECT deleted_to FROM ${metadataTableName} WHERE
         persistence_id = ?
     """
 
-  private[akka] def insertDeletedTo =
+  def insertDeletedTo =
     s"""
       INSERT INTO ${metadataTableName} (persistence_id, deleted_to)
       VALUES ( ?, ? )
@@ -291,8 +316,7 @@ import com.datastax.oss.driver.api.core.CqlSession
    * Avoid calling this from several threads at the same time to
    * reduce the risk of (annoying) "Column family ID mismatch" exception.
    */
-  private[akka] def executeCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
-    import akka.cassandra.session._
+  def executeCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
 
     def tagStatements: Future[Done] =
       if (eventsByTagSettings.eventsByTagEnabled) {

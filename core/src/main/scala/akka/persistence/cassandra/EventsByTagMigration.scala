@@ -4,28 +4,26 @@
 
 package akka.persistence.cassandra
 
-import scala.concurrent.ExecutionContext
-
 import akka.actor.ActorSystem
 import akka.pattern.ask
 import akka.event.Logging
-import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.persistence.cassandra.journal.TagWriters.{ AllFlushed, FlushAllTagWriters, TagWritersSession }
 import akka.persistence.cassandra.journal._
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.RawEvent
-import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors.Extractor
+import akka.persistence.cassandra.Extractors.RawEvent
+import akka.persistence.cassandra.Extractors.Extractor
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query.PersistenceQuery
 import akka.serialization.SerializationExtension
-import akka.stream.{ ActorMaterializer, OverflowStrategy }
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
+import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
 import com.datastax.oss.driver.api.core.cql.Row
-import com.datastax.oss.protocol.internal.util.Bytes
+
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -34,15 +32,17 @@ object EventsByTagMigration {
     new EventsByTagMigration(system)
 
   // Extracts a Cassandra Row, assuming the pre 0.80 schema into a [[RawEvent]]
-  def rawPayloadOldTagSchemaExtractor(
-      bucketSize: BucketSize,
-      ed: EventDeserializer,
-      system: ActorSystem): Extractor[RawEvent] =
-    new Extractor[RawEvent](ed, SerializationExtension(system)) {
+  def rawPayloadOldTagSchemaExtractor(bucketSize: BucketSize, system: ActorSystem): Extractor[RawEvent] =
+    new Extractor[RawEvent] {
+
+      // TODO check this is only created once
+      val columnDefinitionCache = new ColumnDefinitionCache
+      val serialization = SerializationExtension(system)
+
       override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[RawEvent] = {
         // Get the tags from the old location i.e. tag1, tag2, tag3
         val tags: Set[String] =
-          if (ed.columnDefinitionCache.hasOldTagsColumns(row)) {
+          if (columnDefinitionCache.hasOldTagsColumns(row)) {
             (1 to 3).foldLeft(Set.empty[String]) {
               case (acc, i) =>
                 val tag = row.getString(s"tag$i")
@@ -53,48 +53,7 @@ object EventsByTagMigration {
           } else {
             Set.empty
           }
-
-        val timeUuid = row.getUuid("timestamp")
-        val sequenceNr = row.getLong("sequence_nr")
-        val meta = if (ed.columnDefinitionCache.hasMetaColumns(row)) {
-          val m = row.getByteBuffer("meta")
-          Option(m).map(SerializedMeta(_, row.getString("meta_ser_manifest"), row.getInt("meta_ser_id")))
-        } else {
-          None
-        }
-
-        def deserializeEvent(): Future[RawEvent] = {
-          Future.successful(
-            RawEvent(
-              sequenceNr,
-              Serialized(
-                row.getString("persistence_id"),
-                row.getLong("sequence_nr"),
-                row.getByteBuffer("event"),
-                tags,
-                row.getString("event_manifest"),
-                row.getString("ser_manifest"),
-                row.getInt("ser_id"),
-                row.getString("writer_uuid"),
-                meta,
-                timeUuid,
-                timeBucket = TimeBucket(timeUuid, bucketSize))))
-        }
-
-        if (eventDeserializer.columnDefinitionCache.hasMessageColumn(row)) {
-          row.getByteBuffer("message") match {
-            case null  => deserializeEvent()
-            case bytes =>
-              // This is an event from version 0.6 and earlier that used to serialise the PersistentRepr in the
-              // message column rather than the event column
-              val pr = serialization.deserialize(Bytes.getArray(bytes), classOf[PersistentRepr]).get
-              serializeEvent(pr, tags, timeUuid, bucketSize, serialization, system).map { serEvent =>
-                RawEvent(sequenceNr, serEvent)
-              }
-          }
-        } else {
-          deserializeEvent()
-        }
+        Extractors.deserializeRawEvent(system, bucketSize, columnDefinitionCache, tags, serialization, row)
       }
     }
 
@@ -107,7 +66,7 @@ object EventsByTagMigration {
 class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka.persistence.cassandra") {
   private[akka] val log = Logging.getLogger(system, getClass)
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](pluginConfigPath + ".query")
-  private implicit val materialiser = ActorMaterializer()(system)
+  private implicit val sys: ActorSystem = system
 
   implicit val ec =
     system.dispatchers.lookup(system.settings.config.getString(s"$pluginConfigPath.journal.plugin-dispatcher"))
@@ -115,8 +74,12 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
     new PluginSettings(system, system.settings.config.getConfig(pluginConfigPath))
   private val journalStatements = new CassandraJournalStatements(settings)
   private val taggedPreparedStatements = new TaggedPreparedStatements(journalStatements, session.prepare)
+  private val tagWriterSession =
+    TagWritersSession(session, journalSettings.writeProfile, journalSettings.readProfile, taggedPreparedStatements)
+  private val tagWriters = system.actorOf(TagWriters.props(eventsByTagSettings.tagWriterSettings, tagWriterSession))
+
   private val tagRecovery =
-    new CassandraTagRecovery(system, session, settings, taggedPreparedStatements)
+    new CassandraTagRecovery(system, session, settings, taggedPreparedStatements, tagWriters)
 
   import journalStatements._
 
@@ -192,12 +155,6 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
       periodicFlush: Int,
       flushTimeout: Timeout): Future[Done] = {
     log.info("Beginning migration of data to tag_views table in keyspace {}", journalSettings.keyspace)
-    val tagWriterSession =
-      TagWritersSession(session, journalSettings.writeProfile, journalSettings.readProfile, taggedPreparedStatements)
-    val tagWriters = system.actorOf(TagWriters.props(eventsByTagSettings.tagWriterSettings, tagWriterSession))
-
-    val eventDeserializer: CassandraJournal.EventDeserializer =
-      new CassandraJournal.EventDeserializer(system)
 
     implicit val timeout: Timeout = flushTimeout
 
@@ -211,14 +168,14 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
           val startingSeqFut = tagRecovery.tagScanningStartingSequenceNr(pid)
           for {
             tp <- tagRecovery.lookupTagProgress(pid)
-            _ <- tagRecovery.setTagProgress(pid, tp, tagWriters)
+            _ <- tagRecovery.setTagProgress(pid, tp)
             startingSeq <- startingSeqFut
           } yield (tp, startingSeq)
         }
 
         // would be nice to group these up into a TagWrites message but also
         // nice that this reuses the recovery code :-/
-        Source.fromFutureSource {
+        Source.futureSource {
           prereqs.map {
             case (tp, startingSeq) => {
               log.info(
@@ -235,11 +192,11 @@ class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka
                   None,
                   settings.querySettings.readProfile,
                   s"migrateToTag-$pid",
-                  extractor = EventsByTagMigration
-                    .rawPayloadOldTagSchemaExtractor(eventsByTagSettings.bucketSize, eventDeserializer, system))
-                .map(tagRecovery.sendMissingTagWriteRaw(tp, tagWriters, actorRunning = false))
+                  extractor =
+                    EventsByTagMigration.rawPayloadOldTagSchemaExtractor(eventsByTagSettings.bucketSize, system))
+                .map(tagRecovery.sendMissingTagWriteRaw(tp, actorRunning = false))
                 .buffer(periodicFlush, OverflowStrategy.backpressure)
-                .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])
+                .mapAsync(1)(_ => tagRecovery.flush(timeout))
             }
           }
         }

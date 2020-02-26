@@ -11,7 +11,8 @@ import akka.persistence._
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
-import org.scalatest._
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object CassandraIntegrationSpec {
   val config = ConfigFactory.parseString(s"""
@@ -102,7 +103,7 @@ object CassandraIntegrationSpec {
 
 import akka.persistence.cassandra.journal.CassandraIntegrationSpec._
 
-class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender with WordSpecLike with Matchers {
+class CassandraIntegrationSpec extends CassandraSpec(config) with ImplicitSender with AnyWordSpecLike with Matchers {
 
   private def stopAndWaitUntilTerminated(ref: ActorRef) = {
     watch(ref)

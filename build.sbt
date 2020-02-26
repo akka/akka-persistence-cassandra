@@ -3,46 +3,39 @@ ThisBuild / resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/")
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
-  .aggregate(core, cassandraLauncher, session)
+  .aggregate(core, cassandraLauncher, session, reconciler)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
 lazy val session = (project in file("session"))
-  .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi)
+  .enablePlugins(Common, AutomateHeaderPlugin)
   .dependsOn(cassandraLauncher % Test)
-  .settings(osgiSettings: _*)
   .settings(
     name := "akka-cassandra-session",
     libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies,
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
-        "Automatic-Module-Name" -> "akka.cassandra.session"),
-    OsgiKeys.exportPackage := Seq("akka.cassandra.session.*"),
-    OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
-    OsgiKeys.privatePackage := Nil)
+        "Automatic-Module-Name" -> "akka.stream.alpakka.cassandra"))
 
 lazy val dumpSchema = taskKey[Unit]("Dumps cassandra schema for docs")
 dumpSchema := (core / runMain in (Test)).toTask(" akka.persistence.cassandra.PrintCreateStatements").value
 
 lazy val core = (project in file("core"))
-  .enablePlugins(Common, AutomateHeaderPlugin, SbtOsgi, MultiJvmPlugin)
+  .enablePlugins(Common, AutomateHeaderPlugin, MultiJvmPlugin)
   .dependsOn(cassandraLauncher % Test, session)
-  .settings(osgiSettings: _*)
-  .settings({
-    val silencerVersion = "1.4.4"
-    Seq(
-      libraryDependencies ++= Seq(
-          compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
-          ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).cross(CrossVersion.patch)))
-  })
   .settings(
     name := "akka-persistence-cassandra",
-    libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,
+    libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies ++ Dependencies.silencer,
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
-        "Automatic-Module-Name" -> "akka.persistence.cassandra"),
-    OsgiKeys.exportPackage := Seq("akka.persistence.cassandra.*"),
-    OsgiKeys.importPackage := Seq(akkaImport(), optionalImport("org.apache.cassandra.*"), "*"),
-    OsgiKeys.privatePackage := Nil,
-    testOptions in Test ++= Seq(Tests.Argument(TestFrameworks.ScalaTest, "-o")))
+        "Automatic-Module-Name" -> "akka.persistence.cassandra"))
   .configs(MultiJvm)
+
+lazy val reconciler = (project in file("reconciler"))
+  .enablePlugins(Common, AutomateHeaderPlugin, MultiJvmPlugin)
+  .dependsOn(core % "test->test;compile->compile", session)
+  .settings(
+    name := "akka-persistence-cassandra-reconciler",
+    Compile / packageBin / packageOptions += Package.ManifestAttributes(
+        "Automatic-Module-Name" -> "akka.persistence.cassandra.reconciler"),
+    libraryDependencies ++= Dependencies.reconcilerDependencies)
 
 lazy val cassandraLauncher = (project in file("cassandra-launcher"))
   .enablePlugins(Common)
@@ -99,14 +92,20 @@ lazy val docs = project
         "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
         "scaladoc.akka.persistence.cassandra.base_url" -> s"/${(Preprocess / siteSubdirName).value}/"),
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
+    ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,
     publishRsyncArtifact := makeSite.value -> "www/",
     publishRsyncHost := "akkarepo@gustav.akka.io")
 
-def akkaImport(packageName: String = "akka.*") =
-  versionedImport(packageName, "2.4", "2.5")
-def configImport(packageName: String = "com.typesafe.config.*") =
-  versionedImport(packageName, "1.3.0", "1.4.0")
-def versionedImport(packageName: String, lower: String, upper: String) =
-  s"""$packageName;version="[$lower,$upper)""""
-def optionalImport(packageName: String) = s"$packageName;resolution:=optional"
+TaskKey[Unit]("verifyCodeFmt") := {
+  scalafmtCheckAll.all(ScopeFilter(inAnyProject)).result.value.toEither.left.foreach { _ =>
+    throw new MessageOnlyException(
+      "Unformatted Scala code found. Please run 'scalafmtAll' and commit the reformatted code")
+  }
+  (Compile / scalafmtSbtCheck).result.value.toEither.left.foreach { _ =>
+    throw new MessageOnlyException(
+      "Unformatted sbt code found. Please run 'scalafmtSbt' and commit the reformatted code")
+  }
+}
+
+addCommandAlias("verifyCodeStyle", "headerCheck; verifyCodeFmt")

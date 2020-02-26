@@ -10,9 +10,27 @@ object Dependencies {
   val CassandraVersionInDocs = "4.0"
   val DriverVersion = "4.3.0"
 
+  val Logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
+
+  val silencerVersion = "1.4.4"
+  val silencer = Seq(
+    compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
+    ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).cross(CrossVersion.patch))
+
   val akkaCassandraSessionDependencies = Seq(
     ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
     "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-discovery" % AkkaVersion % Provided,
+    "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
+    "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion % Test,
+    "org.scalatest" %% "scalatest" % "3.1.0" % Test,
+    "com.novocode" % "junit-interface" % "0.11" % Test,
+    "junit" % "junit" % "4.13" % Test,
+    Logback % Test)
+
+  val reconcilerDependencies = Seq(
+    ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
+    "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test)
 
   val akkaTestDeps = Seq(
@@ -33,8 +51,8 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
-      "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
-      "org.scalatest" %% "scalatest" % "3.0.8" % Test,
+      Logback % Test,
+      "org.scalatest" %% "scalatest" % "3.1.0" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,
       "org.osgi" % "org.osgi.core" % "5.0.0" % Provided) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
 
@@ -43,5 +61,5 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-persistence-tck" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
-    "ch.qos.logback" % "logback-classic" % "1.2.3" % Test)
+    Logback % Test)
 }
