@@ -7,7 +7,6 @@ package akka.stream.alpakka.cassandra.scaladsl
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
@@ -31,11 +30,13 @@ import akka.annotation.InternalApi
 import akka.stream.alpakka.cassandra.{ CassandraMetricsRegistry, CqlSessionProvider }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
-import scala.compat.java8.FutureConverters._
 
+import scala.compat.java8.FutureConverters._
 import akka.stream.alpakka.cassandra.CassandraServerMetaData
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.servererrors.InvalidQueryException
+
+import scala.util.control.NonFatal
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
@@ -66,12 +67,19 @@ final class CassandraSession(
 
   private var cachedServerMetaData: OptionVal[Future[CassandraServerMetaData]] = OptionVal.None
 
-  private val _underlyingSession: Future[CqlSession] = sessionProvider.connect().flatMap { session =>
-    session.getMetrics.ifPresent(metrics => {
-      CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)
-    })
-    init(session).map(_ => session)
-  }
+  private val _underlyingSession: Future[CqlSession] = sessionProvider
+    .connect()
+    .flatMap { session =>
+      session.getMetrics.ifPresent(metrics => {
+        CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)
+      })
+      init(session).map(_ => session)
+    }
+    .recover {
+      case NonFatal(e) =>
+        log.error(e, "failed to start CassandraSession")
+        throw e
+    }
 
   /**
    * The `Session` of the underlying
@@ -131,10 +139,9 @@ final class CassandraSession(
    * The returned `Future` is completed when the command is done, or if the statement fails.
    */
   def executeDDL(stmt: String): Future[Done] =
-    for {
-      s <- underlying()
-      _ <- s.executeAsync(stmt).toScala
-    } yield Done
+    underlying().flatMap { session =>
+      session.executeAsync(stmt).toScala.map(_ => Done)
+    }
 
   /**
    * See <a href="https://docs.datastax.com/en/dse/6.7/cql/cql/cql_using/useCreateTable.html">Creating a table</a>.
@@ -198,13 +205,7 @@ final class CassandraSession(
    * successfully executed, or if it fails.
    */
   def executeWrite(stmt: String, bindValues: AnyRef*): Future[Done] = {
-    val bound: Future[BoundStatement] = prepare(stmt).map { ps =>
-      val bs =
-        if (bindValues.isEmpty) ps.bind()
-        else ps.bind(bindValues: _*)
-      bs
-    }
-    bound.flatMap(b => executeWrite(b))
+    bind(stmt, bindValues).flatMap(b => executeWrite(b))
   }
 
   /**
@@ -229,7 +230,7 @@ final class CassandraSession(
    * this `Source` and then `run` the stream.
    */
   def select(stmt: Statement[_]): Source[Row, NotUsed] = {
-    Source.fromGraph(new SelectSource(Future.successful(stmt)))
+    Source.fromGraph(new SelectSource(stmt))
   }
 
   /**
@@ -244,7 +245,11 @@ final class CassandraSession(
    * this `Source` and then `run` the stream.
    */
   def select(stmt: Future[Statement[_]]): Source[Row, NotUsed] = {
-    Source.fromGraph(new SelectSource(stmt))
+    Source
+      .futureSource {
+        stmt.map(s => Source.fromGraph(new SelectSource(s)))
+      }
+      .mapMaterializedValue(_ => NotUsed)
   }
 
   /**
@@ -258,11 +263,7 @@ final class CassandraSession(
    * this `Source` and then `run` the stream.
    */
   def select(stmt: String, bindValues: AnyRef*): Source[Row, NotUsed] = {
-    val bound = prepare(stmt).map { ps =>
-      if (bindValues.isEmpty) ps.bind()
-      else ps.bind(bindValues: _*)
-    }
-    Source.fromGraph(new SelectSource(bound))
+    select(bind(stmt, bindValues))
   }
 
   /**
@@ -278,7 +279,7 @@ final class CassandraSession(
    */
   def selectAll(stmt: Statement[_]): Future[immutable.Seq[Row]] = {
     Source
-      .fromGraph(new SelectSource(Future.successful(stmt)))
+      .fromGraph(new SelectSource(stmt))
       .runWith(Sink.seq)
       .map(_.toVector) // Sink.seq returns Seq, not immutable.Seq (compilation issue in Eclipse)
   }
@@ -293,11 +294,7 @@ final class CassandraSession(
    * The returned `Future` is completed with the found rows.
    */
   def selectAll(stmt: String, bindValues: AnyRef*): Future[immutable.Seq[Row]] = {
-    val bound: Future[BoundStatement] = prepare(stmt).map(
-      ps =>
-        if (bindValues.isEmpty) ps.bind()
-        else ps.bind(bindValues: _*))
-    bound.flatMap(bs => selectAll(bs))
+    bind(stmt, bindValues).flatMap(bs => selectAll(bs))
   }
 
   /**
@@ -311,7 +308,6 @@ final class CassandraSession(
    * if any.
    */
   def selectOne(stmt: Statement[_]): Future[Option[Row]] = {
-
     selectResultSet(stmt).map { rs =>
       Option(rs.one()) // rs.one returns null if exhausted
     }
@@ -326,14 +322,17 @@ final class CassandraSession(
    * if any.
    */
   def selectOne(stmt: String, bindValues: AnyRef*): Future[Option[Row]] = {
-    val bound: Future[BoundStatement] = prepare(stmt).map(
-      ps =>
-        if (bindValues.isEmpty) ps.bind()
-        else ps.bind(bindValues: _*))
-    bound.flatMap(bs => selectOne(bs))
+    bind(stmt, bindValues).flatMap(bs => selectOne(bs))
   }
 
-  private class SelectSource(stmt: Future[Statement[_]]) extends GraphStage[SourceShape[Row]] {
+  private def bind(stmt: String, bindValues: Seq[AnyRef]): Future[BoundStatement] = {
+    prepare(stmt).map { ps =>
+      if (bindValues.isEmpty) ps.bind()
+      else ps.bind(bindValues: _*)
+    }
+  }
+
+  private class SelectSource(stmt: Statement[_]) extends GraphStage[SourceShape[Row]] {
 
     private val out: Outlet[Row] = Outlet("rows")
     override val shape: SourceShape[Row] = SourceShape(out)
@@ -353,14 +352,11 @@ final class CassandraSession(
           asyncFailure = getAsyncCallback { e =>
             fail(out, e)
           }
-          stmt.failed.foreach(e => asyncFailure.invoke(e))
-          stmt.foreach { s =>
-            val rsFut = underlying().flatMap(_.executeAsync(s).toScala)
-            rsFut.failed.foreach { e =>
-              asyncFailure.invoke(e)
-            }
-            rsFut.foreach(asyncResult.invoke)
+          val rsFut = underlying().flatMap(_.executeAsync(stmt).toScala)
+          rsFut.failed.foreach { e =>
+            asyncFailure.invoke(e)
           }
+          rsFut.foreach(asyncResult.invoke)
         }
 
         setHandler(out, new OutHandler {
