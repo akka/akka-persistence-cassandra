@@ -51,13 +51,6 @@ import scala.compat.java8.FutureConverters._
  */
 @InternalApi private[akka] object EventsByTagStage {
 
-  // FIXME, make this a public API that users can use to handle missing events
-  // https://github.com/akka/akka-persistence-cassandra/issues/625
-  final class MissingTaggedEventException(val tag: Tag, missing: Map[PersistenceId, MissingData])
-      extends RuntimeException(
-        s"Unable to find missing tagged events: ${missing}" +
-        s"Tag: $tag")
-
   final case class UUIDRow(
       persistenceId: PersistenceId,
       sequenceNr: SequenceNr,
@@ -115,7 +108,7 @@ import scala.compat.java8.FutureConverters._
   type Offset = UUID
   type MaxSequenceNr = Long
 
-  case class MissingData(maxOffset: UUID, maxSequenceNr: TagPidSequenceNr)
+  final case class MissingData(maxOffset: UUID, maxSequenceNr: TagPidSequenceNr)
 
   /**
    *
@@ -550,7 +543,13 @@ import scala.compat.java8.FutureConverters._
 
       private def abortMissingSearch(missing: LookingForMissing): Unit = {
         if (missing.gapDetected) {
-          fail(out, new MissingTaggedEventException(session.tag, missing.missingData))
+          fail(
+            out,
+            new MissingTaggedEventException(
+              session.tag,
+              missing.remainingMissing,
+              missing.minOffset,
+              missing.maxOffset))
         } else {
           log.debug(
             "[{}] [{}]: Finished scanning for older events for persistence ids [{}]",
