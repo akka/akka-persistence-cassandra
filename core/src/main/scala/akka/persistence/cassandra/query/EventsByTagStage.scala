@@ -353,12 +353,18 @@ import scala.compat.java8.FutureConverters._
               missingSequenceNrs,
               explicitGapDetected = true,
               eventsByTagSettings.eventsByTagGapTimeout)
-            stageState.state match {
-              case qip @ QueryInProgress(_, _) =>
-                // let the current query finish and then look for missing
-                updateStageState(_.copy(state = qip.copy(abortForMissingSearch = true)))
-              case _ =>
-                lookForMissing()
+
+            val total = totalMissing()
+            if (total > settings.eventsByTagSettings.maxMissingToSearch) {
+              failTooManyMissing(total)
+            } else {
+              stageState.state match {
+                case qip @ QueryInProgress(_, _) =>
+                  // let the current query finish and then look for missing
+                  updateStageState(_.copy(state = qip.copy(abortForMissingSearch = true)))
+                case _ =>
+                  lookForMissing()
+              }
             }
           }
       }
@@ -514,15 +520,18 @@ import scala.compat.java8.FutureConverters._
           .onComplete(newResultSetCb.invoke)
       }
 
-      private def lookForMissing(): Unit = {
-        val missing = stageState.missingLookup match {
+      private def getMissingLookup(): LookingForMissing = {
+        stageState.missingLookup match {
           case Some(m) => m
           case None =>
             throw new IllegalStateException(
               s"lookingForMissingCalled for tag ${session.tag} when there " +
               s"is no missing. Raise a bug with debug logging.")
         }
+      }
 
+      private def lookForMissing(): Unit = {
+        val missing = getMissingLookup()
         if (missing.deadline.isOverdue()) {
           abortMissingSearch(missing)
         } else {
@@ -722,6 +731,7 @@ import scala.compat.java8.FutureConverters._
           missingSequenceNrs: Map[PersistenceId, Set[Long]],
           explicitGapDetected: Boolean,
           timeout: FiniteDuration): Unit = {
+
         // Start in the toOffsetBucket as it is considered more likely an event has been missed due to an event
         // being delayed slightly rather than by a full bucket
         val bucket = TimeBucket(toOffset, bucketSize)
@@ -742,6 +752,15 @@ import scala.compat.java8.FutureConverters._
                 explicitGapDetected))))
       }
 
+      private def totalMissing(): Long = {
+        val missing = getMissingLookup()
+        missing.remainingMissing.values.foldLeft(0L)(_ + _.size)
+      }
+      private def failTooManyMissing(total: Long): Unit = {
+        failStage(
+          new RuntimeException(s"$total missing tagged events for tag [${session.tag}]. Failing without search"))
+      }
+
       @tailrec def tryPushOne(): Unit =
         stageState.state match {
           case QueryResult(rs) if isAvailable(out) =>
@@ -749,7 +768,7 @@ import scala.compat.java8.FutureConverters._
               queryExhausted()
             } else if (rs.remaining() == 0) {
               log.debug("[{}] Fetching more", stageUuid)
-              fetchMore(rs)
+
             } else if (stageState.isLookingForMissing) {
               checkResultSetForMissing(rs, stageState.missingLookup.get)
               tryPushOne()
@@ -766,7 +785,12 @@ import scala.compat.java8.FutureConverters._
               }
 
               if (missing) {
-                lookForMissing()
+                val total = totalMissing()
+                if (total > settings.eventsByTagSettings.maxMissingToSearch) {
+                  failTooManyMissing(total)
+                } else {
+                  lookForMissing()
+                }
               } else {
                 tryPushOne()
               }

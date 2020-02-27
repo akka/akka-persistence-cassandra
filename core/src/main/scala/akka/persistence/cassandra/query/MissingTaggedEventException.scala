@@ -24,7 +24,7 @@ final class MissingTaggedEventException(
     val tag: String,
     val missing: Map[String, Set[Long]],
     val minOffset: UUID,
-    val maxOffset: UUID
-) extends RuntimeException(
+    val maxOffset: UUID)
+    extends RuntimeException(
       s"Unable to find tagged events: ${missing}" +
       s"Tag: $tag")

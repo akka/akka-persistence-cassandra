@@ -191,6 +191,8 @@ import com.typesafe.config.Config
     optionalDuration(eventsByTagConfig, "back-track.long-interval"),
     period(eventsByTagConfig, "back-track.long-period"))
 
+  val maxMissingToSearch: Long = eventsByTagConfig.getLong("max-missing-to-search")
+
   private def optionalDuration(cfg: Config, path: String): Option[FiniteDuration] = {
     cfg.getString(path).toLowerCase match {
       case "off" | "false" => None

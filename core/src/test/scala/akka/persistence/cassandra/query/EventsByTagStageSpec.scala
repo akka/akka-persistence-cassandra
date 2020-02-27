@@ -539,6 +539,18 @@ class EventsByTagStageSpec
       sub.expectNextPF { case EventEnvelope(_, "p-1", 12, "p1e12") => }
       sub.cancel()
     }
+
+    "fail quickly if large number of missing events" in {
+      val tag = "LargeNumberMissing"
+      val nowTime = LocalDateTime.now(ZoneOffset.UTC)
+      writeTaggedEvent(nowTime.plusSeconds(1), PersistentRepr("p1e1", 1, "p1"), Set(tag), 1, bucketSize)
+      val tagStream = queries.eventsByTag(tag, NoOffset)
+      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      sub.request(2)
+      sub.expectNextPF { case EventEnvelope(_, "p1", 1, "p1e1") => }
+      writeTaggedEvent(nowTime.plusSeconds(2), PersistentRepr("p1e10000", 10000, "p1"), Set(tag), 10000, bucketSize)
+      sub.expectError().getMessage() shouldEqual s"9998 missing tagged events for tag [$tag]. Failing without search"
+    }
   }
 
   private def currentAndPreviousBucket(): (LocalDateTime, LocalDateTime) = {
