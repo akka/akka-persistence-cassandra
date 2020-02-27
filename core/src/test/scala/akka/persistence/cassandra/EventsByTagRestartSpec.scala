@@ -30,7 +30,7 @@ object EventsByTagRestartSpec {
        |akka.persistence.cassandra {
        |  log-queries = off
        |  events-by-tag {
-       |     max-message-batch-size = 250 // make it likely we have messages in the buffer
+       |     max-message-batch-size = 125 // make it likely we have messages in the buffer, but not so big that match batch size is hit
        |     bucket-size = "Day"
        |  }
        |}
