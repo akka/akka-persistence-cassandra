@@ -72,9 +72,23 @@ partition should be depending on the version of Cassandra you are using.
 #### Consistency
 
 By default the journal uses `QUORUM` for all reads and writes.
-For setups with multiple datacentres this can set to `LOCAL_QUORUM` to
-avoid cross DC latency.
-Any other consistency level is highly discouraged.
+For setups with multiple datacenters this can set to `LOCAL_QUORUM` to
+avoid cross DC latency for writes and reads.
+
+The risk of using `LOCAL_QUORUM` is that in the event of a datacenter outage events that have been confirmed
+and any side effects run may not have be replicated to the other datacenters.
+If a persistent actor for which this has happened is started in another datacenter it may not see the latest event
+if it wasn't replicated.
+If the Cassandra data in the datacenter with the outage is recovered then the event that was not replicated will 
+eventually be replicated to all datacenters resulting in a duplicate sequence number.
+With the default [`replay-filter`](https://doc.akka.io/docs/akka/current/typed/persistence.html#replay-filter) the
+duplicate event from the original datacenter will is discarded in subsequent replays of the persistent actor.
+
+Using `QUORUM` for multi datacenter setups increases latency and decreased availability as to reach `QUORUM` nodes in
+other datacenters need to respond. During a datacenter outage or a cross datacenter network partition this won't be
+possible resulting in failed reads and writes.
+
+Using a consistency level other than `QUORUM` or `LOCAL_QUORUM` is highly discouraged.
 
 ```
 datastax-java-driver.profiles {
@@ -83,6 +97,7 @@ datastax-java-driver.profiles {
   }
 }
 ```
+
 #### Journal settings
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #journal }
