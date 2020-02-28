@@ -38,7 +38,7 @@ jobs:
     - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra && ./testLatestAkkaSnapshot.sh
       name: "Run against latest Akka snapshot"
       if: type = cron
-    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra2 && sbt -jvm-opts .jvmopts-travis testOnly -- -l RequiresCassandraThree
+    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra2 && sbt -jvm-opts .jvmopts-travis "testOnly -- -l RequiresCassandraThree"
       name: "Run against Cassandra 2.2"
 
     - stage: whitesource
