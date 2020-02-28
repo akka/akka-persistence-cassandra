@@ -5,8 +5,17 @@
 package docs.javadsl;
 
 import akka.Done;
+// #prepared
+import akka.NotUsed;
+import akka.japi.Function2;
+import akka.japi.Pair;
+import akka.stream.Materializer;
 import akka.stream.alpakka.cassandra.CassandraWriteSettings;
 import akka.stream.alpakka.cassandra.javadsl.CassandraFlow;
+import akka.stream.javadsl.SourceWithContext;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+// #prepared
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSource;
 import akka.stream.alpakka.cassandra.scaladsl.CassandraAccess;
@@ -20,10 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 
 import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -45,6 +51,7 @@ public class CassandraFlowTest {
         helper.shutdown();
     }
 
+    Materializer materializer = helper.materializer;
     CassandraSession cassandraSession = helper.cassandraSession;
     CassandraAccess cassandraAccess = helper.cassandraAccess;
 
@@ -80,28 +87,72 @@ public class CassandraFlowTest {
         String table = helper.createTableName();
         await(cassandraAccess.withSchemaMetadataDisabled(() -> cassandraAccess.lifecycleSession().executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY, name text, city text);")));
 
+        // #prepared
+
         List<Person> persons = Arrays.asList(
                 new Person(12, "John", "London"),
                 new Person(43, "Umberto", "Roma"),
                 new Person(56, "James", "Chicago")
         );
 
-        CompletionStage<Done> written = Source.from(persons)
+        Function2<Person, PreparedStatement, BoundStatement> statementBinder =
+                (person, preparedStatement) -> preparedStatement.bind(person.id, person.name, person.city);
+
+        CompletionStage<List<Person>> written = Source.from(persons)
                 .via(CassandraFlow.create(
+                        cassandraSession,
+                        CassandraWriteSettings.defaults(),
+                        "INSERT INTO " + table + "(id, name, city) VALUES (?, ?, ?)",
+                        statementBinder
+                ))
+                .runWith(Sink.seq(), materializer);
+        // #prepared
+
+        assertThat(await(written).size(), is(persons.size()));
+
+        CompletionStage<List<Person>> select = CassandraSource.create(cassandraSession, "SELECT * FROM " + table)
+                .map(row -> new Person(row.getInt("id"), row.getString("name"), row.getString("city")))
+                .runWith(Sink.seq(), materializer);
+        List<Person> rows = await(select);
+        assertThat(new ArrayList<>(rows), hasItems(persons.toArray()));
+    }
+
+    @Test
+    public void withContextUsage() throws InterruptedException, ExecutionException, TimeoutException {
+        String table = helper.createTableName();
+        await(cassandraAccess.withSchemaMetadataDisabled(() -> cassandraAccess.lifecycleSession().executeDDL("CREATE TABLE IF NOT EXISTS " + table + " (id int PRIMARY KEY, name text, city text);")));
+
+
+        List<Pair<Person, AckHandle>> persons = Arrays.asList(
+                Pair.create(new Person(12, "John", "London"), new AckHandle()),
+                Pair.create(new Person(43, "Umberto", "Roma"), new AckHandle()),
+                Pair.create(new Person(56, "James", "Chicago"), new AckHandle())
+        );
+
+        // #withContext
+        SourceWithContext<Person, AckHandle, NotUsed> from = // ???;
+                // #withContext
+                SourceWithContext.fromPairs(Source.from(persons));
+        // #withContext
+        CompletionStage<Done> written = from
+                .via(CassandraFlow.withContext(
                         cassandraSession,
                         CassandraWriteSettings.defaults(),
                         "INSERT INTO " + table + "(id, name, city) VALUES (?, ?, ?)",
                         (person, preparedStatement) -> preparedStatement.bind(person.id, person.name, person.city)
                 ))
-                .runWith(Sink.ignore(), helper.materializer);
+                .asSource()
+                .mapAsync(1, pair -> pair.second().ack())
+                .runWith(Sink.ignore(), materializer);
+        // #withContext
 
         assertThat(await(written), is(Done.done()));
 
         CompletionStage<List<Person>> select = CassandraSource.create(cassandraSession, "SELECT * FROM " + table)
                 .map(row -> new Person(row.getInt("id"), row.getString("name"), row.getString("city")))
-                .runWith(Sink.seq(), helper.materializer);
+                .runWith(Sink.seq(), materializer);
         List<Person> rows = await(select);
-        assertThat(new ArrayList<>(rows), hasItems(persons.toArray()));
+        assertThat(new ArrayList<>(rows), hasItems(persons.stream().map(p -> p.first()).toArray()));
     }
 
     public static final class Person {
@@ -128,6 +179,12 @@ public class CassandraFlowTest {
         @Override
         public int hashCode() {
             return Objects.hash(id, name, city);
+        }
+    }
+
+    public static final class AckHandle {
+        public CompletionStage<Done> ack() {
+            return CompletableFuture.completedFuture(Done.done());
         }
     }
 

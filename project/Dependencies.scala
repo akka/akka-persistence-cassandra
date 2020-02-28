@@ -7,8 +7,13 @@ object Dependencies {
   val ScalaVersions = Seq(Scala212, Scala213)
 
   val AkkaVersion = System.getProperty("override.akka.version", "2.6.3")
+  val AkkaVersionInDocs = System.getProperty("override.akka.version", "2.6")
   val CassandraVersionInDocs = "4.0"
   val DriverVersion = "4.3.0"
+  val DriverVersionInDocs = "4.3"
+
+  val AlpakkaVersion = "2.0.0-M3"
+  val AlpakkaVersionInDocs = "2.0"
 
   val Logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
 

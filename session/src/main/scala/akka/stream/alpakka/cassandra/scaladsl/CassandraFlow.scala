@@ -8,7 +8,7 @@ import akka.NotUsed
 import akka.dispatch.ExecutionContexts
 import akka.stream.alpakka.cassandra.CassandraWriteSettings
 import akka.stream.scaladsl.{ Flow, FlowWithContext }
-import com.datastax.oss.driver.api.core.cql.{ BatchStatement, BatchType, BoundStatement, PreparedStatement, Row }
+import com.datastax.oss.driver.api.core.cql.{ BatchStatement, BatchType, BoundStatement, PreparedStatement }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
