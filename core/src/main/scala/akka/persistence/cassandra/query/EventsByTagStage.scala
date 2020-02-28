@@ -768,7 +768,7 @@ import scala.compat.java8.FutureConverters._
               queryExhausted()
             } else if (rs.remaining() == 0) {
               log.debug("[{}] Fetching more", stageUuid)
-
+              fetchMore(rs)
             } else if (stageState.isLookingForMissing) {
               checkResultSetForMissing(rs, stageState.missingLookup.get)
               tryPushOne()
