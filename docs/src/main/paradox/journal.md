@@ -53,12 +53,42 @@ One important setting is to configure the database driver to retry the initial c
 
 It is not enabled automatically as it is in the driver's reference.conf and is not overridable in a profile.
 
+#### Target partition size
+
+The messages table that stores the events is partitioned by `(persistence_id, partition_nr)`. The `partition_nr` is an
+artificial partition key to ensure that the Cassandra partition does not get too large if there are a lot of events for
+a single `persistence_id`.
+
+`akka.persistence.cassandra.journal.target-partition-size` controls the number of events that the journal tries to put
+in each Cassandra partition. It is a target as `persistAll` calls will have all the events in the same partition
+even if it will exceed the target partition size to ensure atomicity.
+
+It is not possible to change the value once you have data so consider if the default of 50000 is right for your
+application before deploying to production. Multiply the value by your expected serialized event size to roughly work
+out how large the Cassandra partition will grow to. See [wide partitions in
+Cassandra](https://thelastpickle.com/blog/2019/01/11/wide-partitions-cassandra-3-11.html) for a summary of how large a
+partition should be depending on the version of Cassandra you are using. 
+
 #### Consistency
 
 By default the journal uses `QUORUM` for all reads and writes.
-For setups with multiple datacentres this can set to `LOCAL_QUORUM` to
-avoid cross DC latency.
-Any other consistency level is highly discouraged.
+For setups with multiple datacenters this can set to `LOCAL_QUORUM` to
+avoid cross DC latency for writes and reads.
+
+The risk of using `LOCAL_QUORUM` is that in the event of a datacenter outage events that have been confirmed
+and any side effects run may not have be replicated to the other datacenters.
+If a persistent actor for which this has happened is started in another datacenter it may not see the latest event
+if it wasn't replicated.
+If the Cassandra data in the datacenter with the outage is recovered then the event that was not replicated will 
+eventually be replicated to all datacenters resulting in a duplicate sequence number.
+With the default [`replay-filter`](https://doc.akka.io/docs/akka/current/typed/persistence.html#replay-filter) the
+duplicate event from the original datacenter will is discarded in subsequent replays of the persistent actor.
+
+Using `QUORUM` for multi datacenter setups increases latency and decreased availability as to reach `QUORUM` nodes in
+other datacenters need to respond. During a datacenter outage or a cross datacenter network partition this won't be
+possible resulting in failed reads and writes.
+
+Using a consistency level other than `QUORUM` or `LOCAL_QUORUM` is highly discouraged.
 
 ```
 datastax-java-driver.profiles {
@@ -67,6 +97,7 @@ datastax-java-driver.profiles {
   }
 }
 ```
+
 #### Journal settings
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #journal }
