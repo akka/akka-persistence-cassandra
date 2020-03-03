@@ -117,4 +117,4 @@ TaskKey[Unit]("verifyCodeFmt") := {
   }
 }
 
-addCommandAlias("verifyCodeStyle", "headerCheck; verifyCodeFmt")
+addCommandAlias("verifyCodeStyle", "headerCheckAll; verifyCodeFmt")
