@@ -140,7 +140,8 @@ Descriptions of the important columns in the messages table:
 | event_manifest    | The manifest used by event adapters                                                                                                                          |
 | event             | The serialized user payload                                                                                       |
 
-Old columns, no longer needed but may be in your schema if you have used older versions of the plugin and migrated.
+Old columns, no longer needed but may be in your schema if you have used older versions of the plugin and migrated. See
+@ref[the  migration guide](./migrations.md) for when these have been removed.
 
 | Column  | Description                                                                                                                             |
 |---------|-----------------------------------------------------------------------------------------------------------------------------------------|
