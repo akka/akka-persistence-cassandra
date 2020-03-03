@@ -234,7 +234,7 @@ class EventsByTagStageSpec
       sub.expectNextPF { case EventEnvelope(_, "p-2", 1, "p2e1") => }
       sub.expectNoMessage(longWaitTime)
 
-      sub.expectError().getMessage should startWith("Unable to find missing tagged event")
+      sub.expectError().getMessage should startWith("Unable to find tagged event")
     }
 
     "find multiple missing messages that span time buckets" in {
