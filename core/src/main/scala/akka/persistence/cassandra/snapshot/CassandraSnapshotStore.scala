@@ -15,7 +15,10 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
 
+import akka.Done
 import akka.actor._
+import akka.annotation.InternalApi
+import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.FixedRetryPolicy
@@ -102,6 +105,11 @@ class CassandraSnapshotStore(cfg: Config)
       preparedSelectSnapshot
       preparedSelectSnapshotMetadata
       preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
+
+    case DeleteAllsnapshots(persistenceId) =>
+      val result: Future[Done] =
+        deleteAsync(persistenceId, SnapshotSelectionCriteria(maxSequenceNr = Long.MaxValue)).map(_ => Done)
+      result.pipeTo(sender())
   }
 
   override def postStop(): Unit =
@@ -312,8 +320,11 @@ class CassandraSnapshotStore(cfg: Config)
 
 }
 
-private[snapshot] object CassandraSnapshotStore {
+@InternalApi private[akka] object CassandraSnapshotStore {
   private case object Init
+
+  sealed trait CleanupCommand
+  final case class DeleteAllsnapshots(persistenceId: String) extends CleanupCommand
 
   private case class Serialized(serialized: ByteBuffer, serManifest: String, serId: Int, meta: Option[SerializedMeta])
 

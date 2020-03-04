@@ -281,6 +281,11 @@ trait CassandraStatements {
       VALUES ( ?, ? )
     """
 
+  private[akka] def deleteDeletedTo =
+    s"""
+      DELETE FROM ${metadataTableName} where persistence_id = ?
+    """
+
   private[akka] def writeInUse =
     s"""
        INSERT INTO ${tableName} (persistence_id, partition_nr, used)
