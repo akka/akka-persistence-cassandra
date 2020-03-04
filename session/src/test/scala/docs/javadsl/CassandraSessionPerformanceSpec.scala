@@ -4,17 +4,13 @@
 
 package docs.javadsl
 
-import akka.Done
 import akka.actor.ActorSystem
 import akka.event.Logging
-import akka.stream.alpakka.cassandra.CassandraSessionSettings
-import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSpecBase }
-import akka.stream.scaladsl.Sink
+import akka.stream.alpakka.cassandra.scaladsl.{ CassandraFlow, CassandraSession, CassandraSpecBase }
+import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, CassandraWriteSettings }
+import akka.stream.scaladsl.{ Sink, Source }
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
-import com.datastax.oss.driver.api.core.cql.{ BatchStatement, BatchType }
 
-import scala.collection.JavaConverters._
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSystem("CassandraSessionPerformanceSpec")) {
@@ -40,17 +36,15 @@ final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSyste
                      |    id int PRIMARY KEY
                      |);""".stripMargin)
       .flatMap { _ =>
-        lifecycleSession.prepare(s"INSERT INTO $dataTable(id) VALUES (?)")
-      }
-      .map { prepareStatement =>
-        data.sliding(10000, 10000).foreach { d =>
-          val boundStatements = d.map { i =>
-            prepareStatement.bind(Int.box(i))
+        Source(data)
+          .via {
+            CassandraFlow.createUnloggedBatch(
+              CassandraWriteSettings.create().withMaxBatchSize(10000),
+              s"INSERT INTO $dataTable(id) VALUES (?)",
+              (d: Int, ps) => ps.bind(Int.box(d)),
+              (d: Int) => d % 50)(lifecycleSession)
           }
-          val batchStatement = BatchStatement.newInstance(BatchType.LOGGED).addAll(boundStatements.asJava)
-          Await.result(lifecycleSession.executeWrite(batchStatement), 4.seconds)
-        }
-        Done
+          .runWith(Sink.ignore)
       }
       .futureValue
   }
@@ -61,7 +55,7 @@ final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSyste
   }
 
   "session" must {
-    "stream the result of a Cassandra statement with one page" ignore assertAllStagesStopped {
+    "stream the result of a Cassandra statement with one page" in assertAllStagesStopped {
       val rows =
         session
           .select(s"SELECT * FROM $dataTable")
