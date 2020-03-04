@@ -161,12 +161,12 @@ class CassandraFlowSpec extends CassandraSpecBase(ActorSystem("CassandraFlowSpec
       val persons =
         immutable.Seq(Person(12, "John", "London"), Person(43, "Umberto", "Roma"), Person(56, "James", "Chicago"))
       val written = Source(persons)
-        .via(CassandraFlow.createUnloggedBatch(
+        .via(CassandraFlow.createBatch(
           CassandraWriteSettings.defaults,
           s"INSERT INTO $table(id, name, city) VALUES (?, ?, ?)",
           statementBinder = (person, preparedStatement) =>
             preparedStatement.bind(Int.box(person.id), person.name, person.city),
-          partitionKey = person => person.id))
+          groupingKey = person => person.id))
         .runWith(Sink.ignore)
       written.futureValue mustBe Done
 
