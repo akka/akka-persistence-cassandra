@@ -47,7 +47,7 @@ final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSyste
       .flatMap { _ =>
         Source(data)
           .via {
-            CassandraFlow.createUnloggedBatch(
+            CassandraFlow.createBatch(
               CassandraWriteSettings.create().withMaxBatchSize(10000),
               s"INSERT INTO $dataTable(partition_id, id, value, seq_nr) VALUES (?, ?, ?, ?)",
               (d: Int, ps) => ps.bind(Long.box(partitionId), id, Long.box(d), Long.box(d)),
