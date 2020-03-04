@@ -17,9 +17,9 @@ final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSyste
 
   val log = Logging(system, this.getClass)
 
-  val data = 1 until 1000 * 100
+  val data = 1 until 1000 * 500
 
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig(1.minute)
+  override implicit def patienceConfig: PatienceConfig = PatienceConfig(2.minutes, 100.millis)
 
   private val dataTableName = "largerData"
   lazy val dataTable = s"$keyspaceName.$dataTableName"
@@ -33,16 +33,18 @@ final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSyste
   def insertDataTable() = {
     lifecycleSession
       .executeDDL(s"""CREATE TABLE IF NOT EXISTS $dataTable (
-                     |    id int PRIMARY KEY
+                     |    id int,
+                     |    value int,
+                     |    PRIMARY KEY (id, value)
                      |);""".stripMargin)
       .flatMap { _ =>
         Source(data)
           .via {
             CassandraFlow.createUnloggedBatch(
               CassandraWriteSettings.create().withMaxBatchSize(10000),
-              s"INSERT INTO $dataTable(id) VALUES (?)",
-              (d: Int, ps) => ps.bind(Int.box(d)),
-              (d: Int) => d % 50)(lifecycleSession)
+              s"INSERT INTO $dataTable(id, value) VALUES (?, ?)",
+              (d: Int, ps) => ps.bind(Int.box(d), Int.box(d % 100)),
+              (d: Int) => d % 100)(lifecycleSession)
           }
           .runWith(Sink.ignore)
       }
@@ -54,8 +56,8 @@ final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSyste
     insertDataTable()
   }
 
-  "session" must {
-    "stream the result of a Cassandra statement with one page" in assertAllStagesStopped {
+  "Select" must {
+    "read many rows" in assertAllStagesStopped {
       val rows =
         session
           .select(s"SELECT * FROM $dataTable")
