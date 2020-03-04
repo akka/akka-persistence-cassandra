@@ -153,3 +153,30 @@ There are multiple tables required. These need to be created before starting you
 For local testing you can enable `cassnadra-plugin.journal.table-autocreate`
 
 @@snip [journal-tables](/target/journal-tables.txt) { #journal-tables } 
+
+#### Messages table
+
+Descriptions of the important columns in the messages table:
+
+| Column            | Description                                                                                                               |
+|-------------------|---------------------------------------------------------------------------------------------------------------------------|
+| persistence_id    | The persistence id                                                                                                        |
+| partition_nr      | Artificial partition key to ensure partitions do not grow too large                                                       |
+| sequence_nr       | Sequence number of the event                                                                                              |
+| timestamp         | A type 1 UUID for ordering events in the events by tag query                                                              |
+| timebucket        | The time bucket to partition the events by tag query. Only in this table as events by tag used to use a materialized view |
+| writer_uuid       | A UUID for the actor system that wrote the event. Used to detect multiple writers for the same persistence id             |
+| ser_id            | The serialization id of the user payload                                                                                  |
+| ser_manifest      | The serialization manifest of the user payload                                                                            |
+| event_manifest    | The manifest used by event adapters                                                                                                                          |
+| event             | The serialized user payload                                                                                       |
+
+Old columns, no longer needed but may be in your schema if you have used older versions of the plugin and migrated. See
+@ref[the  migration guide](./migrations.md) for when these have been removed.
+
+| Column  | Description                                                                                                                             |
+|---------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| used    | A static column to record that the artificial partition has been used to detected that all events in a partition have been deleted      |
+| message | Pre 0.6 serialized the PersistentRepr (an internal Akka type) into this column. Newer versions use event and serialize the user payload |
+|         |                                                                                                                                         |
+
