@@ -63,7 +63,7 @@ a single `persistence_id`.
 in each Cassandra partition. It is a target as `persistAll` calls will have all the events in the same partition
 even if it will exceed the target partition size to ensure atomicity.
 
-It is not possible to change the value once you have data so consider if the default of 50000 is right for your
+It is not possible to change the value once you have data so consider if the default of 500000 is right for your
 application before deploying to production. Multiply the value by your expected serialized event size to roughly work
 out how large the Cassandra partition will grow to. See [wide partitions in
 Cassandra](https://thelastpickle.com/blog/2019/01/11/wide-partitions-cassandra-3-11.html) for a summary of how large a
