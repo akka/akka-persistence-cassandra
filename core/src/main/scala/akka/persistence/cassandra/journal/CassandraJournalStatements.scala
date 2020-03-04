@@ -305,6 +305,11 @@ import akka.persistence.cassandra.FutureDone
       VALUES ( ?, ? )
     """
 
+  def deleteDeletedTo =
+    s"""
+      DELETE FROM ${metadataTableName} where persistence_id = ?
+    """
+
   protected def tableName = s"${journalSettings.keyspace}.${journalSettings.table}"
   private def tagTableName = s"${journalSettings.keyspace}.${eventsByTagSettings.tagTable.name}"
   private def tagProgressTableName = s"${journalSettings.keyspace}.tag_write_progress"

@@ -16,7 +16,11 @@ import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
+
+import akka.Done
 import akka.actor._
+import akka.annotation.InternalApi
+import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.serialization.Snapshot
@@ -82,7 +86,6 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       preparedWriteSnapshot
       preparedWriteSnapshotWithMeta
       preparedDeleteSnapshot
-      preparedDeleteAllSnapshotsForPid
       session.serverMetaData.foreach { meta =>
         if (!meta.isVersion2)
           preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
@@ -91,6 +94,11 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       preparedSelectSnapshotMetadata
       preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
       log.debug("Initialized")
+
+    case DeleteAllsnapshots(persistenceId) =>
+      val result: Future[Done] =
+        deleteAsync(persistenceId, SnapshotSelectionCriteria(maxSequenceNr = Long.MaxValue)).map(_ => Done)
+      result.pipeTo(sender())
   }
 
   override def loadAsync(
@@ -312,20 +320,12 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   def preparedDeleteSnapshot: Future[PreparedStatement] =
     session.prepare(deleteSnapshot)
 
-  def preparedDeleteAllSnapshotsForPid: Future[PreparedStatement] =
-    session.prepare(deleteAllSnapshotForPersistenceId)
-
   def preparedDeleteAllSnapshotsForPidAndSequenceNrBetween: Future[PreparedStatement] =
     session.prepare(deleteAllSnapshotForPersistenceIdAndSequenceNrBetween)
 
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
     val boundDeleteSnapshot = preparedDeleteSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
     boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
-  }
-
-  def deleteAllForPersistenceId(pid: String): Future[Done] = {
-    val bound = preparedDeleteAllSnapshotsForPid.map(_.bind(pid))
-    bound.flatMap(session.executeWrite(_)).map(_ => Done)
   }
 
 }
@@ -335,6 +335,9 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
  */
 @InternalApi private[akka] object CassandraSnapshotStore {
   private case object Init
+
+  sealed trait CleanupCommand
+  final case class DeleteAllsnapshots(persistenceId: String) extends CleanupCommand
 
   private case class Serialized(serialized: ByteBuffer, serManifest: String, serId: Int, meta: Option[SerializedMeta])
 
