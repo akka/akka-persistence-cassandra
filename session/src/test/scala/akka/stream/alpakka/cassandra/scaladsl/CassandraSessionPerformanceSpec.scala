@@ -2,22 +2,22 @@
  * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
-package docs.javadsl
+package akka.stream.alpakka.cassandra.scaladsl
+
+import scala.concurrent.Await
 
 import akka.actor.ActorSystem
 import akka.event.Logging
-import akka.stream.alpakka.cassandra.scaladsl.{ CassandraFlow, CassandraSession, CassandraSpecBase }
 import akka.stream.alpakka.cassandra.{ CassandraSessionSettings, CassandraWriteSettings }
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
-
 import scala.concurrent.duration._
 
 final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSystem("CassandraSessionPerformanceSpec")) {
 
   val log = Logging(system, this.getClass)
 
-  val data = 1 until 1000 * 500
+  val data = 1 to 5 * 1000 * 1000
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig(2.minutes, 100.millis)
 
@@ -30,21 +30,28 @@ final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSyste
 
   lazy val session: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
 
+  // only using one partition in this test
+  private val partitionId = 1L
+  // only using one primary key in this test
+  private val id = "1"
+
   def insertDataTable() = {
     lifecycleSession
       .executeDDL(s"""CREATE TABLE IF NOT EXISTS $dataTable (
-                     |    id int,
-                     |    value int,
-                     |    PRIMARY KEY (id, value)
+                     |    partition_id bigint,
+                     |    id text,
+                     |    seq_nr bigint,
+                     |    value bigint,
+                     |    PRIMARY KEY ((partition_id, id), seq_nr)
                      |);""".stripMargin)
       .flatMap { _ =>
         Source(data)
           .via {
             CassandraFlow.createUnloggedBatch(
               CassandraWriteSettings.create().withMaxBatchSize(10000),
-              s"INSERT INTO $dataTable(id, value) VALUES (?, ?)",
-              (d: Int, ps) => ps.bind(Int.box(d), Int.box(d % 100)),
-              (d: Int) => d % 100)(lifecycleSession)
+              s"INSERT INTO $dataTable(partition_id, id, value, seq_nr) VALUES (?, ?, ?, ?)",
+              (d: Int, ps) => ps.bind(Long.box(partitionId), id, Long.box(d), Long.box(d)),
+              (_: Int) => partitionId)(lifecycleSession)
           }
           .runWith(Sink.ignore)
       }
@@ -57,14 +64,15 @@ final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSyste
   }
 
   "Select" must {
-    "read many rows" in assertAllStagesStopped {
-      val rows =
+    "read many rows" ignore assertAllStagesStopped {
+      val t0 = System.nanoTime()
+      val last =
         session
-          .select(s"SELECT * FROM $dataTable")
-          .map(_.getInt("id"))
-          .runWith(Sink.fold(0)((u, _) => u + 1))
-          .futureValue
-      rows mustBe data.last
+          .select(s"SELECT * FROM $dataTable WHERE partition_id = ? and id = ?", Long.box(partitionId), id)
+          .map(_.getLong("value"))
+          .runWith(Sink.last)
+      Await.result(last, 2.minutes) mustBe data.last
+      println(s"Selecting ${data.size} rows took ${(System.nanoTime() - t0) / 1000 / 1000} ms")
     }
   }
 }
