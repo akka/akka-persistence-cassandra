@@ -207,6 +207,39 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       pC2 ! GetRecoveredState
       expectMsg(RecoveredState("", Nil, 0L))
     }
+
+    "delete all for many persistenceId, many events, many snapshots" in {
+      val nrPids = 100
+      val nrEvents = 50
+      val snapEvery = 10
+
+      val pids = Vector.fill(nrPids)(nextPid)
+      val actors = pids.map { pid =>
+        val p = system.actorOf(TestActor.props(pid))
+        (1 to nrEvents).foreach { n =>
+          p ! PersistEvent
+          expectMsgType[Ack]
+          if (n % snapEvery == 0) {
+            p ! Snap
+            expectMsgType[Ack]
+          }
+        }
+        p
+      }
+
+      actors.foreach(system.stop)
+
+      val conf = ConfigFactory.parseString("""
+        log-progress-every = 10
+      """).withFallback(system.settings.config.getConfig("akka.persistence.cassandra.cleanup"))
+      val cleanup = new Cleanup(system, new CleanupSettings(conf))
+      cleanup.deleteAll(pids, neverUsePersistenceIdAgain = true).futureValue
+
+      val p2 = system.actorOf(TestActor.props(pids.last))
+      p2 ! GetRecoveredState
+      expectMsg(RecoveredState("", Nil, 0L))
+    }
+
   }
 
 }
