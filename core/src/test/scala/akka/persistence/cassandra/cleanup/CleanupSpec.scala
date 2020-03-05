@@ -15,6 +15,9 @@ import com.typesafe.config.ConfigFactory
 object CleanupSpec {
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
+    akka.persistence.cassandra.cleanup {
+      log-progress-every = 2
+    }
   """)
 
   case object PersistEvent
@@ -204,7 +207,6 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       pC2 ! GetRecoveredState
       expectMsg(RecoveredState("", Nil, 0L))
     }
-
   }
 
 }

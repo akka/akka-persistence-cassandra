@@ -6,7 +6,6 @@ package akka.persistence.cassandra.cleanup
 
 import scala.collection.immutable
 import scala.concurrent.Future
-import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
 
@@ -21,18 +20,21 @@ import akka.persistence.cassandra.snapshot.CassandraSnapshotStore
 import akka.util.Timeout
 
 @ApiMayChange
-final class Cleanup(system: ActorSystem) {
+final class Cleanup(system: ActorSystem, settings: CleanupSettings) {
+
+  def this(system: ActorSystem) =
+    this(system, new CleanupSettings(system.settings.config.getConfig("akka.persistence.cassandra.cleanup")))
+
+  import settings._
+  import system.dispatcher
 
   private val log = Logging(system, getClass)
-  private val logProgressEvery = 2
-  // FIXME in 1.0 we should support configurable pluginId
-  private val journal = Persistence(system).journalFor("")
+  private val journal = Persistence(system).journalFor(journalPlugin)
   private val snapshotStore =
-    if (system.settings.config.getString("akka.persistence.snapshot-store.plugin").nonEmpty)
-      Some(Persistence(system).snapshotStoreFor(""))
+    if (snapshotPlugin != "" || system.settings.config.getString("akka.persistence.snapshot-store.plugin").nonEmpty)
+      Some(Persistence(system).snapshotStoreFor(snapshotPlugin))
     else None
-  private implicit val askTimeout: Timeout = 10.seconds
-  import system.dispatcher
+  private implicit val askTimeout: Timeout = operationTimeout
 
   def deleteAll(persistenceIds: immutable.Seq[String], neverUsePersistenceIdAgain: Boolean): Future[Done] = {
     foreach(persistenceIds, "deleteAll", pid => deleteAll(pid, neverUsePersistenceIdAgain))
