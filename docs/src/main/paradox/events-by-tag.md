@@ -1,7 +1,7 @@
 # Events by tag
 
 The events by tag query is implemented by writing the events to another table in Cassandra partitioned by tag as well
-as a timebucket to prevent partitions becoming to big.
+as a timebucket to prevent partitions becoming too big.
 
 Due to it being a separate table and events are written from multiple nodes the events by tag is eventually consistent.
 
@@ -16,7 +16,7 @@ of order.
 
 Events from different persistent IDs are ordered by a 
 [type 2 UUID a.k.a TimeUUID](https://en.wikipedia.org/wiki/Universally_unique_identifier),
-esposed in the `EventEnvelope` as a `TimeBasedUUID` offset.
+exposed in the `EventEnvelope` as a `TimeBasedUUID` offset.
 
 As events come from multiple nodes to deliver events in `TimeUUID` order there is an `eventual-consistency-delay` to give
 events time to arrive in Cassandra and for the query to deliver them in their final order. The `eventual-consistency-delay` keeps the query a configurable 
@@ -38,7 +38,7 @@ for finding events delayed a small amount and a low frequency backtrack that sca
 
 These are configured with `akka.persistence.cassandra.query.events-by-tag.back-track`:
 
-@@snip [refernce.conf](/core/src/main/resources/reference.conf) { #backtrack }                                                                                                                                
+@@snip [reference.conf](/core/src/main/resources/reference.conf) { #backtrack }                                                                                                                                
 
 ### Tuning for lower latency
 
@@ -58,7 +58,7 @@ without delay use:
 akka.persistence.cassandra.events-by-tag.flush-interval = 0s
 ```
 
-Alternatively set a very small value e.g. `25ms` so some batching is done. If your applicaion has a large number of tagged events per second
+Alternatively set a very small value e.g. `25ms` so some batching is done. If your application has a large number of tagged events per second
 it is highly advised to set this to a value above 0.
 
 Enable pub sub notifications so events by tag queries can execute a query right away rather than waiting for the next
@@ -126,7 +126,7 @@ For example, to rebuild the data for a persistence id:
 ### Setting a bucket size
 
 Events by tag partitions are grouped into buckets to avoid a single partition for a tag
-getting to large. 
+getting too large. 
 
 * 1000s of events per day per tag -- Day
 * 100,000s  of events per day per tag -- Hour
@@ -137,7 +137,7 @@ This setting can not be changed after data has been written.
  
 More billion per day per tag? You probably need a specialised schema rather than a general library like this.
 
-If a cassandra partition gets too large it will perform badly (and has a hard limit of 2 billion cells, a cell being similar to a column). 
+If a Cassandra partition gets too large it will perform badly (and has a hard limit of 2 billion cells, a cell being similar to a column). 
 Given there is ~10 columns in the table there was a hard limit previously of 200million but performance would degrade before reaching this. 
 
 The support for `Minute` bucket size means that there are 1440 partitions per day. 
