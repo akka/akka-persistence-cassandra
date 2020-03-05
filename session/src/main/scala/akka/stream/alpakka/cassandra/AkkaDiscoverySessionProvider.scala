@@ -51,7 +51,7 @@ import scala.concurrent.{ ExecutionContext, Future }
  * ```
  * CassandraSessionRegistry
  *   .get(system)
- *   .sessionFor(CassandraSessionSettings.create("alpakka.cassandra"), system.dispatcher)
+ *   .sessionFor(CassandraSessionSettings.create("alpakka.cassandra"))
  * ```
  */
 private[cassandra] object AkkaDiscoverySessionProvider {

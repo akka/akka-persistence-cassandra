@@ -126,7 +126,7 @@ final class Reconciliation(system: ActorSystem) extends Extension {
   private implicit val sys = system
   private val recSettings = new ReconciliationSettings(
     system.settings.config.getConfig("akka.persistence.cassandra.reconciler"))
-  private val session = CassandraSessionRegistry(system).sessionFor(recSettings.pluginLocation, system.dispatcher)
+  private val session = CassandraSessionRegistry(system).sessionFor(recSettings.pluginLocation)
   private val settings = PluginSettings(system)
   private val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)

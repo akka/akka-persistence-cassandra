@@ -13,7 +13,6 @@ import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
 import akka.annotation.InternalApi
 import akka.event.{ Logging, LoggingAdapter }
-import akka.stream.alpakka.cassandra._
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
@@ -84,7 +83,7 @@ import akka.stream.scaladsl.Source
   private val pendingDeletes: JMap[String, List[PendingDelete]] = new JHMap
 
   private val session: CassandraSession = CassandraSessionRegistry(context.system)
-    .sessionFor(sharedConfigPath, context.dispatcher, ses => statements.executeAllCreateKeyspaceAndTables(ses))
+    .sessionFor(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses))
 
   private val taggedPreparedStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
   private val tagWriterSession = TagWritersSession(

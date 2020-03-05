@@ -78,7 +78,7 @@ public class CassandraSourceTest {
         // #init-session
         CassandraSessionSettings sessionSettings = CassandraSessionSettings.create();
         CassandraSession cassandraSession =
-                CassandraSessionRegistry.get(system).sessionFor(sessionSettings, system.dispatcher());
+                CassandraSessionRegistry.get(system).sessionFor(sessionSettings);
 
         CompletionStage<String> version =
                 cassandraSession
@@ -141,7 +141,7 @@ public class CassandraSourceTest {
         ActorSystem system = helper.system;
         // #discovery
         CassandraSessionSettings sessionSettings = CassandraSessionSettings.create("example-with-akka-discovery");
-        CassandraSession session = CassandraSessionRegistry.get(system).sessionFor(sessionSettings, system.dispatcher());
+        CassandraSession session = CassandraSessionRegistry.get(system).sessionFor(sessionSettings);
         // #discovery
         session.close(system.dispatcher());
 

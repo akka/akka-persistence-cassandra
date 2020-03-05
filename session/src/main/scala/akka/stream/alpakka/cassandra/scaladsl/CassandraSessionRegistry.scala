@@ -58,8 +58,8 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    *
    * Sessions in the session registry are closed after actor system termination.
    */
-  def sessionFor(configPath: String, executionContext: ExecutionContext): CassandraSession =
-    sessionFor(CassandraSessionSettings(configPath), executionContext)
+  def sessionFor(configPath: String): CassandraSession =
+    sessionFor(CassandraSessionSettings(configPath))
 
   /**
    * Get an existing session or start a new one with the given settings,
@@ -71,11 +71,8 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    *
    * Sessions in the session registry are closed after actor system termination.
    */
-  def sessionFor(
-      configPath: String,
-      executionContext: ExecutionContext,
-      init: CqlSession => Future[Done]): CassandraSession =
-    sessionFor(CassandraSessionSettings(configPath, init), executionContext)
+  def sessionFor(configPath: String, init: CqlSession => Future[Done]): CassandraSession =
+    sessionFor(CassandraSessionSettings(configPath, init))
 
   /**
    * Get an existing session or start a new one with the given settings,
@@ -84,8 +81,8 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    * Note that the session must not be stopped manually, it is shut down when the actor system is shutdown,
    * if you need a more fine grained life cycle control, create the CassandraSession manually instead.
    */
-  def sessionFor(settings: CassandraSessionSettings, executionContext: ExecutionContext): CassandraSession = {
-    sessionFor(settings, executionContext, system.settings.config.getConfig(settings.configPath))
+  def sessionFor(settings: CassandraSessionSettings): CassandraSession = {
+    sessionFor(settings, system.settings.config.getConfig(settings.configPath))
   }
 
   /**
@@ -94,19 +91,18 @@ final class CassandraSessionRegistry(system: ExtendedActorSystem) extends Extens
    */
   @InternalStableApi private[akka] def sessionFor(
       settings: CassandraSessionSettings,
-      executionContext: ExecutionContext,
       sessionProviderConfig: Config): CassandraSession = {
     val key = sessionKey(settings)
-    sessions.computeIfAbsent(key, _ => startSession(settings, key, executionContext, sessionProviderConfig))
+    sessions.computeIfAbsent(key, _ => startSession(settings, key, sessionProviderConfig))
   }
 
   private def startSession(
       settings: CassandraSessionSettings,
       key: SessionKey,
-      executionContext: ExecutionContext,
       sessionProviderConfig: Config): CassandraSession = {
     val sessionProvider = CqlSessionProvider(system, sessionProviderConfig)
     val log = Logging(system, classOf[CassandraSession])
+    val executionContext = system.dispatchers.lookup(sessionProviderConfig.getString("session-dispatcher"))
     new CassandraSession(
       system,
       sessionProvider,
