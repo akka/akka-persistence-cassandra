@@ -19,6 +19,19 @@ import akka.persistence.cassandra.journal.CassandraJournal
 import akka.persistence.cassandra.snapshot.CassandraSnapshotStore
 import akka.util.Timeout
 
+/**
+ * Tool for deleting all events and/or snapshots for a given list of `persistenceIds` without using persistent actors.
+ * It's important that the actors with corresponding `persistenceId` are not running
+ * at the same time as using the tool.
+ *
+ * If `neverUsePersistenceIdAgain` is `true` then the highest used sequence number is deleted and
+ * the `persistenceId` should not be used again, since it would be confusing to reuse the same sequence
+ * numbers for new events.
+ *
+ * When a list of `persistenceIds` are given they are deleted sequentially in the order
+ * of the list. It's possible to parallelize the deletes by running several cleanup operations
+ * at the same time operating on different sets of `persistenceIds`.
+ */
 @ApiMayChange
 final class Cleanup(system: ActorSystem, settings: CleanupSettings) {
 
@@ -36,22 +49,37 @@ final class Cleanup(system: ActorSystem, settings: CleanupSettings) {
     else None
   private implicit val askTimeout: Timeout = operationTimeout
 
+  /**
+   * Delete everything related to the given list of `persistenceIds`. All events and snapshots are deleted.
+   */
   def deleteAll(persistenceIds: immutable.Seq[String], neverUsePersistenceIdAgain: Boolean): Future[Done] = {
     foreach(persistenceIds, "deleteAll", pid => deleteAll(pid, neverUsePersistenceIdAgain))
   }
 
+  /**
+   * Delete everything related to one single `persistenceId`. All events and snapshots are deleted.
+   */
   def deleteAll(persistenceId: String, neverUsePersistenceIdAgain: Boolean): Future[Done] = {
     deleteAllEvents(persistenceId, neverUsePersistenceIdAgain).flatMap(_ => deleteAllSnapshots(persistenceId))
   }
 
+  /**
+   * Delete all events related to the given list of `persistenceIds`. Snapshots are not deleted.
+   */
   def deleteAllEvents(persistenceIds: immutable.Seq[String], neverUsePersistenceIdAgain: Boolean): Future[Done] = {
     foreach(persistenceIds, "deleteAllEvents", pid => deleteAllEvents(pid, neverUsePersistenceIdAgain))
   }
 
+  /**
+   * Delete all events related to one single `persistenceId`. Snapshots are not deleted.
+   */
   def deleteAllEvents(persistenceId: String, neverUsePersistenceIdAgain: Boolean): Future[Done] = {
     (journal ? CassandraJournal.DeleteAllEvents(persistenceId, neverUsePersistenceIdAgain)).mapTo[Done]
   }
 
+  /**
+   * Delete all snapshots related to the given list of `persistenceIds`. Events are not deleted.
+   */
   def deleteAllSnapshots(persistenceIds: immutable.Seq[String]): Future[Done] = {
     if (snapshotStore.isDefined)
       foreach(persistenceIds, "deleteAllSnapshots", pid => deleteAllSnapshots(pid))
@@ -59,6 +87,9 @@ final class Cleanup(system: ActorSystem, settings: CleanupSettings) {
       Future.successful(Done)
   }
 
+  /**
+   * Delete all snapshots related to one single `persistenceId`. Events are not deleted.
+   */
   def deleteAllSnapshots(persistenceId: String): Future[Done] = {
     snapshotStore match {
       case Some(snapshotStoreRef) =>

@@ -114,3 +114,9 @@ CREATE TABLE IF NOT EXISTS akka.metadata(
   deleted_to bigint,
   properties map<text,text>);
 ```
+
+### Delete all events
+
+The tool `akka.persistence.cassandra.cleanup.Cleanup` can be used for deleting all events and/or snapshots
+given list of `persistenceIds` without using persistent actors. It's important that the actors with corresponding
+`persistenceId` are not running at the same time as using the tool.
