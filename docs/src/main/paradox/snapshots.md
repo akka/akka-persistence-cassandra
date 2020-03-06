@@ -45,3 +45,8 @@ CREATE TABLE IF NOT EXISTS akka_snapshot.snapshots (
     };
 ```
 
+### Delete all snapshots
+
+The tool `akka.persistence.cassandra.cleanup.Cleanup` can be used for deleting all events and/or snapshots
+given list of `persistenceIds` without using persistent actors. It's important that the actors with corresponding
+`persistenceId` are not running at the same time as using the tool.

@@ -19,6 +19,7 @@ import akka.actor.OneForOneStrategy
 import akka.actor.SupervisorStrategy
 import akka.annotation.{ DoNotInherit, InternalApi }
 import akka.event.{ Logging, LoggingAdapter }
+import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
@@ -218,6 +219,14 @@ class CassandraJournal(cfg: Config)
         preparedWriteToTagViewWithMeta
         preparedWriteTagScanning
       }
+
+    case DeleteAllEvents(persistenceId, neverUsePersistenceIdAgain) =>
+      val result = asyncDeleteMessagesTo(persistenceId, Long.MaxValue)
+      val result2: Future[Done] =
+        if (neverUsePersistenceIdAgain)
+          result.flatMap(_ => deleteDeletedToSeqNr(persistenceId))
+        else result.map(_ => Done)
+      result2.pipeTo(sender())
   }
 
   private[akka] val writeRetryPolicy = new LoggingRetryPolicy(new FixedRetryPolicy(config.writeRetries))
@@ -584,6 +593,10 @@ class CassandraJournal(cfg: Config)
     deleteResult
   }
 
+  private def deleteDeletedToSeqNr(persistenceId: String): Future[Done] = {
+    session.executeWrite(deleteDeletedTo, persistenceId).map(_ => Done)
+  }
+
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
     val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, partitionNr: JLong))
     boundSelectHighestSequenceNr
@@ -693,6 +706,9 @@ class CassandraJournal(cfg: Config)
   private[akka] type TagPidSequenceNr = Long
 
   private case object Init
+
+  sealed trait CleanupCommand
+  final case class DeleteAllEvents(persistenceId: String, neverUsePersistenceIdAgain: Boolean) extends CleanupCommand
 
   private case class WriteFinished(pid: String, f: Future[Done]) extends NoSerializationVerificationNeeded
 
