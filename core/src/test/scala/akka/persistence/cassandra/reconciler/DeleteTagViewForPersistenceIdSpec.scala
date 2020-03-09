@@ -28,7 +28,8 @@ class DeleteTagViewForPersistenceIdSpec extends CassandraSpec {
         .expectNextN(List("p1 event-1", "p1 event-2", "p1 event-3", "p2 event-1", "p2 event-2", "p2 event-3"))
         .expectNoMessage()
         .cancel()
-      Reconciliation(system).deleteTagViewForPersistenceIds(Set(pid2), tag).futureValue
+      val reconciliation = new Reconciliation(system)
+      reconciliation.deleteTagViewForPersistenceIds(Set(pid2), tag).futureValue
       eventsByTag(tag).request(5).expectNextN(List("p1 event-1", "p1 event-2", "p1 event-3")).expectNoMessage().cancel()
 
     }

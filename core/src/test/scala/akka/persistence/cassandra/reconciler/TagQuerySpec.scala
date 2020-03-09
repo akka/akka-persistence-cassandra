@@ -10,6 +10,8 @@ import org.scalatest.concurrent.Eventually
 
 class TagQuerySpec extends CassandraSpec with Eventually {
 
+  private lazy val reconciliation = new Reconciliation(system)
+
   "Tag querying" should {
     "return distinct tags for all tags" in {
       val pid1 = "pid1"
@@ -17,11 +19,11 @@ class TagQuerySpec extends CassandraSpec with Eventually {
       val tag1 = "tag1"
       val tag2 = "tag2"
       val tag3 = "tag3"
-      Reconciliation(system).allTags().runWith(Sink.seq).futureValue shouldEqual Nil
+      reconciliation.allTags().runWith(Sink.seq).futureValue shouldEqual Nil
       writeEventsFor(Set(tag1, tag2), pid1, 3)
       writeEventsFor(Set(tag2, tag3), pid2, 3)
       eventually {
-        val allTags = Reconciliation(system).allTags().runWith(Sink.seq).futureValue
+        val allTags = reconciliation.allTags().runWith(Sink.seq).futureValue
         allTags.size shouldEqual 3
         allTags.toSet shouldEqual Set(tag1, tag2, tag3)
       }
@@ -36,7 +38,7 @@ class TagQuerySpec extends CassandraSpec with Eventually {
       writeEventsFor(tag1, pid1, 3)
       writeEventsFor(Set(tag2, tag3), pid2, 3)
       eventually {
-        val tags = Reconciliation(system).tagsForPersistenceId(pid2).futureValue
+        val tags = reconciliation.tagsForPersistenceId(pid2).futureValue
         tags.size shouldEqual 2
         tags.toSet shouldEqual Set(tag2, tag3)
       }

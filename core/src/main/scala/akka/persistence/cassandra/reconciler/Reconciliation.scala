@@ -8,11 +8,6 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import akka.actor.ExtendedActorSystem
-import akka.actor.Extension
-import akka.actor.ExtensionId
-import akka.actor.ExtensionIdProvider
-import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
 import akka.stream.scaladsl.Sink
@@ -121,26 +116,28 @@ final private[akka] class ReconciliationSession(session: CassandraSession, state
  * API likely to change when a java/scaladsl is added.
  */
 @ApiMayChange
-final class Reconciliation(system: ActorSystem) extends Extension {
+final class Reconciliation(system: ActorSystem, settings: ReconciliationSettings) {
+
+  def this(system: ActorSystem) =
+    this(system, new ReconciliationSettings(system.settings.config.getConfig("akka.persistence.cassandra.reconciler")))
+
   import system.dispatcher
   private implicit val sys = system
-  private val recSettings = new ReconciliationSettings(
-    system.settings.config.getConfig("akka.persistence.cassandra.reconciler"))
-  private val session = CassandraSessionRegistry(system).sessionFor(recSettings.pluginLocation, system.dispatcher)
-  private val settings = PluginSettings(system)
+  private val session = CassandraSessionRegistry(system).sessionFor(settings.pluginLocation, system.dispatcher)
+  private val pluginSettings = PluginSettings(system, system.settings.config.getConfig(settings.pluginLocation))
   private val queries: CassandraReadJournal =
-    PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
-  private val statements = new CassandraStatements(settings)
+    PersistenceQuery(system).readJournalFor[CassandraReadJournal](settings.pluginLocation + ".query")
+  private val statements = new CassandraStatements(pluginSettings)
   private val recSession = new ReconciliationSession(session, statements)
   private val tagStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
 
   private val tagWriterSession: TagWriters.TagWritersSession =
-    new TagWritersSession(session, recSettings.writeProfile, recSettings.readProfile, tagStatements)
+    new TagWritersSession(session, settings.writeProfile, settings.readProfile, tagStatements)
   private val tagWriters =
     system.actorOf(
-      TagWriters.props(settings.eventsByTagSettings.tagWriterSettings, tagWriterSession),
+      TagWriters.props(pluginSettings.eventsByTagSettings.tagWriterSettings, tagWriterSession),
       "reconciliation-tag-writers")
-  private val recovery = new CassandraTagRecovery(system, session, settings, tagStatements, tagWriters)
+  private val recovery = new CassandraTagRecovery(system, session, pluginSettings, tagStatements, tagWriters)
 
   /**
    * Scans the given tag and deletes all events for the provided persistence ids.
@@ -150,7 +147,7 @@ final class Reconciliation(system: ActorSystem) extends Extension {
    * As this has to scan the tag views table for the given tag it is more efficient to
    */
   def deleteTagViewForPersistenceIds(persistenceId: Set[String], tag: String): Future[Done] =
-    new DeleteTagViewForPersistenceId(persistenceId, tag, system, recSession, settings, queries).execute()
+    new DeleteTagViewForPersistenceId(persistenceId, tag, system, recSession, pluginSettings, queries).execute()
 
   /**
    * Assumes that the tag views table contains no elements for the given persistence ids
@@ -158,7 +155,7 @@ final class Reconciliation(system: ActorSystem) extends Extension {
    * or tag writing has never been enabled
    */
   def rebuildTagViewForPersistenceIds(persistenceId: String): Future[Done] =
-    new BuildTagViewForPersisetceId(persistenceId, system, recovery, settings).reconcile()
+    new BuildTagViewForPersisetceId(persistenceId, system, recovery, pluginSettings).reconcile()
 
   /**
    * Returns all the tags in the journal. This is not an efficient query for Cassandra so it is better
@@ -180,14 +177,4 @@ final class Reconciliation(system: ActorSystem) extends Extension {
    */
   def truncateTagView(): Future[Done] = recSession.truncateAll()
 
-}
-
-/**
- * An extension for reconciling the tag_views table with the messages table
- */
-object Reconciliation extends ExtensionId[Reconciliation] with ExtensionIdProvider {
-  def createExtension(system: ExtendedActorSystem): Reconciliation = new Reconciliation(system)
-  override def lookup(): Reconciliation.type = Reconciliation
-  override def get(system: ActorSystem): Reconciliation = super.get(system)
-  override def get(system: ClassicActorSystemProvider): Reconciliation = super.get(system)
 }
