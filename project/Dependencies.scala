@@ -30,8 +30,6 @@ object Dependencies {
     ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
     "io.netty" % "netty-handler" % OverrideNettyVersion,
     "io.netty" % "netty-all" % OverrideNettyVersion,
-    // Specifying guava dependency because older transitive dependency has security vulnerability
-    "com.google.guava" % "guava" % "27.0.1-jre",
     "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
     "com.typesafe.akka" %% "akka-discovery" % AkkaVersion % Provided,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
