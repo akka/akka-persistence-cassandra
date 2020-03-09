@@ -4,23 +4,36 @@
 
 package akka.persistence.cassandra.cleanup
 
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+
 import akka.actor.ActorRef
 import akka.actor.Props
 import akka.persistence.PersistentActor
 import akka.persistence.SaveSnapshotSuccess
 import akka.persistence.SnapshotOffer
 import akka.persistence.cassandra.CassandraSpec
+import akka.persistence.cassandra.query.firstBucketFormatter
+import akka.persistence.journal.Tagged
+import akka.persistence.query.NoOffset
+import akka.stream.scaladsl.Sink
 import com.typesafe.config.ConfigFactory
 
 object CleanupSpec {
+  val today = LocalDateTime.now(ZoneOffset.UTC)
   val config = ConfigFactory.parseString(s"""
     akka.loglevel = INFO
     akka.persistence.cassandra.cleanup {
       log-progress-every = 2
     }
+    akka.persistence.cassandra.events-by-tag {
+      first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
+      eventual-consistency-delay = 1s
+    }
   """)
 
   case object PersistEvent
+  final case class PersistTaggedEvent(tag: String)
   final case class Ack(sequenceNr: Long)
   case object GetRecoveredState
   final case class RecoveredState(snap: String, events: Seq[String], sequenceNr: Long)
@@ -50,6 +63,11 @@ object CleanupSpec {
         persist(s"evt-$seqNr") { _ =>
           sender() ! Ack(seqNr)
         }
+      case PersistTaggedEvent(tag) =>
+        val seqNr = lastSequenceNr + 1
+        persist(Tagged(s"evt-$seqNr", Set(tag))) { _ =>
+          sender() ! Ack(seqNr)
+        }
       case GetRecoveredState =>
         sender() ! RecoveredState(recoveredSnap, replayedEvents.reverse, lastSequenceNr)
       case Snap =>
@@ -62,7 +80,6 @@ object CleanupSpec {
 }
 
 class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
-
   import CleanupSpec._
 
   "Cassandra cleanup" must {
@@ -126,6 +143,24 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       expectMsg(RecoveredState("", (1 to 8).map(n => s"evt-$n"), 8L))
     }
 
+    "delete tagged events for one persistenceId" in {
+      val pid = nextPid
+      val p = system.actorOf(TestActor.props(pid))
+      (1 to 10).foreach { _ =>
+        p ! PersistTaggedEvent("tag-a")
+        expectMsgType[Ack]
+      }
+
+      system.stop(p)
+
+      queries.currentEventsByTag(tag = "tag-a", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(10)
+
+      val cleanup = new Cleanup(system)
+      cleanup.deleteAllTaggedEvents(pid).futureValue
+
+      queries.currentEventsByTag(tag = "tag-a", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
+    }
+
     "delete all for one persistenceId" in {
       val pid = nextPid
       val p = system.actorOf(TestActor.props(pid))
@@ -136,15 +171,18 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       p ! Snap
       expectMsgType[Ack]
       (1 to 2).foreach { _ =>
-        p ! PersistEvent
+        p ! PersistTaggedEvent("tag-a")
         expectMsgType[Ack]
       }
       p ! Snap
       expectMsgType[Ack]
       (1 to 3).foreach { _ =>
-        p ! PersistEvent
+        p ! PersistTaggedEvent("tag-b")
         expectMsgType[Ack]
       }
+
+      queries.currentEventsByTag(tag = "tag-a", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(2)
+      queries.currentEventsByTag(tag = "tag-b", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(3)
 
       system.stop(p)
 
@@ -154,6 +192,9 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       val p2 = system.actorOf(TestActor.props(pid))
       p2 ! GetRecoveredState
       expectMsg(RecoveredState("", Nil, 0L))
+
+      queries.currentEventsByTag(tag = "tag-a", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
+      queries.currentEventsByTag(tag = "tag-b", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
     }
 
     "delete all for several persistenceId" in {
@@ -164,11 +205,11 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       val pB = system.actorOf(TestActor.props(pidB))
       val pC = system.actorOf(TestActor.props(pidC))
       (1 to 3).foreach { i =>
-        pA ! PersistEvent
+        pA ! PersistTaggedEvent("tag-a")
         expectMsgType[Ack]
         pB ! PersistEvent
         expectMsgType[Ack]
-        pC ! PersistEvent
+        pC ! PersistTaggedEvent("tag-c")
         expectMsgType[Ack]
       }
       pA ! Snap
@@ -176,7 +217,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       pB ! Snap
       expectMsgType[Ack]
       (1 to 2).foreach { _ =>
-        pA ! PersistEvent
+        pA ! PersistTaggedEvent("tag-a")
         expectMsgType[Ack]
         pB ! PersistEvent
         expectMsgType[Ack]
@@ -184,11 +225,14 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       pA ! Snap
       expectMsgType[Ack]
       (1 to 3).foreach { _ =>
-        pA ! PersistEvent
+        pA ! PersistTaggedEvent("tag-a")
         expectMsgType[Ack]
-        pC ! PersistEvent
+        pC ! PersistTaggedEvent("tag-c")
         expectMsgType[Ack]
       }
+
+      queries.currentEventsByTag(tag = "tag-a", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(8)
+      queries.currentEventsByTag(tag = "tag-c", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(6)
 
       system.stop(pA)
 
@@ -206,6 +250,9 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       val pC2 = system.actorOf(TestActor.props(pidC))
       pC2 ! GetRecoveredState
       expectMsg(RecoveredState("", Nil, 0L))
+
+      queries.currentEventsByTag(tag = "tag-a", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
+      queries.currentEventsByTag(tag = "tag-c", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
     }
 
     "delete all for many persistenceId, many events, many snapshots" in {

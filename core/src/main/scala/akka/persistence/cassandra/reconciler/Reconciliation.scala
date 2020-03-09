@@ -24,11 +24,13 @@ import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import java.util.UUID
 import java.lang.{ Long => JLong }
+import java.util.concurrent.atomic.AtomicInteger
+
+import akka.actor.ExtendedActorSystem
 
 /**
  * Database actions for reconciliation
@@ -105,6 +107,13 @@ final private[akka] class ReconciliationSession(session: CassandraSession, state
 }
 
 /**
+ * INTERNAL API
+ */
+@InternalApi private[akka] object Reconciliation {
+  private val uniqueActorNameCounter = new AtomicInteger(0)
+}
+
+/**
  * For reconciling with tag_views table with the messages table. Can be used to fix data issues causes
  * by split brains or persistence ids running in multiple locations.
  *
@@ -134,9 +143,11 @@ final class Reconciliation(system: ActorSystem, settings: ReconciliationSettings
   private val tagWriterSession: TagWriters.TagWritersSession =
     new TagWritersSession(session, settings.writeProfile, settings.readProfile, tagStatements)
   private val tagWriters =
-    system.actorOf(
-      TagWriters.props(pluginSettings.eventsByTagSettings.tagWriterSettings, tagWriterSession),
-      "reconciliation-tag-writers")
+    system
+      .asInstanceOf[ExtendedActorSystem]
+      .systemActorOf(
+        TagWriters.props(pluginSettings.eventsByTagSettings.tagWriterSettings, tagWriterSession),
+        s"reconciliation-tag-writers-${Reconciliation.uniqueActorNameCounter.incrementAndGet()}")
   private val recovery = new CassandraTagRecovery(system, session, pluginSettings, tagStatements, tagWriters)
 
   /**

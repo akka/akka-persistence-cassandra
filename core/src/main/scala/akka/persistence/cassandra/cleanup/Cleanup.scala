@@ -16,6 +16,8 @@ import akka.event.Logging
 import akka.pattern.ask
 import akka.persistence.Persistence
 import akka.persistence.cassandra.journal.CassandraJournal
+import akka.persistence.cassandra.reconciler.Reconciliation
+import akka.persistence.cassandra.reconciler.ReconciliationSettings
 import akka.persistence.cassandra.snapshot.CassandraSnapshotStore
 import akka.util.Timeout
 
@@ -43,21 +45,30 @@ final class Cleanup(system: ActorSystem, settings: CleanupSettings) {
 
   private val log = Logging(system, getClass)
   private val journal = Persistence(system).journalFor(pluginLocation + ".journal")
-  private val snapshotStore = Persistence(system).snapshotStoreFor(pluginLocation + ".snapshot")
+  private lazy val snapshotStore = Persistence(system).snapshotStoreFor(pluginLocation + ".snapshot")
+  private lazy val tagViewsReconciliation = new Reconciliation(
+    system,
+    new ReconciliationSettings(system.settings.config.getConfig(pluginLocation + ".reconciler")))
   private implicit val askTimeout: Timeout = operationTimeout
 
   /**
-   * Delete everything related to the given list of `persistenceIds`. All events and snapshots are deleted.
+   * Delete everything related to the given list of `persistenceIds`. All events, tagged events, and
+   * snapshots are deleted.
    */
   def deleteAll(persistenceIds: immutable.Seq[String], neverUsePersistenceIdAgain: Boolean): Future[Done] = {
     foreach(persistenceIds, "deleteAll", pid => deleteAll(pid, neverUsePersistenceIdAgain))
   }
 
   /**
-   * Delete everything related to one single `persistenceId`. All events and snapshots are deleted.
+   * Delete everything related to one single `persistenceId`. All events,  tagged events, and
+   * snapshots are deleted.
    */
   def deleteAll(persistenceId: String, neverUsePersistenceIdAgain: Boolean): Future[Done] = {
-    deleteAllEvents(persistenceId, neverUsePersistenceIdAgain).flatMap(_ => deleteAllSnapshots(persistenceId))
+    for {
+      _ <- deleteAllEvents(persistenceId, neverUsePersistenceIdAgain)
+      _ <- deleteAllSnapshots(persistenceId)
+      _ <- deleteAllTaggedEvents(persistenceId)
+    } yield Done
   }
 
   /**
@@ -72,6 +83,27 @@ final class Cleanup(system: ActorSystem, settings: CleanupSettings) {
    */
   def deleteAllEvents(persistenceId: String, neverUsePersistenceIdAgain: Boolean): Future[Done] = {
     (journal ? CassandraJournal.DeleteAllEvents(persistenceId, neverUsePersistenceIdAgain)).mapTo[Done]
+  }
+
+  /**
+   * Delete all events from `tag_views` table related to the given list of `persistenceIds`.
+   * Events in `messages` (journal) table are not deleted and snapshots are not deleted.
+   */
+  def deleteAllTaggedEvents(persistenceIds: immutable.Seq[String]): Future[Done] = {
+    foreach(persistenceIds, "deleteAllEvents", pid => deleteAllTaggedEvents(pid))
+  }
+
+  /**
+   * Delete all events from `tag_views` table related to to one single `persistenceId`.
+   * Events in `messages` (journal) table are not deleted and snapshots are not deleted.
+   */
+  def deleteAllTaggedEvents(persistenceId: String): Future[Done] = {
+    tagViewsReconciliation
+      .tagsForPersistenceId(persistenceId)
+      .flatMap { tags =>
+        Future.sequence(tags.map(tag => tagViewsReconciliation.deleteTagViewForPersistenceIds(Set(persistenceId), tag)))
+      }
+      .map(_ => Done)
   }
 
   /**
