@@ -9,8 +9,12 @@ object Dependencies {
   val AkkaVersion = System.getProperty("override.akka.version", "2.6.3")
   val AkkaVersionInDocs = System.getProperty("override.akka.version", "2.6")
   val CassandraVersionInDocs = "4.0"
-  val DriverVersion = "4.3.0"
-  val DriverVersionInDocs = "4.3"
+  val DriverVersion = "4.5.0"
+  val DriverVersionInDocs = DriverVersion.take(3)
+
+  // Performance dropped by ~40% when the driver upgraded to latest netty version
+  // override for now
+  val OverrideNettyVersion = "4.1.39.Final"
 
   val AlpakkaVersion = "2.0.0-M3"
   val AlpakkaVersionInDocs = "2.0"
@@ -24,6 +28,10 @@ object Dependencies {
 
   val akkaCassandraSessionDependencies = Seq(
     ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
+    "io.netty" % "netty-handler" % OverrideNettyVersion,
+    "io.netty" % "netty-all" % OverrideNettyVersion,
+    // Specifying guava dependency because older transitive dependency has security vulnerability
+    "com.google.guava" % "guava" % "27.0.1-jre",
     "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
     "com.typesafe.akka" %% "akka-discovery" % AkkaVersion % Provided,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
@@ -34,7 +42,6 @@ object Dependencies {
     Logback % Test)
 
   val reconcilerDependencies = Seq(
-    ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
     "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
     "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test)
 
@@ -50,9 +57,6 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-cluster-sharding")
 
   val akkaPersistenceCassandraDependencies = Seq(
-      ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
-      // Specifying guava dependency because older transitive dependency has security vulnerability
-      "com.google.guava" % "guava" % "27.0.1-jre",
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
