@@ -379,7 +379,7 @@ abstract class AbstractEventsByTagMigrationSpec
 
   override protected def beforeAll(): Unit = {
     if (!CassandraSessionRegistry(system)
-          .sessionFor("alpakka.cassandra", system.dispatcher)
+          .sessionFor("akka.persistence.cassandra", system.dispatcher)
           .serverMetaData
           .futureValue
           .isVersion2) {
