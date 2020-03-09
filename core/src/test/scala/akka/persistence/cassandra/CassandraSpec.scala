@@ -92,7 +92,7 @@ object CassandraSpec {
  * Picks a free port for Cassandra before starting the ActorSystem
  */
 abstract class CassandraSpec(
-    config: Config,
+    config: Config = CassandraLifecycle.config,
     val journalName: String = getCallerName(getClass),
     val snapshotName: String = getCallerName(getClass),
     dumpRowsOnFailure: Boolean = true)
