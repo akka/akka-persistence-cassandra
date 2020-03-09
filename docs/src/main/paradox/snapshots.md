@@ -12,6 +12,10 @@ To activate the snapshot-store plugin, add the following line to your Akka `appl
 
 This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
 
+### Limitations
+
+The snapshot is stored in a single row so the maximum size of a serialized snapshot is the Cassandra configured
+[`max_mutation_size_in_kb`](http://cassandra.apache.org/doc/latest/faq/index.html#can-large-blob) which is 16MB by default.
 
 ### Keyspace and table definitions
 

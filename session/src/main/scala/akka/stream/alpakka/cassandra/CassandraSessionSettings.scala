@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.stream.alpakka.cassandra
@@ -55,9 +55,18 @@ class CassandraSessionSettings private (
 
 object CassandraSessionSettings {
 
+  val ConfigPath = "alpakka.cassandra"
+
+  def apply(): CassandraSessionSettings = apply(ConfigPath)
+
   def apply(configPath: String, init: CqlSession => Future[Done]): CassandraSessionSettings =
     new CassandraSessionSettings(configPath, init = Some(init))
 
   def apply(configPath: String): CassandraSessionSettings = new CassandraSessionSettings(configPath)
+
+  /** Java API */
+  def create(): CassandraSessionSettings = apply(ConfigPath)
+
+  /** Java API */
   def create(configPath: String): CassandraSessionSettings = apply(configPath)
 }

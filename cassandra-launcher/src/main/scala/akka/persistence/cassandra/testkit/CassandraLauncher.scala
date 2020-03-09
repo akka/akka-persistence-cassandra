@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.persistence.cassandra.testkit
@@ -273,11 +273,16 @@ object CassandraLauncher {
     // We wait for Cassandra to start listening before we return, since running in non fork mode will also not
     // return until Cassandra has started listening.
     waitForCassandraToListen(host, port)
-
     cassandraDaemon = Some(new Closeable {
       override def close(): Unit = {
         process.destroy()
-        Runtime.getRuntime.removeShutdownHook(shutdownHook)
+        try {
+          Runtime.getRuntime.removeShutdownHook(shutdownHook)
+        } catch {
+          case _: IllegalStateException =>
+          // JVM is already shutting down
+        }
+
         if (process.waitFor(ForcedShutdownTimeout.toMillis, TimeUnit.MILLISECONDS)) {
           val exitStatus = process.exitValue()
           // Java processes killed with SIGTERM may exit with a status of 143
@@ -335,7 +340,7 @@ object CassandraLauncher {
         new Socket(host, port).close()
         false
       } catch {
-        case ioe: IOException if deadline.hasTimeLeft() =>
+        case _: IOException if deadline.hasTimeLeft() =>
           Thread.sleep(AwaitListenPoll.toMillis)
           true
         case ioe: IOException =>

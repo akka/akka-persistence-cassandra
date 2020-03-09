@@ -1,8 +1,8 @@
+import bintray.BintrayPlugin.autoImport._
+import com.lightbend.paradox.projectinfo.ParadoxProjectInfoPluginKeys._
 import de.heikoseeberger.sbtheader.HeaderPlugin.autoImport._
 import de.heikoseeberger.sbtheader._
 import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
-import sbtdynver.DynVerPlugin.autoImport._
-import bintray.BintrayPlugin.autoImport._
 import sbt.Keys._
 import sbt._
 import sbt.plugins.JvmPlugin
@@ -34,7 +34,7 @@ object Common extends AutoPlugin {
       description := "A Cassandra plugin for Akka Persistence.")
 
   override lazy val projectSettings = Seq(
-    //      projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
+    projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
     crossVersion := CrossVersion.binary,
     crossScalaVersions := Dependencies.ScalaVersions,
     scalaVersion := Dependencies.Scala212,
@@ -58,7 +58,7 @@ object Common extends AutoPlugin {
     scalafmtOnCompile := true,
     autoAPIMappings := true,
     headerLicense := Some(
-        HeaderLicense.Custom("""Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>""")),
+        HeaderLicense.Custom("""Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>""")),
     Test / logBuffered := System.getProperty("akka.logBufferedTests", "false").toBoolean,
     // show full stack traces and test case durations
     Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
