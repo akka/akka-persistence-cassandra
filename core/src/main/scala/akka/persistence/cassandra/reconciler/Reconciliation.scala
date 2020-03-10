@@ -132,7 +132,7 @@ final class Reconciliation(system: ActorSystem, settings: ReconciliationSettings
 
   import system.dispatcher
   private implicit val sys = system
-  private val session = CassandraSessionRegistry(system).sessionFor(settings.pluginLocation, system.dispatcher)
+  private val session = CassandraSessionRegistry(system).sessionFor(settings.pluginLocation)
   private val pluginSettings = PluginSettings(system, system.settings.config.getConfig(settings.pluginLocation))
   private val queries: CassandraReadJournal =
     PersistenceQuery(system).readJournalFor[CassandraReadJournal](settings.pluginLocation + ".query")

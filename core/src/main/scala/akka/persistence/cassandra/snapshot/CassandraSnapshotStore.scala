@@ -62,7 +62,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
 
   private val someMaxLoadAttempts = Some(snapshotSettings.maxLoadAttempts)
   private val session: CassandraSession = CassandraSessionRegistry(context.system)
-    .sessionFor(sharedConfigPath, context.dispatcher, ses => statements.executeAllCreateKeyspaceAndTables(ses))
+    .sessionFor(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses))
 
   private def preparedWriteSnapshot =
     session.prepare(writeSnapshot(withMeta = false))

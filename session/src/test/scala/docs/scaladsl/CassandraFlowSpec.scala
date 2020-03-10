@@ -23,10 +23,10 @@ class CassandraFlowSpec extends CassandraSpecBase(ActorSystem("CassandraFlowSpec
   val sessionSettings = CassandraSessionSettings("alpakka.cassandra")
   val data = 1 until 103
 
-  override val lifecycleSession: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+  override val lifecycleSession: CassandraSession = sessionRegistry.sessionFor(sessionSettings)
 
   "CassandraFlow" must {
-    implicit val session: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+    implicit val session: CassandraSession = sessionRegistry.sessionFor(sessionSettings)
 
     "update with simple prepared statement" in assertAllStagesStopped {
       val table = createTableName()

@@ -52,11 +52,11 @@ final class CassandraSession(
 
   private val _underlyingSession: Future[CqlSession] = sessionProvider
     .connect()
-    .flatMap { session =>
-      session.getMetrics.ifPresent(metrics => {
+    .flatMap { cqlSession =>
+      cqlSession.getMetrics.ifPresent(metrics => {
         CassandraMetricsRegistry(system).addMetrics(metricsCategory, metrics.getRegistry)
       })
-      init(session).map(_ => session)
+      init(cqlSession).map(_ => cqlSession)
     }
     .recover {
       case NonFatal(e) =>
@@ -122,8 +122,8 @@ final class CassandraSession(
    * The returned `Future` is completed when the command is done, or if the statement fails.
    */
   def executeDDL(stmt: String): Future[Done] =
-    underlying().flatMap { session =>
-      session.executeAsync(stmt).toScala.map(_ => Done)
+    underlying().flatMap { cqlSession =>
+      cqlSession.executeAsync(stmt).toScala.map(_ => Done)
     }
 
   /**
@@ -140,8 +140,8 @@ final class CassandraSession(
    * `executeWrite` or `select` multiple times.
    */
   def prepare(stmt: String): Future[PreparedStatement] =
-    underlying().flatMap { session =>
-      session.prepareAsync(stmt).toScala
+    underlying().flatMap { cqlSession =>
+      cqlSession.prepareAsync(stmt).toScala
     }
 
   /**
@@ -172,8 +172,8 @@ final class CassandraSession(
    * successfully executed, or if it fails.
    */
   def executeWrite(stmt: Statement[_]): Future[Done] = {
-    underlying().flatMap { s =>
-      s.executeAsync(stmt).toScala.map(_ => Done)
+    underlying().flatMap { cqlSession =>
+      cqlSession.executeAsync(stmt).toScala.map(_ => Done)
     }
   }
 

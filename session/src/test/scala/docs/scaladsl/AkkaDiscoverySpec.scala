@@ -18,12 +18,12 @@ class AkkaDiscoverySpec extends CassandraSpecBase(ActorSystem("AkkaDiscoverySpec
   val sessionSettings = CassandraSessionSettings("with-akka-discovery")
   val data = 1 until 103
 
-  override val lifecycleSession: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+  override val lifecycleSession: CassandraSession = sessionRegistry.sessionFor(sessionSettings)
 
   "Service discovery" must {
 
     "connect to Cassandra" in assertAllStagesStopped {
-      val session = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+      val session = sessionRegistry.sessionFor(sessionSettings)
       val table = createTableName()
       withSchemaMetadataDisabled {
         for {
@@ -42,7 +42,7 @@ class AkkaDiscoverySpec extends CassandraSpecBase(ActorSystem("AkkaDiscoverySpec
 
     "fail when the contact point address is invalid" in assertAllStagesStopped {
       val sessionSettings = CassandraSessionSettings("without-akka-discovery")
-      val session = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+      val session = sessionRegistry.sessionFor(sessionSettings)
       val result = session.select(s"SELECT * FROM fsdfsd").runWith(Sink.head)
       val exception = result.failed.futureValue
       exception mustBe a[java.util.concurrent.CompletionException]
@@ -51,7 +51,7 @@ class AkkaDiscoverySpec extends CassandraSpecBase(ActorSystem("AkkaDiscoverySpec
 
     "fail when the port is missing" in assertAllStagesStopped {
       val sessionSettings = CassandraSessionSettings("with-akka-discovery-no-port")
-      val session = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+      val session = sessionRegistry.sessionFor(sessionSettings)
       val result = session.select(s"SELECT * FROM fsdfsd").runWith(Sink.head)
       val exception = result.failed.futureValue
       exception mustBe a[akka.ConfigurationException]
@@ -60,7 +60,7 @@ class AkkaDiscoverySpec extends CassandraSpecBase(ActorSystem("AkkaDiscoverySpec
     "show referencing config in docs" in {
       // #discovery
       val sessionSettings = CassandraSessionSettings("example-with-akka-discovery")
-      implicit val session = CassandraSessionRegistry.get(system).sessionFor(sessionSettings, system.dispatcher)
+      implicit val session = CassandraSessionRegistry.get(system).sessionFor(sessionSettings)
       // #discovery
       session.close(system.dispatcher)
     }
