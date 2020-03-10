@@ -63,7 +63,7 @@ a single `persistence_id`.
 in each Cassandra partition. It is a target as `persistAll` calls will have all the events in the same partition
 even if it will exceed the target partition size to ensure atomicity.
 
-It is not possible to change the value once you have data so consider if the default of 50000 is right for your
+It is not possible to change the value once you have data so consider if the default of 500000 is right for your
 application before deploying to production. Multiply the value by your expected serialized event size to roughly work
 out how large the Cassandra partition will grow to. See [wide partitions in
 Cassandra](https://thelastpickle.com/blog/2019/01/11/wide-partitions-cassandra-3-11.html) for a summary of how large a
@@ -153,3 +153,30 @@ There are multiple tables required. These need to be created before starting you
 For local testing you can enable `cassnadra-plugin.journal.table-autocreate`
 
 @@snip [journal-tables](/target/journal-tables.txt) { #journal-tables } 
+
+#### Messages table
+
+Descriptions of the important columns in the messages table:
+
+| Column            | Description                                                                                                               |
+|-------------------|---------------------------------------------------------------------------------------------------------------------------|
+| persistence_id    | The persistence id                                                                                                        |
+| partition_nr      | Artificial partition key to ensure partitions do not grow too large                                                       |
+| sequence_nr       | Sequence number of the event                                                                                              |
+| timestamp         | A type 1 UUID for ordering events in the events by tag query                                                              |
+| timebucket        | The time bucket to partition the events by tag query. Only in this table as events by tag used to use a materialized view |
+| writer_uuid       | A UUID for the actor system that wrote the event. Used to detect multiple writers for the same persistence id             |
+| ser_id            | The serialization id of the user payload                                                                                  |
+| ser_manifest      | The serialization manifest of the user payload                                                                            |
+| event_manifest    | The manifest used by event adapters                                                                                                                          |
+| event             | The serialized user payload                                                                                       |
+
+Old columns, no longer needed but may be in your schema if you have used older versions of the plugin and migrated. See
+@ref[the  migration guide](./migrations.md) for when these have been removed.
+
+| Column  | Description                                                                                                                             |
+|---------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| used    | A static column to record that the artificial partition has been used to detected that all events in a partition have been deleted      |
+| message | Pre 0.6 serialized the PersistentRepr (an internal Akka type) into this column. Newer versions use event and serialize the user payload |
+|         |                                                                                                                                         |
+

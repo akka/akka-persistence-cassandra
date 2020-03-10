@@ -16,6 +16,7 @@ import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.matchers.should.Matchers
+import scala.concurrent.duration._
 
 object CassandraLoadTypedSpec {
 
@@ -105,7 +106,7 @@ object CassandraLoadTypedSpec {
 
 }
 
-class CassandraLoadTypedSpec extends CassandraSpec with AnyWordSpecLike with Matchers {
+class CassandraLoadTypedSpec extends CassandraSpec(dumpRowsOnFailure = false) with AnyWordSpecLike with Matchers {
 
   import CassandraLoadTypedSpec._
 
@@ -130,7 +131,7 @@ class CassandraLoadTypedSpec extends CassandraSpec with AnyWordSpecLike with Mat
     }
 
     processor ! "stats"
-    val throughput = probe.expectMessageType[String]
+    val throughput = probe.expectMessageType[String](5.seconds)
     println(throughput)
   }
 
