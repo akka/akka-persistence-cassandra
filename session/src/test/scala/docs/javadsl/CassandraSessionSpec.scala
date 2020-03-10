@@ -65,17 +65,17 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
 
   val sessionSettings: CassandraSessionSettings = CassandraSessionSettings("alpakka.cassandra")
   override val lifecycleSession: scaladsl.CassandraSession =
-    sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+    sessionRegistry.sessionFor(sessionSettings)
 
   // testing javadsl to prove delegation works
-  lazy val session: CassandraSession = javadslSessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+  lazy val session: CassandraSession = javadslSessionRegistry.sessionFor(sessionSettings)
 
   def await[T](cs: CompletionStage[T]): T = cs.toScala.futureValue
 
   "session" must {
 
     "stream the result of a Cassandra statement with one page" in assertAllStagesStopped {
-      val session = javadslSessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+      val session = javadslSessionRegistry.sessionFor(sessionSettings)
       val table = createTableName()
       withSchemaMetadataDisabled {
         for {

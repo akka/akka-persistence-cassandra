@@ -26,9 +26,9 @@ final class CassandraSessionPerformanceSpec extends CassandraSpecBase(ActorSyste
 
   val sessionSettings: CassandraSessionSettings = CassandraSessionSettings()
   override val lifecycleSession: CassandraSession =
-    sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+    sessionRegistry.sessionFor(sessionSettings)
 
-  lazy val session: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+  lazy val session: CassandraSession = sessionRegistry.sessionFor(sessionSettings)
 
   // only using one partition in this test
   private val partitionId = 1L

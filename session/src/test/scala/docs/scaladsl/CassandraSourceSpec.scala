@@ -23,7 +23,7 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
   val data = 1 until 103
   def intTable = keyspaceName + ".idtable"
 
-  override val lifecycleSession: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+  override val lifecycleSession: CassandraSession = sessionRegistry.sessionFor(sessionSettings)
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -43,7 +43,7 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
       // #init-session
       val sessionSettings = CassandraSessionSettings()
       implicit val cassandraSession: CassandraSession =
-        CassandraSessionRegistry.get(system).sessionFor(sessionSettings, system.dispatcher)
+        CassandraSessionRegistry.get(system).sessionFor(sessionSettings)
 
       val version: Future[String] =
         cassandraSession
@@ -56,7 +56,7 @@ class CassandraSourceSpec extends CassandraSpecBase(ActorSystem("CassandraSource
   }
 
   "CassandraSourceSpec" must {
-    implicit val session: CassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher)
+    implicit val session: CassandraSession = sessionRegistry.sessionFor(sessionSettings)
 
     "stream the result of a Cassandra statement with one page" in assertAllStagesStopped {
       // #cql
