@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, PluginSettings }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
+import akka.persistence.cassandra.RequiresCassandraThree
 
 object CassandraCompactionStrategySpec {
   lazy val config = ConfigFactory.parseString(s"""
@@ -46,7 +47,7 @@ class CassandraCompactionStrategySpec
       compactionStrategy.compactionWindowUnit shouldEqual TimeUnit.DAYS
     }
 
-    "successfully create CQL from TimeWindowCompactionStrategy" in {
+    "successfully create CQL from TimeWindowCompactionStrategy" taggedAs (RequiresCassandraThree) in {
       val twConfig = ConfigFactory.parseString("""journal.table-compaction-strategy {
           | class = "TimeWindowCompactionStrategy"
           | compaction_window_size = 1

@@ -133,16 +133,5 @@ final class CassandraSessionSpec extends CassandraSpecBase(ActorSystem("Cassandr
       val row = await(session.selectOne(s"SELECT count FROM $dataTable WHERE partition = ? and key = ?", "A", "x"))
       row.asScala mustBe empty
     }
-
-    "create indexes" in {
-      withSchemaMetadataDisabled(lifecycleSession.executeDDL(
-        s"CREATE INDEX IF NOT EXISTS count_idx ON $dataTable(count)")).futureValue mustBe Done
-      val row =
-        await(
-          session.selectOne("SELECT * FROM system_schema.indexes WHERE table_name = ? ALLOW FILTERING", dataTableName))
-      row.asScala.map(index => index.getString("table_name") -> index.getString("index_name")) mustBe Some(
-        dataTableName -> "count_idx")
-    }
-
   }
 }

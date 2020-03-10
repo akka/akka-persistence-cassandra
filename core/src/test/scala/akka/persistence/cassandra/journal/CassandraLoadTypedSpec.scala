@@ -131,7 +131,8 @@ class CassandraLoadTypedSpec extends CassandraSpec(dumpRowsOnFailure = false) wi
     }
 
     processor ! "stats"
-    val throughput = probe.expectMessageType[String](5.seconds)
+    // takes a bit longer on c* 2.2
+    val throughput = probe.expectMessageType[String](10.seconds)
     println(throughput)
   }
 

@@ -30,12 +30,16 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 import scala.util.control.NonFatal
 
 import akka.stream.SystemMaterializer
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 
 /**
  */
 object EventsByTagMigrationSpec {
 
   val config = ConfigFactory.parseString(s"""
+                                            
+      # use a separate session for setup as not to initialize the session during setup
+      test-setup-session = $${akka.persistence.cassandra} 
   
        // disable normal failure logging as tall these tests are related 
        // so if one fails need the logs for all
@@ -64,7 +68,7 @@ class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigra
     val pidOne = "pOne"
     val pidTwo = "pTwo"
 
-    "support migrating a subset of persistenceIds" in {
+    "support migrating a subset of persistenceIds" taggedAs (RequiresCassandraThree) in {
       writeOldTestEventWithTags(PersistentRepr("e-1", 1, pidOne), Set("blue"))
       writeOldTestEventWithTags(PersistentRepr("e-2", 2, pidOne), Set("blue"))
       writeOldTestEventWithTags(PersistentRepr("f-1", 1, pidTwo), Set("blue"))
@@ -108,7 +112,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     val pidWithSnapshot = "pidSnapshot"
     val pidExcluded = "pidExcluded"
 
-    "have some existing tagged messages" in {
+    "have some existing tagged messages" taggedAs (RequiresCassandraThree) in {
       // this one uses the 0.7 schema, soo old.
       writeOldTestEventInMessagesColumn(PersistentRepr("e-1", 1L, pidOne), Set("blue", "green", "orange"))
 
@@ -130,7 +134,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       writeOldTestEventWithTags(PersistentRepr("i-1", 1L, pidExcluded), Set("bad-tag"))
     }
 
-    "allow creation of the new tags view table" in {
+    "allow creation of the new tags view table" taggedAs (RequiresCassandraThree) in {
       migrator.createTables().futureValue shouldEqual Done
     }
 
@@ -138,7 +142,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       migrator.migrateToTagViews(filter = _ != pidExcluded).futureValue shouldEqual Done
     }
 
-    "be idempotent so it can be restarted" in {
+    "be idempotent so it can be restarted" taggedAs (RequiresCassandraThree) in {
       // add some more events to be picked up
       writeOldTestEventWithTags(PersistentRepr("f-1", 1L, pidTwo), Set("green"))
       writeOldTestEventWithTags(PersistentRepr("f-2", 2L, pidTwo), Set("blue"))
@@ -148,21 +152,21 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
         Some("This is the best event ever"))
     }
 
-    "allow a second migration to resume from where the last one got to" in {
+    "allow a second migration to resume from where the last one got to" taggedAs (RequiresCassandraThree) in {
       migrator.migrateToTagViews(filter = _ != pidExcluded).futureValue shouldEqual Done
     }
 
-    "migrate events missed during the large migration as part of actor recovery" in {
+    "migrate events missed during the large migration as part of actor recovery" taggedAs (RequiresCassandraThree) in {
       // these events mimic the old version still running and persisting events
       writeOldTestEventWithTags(PersistentRepr("f-3", 3L, pidTwo), Set("green"))
       writeOldTestEventWithTags(PersistentRepr("f-4", 4L, pidTwo), Set("blue"))
     }
 
-    "allow adding of the new tags column" in {
+    "allow adding of the new tags column" taggedAs (RequiresCassandraThree) in {
       migrator.addTagsColumn().futureValue shouldEqual Done
     }
 
-    "work with the current implementation" in {
+    "work with the current implementation" taggedAs (RequiresCassandraThree) in {
       val blueSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("blue", NoOffset)
       val blueProbe = blueSrc.runWith(TestSink.probe[Any])
       blueProbe.request(5)
@@ -212,7 +216,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       excludedProbe.cancel()
     }
 
-    "see events missed by migration if the persistent actor is started" in {
+    "see events missed by migration if the persistent actor is started" taggedAs (RequiresCassandraThree) in {
       val probe = TestProbe()
       systemTwo.actorOf(TestTaggingActor.props(pidTwo, probe = Some(probe.ref)))
       probe.expectMsg(RecoveryCompleted)
@@ -238,19 +242,19 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
     }
     // This will be left as a manual step for the user as it stops
     // rolling back to the old version
-    "allow dropping of the materialized view" in {
+    "allow dropping of the materialized view" taggedAs (RequiresCassandraThree) in {
       system.log.info("Dropping old materialzied view")
       cluster.execute(SimpleStatement.newInstance(s"DROP MATERIALIZED VIEW $eventsByTagViewName"))
       system.log.info("Dropped old materialzied view")
     }
 
-    "have a peek in the messages table" in {
+    "have a peek in the messages table" taggedAs (RequiresCassandraThree) in {
       val row = cluster.execute(SimpleStatement.newInstance(s"select * from ${messagesTableName} limit 1")).one()
       system.log.debug("New messages table looks like: {}", row)
       system.log.debug("{}", row.getColumnDefinitions)
     }
 
-    "be able to add tags to existing pids" in {
+    "be able to add tags to existing pids" taggedAs (RequiresCassandraThree) in {
       // we need a new actor system for this as the old one will have prepared the statements without
       // the tags column existing
       val pidOnePA = systemTwo.actorOf(TestTaggingActor.props(pidOne, Set("blue", "yellow")))
@@ -279,13 +283,13 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
 
     // Again a manual step, leaving them is only wasting disk space
     // the new version will work with these columns still there
-    "allow dropping of tag columns" in {
+    "allow dropping of tag columns" taggedAs (RequiresCassandraThree) in {
       cluster.execute(s"ALTER TABLE ${messagesTableName} DROP tag1")
       cluster.execute(s"ALTER TABLE ${messagesTableName} DROP tag2")
       cluster.execute(s"ALTER TABLE ${messagesTableName} DROP tag3")
     }
 
-    "still work after dropping the tag columns" in {
+    "still work after dropping the tag columns" taggedAs (RequiresCassandraThree) in {
       val pidTwoPA = systemThree.actorOf(TestTaggingActor.props(pidTwo, Set("orange")))
       pidTwoPA ! "new-event-1"
       expectMsg(Ack)
@@ -377,13 +381,18 @@ abstract class AbstractEventsByTagMigrationSpec
     PersistenceQuery(systemThree).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    system.log.debug("Creating old tables, first dropping {}", messagesTableName)
-    // Drop the messages table as we want to start with the old one
-    cluster.execute(s"drop table $messagesTableName")
-    cluster.execute(oldMessagesTable)
-    cluster.execute(oldMateterializedView)
-    system.log.debug("Old tables created")
+    // this uses the alpakka connection, not the journal one as otherwise
+    if (!CassandraSessionRegistry(system).sessionFor("test-setup-session").serverMetaData.futureValue.isVersion2) {
+      println("Creating old tables")
+      super.beforeAll()
+      system.log.debug("Creating old tables, first dropping {}", messagesTableName)
+      // Drop the messages table as we want to start with the old one
+      cluster.execute(s"drop table $messagesTableName")
+      cluster.execute(oldMessagesTable)
+      cluster.execute(oldMateterializedView)
+      system.log.debug("Old tables created")
+    }
+
   }
 
   private lazy val serialization = SerializationExtension(system)
