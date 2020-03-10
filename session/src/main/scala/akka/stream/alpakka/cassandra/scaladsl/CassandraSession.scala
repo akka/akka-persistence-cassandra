@@ -4,38 +4,21 @@
 
 package akka.stream.alpakka.cassandra.scaladsl
 
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import akka.Done
-import akka.NotUsed
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
+import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
 import akka.stream.ActorMaterializer
-import akka.stream.Attributes
-import akka.stream.Outlet
-import akka.stream.SourceShape
-import akka.stream.scaladsl.Sink
-import akka.stream.scaladsl.Source
-import akka.stream.stage.AsyncCallback
-import akka.stream.stage.GraphStage
-import akka.stream.stage.GraphStageLogic
-import akka.stream.stage.OutHandler
-import com.datastax.oss.driver.api.core.cql.BatchStatement
-import com.datastax.oss.driver.api.core.cql.BoundStatement
-import com.datastax.oss.driver.api.core.cql.PreparedStatement
-import com.datastax.oss.driver.api.core.cql.Row
-import com.datastax.oss.driver.api.core.cql.Statement
-import akka.annotation.InternalApi
-import akka.stream.alpakka.cassandra.{ CassandraMetricsRegistry, CqlSessionProvider }
-import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.driver.api.core.cql.AsyncResultSet
-
-import scala.compat.java8.FutureConverters._
-import akka.stream.alpakka.cassandra.CassandraServerMetaData
+import akka.stream.alpakka.cassandra.{ CassandraMetricsRegistry, CassandraServerMetaData, CqlSessionProvider }
+import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.OptionVal
+import akka.{ Done, NotUsed }
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql._
 import com.datastax.oss.driver.api.core.servererrors.InvalidQueryException
 
+import scala.collection.immutable
+import scala.compat.java8.FutureConverters._
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.control.NonFatal
 
 /**
@@ -230,7 +213,13 @@ final class CassandraSession(
    * this `Source` and then `run` the stream.
    */
   def select(stmt: Statement[_]): Source[Row, NotUsed] = {
-    Source.fromGraph(new SelectSource(stmt))
+    Source
+      .futureSource {
+        underlying().map { cqlSession =>
+          Source.fromPublisher(cqlSession.executeReactive(stmt))
+        }
+      }
+      .mapMaterializedValue(_ => NotUsed)
   }
 
   /**
@@ -247,7 +236,10 @@ final class CassandraSession(
   def select(stmt: Future[Statement[_]]): Source[Row, NotUsed] = {
     Source
       .futureSource {
-        stmt.map(s => Source.fromGraph(new SelectSource(s)))
+        underlying().flatMap(cqlSession => stmt.map(cqlSession -> _)).map {
+          case (cqlSession, stmtValue) =>
+            Source.fromPublisher(cqlSession.executeReactive(stmtValue))
+        }
       }
       .mapMaterializedValue(_ => NotUsed)
   }
@@ -278,8 +270,7 @@ final class CassandraSession(
    * The returned `Future` is completed with the found rows.
    */
   def selectAll(stmt: Statement[_]): Future[immutable.Seq[Row]] = {
-    Source
-      .fromGraph(new SelectSource(stmt))
+    select(stmt)
       .runWith(Sink.seq)
       .map(_.toVector) // Sink.seq returns Seq, not immutable.Seq (compilation issue in Eclipse)
   }
@@ -330,60 +321,6 @@ final class CassandraSession(
       if (bindValues.isEmpty) ps.bind()
       else ps.bind(bindValues: _*)
     }
-  }
-
-  private class SelectSource(stmt: Statement[_]) extends GraphStage[SourceShape[Row]] {
-
-    private val out: Outlet[Row] = Outlet("rows")
-    override val shape: SourceShape[Row] = SourceShape(out)
-
-    override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
-      new GraphStageLogic(shape) {
-
-        var asyncResult: AsyncCallback[AsyncResultSet] = _
-        var asyncFailure: AsyncCallback[Throwable] = _
-        var resultSet: Option[AsyncResultSet] = None
-
-        override def preStart(): Unit = {
-          asyncResult = getAsyncCallback[AsyncResultSet] { rs =>
-            resultSet = Some(rs)
-            tryPushOne()
-          }
-          asyncFailure = getAsyncCallback { e =>
-            fail(out, e)
-          }
-          val rsFut = underlying().flatMap(_.executeAsync(stmt).toScala)
-          rsFut.failed.foreach { e =>
-            asyncFailure.invoke(e)
-          }
-          rsFut.foreach(asyncResult.invoke)
-        }
-
-        setHandler(out, new OutHandler {
-          override def onPull(): Unit =
-            tryPushOne()
-        })
-
-        def tryPushOne(): Unit =
-          resultSet match {
-            case Some(rs) if isAvailable(out) =>
-              if (rs.remaining() > 0) {
-                push(out, rs.one())
-              } else if (rs.hasMorePages) {
-                val next = rs.fetchNextPage()
-                next.whenComplete { (result, throwable) =>
-                  if (result != null) {
-                    asyncResult.invoke(result)
-                  } else {
-                    asyncFailure.invoke(throwable)
-                  }
-                }
-              } else {
-                complete(out)
-              }
-            case _ =>
-          }
-      }
   }
 
 }

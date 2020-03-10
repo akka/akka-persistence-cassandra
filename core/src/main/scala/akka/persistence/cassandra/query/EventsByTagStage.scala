@@ -51,13 +51,6 @@ import scala.compat.java8.FutureConverters._
  */
 @InternalApi private[akka] object EventsByTagStage {
 
-  // FIXME, make this a public API that users can use to handle missing events
-  // https://github.com/akka/akka-persistence-cassandra/issues/625
-  final class MissingTaggedEventException(val tag: Tag, missing: Map[PersistenceId, MissingData])
-      extends RuntimeException(
-        s"Unable to find missing tagged events: ${missing}" +
-        s"Tag: $tag")
-
   final case class UUIDRow(
       persistenceId: PersistenceId,
       sequenceNr: SequenceNr,
@@ -115,7 +108,7 @@ import scala.compat.java8.FutureConverters._
   type Offset = UUID
   type MaxSequenceNr = Long
 
-  case class MissingData(maxOffset: UUID, maxSequenceNr: TagPidSequenceNr)
+  final case class MissingData(maxOffset: UUID, maxSequenceNr: TagPidSequenceNr)
 
   /**
    *
@@ -360,12 +353,18 @@ import scala.compat.java8.FutureConverters._
               missingSequenceNrs,
               explicitGapDetected = true,
               eventsByTagSettings.eventsByTagGapTimeout)
-            stageState.state match {
-              case qip @ QueryInProgress(_, _) =>
-                // let the current query finish and then look for missing
-                updateStageState(_.copy(state = qip.copy(abortForMissingSearch = true)))
-              case _ =>
-                lookForMissing()
+
+            val total = totalMissing()
+            if (total > settings.eventsByTagSettings.maxMissingToSearch) {
+              failTooManyMissing(total)
+            } else {
+              stageState.state match {
+                case qip @ QueryInProgress(_, _) =>
+                  // let the current query finish and then look for missing
+                  updateStageState(_.copy(state = qip.copy(abortForMissingSearch = true)))
+                case _ =>
+                  lookForMissing()
+              }
             }
           }
       }
@@ -521,15 +520,18 @@ import scala.compat.java8.FutureConverters._
           .onComplete(newResultSetCb.invoke)
       }
 
-      private def lookForMissing(): Unit = {
-        val missing = stageState.missingLookup match {
+      private def getMissingLookup(): LookingForMissing = {
+        stageState.missingLookup match {
           case Some(m) => m
           case None =>
             throw new IllegalStateException(
               s"lookingForMissingCalled for tag ${session.tag} when there " +
               s"is no missing. Raise a bug with debug logging.")
         }
+      }
 
+      private def lookForMissing(): Unit = {
+        val missing = getMissingLookup()
         if (missing.deadline.isOverdue()) {
           abortMissingSearch(missing)
         } else {
@@ -550,7 +552,13 @@ import scala.compat.java8.FutureConverters._
 
       private def abortMissingSearch(missing: LookingForMissing): Unit = {
         if (missing.gapDetected) {
-          fail(out, new MissingTaggedEventException(session.tag, missing.missingData))
+          fail(
+            out,
+            new MissingTaggedEventException(
+              session.tag,
+              missing.remainingMissing,
+              missing.minOffset,
+              missing.maxOffset))
         } else {
           log.debug(
             "[{}] [{}]: Finished scanning for older events for persistence ids [{}]",
@@ -723,6 +731,7 @@ import scala.compat.java8.FutureConverters._
           missingSequenceNrs: Map[PersistenceId, Set[Long]],
           explicitGapDetected: Boolean,
           timeout: FiniteDuration): Unit = {
+
         // Start in the toOffsetBucket as it is considered more likely an event has been missed due to an event
         // being delayed slightly rather than by a full bucket
         val bucket = TimeBucket(toOffset, bucketSize)
@@ -741,6 +750,15 @@ import scala.compat.java8.FutureConverters._
                 missingSequenceNrs,
                 Deadline.now + timeout,
                 explicitGapDetected))))
+      }
+
+      private def totalMissing(): Long = {
+        val missing = getMissingLookup()
+        missing.remainingMissing.values.foldLeft(0L)(_ + _.size)
+      }
+      private def failTooManyMissing(total: Long): Unit = {
+        failStage(
+          new RuntimeException(s"$total missing tagged events for tag [${session.tag}]. Failing without search"))
       }
 
       @tailrec def tryPushOne(): Unit =
@@ -767,7 +785,12 @@ import scala.compat.java8.FutureConverters._
               }
 
               if (missing) {
-                lookForMissing()
+                val total = totalMissing()
+                if (total > settings.eventsByTagSettings.maxMissingToSearch) {
+                  failTooManyMissing(total)
+                } else {
+                  lookForMissing()
+                }
               } else {
                 tryPushOne()
               }
