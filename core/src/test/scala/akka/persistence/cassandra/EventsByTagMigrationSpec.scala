@@ -382,11 +382,7 @@ abstract class AbstractEventsByTagMigrationSpec
 
   override protected def beforeAll(): Unit = {
     // this uses the alpakka connection, not the journal one as otherwise
-    if (!CassandraSessionRegistry(system)
-          .sessionFor("test-setup-session", system.dispatcher)
-          .serverMetaData
-          .futureValue
-          .isVersion2) {
+    if (!CassandraSessionRegistry(system).sessionFor("test-setup-session").serverMetaData.futureValue.isVersion2) {
       println("Creating old tables")
       super.beforeAll()
       system.log.debug("Creating old tables, first dropping {}", messagesTableName)
