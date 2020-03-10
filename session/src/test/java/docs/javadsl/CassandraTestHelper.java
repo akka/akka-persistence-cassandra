@@ -36,7 +36,7 @@ public class CassandraTestHelper {
         materializer = ActorMaterializer.create(system);
         CassandraSessionRegistry sessionRegistry = CassandraSessionRegistry.get(system);
         CassandraSessionSettings sessionSettings = CassandraSessionSettings.create("alpakka.cassandra");
-        cassandraSession = sessionRegistry.sessionFor(sessionSettings, system.dispatcher());
+        cassandraSession = sessionRegistry.sessionFor(sessionSettings);
 
         cassandraAccess = new CassandraAccess(cassandraSession.delegate());
         keyspaceName = TEST_NAME + System.nanoTime();
