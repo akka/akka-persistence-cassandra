@@ -21,13 +21,14 @@ class BuildTagViewForPersisetceIdSpec extends CassandraSpec with Eventually {
       eventually {
         expectEventsForTag(tag1, "pid1 event-1", "pid1 event-2", "pid2 event-1")
       }
-      Reconciliation(system).truncateTagView().futureValue
+      val reconciliation = new Reconciliation(system)
+      reconciliation.truncateTagView().futureValue
       expectEventsForTag(tag1)
-      Reconciliation(system).rebuildTagViewForPersistenceIds(pid1).futureValue
+      reconciliation.rebuildTagViewForPersistenceIds(pid1).futureValue
       eventually {
         expectEventsForTag(tag1, "pid1 event-1", "pid1 event-2")
       }
-      Reconciliation(system).rebuildTagViewForPersistenceIds(pid2).futureValue
+      reconciliation.rebuildTagViewForPersistenceIds(pid2).futureValue
       eventually {
         expectEventsForTag(tag1, "pid1 event-1", "pid1 event-2", "pid2 event-1")
       }

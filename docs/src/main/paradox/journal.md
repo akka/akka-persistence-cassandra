@@ -180,3 +180,9 @@ Old columns, no longer needed but may be in your schema if you have used older v
 | message | Pre 0.6 serialized the PersistentRepr (an internal Akka type) into this column. Newer versions use event and serialize the user payload |
 |         |                                                                                                                                         |
 
+
+### Delete all events
+
+The tool `akka.persistence.cassandra.cleanup.Cleanup` can be used for deleting all events and/or snapshots
+given list of `persistenceIds` without using persistent actors. It's important that the actors with corresponding
+`persistenceId` are not running at the same time as using the tool.

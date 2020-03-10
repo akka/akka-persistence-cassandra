@@ -7,10 +7,7 @@ package akka.persistence.cassandra.reconciler
 import com.typesafe.config.Config
 import akka.annotation.InternalApi
 
-/**
- * INTERNAL API
- */
-@InternalApi private[akka] final class ReconciliationSettings(config: Config) {
+final class ReconciliationSettings(config: Config) {
 
   val readProfile: String = config.getString("read-profile")
   val writeProfile: String = config.getString("write-profile")

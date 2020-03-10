@@ -19,8 +19,7 @@ class ReconciliationCompileOnly {
   val system = ActorSystem()
   import system.dispatcher
 
-  // Load the extension
-  val rec = Reconciliation(system)
+  val rec = new Reconciliation(system)
 
   // Drop and re-create data for a persistence id
   val pid = "pid1"

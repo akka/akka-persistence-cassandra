@@ -25,7 +25,8 @@ class TruncateAllSpec extends CassandraSpec with Eventually {
       expectEventsForTag(tag2, "pid2 event-1", "pid2 event-2")
       expectEventsForTag(tag3, "pid2 event-1", "pid2 event-2")
 
-      Reconciliation(system).truncateTagView().futureValue
+      val reconciliation = new Reconciliation(system)
+      reconciliation.truncateTagView().futureValue
 
       eventually {
         expectEventsForTag(tag1)

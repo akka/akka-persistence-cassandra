@@ -119,7 +119,7 @@ After deleting the tag views they will be automatically re-built next time the p
 
 For example, to rebuild the data for a persistence id:
 
-@@snip [reconciler](/reconciler/src/test/scala/doc/reconciler/ReconciliationCompileOnly.scala) { #imports #reconcile}                                                                                                                                
+@@snip [reconciler](/core/src/test/scala/doc/reconciler/ReconciliationCompileOnly.scala) { #imports #reconcile}                                                                                                                                
 
 ## Other tuning
 

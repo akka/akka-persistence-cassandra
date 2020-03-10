@@ -57,11 +57,6 @@ import akka.persistence.cassandra.FutureDone
         sequence_nr = ?
     """
 
-  def deleteAllSnapshotForPersistenceId = s"""
-      DELETE FROM ${tableName} WHERE
-        persistence_id = ?
-    """
-
   def deleteAllSnapshotForPersistenceIdAndSequenceNrBetween = s"""
     DELETE FROM ${tableName}
     WHERE persistence_id = ?

@@ -13,6 +13,7 @@ import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
 import akka.annotation.InternalApi
 import akka.event.{ Logging, LoggingAdapter }
+import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
@@ -202,6 +203,14 @@ import akka.stream.scaladsl.Source
       if (settings.eventsByTagSettings.eventsByTagEnabled) {
         taggedPreparedStatements.init()
       }
+
+    case DeleteAllEvents(persistenceId, neverUsePersistenceIdAgain) =>
+      val result = asyncDeleteMessagesTo(persistenceId, Long.MaxValue)
+      val result2: Future[Done] =
+        if (neverUsePersistenceIdAgain)
+          result.flatMap(_ => deleteDeletedToSeqNr(persistenceId))
+        else result.map(_ => Done)
+      result2.pipeTo(sender())
   }
 
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
@@ -592,6 +601,10 @@ import akka.stream.scaladsl.Source
     deleteResult
   }
 
+  private def deleteDeletedToSeqNr(persistenceId: String): Future[Done] = {
+    session.executeWrite(statements.journalStatements.deleteDeletedTo, persistenceId).map(_ => Done)
+  }
+
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
     val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, partitionNr: JLong))
     boundSelectHighestSequenceNr
@@ -777,6 +790,9 @@ import akka.stream.scaladsl.Source
   private[akka] type TagPidSequenceNr = Long
 
   private case object Init
+
+  sealed trait CleanupCommand
+  final case class DeleteAllEvents(persistenceId: String, neverUsePersistenceIdAgain: Boolean) extends CleanupCommand
 
   private case class WriteFinished(pid: String, f: Future[Done]) extends NoSerializationVerificationNeeded
 
