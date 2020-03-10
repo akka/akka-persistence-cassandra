@@ -4,11 +4,16 @@
 
 package akka.stream.alpakka.cassandra
 
-import scala.concurrent.duration.FiniteDuration
 import akka.util.JavaDurationConverters._
-import scala.concurrent.duration._
+import com.datastax.oss.driver.api.core.cql.BatchType
 
-class CassandraWriteSettings private (val parallelism: Int, val maxBatchSize: Int, val maxBatchWait: FiniteDuration) {
+import scala.concurrent.duration.{ FiniteDuration, _ }
+
+class CassandraWriteSettings private (
+    val parallelism: Int,
+    val maxBatchSize: Int,
+    val maxBatchWait: FiniteDuration,
+    val batchType: BatchType) {
   require(parallelism > 0, s"Invalid value for parallelism: $parallelism. It should be > 0.")
   require(maxBatchSize > 0, s"Invalid value for maxBatchSize: $maxBatchSize. It should be > 0.")
 
@@ -35,22 +40,27 @@ class CassandraWriteSettings private (val parallelism: Int, val maxBatchSize: In
   def withMaxBatchWait(maxBatchWait: java.time.Duration): CassandraWriteSettings =
     copy(maxBatchWait = maxBatchWait.asScala)
 
+  def withBatchType(value: BatchType): CassandraWriteSettings =
+    copy(batchType = value)
+
   private def copy(
       parallelism: Int = parallelism,
       maxBatchSize: Int = maxBatchSize,
-      maxBatchWait: FiniteDuration = maxBatchWait) =
-    new CassandraWriteSettings(parallelism, maxBatchSize, maxBatchWait)
+      maxBatchWait: FiniteDuration = maxBatchWait,
+      batchType: BatchType = batchType) =
+    new CassandraWriteSettings(parallelism, maxBatchSize, maxBatchWait, batchType)
 
   override def toString: String =
     "CassandraWriteSettings(" +
     s"parallelism=$parallelism," +
     s"maxBatchSize=$maxBatchSize," +
-    s"maxBatchWait=$maxBatchWait)"
+    s"maxBatchWait=$maxBatchWait," +
+    s"batchType=$batchType)"
 
 }
 
 object CassandraWriteSettings {
-  val defaults: CassandraWriteSettings = new CassandraWriteSettings(1, 100, 500.millis)
+  val defaults: CassandraWriteSettings = new CassandraWriteSettings(1, 100, 500.millis, BatchType.LOGGED)
 
   def create(): CassandraWriteSettings = defaults
   def apply(): CassandraWriteSettings = defaults

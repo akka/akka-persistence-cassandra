@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.persistence.cassandra
@@ -92,7 +92,7 @@ object CassandraSpec {
  * Picks a free port for Cassandra before starting the ActorSystem
  */
 abstract class CassandraSpec(
-    config: Config,
+    config: Config = CassandraLifecycle.config,
     val journalName: String = getCallerName(getClass),
     val snapshotName: String = getCallerName(getClass),
     dumpRowsOnFailure: Boolean = true)

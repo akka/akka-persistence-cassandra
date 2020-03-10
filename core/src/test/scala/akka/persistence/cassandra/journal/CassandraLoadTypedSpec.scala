@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package akka.persistence.cassandra.journal
@@ -106,7 +106,7 @@ object CassandraLoadTypedSpec {
 
 }
 
-class CassandraLoadTypedSpec extends CassandraSpec with AnyWordSpecLike with Matchers {
+class CassandraLoadTypedSpec extends CassandraSpec(dumpRowsOnFailure = false) with AnyWordSpecLike with Matchers {
 
   import CassandraLoadTypedSpec._
 

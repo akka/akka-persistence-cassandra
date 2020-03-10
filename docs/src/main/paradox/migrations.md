@@ -52,7 +52,7 @@ Using DateTieredCompactionStrategy with automatic schema creation
 ### Drop static column
 
 See instructions for migrations to 0.101 below. To support rolling update if you are migrating from an
-earlier version to 1.0 you must first update to 0.101 but the second step can be skipped and will be part of the
+earlier version to 1.0 you must first update to 0.101+ but the second step can be skipped and will be part of the
 1.0 update instead.
 
 After completed update to 1.0 the static column `used` should be dropped with:
@@ -61,23 +61,24 @@ After completed update to 1.0 the static column `used` should be dropped with:
 alter table akka.messages drop used;
 ```
 
-## Migrations to 0.101
+## Migrations to 0.101 and later
 
-Version 0.101 makes it possible to drop the static column `used`. 
+Versions 0.101+ make it possible to drop the static column `used`.  This saves space for persistence ids
+that have been deleted. Also some cloud Cassandra versions do not support static columns.
 
 The complete removal of the static column must be performed in two steps to support rolling update where an
-Akka Cluster is running a mix of versions 0.100 and 0.101.
+Akka Cluster is running a mix of versions prior to 0.101 and 0.101+.
 
 If you can accept a full cluster shutdown you can update to the second step directly.
 
 **Step 1**
 
 0.101 is not using the static column `used` in the reads but still populates it in the writes so that earlier
-versions can read it.
+versions can read it. First upgrade to a 0.x version greater than 0.101.
 
 **Step 2**
 
-After complete roll out of 0.101 in step 1 the configuration can be changed so that the static column isn't used
+After complete roll out of a 0.101+ version in step 1 the configuration can be changed so that the static column isn't used
 at all.
 
 ```

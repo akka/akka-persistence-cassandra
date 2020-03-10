@@ -13,7 +13,6 @@ import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
 import akka.annotation.InternalApi
 import akka.event.{ Logging, LoggingAdapter }
-import akka.stream.alpakka.cassandra._
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
