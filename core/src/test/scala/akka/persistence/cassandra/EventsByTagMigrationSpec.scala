@@ -37,6 +37,9 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 object EventsByTagMigrationSpec {
 
   val config = ConfigFactory.parseString(s"""
+                                            
+      # use a separate session for setup as not to initialize the session during setup
+      test-setup-session = $${akka.persistence.cassandra} 
   
        // disable normal failure logging as tall these tests are related 
        // so if one fails need the logs for all
@@ -378,11 +381,13 @@ abstract class AbstractEventsByTagMigrationSpec
     PersistenceQuery(systemThree).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
 
   override protected def beforeAll(): Unit = {
+    // this uses the alpakka connection, not the journal one as otherwise
     if (!CassandraSessionRegistry(system)
-          .sessionFor("akka.persistence.cassandra", system.dispatcher)
+          .sessionFor("test-setup-session", system.dispatcher)
           .serverMetaData
           .futureValue
           .isVersion2) {
+      println("Creating old tables")
       super.beforeAll()
       system.log.debug("Creating old tables, first dropping {}", messagesTableName)
       // Drop the messages table as we want to start with the old one
