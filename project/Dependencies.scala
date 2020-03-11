@@ -9,14 +9,9 @@ object Dependencies {
   val AkkaVersion = System.getProperty("override.akka.version", "2.6.3")
   val AkkaVersionInDocs = System.getProperty("override.akka.version", "2.6")
   val CassandraVersionInDocs = "4.0"
-  val DriverVersion = "4.5.0"
-  val DriverVersionInDocs = DriverVersion.take(3)
+  val DriverVersionInDocs = "4.5"
 
-  // Performance dropped by ~40% when the driver upgraded to latest netty version
-  // override for now https://datastax-oss.atlassian.net/browse/JAVA-2676
-  val OverrideNettyVersion = "4.1.39.Final"
-
-  val AlpakkaVersion = "2.0.0-M3"
+  val AlpakkaVersion = "2.0.0-M3+16-49d6b5bf"
   val AlpakkaVersionInDocs = "2.0"
 
   val Logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
@@ -25,19 +20,6 @@ object Dependencies {
   val silencer = Seq(
     compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
     ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).cross(CrossVersion.patch))
-
-  val akkaCassandraSessionDependencies = Seq(
-    ("com.datastax.oss" % "java-driver-core" % DriverVersion).exclude("com.github.spotbugs", "spotbugs-annotations"),
-    "io.netty" % "netty-handler" % OverrideNettyVersion,
-    "io.netty" % "netty-all" % OverrideNettyVersion,
-    "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-    "com.typesafe.akka" %% "akka-discovery" % AkkaVersion % Provided,
-    "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
-    "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion % Test,
-    "org.scalatest" %% "scalatest" % "3.1.0" % Test,
-    "com.novocode" % "junit-interface" % "0.11" % Test,
-    "junit" % "junit" % "4.13" % Test,
-    Logback % Test)
 
   val reconcilerDependencies = Seq(
     "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
@@ -55,6 +37,7 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-cluster-sharding")
 
   val akkaPersistenceCassandraDependencies = Seq(
+      "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % AlpakkaVersion,
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,

@@ -1,25 +1,19 @@
 ThisBuild / resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/")
+// Alpakka Snapshots
+ThisBuild / resolvers += Resolver.bintrayRepo("akka", "snapshots")
 
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
-  .aggregate(core, cassandraLauncher, session)
+  .aggregate(core, cassandraLauncher)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
-
-lazy val session = project
-  .enablePlugins(Common, AutomateHeaderPlugin)
-  .settings(
-    name := "akka-cassandra-session",
-    libraryDependencies ++= Dependencies.akkaCassandraSessionDependencies,
-    Compile / packageBin / packageOptions += Package.ManifestAttributes(
-        "Automatic-Module-Name" -> "akka.stream.alpakka.cassandra"))
 
 lazy val dumpSchema = taskKey[Unit]("Dumps cassandra schema for docs")
 dumpSchema := (core / runMain in (Test)).toTask(" akka.persistence.cassandra.PrintCreateStatements").value
 
 lazy val core = (project in file("core"))
   .enablePlugins(Common, AutomateHeaderPlugin, MultiJvmPlugin)
-  .dependsOn(cassandraLauncher % Test, session)
+  .dependsOn(cassandraLauncher % Test)
   .settings(
     name := "akka-persistence-cassandra",
     libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies ++ Dependencies.silencer,
@@ -74,9 +68,7 @@ lazy val docs = project
         "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${Dependencies.AkkaVersionInDocs}/",
         // Alpakka
         "extref.alpakka.base_url" -> s"https://doc.akka.io/docs/alpakka/${Dependencies.AlpakkaVersionInDocs}/%s",
-        // TODO switch this
-        // "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/akka/${Dependencies.AlpakkaVersionInDocs}/",
-        "scaladoc.akka.stream.alpakka.base_url" -> s"/${(Preprocess / siteSubdirName).value}/",
+        "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.AlpakkaVersionInDocs}/",
         "javadoc.akka.stream.alpakka.base_url" -> "",
         // Cassandra
         "extref.cassandra.base_url" -> s"https://cassandra.apache.org/doc/${Dependencies.CassandraVersionInDocs}/%s",
