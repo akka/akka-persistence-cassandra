@@ -1,6 +1,6 @@
 # Query Plugin
 
-It implements the following @extref:[Persistence Queries](akka:scala/persistence-query.html):
+It implements the following @extref:[Persistence Queries](akka:persistence-query.html):
 
 * eventsByPersistenceId, currentEventsByPersistenceId
 * eventsByTag, currentEventsByTag
