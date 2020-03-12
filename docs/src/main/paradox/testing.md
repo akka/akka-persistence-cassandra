@@ -1,6 +1,6 @@
 # Testing
 
-There are numbers options for testing persistent actors when using the APC plugin.
+There are a number of options for testing persistent actors when using the APC plugin.
 The two main methods are:
 
 * Testing using the inmem or Leveldb journals as shown in the [Akka docs](https://doc.akka.io/docs/akka/current/typed/persistence-testing.html).
@@ -17,6 +17,12 @@ Then there are options with tighter unit test framework integration:
 * [Cassandra unit](https://github.com/jsevellec/cassandra-unit)
 * [Test Containers](https://www.testcontainers.org/modules/databases/cassandra/)
 
+For testing it can be convenient to enable automatic creation of keyspace and tables with configuration:
 
-
+    akka.persistence.cassandra {
+      journal.keyspace-autocreate = on
+      journal.tables-autocreate = on
+      snapshot.keyspace-autocreate = on
+      snapshot.tables-autocreate = on
+    }
 
