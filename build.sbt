@@ -1,5 +1,5 @@
 ThisBuild / resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/")
-// Alpakka Snapshots
+// TODO Remove this when depending on released versions of Alpakka
 ThisBuild / resolvers += Resolver.bintrayRepo("akka", "snapshots")
 
 lazy val root = (project in file("."))

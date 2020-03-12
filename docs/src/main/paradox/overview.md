@@ -8,7 +8,7 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 
 ## Dependencies
 
-This plugin requires **Akka 2.6** and is built against Akka $akka.version$.
+This plugin requires **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html) for details.
 
 @@dependency [Maven,sbt,Gradle] {
   group=com.typesafe.akka
