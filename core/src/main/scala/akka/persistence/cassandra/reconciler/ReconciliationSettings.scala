@@ -5,7 +5,6 @@
 package akka.persistence.cassandra.reconciler
 
 import com.typesafe.config.Config
-import akka.annotation.InternalApi
 
 final class ReconciliationSettings(config: Config) {
 

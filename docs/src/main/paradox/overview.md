@@ -1,6 +1,6 @@
 # Overview
 
-The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https://cassandra.apache.org) as a backend for @extref:[Akka Persistence](akka:persistence.html) and @extref:[Akka Persistence Query](akka:persistence-query.html).
+The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https://cassandra.apache.org) as a backend for @extref:[Akka Persistence](akka:persistence.html) and @extref:[Akka Persistence Query](akka:persistence-query.html). It uses @extref:[Alpakka Cassandra](alpakka:cassandra.html) for Cassandra access which is based on the @extref:[Datastax Java Driver](java-driver:).
 
 ## Project Info
 
@@ -8,13 +8,24 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 
 ## Dependencies
 
+This plugin requires **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html) for details.
+
 @@dependency [Maven,sbt,Gradle] {
   group=com.typesafe.akka
   artifact=akka-persistence-cassandra_$scala.binary.version$
   version=$project.version$
+  symbol=AkkaVersion
+  value=$akka.version$
+  group1=com.typesafe.akka
+  artifact1=akka-persistence
+  version1=AkkaVersion
+  group2=com.typesafe.akka
+  artifact2=akka-persistence-query
+  version2=AkkaVersion
+  group3=com.typesafe.akka
+  artifact3=akka-cluster-tools
+  version3=AkkaVersion
 }
-
-This plugin build depends on Akka 2.5.x but the plugin will also work with Akka 2.6 (since Akka is [binary backwards compatible](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html#binary-compatibility-rules-explained)). 
 
 Note that it is important that all `akka-*` dependencies are in the same version, so it is recommended to depend on them explicitly to avoid problems with transient dependencies causing an unlucky mix of versions.
 
@@ -24,14 +35,14 @@ The table below shows Akka Persistence Cassandra’s direct dependencies and the
 
 ## Snapshots
 
-[sonatype-badge]: https://img.shields.io/nexus/s/https/oss.sonatype.org/com.typesafe.akka/akka-persistence-cassandra_2.12.svg?label=latest%20snapshot
-[sonatype]:       https://oss.sonatype.org/content/repositories/snapshots/com/typesafe/akka/akka-persistence-cassandra_2.12/
+[bintray-badge]:  https://api.bintray.com/packages/akka/snapshots/akka-persistence-cassandra/images/download.svg
+[bintray]:        https://bintray.com/akka/snapshots/akka-persistence-cassandra/_latestVersion
 
 Snapshots are published to a snapshot repository in Sonatype after every successful build on master. Add the following to your project build definition to resolve snapshots:
 
 sbt
 :   ```scala
-    resolvers += Resolver.sonatypeRepo("snapshots")
+    resolvers += Resolver.bintrayRepo("akka", "snapshots")
     ```
 
 Maven
@@ -40,9 +51,9 @@ Maven
     ...
       <repositories>
         <repository>
-          <id>sonatype-snapshots</id>
-          <name>Sonatype Snapshots</name>
-          <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+          <id>akka-snapshots</id>
+          <name>Akka Snapshots</name>
+          <url>https://dl.bintray.com/akka/snapshots</url>
         </repository>
       </repositories>
     ...
@@ -53,12 +64,12 @@ Gradle
 :   ```gradle
     repositories {
       maven {
-        url  "https://oss.sonatype.org/content/repositories/snapshots"
+        url  "https://dl.bintray.com/akka/snapshots"
       }
     }
     ```
 
-Latest published snapshot version is [![sonatype-badge][]][sonatype]
+Latest published snapshot version is [![bintray-badge][]][bintray]
 
 The [snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) is updated with every snapshot build.
 
