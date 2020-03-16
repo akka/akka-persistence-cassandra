@@ -22,22 +22,25 @@ import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
 import com.datastax.oss.driver.api.core.cql.Row
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
+import akka.actor.ClassicActorSystemProvider
+
 object EventsByTagMigration {
-  def apply(system: ActorSystem): EventsByTagMigration =
-    new EventsByTagMigration(system)
+  def apply(systemProvider: ClassicActorSystemProvider): EventsByTagMigration =
+    new EventsByTagMigration(systemProvider)
 
   // Extracts a Cassandra Row, assuming the pre 0.80 schema into a [[RawEvent]]
-  def rawPayloadOldTagSchemaExtractor(bucketSize: BucketSize, system: ActorSystem): Extractor[RawEvent] =
+  def rawPayloadOldTagSchemaExtractor(
+      bucketSize: BucketSize,
+      systemProvider: ClassicActorSystemProvider): Extractor[RawEvent] =
     new Extractor[RawEvent] {
 
       // TODO check this is only created once
       val columnDefinitionCache = new ColumnDefinitionCache
-      val serialization = SerializationExtension(system)
+      val serialization = SerializationExtension(systemProvider.classicSystem)
 
       override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[RawEvent] = {
         // Get the tags from the old location i.e. tag1, tag2, tag3
@@ -53,7 +56,13 @@ object EventsByTagMigration {
           } else {
             Set.empty
           }
-        Extractors.deserializeRawEvent(system, bucketSize, columnDefinitionCache, tags, serialization, row)
+        Extractors.deserializeRawEvent(
+          systemProvider.classicSystem,
+          bucketSize,
+          columnDefinitionCache,
+          tags,
+          serialization,
+          row)
       }
     }
 
@@ -63,7 +72,10 @@ object EventsByTagMigration {
  *
  * @param pluginConfigPath The config namespace where the plugin is configured, default is `akka.persistence.cassandra`
  */
-class EventsByTagMigration(system: ActorSystem, pluginConfigPath: String = "akka.persistence.cassandra") {
+class EventsByTagMigration(
+    systemProvider: ClassicActorSystemProvider,
+    pluginConfigPath: String = "akka.persistence.cassandra") {
+  private val system = systemProvider.classicSystem
   private[akka] val log = Logging.getLogger(system, getClass)
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](pluginConfigPath + ".query")
   private implicit val sys: ActorSystem = system

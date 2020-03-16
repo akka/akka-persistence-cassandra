@@ -30,6 +30,7 @@ import java.util.UUID
 import java.lang.{ Long => JLong }
 import java.util.concurrent.atomic.AtomicInteger
 
+import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
 
 /**
@@ -125,13 +126,16 @@ final private[akka] class ReconciliationSession(session: CassandraSession, state
  * API likely to change when a java/scaladsl is added.
  */
 @ApiMayChange
-final class Reconciliation(system: ActorSystem, settings: ReconciliationSettings) {
+final class Reconciliation(systemProvider: ClassicActorSystemProvider, settings: ReconciliationSettings) {
 
-  def this(system: ActorSystem) =
-    this(system, new ReconciliationSettings(system.settings.config.getConfig("akka.persistence.cassandra.reconciler")))
+  def this(systemProvider: ClassicActorSystemProvider) =
+    this(
+      systemProvider,
+      new ReconciliationSettings(
+        systemProvider.classicSystem.settings.config.getConfig("akka.persistence.cassandra.reconciler")))
 
+  private implicit val system: ActorSystem = systemProvider.classicSystem
   import system.dispatcher
-  private implicit val sys = system
   private val session = CassandraSessionRegistry(system).sessionFor(settings.pluginLocation)
   private val pluginSettings = PluginSettings(system, system.settings.config.getConfig(settings.pluginLocation))
   private val queries: CassandraReadJournal =

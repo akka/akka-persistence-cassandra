@@ -6,12 +6,15 @@ package akka.persistence.cassandra
 
 import scala.collection.immutable
 
-import akka.actor.ActorSystem
+import akka.actor.ClassicActorSystemProvider
 
 /**
  * Definitions of keyspace and table creation statements.
  */
-class KeyspaceAndTableStatements(system: ActorSystem, configPath: String, settings: PluginSettings)
+class KeyspaceAndTableStatements(
+    systemProvider: ClassicActorSystemProvider,
+    configPath: String,
+    settings: PluginSettings)
     extends CassandraStatements(settings) {
 
   /**
