@@ -10,7 +10,7 @@ import scala.util.Failure
 import scala.util.Success
 
 import akka.Done
-import akka.actor.ActorSystem
+import akka.actor.ClassicActorSystemProvider
 import akka.annotation.ApiMayChange
 import akka.event.Logging
 import akka.pattern.ask
@@ -35,11 +35,14 @@ import akka.util.Timeout
  * at the same time operating on different sets of `persistenceIds`.
  */
 @ApiMayChange
-final class Cleanup(system: ActorSystem, settings: CleanupSettings) {
+final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: CleanupSettings) {
 
-  def this(system: ActorSystem) =
-    this(system, new CleanupSettings(system.settings.config.getConfig("akka.persistence.cassandra.cleanup")))
+  def this(systemProvider: ClassicActorSystemProvider) =
+    this(
+      systemProvider,
+      new CleanupSettings(systemProvider.classicSystem.settings.config.getConfig("akka.persistence.cassandra.cleanup")))
 
+  private val system = systemProvider.classicSystem
   import settings._
   import system.dispatcher
 
