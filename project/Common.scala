@@ -20,7 +20,7 @@ object Common extends AutoPlugin {
       organizationHomepage := Some(url("https://www.lightbend.com/")),
       startYear := Some(2016),
       homepage := Some(url("https://akka.io")),
-      apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${version.value}")),
+      // apiURL defined in projectSettings because version.value is not correct here
       scmInfo := Some(
           ScmInfo(
             url("https://github.com/akka/akka-persistence-cassandra"),
@@ -57,6 +57,7 @@ object Common extends AutoPlugin {
     Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     scalafmtOnCompile := true,
     autoAPIMappings := true,
+    apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${version.value}")),
     headerLicense := Some(
         HeaderLicense.Custom("""Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>""")),
     Test / logBuffered := System.getProperty("akka.logBufferedTests", "false").toBoolean,
