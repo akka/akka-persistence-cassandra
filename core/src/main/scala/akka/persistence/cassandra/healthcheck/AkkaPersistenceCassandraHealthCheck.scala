@@ -12,18 +12,19 @@ import akka.persistence.cassandra.journal.CassandraJournal.{ HealthCheckQuery, H
 import akka.util.Timeout
 
 import scala.concurrent.{ ExecutionContextExecutor, Future }
-import scala.concurrent.duration._
-import scala.language.postfixOps
+
+import java.util.concurrent.TimeUnit.MILLISECONDS
 
 class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Future[Boolean]) {
 
   private[akka] val log = Logging.getLogger(system, getClass)
   private implicit val ec: ExecutionContextExecutor = system.dispatcher
-  private implicit val timeout: Timeout = 1 second
 
   private val healthCheckSettings = new HealthCheckSettings(system, system.settings.config)
   private val journalPluginId = s"${healthCheckSettings.pluginLocation}.journal"
   private val journalRef = Persistence(system).journalFor(journalPluginId)
+
+  private implicit val timeout: Timeout = Timeout(healthCheckSettings.timeoutMs, MILLISECONDS)
 
   override def apply(): Future[Boolean] = {
     (journalRef ? HealthCheckQuery).mapTo[HealthCheckResponse].map(_.result).recoverWith {

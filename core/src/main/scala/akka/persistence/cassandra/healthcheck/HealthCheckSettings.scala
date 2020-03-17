@@ -15,4 +15,6 @@ private[akka] class HealthCheckSettings(system: ActorSystem, config: Config) ext
 
   val pluginLocation: String = healthCheckConfig.getString("plugin-location")
 
+  val timeoutMs: Int = healthCheckConfig.getInt("timeout-ms")
+
 }
