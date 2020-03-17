@@ -57,7 +57,7 @@ object Common extends AutoPlugin {
     Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     scalafmtOnCompile := true,
     autoAPIMappings := true,
-    apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${version.value}")),
+    apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${projectInfoVersion.value}")),
     headerLicense := Some(
         HeaderLicense.Custom("""Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>""")),
     Test / logBuffered := System.getProperty("akka.logBufferedTests", "false").toBoolean,
