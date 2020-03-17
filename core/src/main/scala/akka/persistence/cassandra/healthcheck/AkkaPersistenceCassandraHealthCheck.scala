@@ -20,9 +20,9 @@ class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Fu
   private[akka] val log = Logging.getLogger(system, getClass)
   private implicit val ec: ExecutionContextExecutor = system.dispatcher
   private implicit val timeout: Timeout = 1 second
+  private val journalRef = Persistence(system).journalFor("akka.persistence.cassandra.journal")
 
   override def apply(): Future[Boolean] = {
-    val journalRef = Persistence(system).journalFor("akka.persistence.cassandra.journal")
     (journalRef ? HealthCheckQuery).mapTo[HealthCheckResponse].map(_.result).recoverWith {
       case e: AskTimeoutException =>
         log.debug("Failed to receive health check due to ask timeout: {}", e.getCause(), e)
