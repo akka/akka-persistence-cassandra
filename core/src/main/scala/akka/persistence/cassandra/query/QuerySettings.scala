@@ -12,8 +12,6 @@ import akka.annotation.InternalStableApi
 import akka.persistence.cassandra.EventsByTagSettings
 import com.typesafe.config.Config
 
-import scala.util.Try
-
 /**
  * INTERNAL API
  */
@@ -42,11 +40,6 @@ import scala.util.Try
   val eventsByPersistenceIdEventTimeout: FiniteDuration =
     queryConfig.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 
-  val healthCheckQuery: String = Try {
-    queryConfig.getString("health-check-query")
-  }.recover {
-    case _: Exception =>
-      "SELECT now() FROM system.local"
-  }.get
+  val healthCheckQuery: String = queryConfig.getString("health-check-query")
 
 }
