@@ -20,7 +20,10 @@ class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Fu
   private[akka] val log = Logging.getLogger(system, getClass)
   private implicit val ec: ExecutionContextExecutor = system.dispatcher
   private implicit val timeout: Timeout = 1 second
-  private val journalRef = Persistence(system).journalFor("akka.persistence.cassandra.journal")
+
+  private val healthCheckSettings = new HealthCheckSettings(system, system.settings.config)
+  private val journalPluginId = s"${healthCheckSettings.pluginLocation}.journal"
+  private val journalRef = Persistence(system).journalFor(journalPluginId)
 
   override def apply(): Future[Boolean] = {
     (journalRef ? HealthCheckQuery).mapTo[HealthCheckResponse].map(_.result).recoverWith {
