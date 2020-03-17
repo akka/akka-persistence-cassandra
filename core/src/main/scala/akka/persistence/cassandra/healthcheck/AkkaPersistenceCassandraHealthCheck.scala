@@ -12,8 +12,9 @@ import akka.persistence.cassandra.journal.CassandraJournal.{ HealthCheckQuery, H
 import akka.util.Timeout
 
 import scala.concurrent.{ ExecutionContextExecutor, Future }
-
 import java.util.concurrent.TimeUnit.MILLISECONDS
+
+import scala.util.control.NonFatal
 
 class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Future[Boolean]) {
 
@@ -29,10 +30,10 @@ class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Fu
   override def apply(): Future[Boolean] = {
     (journalRef ? HealthCheckQuery).mapTo[HealthCheckResponse].map(_.result).recoverWith {
       case e: AskTimeoutException =>
-        log.debug("Failed to receive health check due to ask timeout: {}", e.getCause(), e)
+        log.debug("Failed to execute health check due to ask timeout", e)
         Future(false)
-      case e: Exception =>
-        log.debug("Failed to receive health check due to {}", e.getCause, e)
+      case NonFatal(e) =>
+        log.debug("Failed to execute health check", e)
         Future(false)
     }
   }
