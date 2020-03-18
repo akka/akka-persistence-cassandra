@@ -19,12 +19,12 @@ import scala.util.control.NonFatal
 class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Future[Boolean]) {
 
   private[akka] val log = Logging.getLogger(system, getClass)
-  private implicit val ec: ExecutionContextExecutor = system.dispatcher
 
   private val healthCheckSettings = new HealthCheckSettings(system, system.settings.config)
   private val journalPluginId = s"${healthCheckSettings.pluginLocation}.journal"
   private val journalRef = Persistence(system).journalFor(journalPluginId)
 
+  private implicit val ec: ExecutionContextExecutor = system.dispatchers.lookup(s"$journalPluginId.plugin-dispatcher")
   private implicit val timeout: Timeout = Timeout(healthCheckSettings.timeoutMs, MILLISECONDS)
 
   override def apply(): Future[Boolean] = {
