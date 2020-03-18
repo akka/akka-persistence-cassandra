@@ -560,10 +560,7 @@ import akka.stream.scaladsl.Source
       deleteResult.map(_ => Done)
     }
 
-    /**
-     * Deletes the events by inserting into the metadata table deleted_to
-     * and physically deletes the rows.
-     */
+    // Deletes the events by inserting into the metadata table deleted_to and physically deletes the rows.
     def logicalAndPhysicalDelete(highestDeletedSequenceNumber: Long, highestSequenceNr: Long): Future[Done] = {
       val lowestPartition = partitionNr(highestDeletedSequenceNumber + 1, journalSettings.targetPartitionSize)
       val toSeqNr = math.min(toSequenceNr, highestSequenceNr)
