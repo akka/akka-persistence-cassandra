@@ -13,10 +13,12 @@ import com.typesafe.config.Config
 @InternalApi
 private[akka] class HealthCheckSettings(system: ActorSystem, config: Config) extends NoSerializationVerificationNeeded {
 
-  private val healthCheckConfig = config.getConfig("akka.persistence.cassandra.healthcheck")
+  private val healthCheckConfig = config.getConfig("healthcheck")
 
   val pluginLocation: String = healthCheckConfig.getString("plugin-location")
 
   val timeout: Duration = healthCheckConfig.getDuration("timeout")
+
+  val healthCheckCql: String = healthCheckConfig.getString("health-check-cql")
 
 }

@@ -40,6 +40,4 @@ import com.typesafe.config.Config
   val eventsByPersistenceIdEventTimeout: FiniteDuration =
     queryConfig.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 
-  val healthCheckQuery: String = queryConfig.getString("health-check-query")
-
 }

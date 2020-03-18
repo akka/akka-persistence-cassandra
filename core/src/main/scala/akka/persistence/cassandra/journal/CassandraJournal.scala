@@ -66,7 +66,7 @@ import akka.stream.scaladsl.Source
     new CassandraJournal.EventDeserializer(context.system)
 
   private val statements: CassandraStatements = new CassandraStatements(settings)
-  private val healthCheckStatement = settings.querySettings.healthCheckQuery
+  private val healthCheckCql = settings.healthCheckSettings.healthCheckCql
   private val serialization = SerializationExtension(context.system)
   private val log: LoggingAdapter = Logging(context.system, getClass)
 
@@ -213,7 +213,7 @@ import akka.stream.scaladsl.Source
       result2.pipeTo(sender())
 
     case HealthCheckQuery =>
-      session.selectOne(healthCheckStatement).map(_ => HealthCheckResponse).pipeTo(sender)
+      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse).pipeTo(sender)
   }
 
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {

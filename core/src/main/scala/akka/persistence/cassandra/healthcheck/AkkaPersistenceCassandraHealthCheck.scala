@@ -8,11 +8,11 @@ import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.pattern.{ ask, AskTimeoutException }
 import akka.persistence.Persistence
-import akka.persistence.cassandra.journal.CassandraJournal.{ HealthCheckQuery, HealthCheckResponse }
+import akka.persistence.cassandra.PluginSettings
+import akka.persistence.cassandra.journal.CassandraJournal.HealthCheckQuery
 import akka.util.Timeout
 
 import scala.concurrent.{ ExecutionContextExecutor, Future }
-
 import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
 
@@ -20,7 +20,8 @@ class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Fu
 
   private[akka] val log = Logging.getLogger(system, getClass)
 
-  private val healthCheckSettings = new HealthCheckSettings(system, system.settings.config)
+  private val settings = new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
+  private val healthCheckSettings = settings.healthCheckSettings
   private val journalPluginId = s"${healthCheckSettings.pluginLocation}.journal"
   private val journalRef = Persistence(system).journalFor(journalPluginId)
 

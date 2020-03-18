@@ -19,7 +19,7 @@ class AkkaPersistenceCassandraHealthCheckDefaultQuerySpec extends CassandraSpec 
 }
 
 class AkkaPersistenceCassandraHealthCheckCustomQueryNonEmptyResultSpec extends CassandraSpec(s"""
-       akka.persistence.cassandra.query.health-check-query="SELECT * FROM system.peers"
+       akka.persistence.cassandra.healthcheck.health-check-cql="SELECT * FROM system.peers"
     """) with CassandraLifecycle {
 
   override def beforeAll(): Unit = {
@@ -43,7 +43,7 @@ class AkkaPersistenceCassandraHealthCheckCustomQueryNonEmptyResultSpec extends C
 }
 
 class AkkaPersistenceCassandraHealthCheckCustomQueryEmptyResultSpec extends CassandraSpec(s"""
-       akka.persistence.cassandra.query.health-check-query="SELECT * FROM system.peers"
+       akka.persistence.cassandra.healthcheck.health-check-cql="SELECT * FROM system.peers"
     """) with CassandraLifecycle {
 
   override def beforeAll(): Unit = {
@@ -60,7 +60,7 @@ class AkkaPersistenceCassandraHealthCheckCustomQueryEmptyResultSpec extends Cass
 }
 
 class AkkaPersistenceCassandraHealthCheckCustomFailingQuerySpec extends CassandraSpec(s"""
-       akka.persistence.cassandra.query.health-check-query="SELECT * FROM non_existing_keyspace.non_existing_table"
+       akka.persistence.cassandra.healthcheck.health-check-cql="SELECT * FROM non_existing_keyspace.non_existing_table"
     """) with CassandraLifecycle {
 
   "AkkaPersistenceCassandraHealthCheck" must {
