@@ -213,13 +213,7 @@ import akka.stream.scaladsl.Source
       result2.pipeTo(sender())
 
     case HealthCheckQuery =>
-      session
-        .selectOne(healthCheckStatement)
-        .map {
-          case Some(_) => HealthCheckResponse(true)
-          case None    => HealthCheckResponse(false)
-        }
-        .pipeTo(sender)
+      session.selectOne(healthCheckStatement).map(_ => HealthCheckResponse).pipeTo(sender)
   }
 
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
@@ -832,7 +826,7 @@ import akka.stream.scaladsl.Source
 
   sealed trait HealthCheck
   case object HealthCheckQuery extends HealthCheck
-  case class HealthCheckResponse(result: Boolean) extends HealthCheck
+  case object HealthCheckResponse extends HealthCheck
 
   class EventDeserializer(system: ActorSystem) {
 

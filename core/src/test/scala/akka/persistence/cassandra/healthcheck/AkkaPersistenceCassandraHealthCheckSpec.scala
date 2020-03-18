@@ -6,24 +6,19 @@ package akka.persistence.cassandra.healthcheck
 
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
 
-import scala.concurrent.Await
-import scala.concurrent.duration._
 import scala.language.postfixOps
 
 class AkkaPersistenceCassandraHealthCheckDefaultQuerySpec extends CassandraSpec with CassandraLifecycle {
 
   "AkkaPersistenceCassandraHealthCheck" must {
     "reply with successful health check result when plugin uses default query" in {
-      val healthCheckFuture = new AkkaPersistenceCassandraHealthCheck(system)()
-
-      val healthCheckResult = Await.result(healthCheckFuture, 1 second)
-
-      healthCheckResult shouldBe true
+      val healthCheckResult = new AkkaPersistenceCassandraHealthCheck(system)()
+      healthCheckResult.futureValue shouldBe true
     }
   }
 }
 
-class AkkaPersistenceCassandraHealthCheckCustomSuccessQuerySpec extends CassandraSpec(s"""
+class AkkaPersistenceCassandraHealthCheckCustomQueryNonEmptyResultSpec extends CassandraSpec(s"""
        akka.persistence.cassandra.query.health-check-query="SELECT * FROM system.peers"
     """) with CassandraLifecycle {
 
@@ -41,26 +36,37 @@ class AkkaPersistenceCassandraHealthCheckCustomSuccessQuerySpec extends Cassandr
 
   "AkkaPersistenceCassandraHealthCheck" must {
     "reply with successful health check result when plugin executes custom query and result is non-empty" in {
-      val healthCheckFuture = new AkkaPersistenceCassandraHealthCheck(system)()
+      val healthCheckResult = new AkkaPersistenceCassandraHealthCheck(system)()
+      healthCheckResult.futureValue shouldBe true
+    }
+  }
+}
 
-      val healthCheckResult = Await.result(healthCheckFuture, 1 second)
+class AkkaPersistenceCassandraHealthCheckCustomQueryEmptyResultSpec extends CassandraSpec(s"""
+       akka.persistence.cassandra.query.health-check-query="SELECT * FROM system.peers"
+    """) with CassandraLifecycle {
 
-      healthCheckResult shouldBe true
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    cluster.execute("TRUNCATE system.peers")
+  }
+
+  "AkkaPersistenceCassandraHealthCheck" must {
+    "reply with successful health check result when plugin executes custom query and result is empty" in {
+      val healthCheckResult = new AkkaPersistenceCassandraHealthCheck(system)()
+      healthCheckResult.futureValue shouldBe true
     }
   }
 }
 
 class AkkaPersistenceCassandraHealthCheckCustomFailingQuerySpec extends CassandraSpec(s"""
-       akka.persistence.cassandra.query.health-check-query="SELECT * FROM system.peers"
+       akka.persistence.cassandra.query.health-check-query="SELECT * FROM non_existing_keyspace.non_existing_table"
     """) with CassandraLifecycle {
 
   "AkkaPersistenceCassandraHealthCheck" must {
-    "reply with failed health check result when plugin executes custom query and result is empty" in {
-      val healthCheckFuture = new AkkaPersistenceCassandraHealthCheck(system)()
-
-      val healthCheckResult = Await.result(healthCheckFuture, 1 second)
-
-      healthCheckResult shouldBe false
+    "reply with failed health check result when plugin executes custom query and it fails" in {
+      val healthCheckResult = new AkkaPersistenceCassandraHealthCheck(system)()
+      healthCheckResult.futureValue shouldBe false
     }
   }
 }

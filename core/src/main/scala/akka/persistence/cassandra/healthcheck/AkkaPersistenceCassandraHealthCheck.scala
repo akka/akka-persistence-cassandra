@@ -28,7 +28,7 @@ class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Fu
   private implicit val timeout: Timeout = Duration.fromNanos(healthCheckSettings.timeout.toNanos)
 
   override def apply(): Future[Boolean] = {
-    (journalRef ? HealthCheckQuery).mapTo[HealthCheckResponse].map(_.result).recoverWith {
+    (journalRef ? HealthCheckQuery).map(_ => true).recoverWith {
       case _: AskTimeoutException =>
         log.warning("Failed to execute health check due to ask timeout")
         Future(false)
