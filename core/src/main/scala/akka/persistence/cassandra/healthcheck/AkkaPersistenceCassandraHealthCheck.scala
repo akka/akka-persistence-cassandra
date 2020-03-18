@@ -29,11 +29,11 @@ class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Fu
 
   override def apply(): Future[Boolean] = {
     (journalRef ? HealthCheckQuery).mapTo[HealthCheckResponse].map(_.result).recoverWith {
-      case e: AskTimeoutException =>
-        log.debug("Failed to execute health check due to ask timeout", e)
+      case _: AskTimeoutException =>
+        log.warning("Failed to execute health check due to ask timeout")
         Future(false)
       case NonFatal(e) =>
-        log.debug("Failed to execute health check", e)
+        log.warning("Failed to execute health check due to: {}", e)
         Future(false)
     }
   }
