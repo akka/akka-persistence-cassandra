@@ -41,12 +41,14 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
     deleteAllEvents()
   }
 
-  def all(): Source[String, NotUsed] = queries.persistenceIds().filterNot(_ == "persistenceInit")
+  def all(): Source[String, NotUsed] = queries.persistenceIds().filterNot(_.startsWith("persistenceInit"))
 
-  def current(): Source[String, NotUsed] = queries.currentPersistenceIds().filterNot(_ == "persistenceInit")
+  def current(): Source[String, NotUsed] = queries.currentPersistenceIds().filterNot(_.startsWith("persistenceInit"))
 
-  private def deleteAllEvents(): Unit =
+  private def deleteAllEvents(): Unit = {
     cluster.execute(s"TRUNCATE ${journalSettings.keyspace}.${journalSettings.table}")
+    cluster.execute(s"TRUNCATE ${journalSettings.keyspace}.${journalSettings.allPersistenceIdsTable}")
+  }
 
   private def setup(persistenceId: String, n: Int): ActorRef = {
     val ref = system.actorOf(TestActor.props(persistenceId))
@@ -153,6 +155,17 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       setup("q", 1000)
 
       probe.request(10).expectNext("q").expectNoMessage(1000.millis)
+    }
+  }
+
+  "Cassandra query CurrentPersistenceIdsFromMessages" must {
+    "find existing events" in {
+      setup("a2", 1)
+      setup("b2", 1)
+      setup("c2", 1)
+
+      val src = queries.currentPersistenceIdsFromMessages().filterNot(_.startsWith("persistenceInit"))
+      src.runWith(TestSink.probe[Any]).request(4).expectNextUnordered("a2", "b2", "c2").expectComplete()
     }
   }
 }

@@ -164,7 +164,7 @@ class CassandraReadJournal protected (
       .sequence(
         List(
           preparedSelectDeletedTo,
-          preparedSelectDistinctPersistenceIds,
+          preparedSelectAllPersistenceIds,
           preparedSelectEventsByPersistenceId,
           preparedSelectFromTagViewWithUpperBound,
           preparedSelectTagSequenceNrs))
@@ -175,6 +175,9 @@ class CassandraReadJournal protected (
 
   private def preparedSelectDeletedTo: Future[PreparedStatement] =
     session.prepare(statements.journalStatements.selectDeletedTo)
+
+  private def preparedSelectAllPersistenceIds: Future[PreparedStatement] =
+    session.prepare(queryStatements.selectAllPersistenceIds)
 
   private def preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
     session.prepare(queryStatements.selectDistinctPersistenceIds)
@@ -690,7 +693,7 @@ class CassandraReadJournal protected (
     persistenceIds(Some(querySettings.refreshInterval), "allPersistenceIds")
 
   /**
-   * Same type of query as `allPersistenceIds` but the event stream
+   * Same type of query as `persistenceIds` but the event stream
    * is completed immediately when it reaches the end of the "result set". Events that are
    * stored after the query is completed are not included in the event stream.
    */
@@ -699,11 +702,25 @@ class CassandraReadJournal protected (
 
   private def persistenceIds(refreshInterval: Option[FiniteDuration], name: String): Source[String, NotUsed] =
     createSource[String, PreparedStatement](
-      preparedSelectDistinctPersistenceIds,
+      preparedSelectAllPersistenceIds,
       (s, ps) =>
         Source
           .fromGraph(new AllPersistenceIdsStage(refreshInterval, ps, s, querySettings.readProfile))
           .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
           .named(name))
+
+  /**
+   * INTERNAL API: Needed for migration to 1.0
+   */
+  @InternalApi private[akka] def currentPersistenceIdsFromMessages(): Source[String, NotUsed] =
+    createSource[String, PreparedStatement](
+      preparedSelectDistinctPersistenceIds,
+      (s, ps) =>
+        Source
+          .fromGraph(new AllPersistenceIdsStage(None, ps, s, querySettings.readProfile))
+          .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+          .mapMaterializedValue(_ => NotUsed)
+          .named("currentPersistenceIdsFromMessages"))
+
 }

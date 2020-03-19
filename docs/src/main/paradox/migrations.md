@@ -61,6 +61,23 @@ After completed update to 1.0 the static column `used` should be dropped with:
 alter table akka.messages drop used;
 ```
 
+### All persistenceIds query
+
+The implementation of `persistenceIds` and `currentPersistenceIds` queries have been made more efficient
+by inserting new persistence ids into a new table `all_persistence_ids`.
+
+Create the `all_persistence_ids` table if you are not using `tables-autocreate=on`, which is not recommended for
+production. See @ref:[table definition](journal.md#schema).
+
+The following migration step is not needed if you don't use the `persistenceIds` or `currentPersistenceIds` queries.
+
+Already existing persistence ids should be inserted into the new table. This can be done with the `Reconciliation`
+tool:
+
+@@snip [reconciler](/core/src/test/scala/doc/reconciler/AllPersistenceIdsMigrationCompileOnly.scala) { #imports #migrate}
+
+You can run that migration tool while the old (or new) system is running, and it can be run several times if needed.  
+
 ## Migrations to 0.101 and later
 
 Versions 0.101+ make it possible to drop the static column `used`.  This saves space for persistence ids

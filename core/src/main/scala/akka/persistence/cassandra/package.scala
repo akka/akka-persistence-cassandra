@@ -30,6 +30,9 @@ package object cassandra {
   /** INTERNAL API */
   @InternalApi private[akka] val FutureDone: Future[Done] = Future.successful(Done)
 
+  /** INTERNAL API */
+  @InternalApi private[akka] val FutureUnit: Future[Unit] = Future.successful(())
+
   private val timestampFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss:SSS")
 
   /** INTERNAL API */

@@ -39,6 +39,7 @@ class KeyspaceAndTableStatements(
     journalStatements.createTagsProgressTable ::
     journalStatements.createTagScanningTable ::
     journalStatements.createMetadataTable ::
+    journalStatements.createAllPersistenceIdsTable ::
     Nil
 
   /**
