@@ -5,6 +5,7 @@
 package akka.persistence.cassandra.query
 
 import scala.concurrent.duration._
+
 import akka.actor.ActorSystem
 import akka.actor.NoSerializationVerificationNeeded
 import akka.annotation.InternalApi

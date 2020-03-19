@@ -4,11 +4,11 @@
 
 package akka.persistence.cassandra.healthcheck
 
-import java.time.Duration
-
 import akka.actor.{ ActorSystem, NoSerializationVerificationNeeded }
 import akka.annotation.InternalApi
 import com.typesafe.config.Config
+
+import scala.concurrent.duration._
 
 @InternalApi
 private[akka] class HealthCheckSettings(system: ActorSystem, config: Config) extends NoSerializationVerificationNeeded {
@@ -17,7 +17,7 @@ private[akka] class HealthCheckSettings(system: ActorSystem, config: Config) ext
 
   val pluginLocation: String = healthCheckConfig.getString("plugin-location")
 
-  val timeout: Duration = healthCheckConfig.getDuration("timeout")
+  val timeout: FiniteDuration = healthCheckConfig.getDuration("timeout", MILLISECONDS).millis
 
   val healthCheckCql: String = healthCheckConfig.getString("health-check-cql")
 

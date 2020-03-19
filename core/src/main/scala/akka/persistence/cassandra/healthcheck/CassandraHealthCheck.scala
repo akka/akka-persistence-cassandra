@@ -13,10 +13,9 @@ import akka.persistence.cassandra.journal.CassandraJournal.HealthCheckQuery
 import akka.util.Timeout
 
 import scala.concurrent.{ ExecutionContextExecutor, Future }
-import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
 
-class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Future[Boolean]) {
+class CassandraHealthCheck(system: ActorSystem) extends (() => Future[Boolean]) {
 
   private[akka] val log = Logging.getLogger(system, getClass)
 
@@ -26,16 +25,16 @@ class AkkaPersistenceCassandraHealthCheck(system: ActorSystem) extends (() => Fu
   private val journalRef = Persistence(system).journalFor(journalPluginId)
 
   private implicit val ec: ExecutionContextExecutor = system.dispatchers.lookup(s"$journalPluginId.plugin-dispatcher")
-  private implicit val timeout: Timeout = Duration.fromNanos(healthCheckSettings.timeout.toNanos)
+  private implicit val timeout: Timeout = healthCheckSettings.timeout
 
   override def apply(): Future[Boolean] = {
     (journalRef ? HealthCheckQuery).map(_ => true).recoverWith {
       case _: AskTimeoutException =>
         log.warning("Failed to execute health check due to ask timeout")
-        Future(false)
+        Future.successful(false)
       case NonFatal(e) =>
         log.warning("Failed to execute health check due to: {}", e)
-        Future(false)
+        Future.successful(false)
     }
   }
 }
