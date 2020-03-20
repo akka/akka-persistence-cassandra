@@ -115,6 +115,8 @@ alter table akka.messages drop used;
 0.80 introduces a completely different way to manage tags for events. You can skip right ahead to 0.98 without going to
 0.80.
 
+If you migrate directly to 1.0.0 you must first run the migration of the @ref:[All persistenceIds query](#all-persistenceids-query).
+
 It is very important that you test this migration in a pre-production environment as once you drop the materialized view
 and tag columns you can not roll back.
  
