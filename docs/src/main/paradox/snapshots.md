@@ -1,28 +1,23 @@
 # Snapshots
 
-### Features
+## Features
 
-- Implements the Akka Persistence @extref:[snapshot store plugin API](akka:persistence.html#snapshot-store-plugin-api).
+- Implements the Akka Persistence @extref:[snapshot store plugin API](akka:persistence-journals.html#snapshot-store-plugin-api).
 
-### Configuration
+## Schema
 
-To activate the snapshot-store plugin, add the following line to your Akka `application.conf`:
+The keyspace and tables needs to be created before using the plugin. 
+  
+@@@ warning
 
-    akka.persistence.snapshot-store.plugin = "akka.persistence.cassandra.snapshot"
-
-This will run the snapshot store with its default settings. The default settings can be changed with the configuration properties defined in [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
-
-### Limitations
-
-The snapshot is stored in a single row so the maximum size of a serialized snapshot is the Cassandra configured
-[`max_mutation_size_in_kb`](http://cassandra.apache.org/doc/latest/faq/index.html#can-large-blob) which is 16MB by default.
-
-### Keyspace and table definitions
-
-The default keyspace used by the plugin is called `akka_snapshot`. Auto creation of the keyspace and tables
+Auto creation of the keyspace and tables
 is included as a development convenience and should never be used in production. Cassandra does not handle
 concurrent schema migrations well and if every Akka node tries to create the schema at the same time you'll
-get column id mismatch errors in Cassandra. The keyspace should be created with the
+get column id mismatch errors in Cassandra.
+
+@@@
+
+The default keyspace used by the plugin is `akka_snapshot`, it should be created with the
 NetworkTopology replication strategy with a replication factor of at least 3:
 
 ```
@@ -34,32 +29,28 @@ For local testing, and the default if you enable `akka.persistence.cassandra.sna
 @@snip [snapshot-keyspace](/target/snapshot-keyspace.txt) { #snapshot-keyspace } 
 
 A single table is required. This needs to be created before starting your application.
-For local testing you can enable `cassnadra-plugin.snapshot.table-autocreate`
+For local testing you can enable `cassnadra-plugin.snapshot.table-autocreate`.
+The default table definitions look like this:
 
-@@snip [snapshot-tables](/target/snapshot-tables.txt) { #snapshot-tables} 
+@@snip [snapshot-tables](/target/snapshot-tables.txt) { #snapshot-tables}
 
-#### Snapshot settings
+## Configuration
 
-Under `akka.persistence.cassandra.snapshot`:
+To activate the snapshot-store plugin, add the following line to your Akka `application.conf`:
 
-@@snip [reference.conf](/core/src/main/resources/reference.conf) { #snapshot }
+    akka.persistence.snapshot-store.plugin = "akka.persistence.cassandra.snapshot"
 
-##### Cassandra driver overrides
+This will run the snapshot store with its default settings. The default settings can be changed with the configuration
+properties defined in @ref:[reference.conf](configuration.md#default-configuration). Journal configuration is under 
+`akka.persistence.cassandra.snapshot`.
 
-@@snip [reference.conf](/core/src/main/resources/reference.conf) { #profile }
+## Limitations
 
-##### Shared settings for all parts of the plugin
+The snapshot is stored in a single row so the maximum size of a serialized snapshot is the Cassandra configured
+[`max_mutation_size_in_kb`](http://cassandra.apache.org/doc/latest/faq/index.html#can-large-blob) which is 16MB by default.
 
-The following settings are shared by the `journal`, `query`, and `snapshot` parts of the plugin and are under
-`akka.persistence.cassandra`: 
+## Delete all snapshots
 
-@@snip [reference.conf](/core/src/main/resources/reference.conf) { #shared }
-
-
-
-
-### Delete all snapshots
-
-The tool `akka.persistence.cassandra.cleanup.Cleanup` can be used for deleting all events and/or snapshots
+The @apidoc[akka.persistence.cassandra.cleanup.Cleanup] tool can be used for deleting all events and/or snapshots
 given list of `persistenceIds` without using persistent actors. It's important that the actors with corresponding
 `persistenceId` are not running at the same time as using the tool.

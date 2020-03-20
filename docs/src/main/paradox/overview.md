@@ -1,6 +1,6 @@
 # Overview
 
-The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https://cassandra.apache.org) as a backend for @extref:[Akka Persistence](akka:persistence.html) and @extref:[Akka Persistence Query](akka:persistence-query.html). It uses @extref:[Alpakka Cassandra](alpakka:cassandra.html) for Cassandra access which is based on the @extref:[Datastax Java Driver](java-driver:).
+The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https://cassandra.apache.org) as a backend for @extref:[Akka Persistence](akka:typed/persistence.html) and @extref:[Akka Persistence Query](akka:persistence-query.html). It uses @extref:[Alpakka Cassandra](alpakka:cassandra.html) for Cassandra access which is based on the @extref:[Datastax Java Driver](java-driver:).
 
 ## Project Info
 
@@ -10,7 +10,7 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 
 This plugin requires **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html) for details.
 
-@@dependency [Maven,sbt,Gradle] {
+@@dependency [sbt,Maven,Gradle] {
   group=com.typesafe.akka
   artifact=akka-persistence-cassandra_$scala.binary.version$
   version=$project.version$
@@ -32,6 +32,8 @@ Note that it is important that all `akka-*` dependencies are in the same version
 The table below shows Akka Persistence Cassandra’s direct dependencies and the second tab shows all libraries it depends on transitively.
 
 @@dependencies{ projectId="core" }
+
+To use the plugin with **Akka 2.5.x** you must use @extref:[version 0.103](apc-0.x:) or later in the 0.x series. 
 
 ## Snapshots
 

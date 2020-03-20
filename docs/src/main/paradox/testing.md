@@ -1,9 +1,9 @@
 # Testing
 
-There are a number of options for testing persistent actors when using the APC plugin.
+There are a number of options for testing persistent actors when using the Akka Persistence Cassandra plugin.
 The two main methods are:
 
-* Testing using the inmem or Leveldb journals as shown in the [Akka docs](https://doc.akka.io/docs/akka/current/typed/persistence-testing.html).
+* Testing using the inmem journal as shown in the [Akka docs](https://doc.akka.io/docs/akka/current/typed/persistence-testing.html).
 * Testing against a real Cassandra instance.
 
 For testing against Cassandra you can:
