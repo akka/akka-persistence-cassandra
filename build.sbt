@@ -1,4 +1,7 @@
-ThisBuild / resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/")
+ThisBuild / resolvers ++= {
+  if (System.getProperty("override.akka.version") != null) Seq("Akka Snapshots".at("https://repo.akka.io/snapshots/"))
+  else Seq.empty
+}
 
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
