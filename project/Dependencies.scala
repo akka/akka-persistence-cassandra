@@ -6,17 +6,17 @@ object Dependencies {
   val Scala213 = "2.13.1"
   val ScalaVersions = Seq(Scala212, Scala213)
 
-  val AkkaVersion = System.getProperty("override.akka.version", "2.6.3")
+  val AkkaVersion = System.getProperty("override.akka.version", "2.6.4")
   val AkkaVersionInDocs = System.getProperty("override.akka.version", "2.6")
   val CassandraVersionInDocs = "4.0"
   val DriverVersionInDocs = "4.5"
 
-  val AlpakkaVersion = "2.0.0-M3+16-49d6b5bf"
+  val AlpakkaVersion = "2.0.0-RC1"
   val AlpakkaVersionInDocs = "2.0"
 
   val Logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
 
-  val silencerVersion = "1.4.4"
+  val silencerVersion = "1.5.0"
   val silencer = Seq(
     compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
     ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).cross(CrossVersion.patch))
