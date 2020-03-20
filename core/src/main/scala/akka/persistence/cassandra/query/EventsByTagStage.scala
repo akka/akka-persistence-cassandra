@@ -285,7 +285,7 @@ import scala.compat.java8.FutureConverters._
       val backTrackCb = getAsyncCallback[Try[Map[PersistenceId, (TagPidSequenceNr, UUID)]]] {
         case Failure(e) =>
           updateStageState(_.copy(delayedScanInProgress = false))
-          log.warning("Backtrack failed, this will retried", e)
+          log.warning("Backtrack failed, this will retried. {}", e)
         case Success(sequenceNrs) =>
           updateStageState(_.copy(delayedScanInProgress = false))
           log.debug("Current sequence nrs: {} from back tracking: {}", stageState.tagPidSequenceNrs, sequenceNrs)
