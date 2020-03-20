@@ -7,16 +7,15 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 @@@ index
 
 * [overview](overview.md)
-* [Getting Started](getting-started.md)
 * [Journal Plugin](journal.md)
 * [Query Plugin](read-journal.md)
 * [Events by tag](events-by-tag.md)
-* [reconciliation](reconciliation.md)
 * [Snapshot Plugin](snapshots.md)
 * [Serialization](serialization.md)
 * [Testing](testing.md)
 * [CQRS](cqrs.md)
-* [scylladb](scylladb.md)
-* [migrations](migrations.md)
+* [Configuration](configuration.md)
+* [ScyllaDB](scylladb.md)
+* [Migrations](migrations.md)
 
 @@@
