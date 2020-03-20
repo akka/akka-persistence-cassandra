@@ -36,11 +36,11 @@ To detect missed events without receiving another event for the same persistence
 to find events. Queries are run in the background to detect delayed events. A high frequency short back track is done
 for finding events delayed a small amount and a low frequency backtrack that scans further back. 
 
-These are configured with `akka.persistence.cassandra.query.events-by-tag.back-track`:
+These are configured with `akka.persistence.cassandra.events-by-tag.back-track`:
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #backtrack }                                                                                                                                
 
-### Tuning for lower latency
+## Tuning for lower latency
 
 The default `eventual-consistency-delay` is set to `5s` which is high as it is the safest. This can be set much lower 
 for latency sensitive applications and missed events will be detected via the above mechanisms. The downside is that
@@ -50,9 +50,7 @@ With a low value it will happen frequently.
 Like with any tuning testing should be done to see what works for your environment. The values below may be too low
 depending on the load and performance of your Cassandra cluster.
 
-#### Settings
-
-Flush the tag writes right away. By default they are batched and written as an unlogged back which increases throughput. To write each individually
+It is possible to flush the tag writes right away. By default they are batched and written as an unlogged back which increases throughput. To write each individually
 without delay use:
 ```
 akka.persistence.cassandra.events-by-tag.flush-interval = 0s
@@ -76,7 +74,7 @@ can decrease throughput and latency as more events will be missed initially and 
 akka.persistence.cassandra.events-by-tag.eventual-consistency-delay = 50ms
 ```
 
-### Missing searches and gap detection
+## Missing searches and gap detection
 
 If a gap is detected then the event is held back and the stream goes into a searching mode for the missing
 events. The search only looks in the current bucket and the previous one. If the event is older then it won't be found in this search.
@@ -104,9 +102,9 @@ If this is an issue it can be set to 0s. If events are found out of order due to
 
 ## Events by tag reconciliation
 
-In the event that the `tag_views` table gets corrupted there is a Reconciliation extension that can help fix it.
-It can only be run while the application is offline but per persistence id operations can be used if it is known that
-the persistence id is not running.
+In the event that the `tag_views` table gets corrupted there is a @apidoc[akka.persistence.cassandra.reconciler.Reconciliation]
+tool that can help fix it. It can only be run while the application is offline but per persistence id operations can
+be used if it is known that the persistence id is not running.
 
 It supports:
 
@@ -170,6 +168,9 @@ The TTL must be greater than any expected delay in using the tagged events to bu
 otherwise they'll be deleted before being read.
 
 @@@
+
+The @apidoc[akka.persistence.cassandra.cleanup.Cleanup] tool can also be used for deleting from the `tag_views`
+table.
 
 ## How it works
 
@@ -244,11 +245,3 @@ Events buffered in the tag writer.
 
 * Buffered events for the persistenceId should be dropped as if they are buffered the tag write progress
 won't have been saved as it happens after the write of the events to tag_views.
-
-### Deletion of events
-
-*Deletes are not propagated to the events by tag table.*
-
-It is assumed that the eventsByTag query is used to populate a separate read view or
-events are never deleted.
-

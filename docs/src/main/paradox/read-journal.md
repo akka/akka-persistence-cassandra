@@ -6,39 +6,19 @@ It implements the following @extref:[Persistence Queries](akka:persistence-query
 * eventsByTag, currentEventsByTag
 * persistenceIds, currentPersistenceIds 
 
-Due to the nature of Cassandra the query for `persistenceIds` is inefficient and unlikely
-to work for use cases with large amounts of data.
+See API details in @apidoc[CassandraReadJournal] and @ref:[eventsByTag documentation](events-by-tag.md). 
 
 Persistence Query usage example to obtain a stream with all events tagged with "someTag" with Persistence Query:
 
     val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
     queries.eventsByTag("someTag", Offset.noOffset)
     
-## Configuration 
+## Configuration
 
-### Query settings
+The default settings can be changed with the configuration properties defined in
+@ref:[reference.conf](configuration.md#default-configuration).
 
-Under `akka.persistence.cassandra.query`:
-
-@@snip [reference.conf](/core/src/main/resources/reference.conf) { #query }
-
-#### Cassandra driver overrides
-
-@@snip [reference.conf](/core/src/main/resources/reference.conf) { #profile }
-
-#### Shared settings for all parts of the plugin
-
-The following settings are shared by the `journal`, `query`, and `snapshot` parts of the plugin and are under
-`akka.persistence.cassandra`: 
-
-@@snip [reference.conf](/core/src/main/resources/reference.conf) { #shared }
+Query configuration is under `akka.persistence.cassandra.query`.
 
 Events by tag configuration is under `akka.persistence.cassandra.events-by-tag` and shared
 b `journal` and `query`.
-
-@@snip [reference.conf](/core/src/main/resources/reference.conf) { #events-by-tag }
-
-
-
-
-    

@@ -1,18 +1,18 @@
 # Migration
 
-### Migrating from 0.80+ to 1.0
+## Migrating from 0.80+ to 1.0
 
 * Rolling update to 1.0 requires update from 0.101 to 1.0. First update to 0.101.
 * After being deprecated, the DateTieredCompactionStrategy has been removed.
 
-#### Driver upgrade with significant configuration changes
+### Driver upgrade with significant configuration changes
 
 Version 4.x of the cassandra driver comes with a new way to configure it via [typesafe configuration](https://github.com/lightbend/config)
 which matches how Akka manages configuration.
 
 All driver related configuration e.g. query consistency, query retries etc has been removed from this
 project's `reference.conf` and now each part of the plugin (journal, snapshot and query) specify a read and write 
-[execution profile](https://docs.datastax.com/en/developer/java-driver/4.3/manual/core/configuration/#execution-profiles) that gives
+@extref:[execution profile](java-driver:manual/core/configuration/#execution-profiles) that gives
 fine grained control over consistencies and retires for each are. By default all read/write profiles are the same and under
 `datastax-java-driver.profile.akka.persistence.cassandra`. The only value in the profile provided by the plugin is setting the `basic.request.consistency`
 to `QUORUM`.
@@ -21,7 +21,7 @@ The new driver supports reconnection during initialization which was previously 
 `datastax-java-driver.advanced.reconnect-on-init = true`
 It can't be turned on by the plugin as it is in the driver's reference.conf and is not overridable in a profile.
 
-#### Changed configuration structure
+### Changed configuration structure
 
 In addition to the driver related configuration described above the overall configuration structure has been changed.
 It is now structured in four main sections within the top level `akka.persistence.cassandra` section:
@@ -78,7 +78,8 @@ tool:
 
 You can run that migration tool while the old (or new) system is running, and it can be run several times if needed.  
 
-## Migrations to 0.101 and later
+## Migrations to 0.101 and later in 0.x series
+
 
 Versions 0.101+ make it possible to drop the static column `used`.  This saves space for persistence ids
 that have been deleted. Also some cloud Cassandra versions do not support static columns.
@@ -110,7 +111,7 @@ After completed update of the configuration change the column can be dropped wit
 alter table akka.messages drop used;
 ```  
 
-## Migrations to 0.80 and later
+## Migrations to 0.80 and later in 0.x series
 
 0.80 introduces a completely different way to manage tags for events. You can skip right ahead to 0.98 without going to
 0.80.
