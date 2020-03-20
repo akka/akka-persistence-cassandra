@@ -40,7 +40,6 @@ import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
-
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
 import akka.stream.scaladsl.Source
@@ -67,6 +66,7 @@ import akka.stream.scaladsl.Source
     new CassandraJournal.EventDeserializer(context.system)
 
   private val statements: CassandraStatements = new CassandraStatements(settings)
+  private val healthCheckCql = settings.healthCheckSettings.healthCheckCql
   private val serialization = SerializationExtension(context.system)
   private val log: LoggingAdapter = Logging(context.system, getClass)
 
@@ -211,6 +211,9 @@ import akka.stream.scaladsl.Source
           result.flatMap(_ => deleteDeletedToSeqNr(persistenceId))
         else result.map(_ => Done)
       result2.pipeTo(sender())
+
+    case HealthCheckQuery =>
+      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse).pipeTo(sender)
   }
 
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
@@ -817,6 +820,10 @@ import akka.stream.scaladsl.Source
 
   private case class PartitionInfo(partitionNr: Long, minSequenceNr: Long, maxSequenceNr: Long)
   private case class MessageId(persistenceId: String, sequenceNr: Long)
+
+  sealed trait HealthCheck
+  case object HealthCheckQuery extends HealthCheck
+  case object HealthCheckResponse extends HealthCheck
 
   class EventDeserializer(system: ActorSystem) {
 
