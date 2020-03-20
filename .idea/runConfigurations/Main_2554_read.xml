@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Main 2554 read" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="akka.persistence.cassandra.example.Main" />
+    <module name="endToEndExample" />
+    <option name="VM_PARAMETERS" value="-Dakka.remote.artery.canonical.port=2554 -Dakka.management.http.port=8554 -Dconfig.resource=local.conf -Dakka.cluster.roles.0=read" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="akka.persistence.cassandra.example.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
