@@ -9,12 +9,13 @@ import akka.persistence.cassandra.reconciler.Reconciliation
 import akka.actor.ActorSystem
 import scala.concurrent.Future
 import akka.Done
+
 //#imports
 
 class ReconciliationCompileOnly {
 
   //#reconcile
-  // System should have the same caassandra plugin configuration as your application
+  // System should have the same Cassandra plugin configuration as your application
   // but be careful to remove seed nodes so this doesn't join the cluster
   val system = ActorSystem()
   import system.dispatcher

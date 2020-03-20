@@ -29,6 +29,7 @@ import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import scala.util.control.NonFatal
 
+import akka.persistence.cassandra.reconciler.Reconciliation
 import akka.stream.SystemMaterializer
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 
@@ -132,6 +133,9 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       writeToDeletedTo(pidWithSnapshot, 9)
 
       writeOldTestEventWithTags(PersistentRepr("i-1", 1L, pidExcluded), Set("bad-tag"))
+
+      // since we are writing the events directly the all_persistence_ids table must also be updated
+      reconciler.rebuildAllPersistenceIds().futureValue
     }
 
     "allow creation of the new tags view table" taggedAs (RequiresCassandraThree) in {
@@ -150,6 +154,9 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
         PersistentRepr("g-1", 1L, pidWithMeta),
         Set("blue"),
         Some("This is the best event ever"))
+
+      // since we are writing the events directly the all_persistence_ids table must also be updated
+      reconciler.rebuildAllPersistenceIds().futureValue
     }
 
     "allow a second migration to resume from where the last one got to" taggedAs (RequiresCassandraThree) in {
@@ -160,6 +167,9 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       // these events mimic the old version still running and persisting events
       writeOldTestEventWithTags(PersistentRepr("f-3", 3L, pidTwo), Set("green"))
       writeOldTestEventWithTags(PersistentRepr("f-4", 4L, pidTwo), Set("blue"))
+
+      // since we are writing the events directly the all_persistence_ids table must also be updated
+      reconciler.rebuildAllPersistenceIds().futureValue
     }
 
     "allow adding of the new tags column" taggedAs (RequiresCassandraThree) in {
@@ -369,6 +379,7 @@ abstract class AbstractEventsByTagMigrationSpec
   // very confused
   lazy val migrationSystem = ActorSystem("Migrator", system.settings.config)
   lazy val migrator = EventsByTagMigration(migrationSystem)
+  lazy val reconciler = new Reconciliation(migrationSystem)
 
   // Lazy so they don't get created until the schema changes have happened
   lazy val systemTwo = ActorSystem("EventsByTagMigration-2", system.settings.config)

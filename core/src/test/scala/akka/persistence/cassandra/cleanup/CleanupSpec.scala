@@ -96,6 +96,9 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       val cleanup = new Cleanup(system)
       cleanup.deleteAllEvents(pid, neverUsePersistenceIdAgain = true).futureValue
 
+      // also delete from all_persistence_ids
+      queries.currentPersistenceIds().runWith(Sink.seq).futureValue should not contain (pid)
+
       val p2 = system.actorOf(TestActor.props(pid))
       p2 ! GetRecoveredState
       expectMsg(RecoveredState("", Nil, 0L))
@@ -189,6 +192,9 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       val cleanup = new Cleanup(system)
       cleanup.deleteAll(pid, neverUsePersistenceIdAgain = true).futureValue
 
+      // also delete from all_persistence_ids
+      queries.currentPersistenceIds().runWith(Sink.seq).futureValue should not contain (pid)
+
       val p2 = system.actorOf(TestActor.props(pid))
       p2 ! GetRecoveredState
       expectMsg(RecoveredState("", Nil, 0L))
@@ -253,6 +259,10 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
 
       queries.currentEventsByTag(tag = "tag-a", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
       queries.currentEventsByTag(tag = "tag-c", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
+
+      // also delete from all_persistence_ids
+      val foundPids = queries.currentPersistenceIds().runWith(Sink.seq).futureValue.toSet
+      Set(pidA, pidB, pidC).intersect(foundPids) should ===(Set.empty)
     }
 
     "delete all for many persistenceId, many events, many snapshots" in {
@@ -281,6 +291,10 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       """).withFallback(system.settings.config.getConfig("akka.persistence.cassandra.cleanup"))
       val cleanup = new Cleanup(system, new CleanupSettings(conf))
       cleanup.deleteAll(pids, neverUsePersistenceIdAgain = true).futureValue
+
+      // also delete from all_persistence_ids
+      val foundPids = queries.currentPersistenceIds().runWith(Sink.seq).futureValue.toSet
+      pids.toSet.intersect(foundPids) should ===(Set.empty)
 
       val p2 = system.actorOf(TestActor.props(pids.last))
       p2 ! GetRecoveredState
