@@ -15,9 +15,9 @@ import akka.util.Timeout
 import scala.concurrent.{ ExecutionContextExecutor, Future }
 import scala.util.control.NonFatal
 
-class CassandraHealthCheck(system: ActorSystem) extends (() => Future[Boolean]) {
+final class CassandraHealthCheck(system: ActorSystem) extends (() => Future[Boolean]) {
 
-  private[akka] val log = Logging.getLogger(system, getClass)
+  private val log = Logging.getLogger(system, getClass)
 
   private val settings = new PluginSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
   private val healthCheckSettings = settings.healthCheckSettings

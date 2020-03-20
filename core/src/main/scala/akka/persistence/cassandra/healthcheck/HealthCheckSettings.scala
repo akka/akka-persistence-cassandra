@@ -11,7 +11,8 @@ import com.typesafe.config.Config
 import scala.concurrent.duration._
 
 @InternalApi
-private[akka] class HealthCheckSettings(system: ActorSystem, config: Config) extends NoSerializationVerificationNeeded {
+private[akka] final class HealthCheckSettings(system: ActorSystem, config: Config)
+    extends NoSerializationVerificationNeeded {
 
   private val healthCheckConfig = config.getConfig("healthcheck")
 
