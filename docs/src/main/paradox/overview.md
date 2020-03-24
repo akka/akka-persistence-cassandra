@@ -17,13 +17,13 @@ This plugin requires **Akka $akka.version$** or later. See [Akka's Binary Compat
   symbol=AkkaVersion
   value=$akka.version$
   group1=com.typesafe.akka
-  artifact1=akka-persistence
+  artifact1=akka-persistence_$scala.binary.version$
   version1=AkkaVersion
   group2=com.typesafe.akka
-  artifact2=akka-persistence-query
+  artifact2=akka-persistence-query_$scala.binary.version$
   version2=AkkaVersion
   group3=com.typesafe.akka
-  artifact3=akka-cluster-tools
+  artifact3=akka-cluster-tools_$scala.binary.version$
   version3=AkkaVersion
 }
 
