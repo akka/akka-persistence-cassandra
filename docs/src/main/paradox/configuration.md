@@ -37,7 +37,13 @@ It is not enabled automatically as it is in the driver's reference.conf and is n
 ## Contact points configuration
 
 The Cassandra server contact points can be defined with the @extref:[Cassandra driver configuration](java-driver:manual/core/configuration/)
-`datastax-java-driver.contact-points` and `datastax-java-driver.load-balancing-policy.local-datacenter`.
+
+```
+datastax-java-driver {
+  basic.contact-points = ["127.0.0.1:9042"]
+  basic.load-balancing-policy.local-datacenter = "datacenter1"
+}
+```
 
 Alternatively, Akka Discovery can be used for finding the Cassandra server contact points as described
 in the @extref:[Alpakka Cassandra documentation](alpakka:cassandra.html#using-akka-discovery).
