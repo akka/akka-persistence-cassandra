@@ -100,7 +100,7 @@ After complete roll out of a 0.101+ version in step 1 the configuration can be c
 at all.
 
 ```
-akka.persistence.cassandra.journal-static-column-compat = off
+cassandra-journal.write-static-column-compat = off
 ```
 
 It can still run with an old schema where the column exists. 
@@ -216,7 +216,7 @@ It is also not required to add the materialized views, not even if the meta data
 If you don't alter existing messages table and still use `tables-autocreate=on` you have to set config:
 
 ```
-akka.persistence.cassandra.meta-in-events-by-tag-view = off
+cassandra-journal.meta-in-events-by-tag-view = off
 ``` 
 
 When trying to create the materialized view (tables-autocreate=on) with the meta columns before corresponding columns have been added the messages table an exception "Undefined column name meta_ser_id" is raised, because Cassandra validates the ["CREATE MATERIALIZED VIEW IF NOT EXISTS"](https://docs.datastax.com/en/cql/3.3/cql/cql_reference/cqlCreateMaterializedView.html#cqlCreateMaterializedView__if-not-exists) even though the view already exists and will not be created. To work around that issue you can disable the meta columns in the materialized view by setting `meta-in-events-by-tag-view=off`.
