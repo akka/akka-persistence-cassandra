@@ -149,7 +149,7 @@ class CassandraReadJournal protected (
    */
   val session: CassandraSession = {
     CassandraSessionRegistry(system).sessionFor(
-      CassandraSessionSettings(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses)),
+      CassandraSessionSettings(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses, log)),
       sharedConfig)
   }
 

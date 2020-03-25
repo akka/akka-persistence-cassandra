@@ -10,6 +10,7 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.annotation.InternalApi
+import akka.event.LoggingAdapter
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
 import akka.persistence.cassandra.FutureDone
@@ -84,8 +85,11 @@ import akka.persistence.cassandra.FutureDone
    * Execute creation of keyspace and tables if that is enabled in config.
    * Avoid calling this from several threads at the same time to
    * reduce the risk of (annoying) "Column family ID mismatch" exception.
+   *
+   * Exceptions will be logged but will not fail the returned Future.
    */
-  def executeCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
+  def executeCreateKeyspaceAndTables(session: CqlSession, log: LoggingAdapter)(
+      implicit ec: ExecutionContext): Future[Done] = {
     def keyspace: Future[Done] =
       if (snapshotSettings.keyspaceAutoCreate)
         session.executeAsync(createKeyspace).toScala.map(_ => Done)
@@ -101,8 +105,18 @@ import akka.persistence.cassandra.FutureDone
         session.setSchemaMetadataEnabled(null)
         Done
       }
-      result.failed.foreach(_ => session.setSchemaMetadataEnabled(null))
-      result
-    } else keyspace
+      result.recoverWith {
+        case e =>
+          log.warning("Failed to create snapshot keyspace and tables: {}", e)
+          session.setSchemaMetadataEnabled(null)
+          FutureDone
+      }
+    } else {
+      keyspace.recoverWith {
+        case e =>
+          log.warning("Failed to create snapshot keyspace: {}", e)
+          FutureDone
+      }
+    }
   }
 }

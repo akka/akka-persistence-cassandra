@@ -9,6 +9,7 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.annotation.InternalApi
+import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournalStatements
 import akka.persistence.cassandra.snapshot.CassandraSnapshotStatements
 import com.datastax.oss.driver.api.core.CqlSession
@@ -24,10 +25,18 @@ private[akka] class CassandraStatements(val settings: PluginSettings) {
 
   val snapshotStatements: CassandraSnapshotStatements = new CassandraSnapshotStatements(settings.snapshotSettings)
 
-  def executeAllCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
+  /**
+   * Execute creation of keyspace and tables if that is enabled in config.
+   * Avoid calling this from several threads at the same time to
+   * reduce the risk of (annoying) "Column family ID mismatch" exception.
+   *
+   * Exceptions will be logged but will not fail the returned Future.
+   */
+  def executeAllCreateKeyspaceAndTables(session: CqlSession, log: LoggingAdapter)(
+      implicit ec: ExecutionContext): Future[Done] = {
     for {
-      _ <- journalStatements.executeCreateKeyspaceAndTables(session)
-      _ <- snapshotStatements.executeCreateKeyspaceAndTables(session)
+      _ <- journalStatements.executeCreateKeyspaceAndTables(session, log)
+      _ <- snapshotStatements.executeCreateKeyspaceAndTables(session, log)
     } yield Done
   }
 
