@@ -1,9 +1,11 @@
 import com.typesafe.sbt.packager.docker._
 
-ThisBuild / resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/")
-// TODO Remove this when depending on released versions of Alpakka
-ThisBuild / resolvers += Resolver.bintrayRepo("akka", "snapshots")
-// make version compatible with docker
+ThisBuild / resolvers ++= {
+  if (System.getProperty("override.akka.version") != null) Seq("Akka Snapshots".at("https://repo.akka.io/snapshots/"))
+  else Seq.empty
+}
+
+// make version compatible with docker for publishing example project
 ThisBuild / dynverSeparator := "-"
 
 lazy val root = (project in file("."))
@@ -106,6 +108,8 @@ lazy val docs = project
         "extref.alpakka.base_url" -> s"https://doc.akka.io/docs/alpakka/${Dependencies.AlpakkaVersionInDocs}/%s",
         "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.AlpakkaVersionInDocs}/",
         "javadoc.akka.stream.alpakka.base_url" -> "",
+        // APC 0.x
+        "extref.apc-0.x.base_url" -> s"https://doc.akka.io/docs/akka-persistence-cassandra/0.103/%s",
         // Cassandra
         "extref.cassandra.base_url" -> s"https://cassandra.apache.org/doc/${Dependencies.CassandraVersionInDocs}/%s",
         // Datastax Java driver

@@ -40,7 +40,6 @@ import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
-
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
 import akka.stream.scaladsl.Source
@@ -67,6 +66,7 @@ import akka.stream.scaladsl.Source
     new CassandraJournal.EventDeserializer(context.system)
 
   private val statements: CassandraStatements = new CassandraStatements(settings)
+  private val healthCheckCql = settings.healthCheckSettings.healthCheckCql
   private val serialization = SerializationExtension(context.system)
   private val log: LoggingAdapter = Logging(context.system, getClass)
 
@@ -135,6 +135,9 @@ import akka.stream.scaladsl.Source
     } else
       deletesNotSupportedException
   }
+  private def preparedInsertIntoAllPersistenceIds: Future[PreparedStatement] = {
+    session.prepare(statements.journalStatements.insertIntoAllPersistenceIds)
+  }
 
   private def preparedWriteMessageWithMeta =
     session.prepare(statements.journalStatements.writeMessage(withMeta = true))
@@ -193,6 +196,7 @@ import akka.stream.scaladsl.Source
       preparedWriteMessageWithMeta
       preparedSelectMessages
       preparedSelectHighestSequenceNr
+      preparedInsertIntoAllPersistenceIds
       if (settings.journalSettings.supportDeletes) {
         preparedDeleteMessages
         preparedSelectDeletedTo
@@ -208,9 +212,14 @@ import akka.stream.scaladsl.Source
       val result = asyncDeleteMessagesTo(persistenceId, Long.MaxValue)
       val result2: Future[Done] =
         if (neverUsePersistenceIdAgain)
-          result.flatMap(_ => deleteDeletedToSeqNr(persistenceId))
+          result
+            .flatMap(_ => deleteDeletedToSeqNr(persistenceId))
+            .flatMap(_ => deleteFromAllPersistenceIds(persistenceId))
         else result.map(_ => Done)
       result2.pipeTo(sender())
+
+    case HealthCheckQuery =>
+      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse).pipeTo(sender)
   }
 
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
@@ -264,7 +273,7 @@ import akka.stream.scaladsl.Source
               todo match {
                 case write :: remainder =>
                   writeMessages(write).flatMap(_ => rec(remainder))
-                case Nil => Future.successful(())
+                case Nil => FutureUnit
               }
 
             rec(groups)
@@ -336,15 +345,25 @@ import akka.stream.scaladsl.Source
   }
 
   private def writeMessages(atomicWrites: Seq[SerializedAtomicWrite]): Future[Unit] = {
+    // insert into the all_persistence_ids table for the first event, used by persistenceIds query
+    val allPersistenceId =
+      if (atomicWrites.head.payload.head.sequenceNr == 1L)
+        preparedInsertIntoAllPersistenceIds.map(_.bind(atomicWrites.head.persistenceId)).flatMap(execute(_))
+      else
+        FutureUnit
+
     val boundStatements: Seq[Future[BoundStatement]] = statementGroup(atomicWrites)
-    boundStatements.size match {
-      case 1 =>
-        boundStatements.head.flatMap(execute(_))
-      case 0 => Future.successful(())
-      case _ =>
-        Future.sequence(boundStatements).flatMap { stmts =>
-          executeBatch(batch => stmts.foldLeft(batch) { case (acc, next) => acc.add(next) })
-        }
+
+    allPersistenceId.flatMap { _ =>
+      boundStatements.size match {
+        case 1 =>
+          boundStatements.head.flatMap(execute(_))
+        case 0 => FutureUnit
+        case _ =>
+          Future.sequence(boundStatements).flatMap { stmts =>
+            executeBatch(batch => stmts.foldLeft(batch) { case (acc, next) => acc.add(next) })
+          }
+      }
     }
   }
 
@@ -436,7 +455,7 @@ import akka.stream.scaladsl.Source
             log.debug("[{}] New pid. Sending blank tag progress. [{}]", persistenceId, persistentActor)
             tr.setTagProgress(persistenceId, Map.empty)
           } else {
-            Future.successful(())
+            FutureUnit
           }
         } yield seqNr
       case None =>
@@ -560,10 +579,7 @@ import akka.stream.scaladsl.Source
       deleteResult.map(_ => Done)
     }
 
-    /**
-     * Deletes the events by inserting into the metadata table deleted_to
-     * and physically deletes the rows.
-     */
+    // Deletes the events by inserting into the metadata table deleted_to and physically deletes the rows.
     def logicalAndPhysicalDelete(highestDeletedSequenceNumber: Long, highestSequenceNr: Long): Future[Done] = {
       val lowestPartition = partitionNr(highestDeletedSequenceNumber + 1, journalSettings.targetPartitionSize)
       val toSeqNr = math.min(toSequenceNr, highestSequenceNr)
@@ -572,7 +588,7 @@ import akka.stream.scaladsl.Source
         if (toSeqNr <= highestDeletedSequenceNumber) {
           // already deleted same or higher sequence number, don't update highestDeletedSequenceNumber,
           // but perform the physical delete (again), may be a retry request
-          Future.successful(())
+          FutureUnit
         } else {
           val boundInsertDeletedTo =
             preparedInsertDeletedTo.map(_.bind(persistenceId, toSeqNr: JLong))
@@ -603,6 +619,10 @@ import akka.stream.scaladsl.Source
 
   private def deleteDeletedToSeqNr(persistenceId: String): Future[Done] = {
     session.executeWrite(statements.journalStatements.deleteDeletedTo, persistenceId).map(_ => Done)
+  }
+
+  private def deleteFromAllPersistenceIds(persistenceId: String): Future[Done] = {
+    session.executeWrite(statements.journalStatements.deleteFromAllPersistenceIds, persistenceId).map(_ => Done)
   }
 
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
@@ -820,6 +840,10 @@ import akka.stream.scaladsl.Source
 
   private case class PartitionInfo(partitionNr: Long, minSequenceNr: Long, maxSequenceNr: Long)
   private case class MessageId(persistenceId: String, sequenceNr: Long)
+
+  sealed trait HealthCheck
+  case object HealthCheckQuery extends HealthCheck
+  case object HealthCheckResponse extends HealthCheck
 
   class EventDeserializer(system: ActorSystem) {
 

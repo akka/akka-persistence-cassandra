@@ -19,9 +19,9 @@ class EventsByTagCrashSpec extends CassandraSpec(EventsByTagRestartSpec.config) 
   "EventsByTag" must {
 
     "should handle crashes of the persistent actor" in {
-      // crash the actor 250 times, persist 5 events each time
+      // crash the actor many times, persist 5 events each time
       val crashEvery = 5
-      val crashNr = 250
+      val crashNr = 20
       val msgs = crashEvery * crashNr
       val p2 = system.actorOf(TestTaggingActor.props("p2", Set("blue")))
       (1 to msgs).foreach { cn =>

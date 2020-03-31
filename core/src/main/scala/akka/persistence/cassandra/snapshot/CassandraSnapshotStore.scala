@@ -238,7 +238,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
                         .flatMap(stmts => executeBatch(batch => stmts.foreach(batch.addStatement)))))
                   .map(_ => ())
               } else {
-                Future.successful(())
+                FutureUnit
               }
           }
         }

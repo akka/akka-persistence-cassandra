@@ -105,6 +105,15 @@ final private[akka] class ReconciliationSession(session: CassandraSession, state
       _ <- tagScanning
     } yield Done
   }
+
+  def insertIntoPersistenceIds(): Sink[String, Future[Done]] = {
+    val pstmt = session.prepare(statements.journalStatements.insertIntoAllPersistenceIds)
+    Sink
+      .futureSink(pstmt.map(p =>
+        Sink.foreachAsync[String](1)(persistenceId => session.executeWrite(p.bind(persistenceId)).map(_ => ()))))
+      .mapMaterializedValue(_.flatten)
+  }
+
 }
 
 /**
@@ -192,4 +201,6 @@ final class Reconciliation(systemProvider: ClassicActorSystemProvider, settings:
    */
   def truncateTagView(): Future[Done] = recSession.truncateAll()
 
+  def rebuildAllPersistenceIds(): Future[Done] =
+    queries.currentPersistenceIdsFromMessages().runWith(recSession.insertIntoPersistenceIds())
 }

@@ -11,14 +11,14 @@ object Dependencies {
   val CassandraVersionInDocs = "4.0"
   val DriverVersionInDocs = "4.5"
 
-  val AlpakkaVersion = "2.0.0-M3+16-49d6b5bf"
+  val AlpakkaVersion = "2.0.0-RC1"
   val AlpakkaVersionInDocs = AlpakkaVersion.take(3)
   // for example
   val AkkaManagementVersion = "1.0.6"
 
   val Logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
 
-  val silencerVersion = "1.4.4"
+  val silencerVersion = "1.5.0"
   val silencer = Seq(
     compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
     ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).cross(CrossVersion.patch))

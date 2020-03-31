@@ -34,7 +34,7 @@ import akka.persistence.cassandra.FutureDone
   // ser_manifest together with ser_id is used for the serialization of the event (payload).
   def createTable =
     s"""
-      |CREATE TABLE IF NOT EXISTS ${tableName} (
+      |CREATE TABLE IF NOT EXISTS $tableName (
       |  persistence_id text,
       |  partition_nr bigint,
       |  sequence_nr bigint,
@@ -56,7 +56,7 @@ import akka.persistence.cassandra.FutureDone
 
   def createTagsTable =
     s"""
-      |CREATE TABLE IF NOT EXISTS ${tagTableName} (
+      |CREATE TABLE IF NOT EXISTS $tagTableName (
       |  tag_name text,
       |  persistence_id text,
       |  sequence_nr bigint,
@@ -98,12 +98,18 @@ import akka.persistence.cassandra.FutureDone
      |  PRIMARY KEY (persistence_id))
      """.stripMargin.trim
 
-  def createMetadataTable =
+  def createMetadataTable: String =
     s"""
      |CREATE TABLE IF NOT EXISTS $metadataTableName(
      |  persistence_id text PRIMARY KEY,
      |  deleted_to bigint,
      |  properties map<text,text>)
+    """.stripMargin.trim
+
+  def createAllPersistenceIdsTable: String =
+    s"""
+     |CREATE TABLE IF NOT EXISTS $allPersistenceIdsTableName(
+     |  persistence_id text PRIMARY KEY)
     """.stripMargin.trim
 
   def writeMessage(withMeta: Boolean) =
@@ -252,7 +258,7 @@ import akka.persistence.cassandra.FutureDone
 
   def deleteMessage =
     s"""
-      DELETE FROM ${tableName} WHERE
+      DELETE FROM $tableName WHERE
         persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr = ?
@@ -261,14 +267,14 @@ import akka.persistence.cassandra.FutureDone
   def deleteMessages(cassandra2xCompat: Boolean) =
     if (cassandra2xCompat)
       s"""
-      DELETE FROM ${tableName} WHERE
+      DELETE FROM $tableName WHERE
         persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr = ?
     """
     else
       s"""
-      DELETE FROM ${tableName} WHERE
+      DELETE FROM $tableName WHERE
         persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr >= 0 AND
@@ -277,7 +283,7 @@ import akka.persistence.cassandra.FutureDone
 
   def selectMessages =
     s"""
-      SELECT * FROM ${tableName} WHERE
+      SELECT * FROM $tableName WHERE
         persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr >= ? AND
@@ -286,7 +292,7 @@ import akka.persistence.cassandra.FutureDone
 
   def selectHighestSequenceNr =
     s"""
-     SELECT sequence_nr FROM ${tableName} WHERE
+     SELECT sequence_nr FROM $tableName WHERE
        persistence_id = ? AND
        partition_nr = ?
        ORDER BY sequence_nr
@@ -295,19 +301,30 @@ import akka.persistence.cassandra.FutureDone
 
   def selectDeletedTo =
     s"""
-      SELECT deleted_to FROM ${metadataTableName} WHERE
+      SELECT deleted_to FROM $metadataTableName WHERE
         persistence_id = ?
     """
 
   def insertDeletedTo =
     s"""
-      INSERT INTO ${metadataTableName} (persistence_id, deleted_to)
+      INSERT INTO $metadataTableName (persistence_id, deleted_to)
       VALUES ( ?, ? )
     """
 
   def deleteDeletedTo =
     s"""
-      DELETE FROM ${metadataTableName} where persistence_id = ?
+      DELETE FROM $metadataTableName where persistence_id = ?
+    """
+
+  def insertIntoAllPersistenceIds =
+    s"""
+      INSERT INTO $allPersistenceIdsTableName (persistence_id)
+      VALUES ( ? )
+    """
+
+  def deleteFromAllPersistenceIds =
+    s"""
+      DELETE FROM $allPersistenceIdsTableName where persistence_id = ?
     """
 
   protected def tableName = s"${journalSettings.keyspace}.${journalSettings.table}"
@@ -315,6 +332,7 @@ import akka.persistence.cassandra.FutureDone
   private def tagProgressTableName = s"${journalSettings.keyspace}.tag_write_progress"
   private def tagScanningTableName = s"${journalSettings.keyspace}.tag_scanning"
   private def metadataTableName = s"${journalSettings.keyspace}.${journalSettings.metadataTable}"
+  private def allPersistenceIdsTableName = s"${journalSettings.keyspace}.${journalSettings.allPersistenceIdsTable}"
 
   /**
    * Execute creation of keyspace and tables if that is enabled in config.
@@ -344,6 +362,7 @@ import akka.persistence.cassandra.FutureDone
         _ <- keyspace
         _ <- session.executeAsync(createTable).toScala
         _ <- session.executeAsync(createMetadataTable).toScala
+        _ <- session.executeAsync(createAllPersistenceIdsTable).toScala
         _ <- tagStatements
       } yield {
         session.setSchemaMetadataEnabled(null)

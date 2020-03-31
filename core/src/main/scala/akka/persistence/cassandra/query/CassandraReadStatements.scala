@@ -18,6 +18,12 @@ import akka.persistence.cassandra.PluginSettings
 
   private def tableName = s"${journalSettings.keyspace}.${journalSettings.table}"
   private def tagViewTableName = s"${journalSettings.keyspace}.${eventsByTagSettings.tagTable.name}"
+  private def allPersistenceIdsTableName = s"${journalSettings.keyspace}.${journalSettings.allPersistenceIdsTable}"
+
+  def selectAllPersistenceIds =
+    s"""
+      SELECT persistence_id FROM $allPersistenceIdsTableName
+     """
 
   def selectDistinctPersistenceIds =
     s"""

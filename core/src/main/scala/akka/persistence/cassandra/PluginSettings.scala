@@ -7,6 +7,7 @@ package akka.persistence.cassandra
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
 import akka.annotation.InternalStableApi
+import akka.persistence.cassandra.healthcheck.HealthCheckSettings
 import akka.persistence.cassandra.journal.JournalSettings
 import akka.persistence.cassandra.query.QuerySettings
 import akka.persistence.cassandra.snapshot.SnapshotSettings
@@ -24,6 +25,8 @@ import com.typesafe.config.Config
   val querySettings: QuerySettings = new QuerySettings(system, config, eventsByTagSettings)
 
   val snapshotSettings: SnapshotSettings = new SnapshotSettings(system, config)
+
+  val healthCheckSettings: HealthCheckSettings = new HealthCheckSettings(system, config)
 }
 
 /**
