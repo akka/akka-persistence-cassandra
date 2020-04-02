@@ -83,8 +83,9 @@ import akka.stream.scaladsl.Source
   // so fine to use an immutable list as the value
   private val pendingDeletes: JMap[String, List[PendingDelete]] = new JHMap
 
-  private val session: CassandraSession = CassandraSessionRegistry(context.system)
-    .sessionFor(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses))
+  private val session: CassandraSession =
+    CassandraSessionRegistry(context.system)
+      .sessionFor(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses, log))
 
   private val taggedPreparedStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
   private val tagWriterSession = TagWritersSession(
