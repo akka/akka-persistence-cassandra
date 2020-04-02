@@ -4,11 +4,12 @@
 
 package akka.persistence.cassandra
 
-import java.net.InetSocketAddress
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
+
+import scala.concurrent.Await
 
 import akka.actor.{ ActorSystem, PoisonPill, Props }
 import akka.persistence.PersistentActor
@@ -18,6 +19,9 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest._
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
+
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
+import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 
 object CassandraLifecycle {
 
@@ -40,6 +44,7 @@ object CassandraLifecycle {
     # needed when testing with Akka 2.6
     akka.actor.allow-java-serialization = on
     akka.actor.warn-about-java-serializer-usage = off
+    akka.use-slf4j = off
     """).withFallback(CassandraSpec.enableAutocreate).resolve()
 
   def awaitPersistenceInit(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
@@ -99,14 +104,11 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
 
   def systemName: String
 
-  def port(): Int = 9042
+  lazy val cluster: CqlSession =
+    Await.result(session.underlying(), 10.seconds)
 
-  lazy val cluster = {
-    CqlSession
-      .builder()
-      .withLocalDatacenter("datacenter1")
-      .addContactPoint(new InetSocketAddress("localhost", port()))
-      .build()
+  def session: CassandraSession = {
+    CassandraSessionRegistry(system).sessionFor("akka.persistence.cassandra")
   }
 
   override protected def beforeAll(): Unit = {
@@ -119,8 +121,8 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   }
 
   override protected def afterAll(): Unit = {
-    shutdown(system, verifySystemShutdown = true)
     externalCassandraCleanup()
+    shutdown(system, verifySystemShutdown = true)
     super.afterAll()
   }
 

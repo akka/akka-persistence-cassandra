@@ -219,6 +219,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
     session.serverMetaData.flatMap { meta =>
       if (meta.isVersion2
+          || settings.cosmosDb
           || 0L < criteria.minTimestamp
           || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
         preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
