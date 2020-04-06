@@ -96,7 +96,7 @@ object CassandraLauncher {
 
   /**
    * Select two free ports.
-   * Note that requestPort is always used even if user requested a fixed port. We want to make sure the port it no in use
+   * Note that requestPort is always used even if user requested a fixed port. We want to make sure the port is not in use
    * and won't conflict with the storagePort
    */
   private def selectFreePorts(host: String, requestedPort: Int): (Int, Int) = {
