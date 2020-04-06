@@ -50,7 +50,7 @@ import akka.persistence.cassandra.FutureDone
       |  meta_ser_manifest text,
       |  meta blob,
       |  tags set<text>,
-      |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
+      |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp))
       |  WITH gc_grace_seconds =${journalSettings.gcGraceSeconds}
       |  AND compaction = ${indent(journalSettings.tableCompactionStrategy.asCQL, "    ")}
     """.stripMargin.trim
