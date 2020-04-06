@@ -5,14 +5,16 @@
 package akka.persistence.cassandra.testkit
 
 import java.io._
-import java.net.{ InetSocketAddress, Socket, URI }
+import java.net.{InetSocketAddress, Socket, URI}
 import java.nio.channels.ServerSocketChannel
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.varargs
 import scala.collection.immutable
 import scala.concurrent.duration._
+import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 
 /**
@@ -68,20 +70,66 @@ object CassandraLauncher {
 
   private var cassandraDaemon: Option[Closeable] = None
 
+  private val DEFAULT_HOST = "127.0.0.1"
+
   /**
    * The random free port that will be used if `port=0` is
    * specified in the `start` method.
+   *
+   * Calling `randomPort` before `start` is not recommended. It will fix the value and won't necessarily
+   * reflect the value that is effectively used by the launcher.
    */
-  lazy val randomPort: Int = freePort()
+  lazy val randomPort: Int = {
+    selectedPorts.compareAndSet((0,0), selectFreePorts(DEFAULT_HOST, 0))
+    selectedPorts.get()._1
+  }
 
+
+  @deprecated("Internal API, will be removed in future release", "0.104")
   def freePort(): Int = {
     val serverSocket = ServerSocketChannel.open().socket()
-    serverSocket.bind(new InetSocketAddress("127.0.0.1", 0))
+    serverSocket.bind(new InetSocketAddress(DEFAULT_HOST, 0))
     val port = serverSocket.getLocalPort
     serverSocket.close()
     port
   }
 
+
+  private val selectedPorts: AtomicReference[(Int, Int)] = new AtomicReference((0,0))
+
+  /**
+   * Select two free ports.
+   * Note that requestPort is always used even if user requested a fixed port. We want to make sure the port it no in use
+   * and won't conflict with the storagePort
+   */
+  private def selectFreePorts(host: String, requestedPort: Int): (Int, Int) = {
+
+    val clientSocket = ServerSocketChannel.open().socket()
+    val storageSocket = ServerSocketChannel.open().socket()
+
+    try {
+      clientSocket.bind(new InetSocketAddress(host, requestedPort))
+      storageSocket.bind(new InetSocketAddress(host, 0))
+
+      // return both ports
+      (clientSocket.getLocalPort, storageSocket.getLocalPort)
+
+    } finally  {
+      // close independently
+      val t1 = Try(clientSocket.close())
+      val t2 = Try(storageSocket.close())
+
+      // if one the two failed, we should throw the exception
+      (t1, t2) match {
+        case (Failure(ex1), Failure(ex2)) => throw new RuntimeException(s"Failed to close sockets: client '${ex1.getMessage}', storage '${ex2.getMessage}'" )
+        case (Failure(ex1), _) => throw new RuntimeException(s"Failed to close client-port socket: '${ex1.getMessage}'" )
+        case (_, Failure(ex2)) => throw new RuntimeException(s"Failed to close storage-port socket: '${ex2.getMessage}'" )
+        case (_, _) => // we are fine, all closed
+      }
+
+    }
+
+  }
   /**
    * Use this to locate classpath elements from the current classpath to add
    * to the classpath of the launched Cassandra.
@@ -191,9 +239,23 @@ object CassandraLauncher {
 
       prepareCassandraDirectory(cassandraDirectory, clean)
 
-      val realHost = host.getOrElse("127.0.0.1")
-      val realPort = if (port == 0) randomPort else port
-      val storagePort = freePort()
+      val realHost = host.getOrElse(DEFAULT_HOST)
+
+      // NOTE: read comments bellow to get the full picture
+      if (port != 0) {
+        // if user explicitly passes a port, we should use it and override `selectedPorts`
+        // selectedPorts may have been already set if user has previously called `randomPort`
+        // in such a case, randomPort will be fixed to a 'wrong' old number
+        selectedPorts.set(selectFreePorts(realHost, port))
+      }
+      else {
+        // if a random port is requested, we only override `selectedPorts` if not yet calculated (eg: default (0,0)).
+        // If user has previously called `randomPort`, we will already have a value and we should keep using it.
+        selectedPorts.compareAndSet((0,0), selectFreePorts(realHost, port))
+      }
+
+      val (realPort, storagePort) = selectedPorts.get()
+
       println(
         s"Starting Cassandra on port client port: $realPort storage port $storagePort host $realHost java version ${System
           .getProperty("java.runtime.version")}")
