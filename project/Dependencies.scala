@@ -11,7 +11,7 @@ object Dependencies {
   val CassandraVersionInDocs = "4.0"
   val DriverVersionInDocs = "4.5"
 
-  val AlpakkaVersion = "2.0.0-RC1"
+  val AlpakkaVersion = "2.0.0-RC2"
   val AlpakkaVersionInDocs = "2.0"
 
   val Logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
