@@ -5,7 +5,7 @@
 package akka.persistence.cassandra.testkit
 
 import java.io._
-import java.net.{InetSocketAddress, Socket, URI}
+import java.net.{ InetSocketAddress, Socket, URI }
 import java.nio.channels.ServerSocketChannel
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.varargs
 import scala.collection.immutable
 import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 import scala.util.control.NonFatal
 
 /**
@@ -80,11 +80,9 @@ object CassandraLauncher {
    * reflect the value that is effectively used by the launcher.
    */
   lazy val randomPort: Int = {
-    selectedPorts.compareAndSet((0,0), selectFreePorts(DEFAULT_HOST, 0))
+    selectedPorts.compareAndSet((0, 0), selectFreePorts(DEFAULT_HOST, 0))
     selectedPorts.get()._1
   }
-
-
   @deprecated("Internal API, will be removed in future release", "0.104")
   def freePort(): Int = {
     val serverSocket = ServerSocketChannel.open().socket()
@@ -94,8 +92,7 @@ object CassandraLauncher {
     port
   }
 
-
-  private val selectedPorts: AtomicReference[(Int, Int)] = new AtomicReference((0,0))
+  private val selectedPorts: AtomicReference[(Int, Int)] = new AtomicReference((0, 0))
 
   /**
    * Select two free ports.
@@ -114,22 +111,26 @@ object CassandraLauncher {
       // return both ports
       (clientSocket.getLocalPort, storageSocket.getLocalPort)
 
-    } finally  {
+    } finally {
       // close independently
       val t1 = Try(clientSocket.close())
       val t2 = Try(storageSocket.close())
 
       // if one the two failed, we should throw the exception
       (t1, t2) match {
-        case (Failure(ex1), Failure(ex2)) => throw new RuntimeException(s"Failed to close sockets: client '${ex1.getMessage}', storage '${ex2.getMessage}'" )
-        case (Failure(ex1), _) => throw new RuntimeException(s"Failed to close client-port socket: '${ex1.getMessage}'" )
-        case (_, Failure(ex2)) => throw new RuntimeException(s"Failed to close storage-port socket: '${ex2.getMessage}'" )
+        case (Failure(ex1), Failure(ex2)) =>
+          throw new RuntimeException(
+            s"Failed to close sockets: client '${ex1.getMessage}', storage '${ex2.getMessage}'")
+        case (Failure(ex1), _) => throw new RuntimeException(s"Failed to close client-port socket: '${ex1.getMessage}'")
+        case (_, Failure(ex2)) =>
+          throw new RuntimeException(s"Failed to close storage-port socket: '${ex2.getMessage}'")
         case (_, _) => // we are fine, all closed
       }
 
     }
 
   }
+
   /**
    * Use this to locate classpath elements from the current classpath to add
    * to the classpath of the launched Cassandra.
@@ -247,11 +248,10 @@ object CassandraLauncher {
         // selectedPorts may have been already set if user has previously called `randomPort`
         // in such a case, randomPort will be fixed to a 'wrong' old number
         selectedPorts.set(selectFreePorts(realHost, port))
-      }
-      else {
+      } else {
         // if a random port is requested, we only override `selectedPorts` if not yet calculated (eg: default (0,0)).
         // If user has previously called `randomPort`, we will already have a value and we should keep using it.
-        selectedPorts.compareAndSet((0,0), selectFreePorts(realHost, port))
+        selectedPorts.compareAndSet((0, 0), selectFreePorts(realHost, port))
       }
 
       val (realPort, storagePort) = selectedPorts.get()
