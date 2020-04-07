@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.varargs
 import scala.collection.immutable
 import scala.concurrent.duration._
-import scala.util.{ Failure, Success, Try }
+import scala.util.{ Failure, Try }
 import scala.util.control.NonFatal
 
 /**
@@ -72,6 +72,9 @@ object CassandraLauncher {
 
   private val DEFAULT_HOST = "127.0.0.1"
 
+  private val initialPortsValue = (0, 0)
+  private val selectedPorts: AtomicReference[(Int, Int)] = new AtomicReference(initialPortsValue)
+
   /**
    * The random free port that will be used if `port=0` is
    * specified in the `start` method.
@@ -80,9 +83,10 @@ object CassandraLauncher {
    * reflect the value that is effectively used by the launcher.
    */
   lazy val randomPort: Int = {
-    selectedPorts.compareAndSet((0, 0), selectFreePorts(DEFAULT_HOST, 0))
+    selectedPorts.compareAndSet(initialPortsValue, selectFreePorts(DEFAULT_HOST, 0))
     selectedPorts.get()._1
   }
+
   @deprecated("Internal API, will be removed in future release", "0.104")
   def freePort(): Int = {
     val serverSocket = ServerSocketChannel.open().socket()
@@ -91,8 +95,6 @@ object CassandraLauncher {
     serverSocket.close()
     port
   }
-
-  private val selectedPorts: AtomicReference[(Int, Int)] = new AtomicReference((0, 0))
 
   /**
    * Select two free ports.
@@ -251,7 +253,7 @@ object CassandraLauncher {
       } else {
         // if a random port is requested, we only override `selectedPorts` if not yet calculated (eg: default (0,0)).
         // If user has previously called `randomPort`, we will already have a value and we should keep using it.
-        selectedPorts.compareAndSet((0, 0), selectFreePorts(realHost, port))
+        selectedPorts.compareAndSet(initialPortsValue, selectFreePorts(realHost, port))
       }
 
       val (realPort, storagePort) = selectedPorts.get()
