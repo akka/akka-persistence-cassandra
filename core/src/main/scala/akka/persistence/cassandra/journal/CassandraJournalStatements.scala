@@ -50,7 +50,7 @@ import akka.persistence.cassandra.FutureDone
       |  meta_ser_manifest text,
       |  meta blob,
       |  tags set<text>,
-      |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
+      |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp))
       |  WITH gc_grace_seconds =${journalSettings.gcGraceSeconds}
       |  AND compaction = ${indent(journalSettings.tableCompactionStrategy.asCQL, "    ")}
     """.stripMargin.trim
@@ -136,20 +136,7 @@ import akka.persistence.cassandra.FutureDone
         persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr = ? AND
-        timestamp = ? AND
-        timebucket = ?
-     """
-
-  def addTagsToMessagesTable: String =
-    s"""
-       UPDATE $tableName
-       SET tags = tags + ?
-       WHERE
-        persistence_id = ? AND
-        partition_nr = ? AND
-        sequence_nr = ? AND
-        timestamp = ? AND
-        timebucket = ?
+        timestamp = ?
      """
 
   def writeTags(withMeta: Boolean): String =
