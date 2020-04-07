@@ -136,20 +136,7 @@ import akka.persistence.cassandra.FutureDone
         persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr = ? AND
-        timestamp = ? AND
-        timebucket = ?
-     """
-
-  def addTagsToMessagesTable: String =
-    s"""
-       UPDATE $tableName
-       SET tags = tags + ?
-       WHERE
-        persistence_id = ? AND
-        partition_nr = ? AND
-        sequence_nr = ? AND
-        timestamp = ? AND
-        timebucket = ?
+        timestamp = ?
      """
 
   def writeTags(withMeta: Boolean): String =
