@@ -6,7 +6,7 @@ All events are tagged with a configurable number of tags `tag-1`, `tag-2`, etc.
 
 Then there are N processors that each process a configured number of tags.
 
-The write side will use processor * tags per processors as the toal number of tags
+The write side will use processor * tags per processors as the total number of tags
 
 There are three roles:
 
@@ -42,7 +42,7 @@ IntelliJ run configurations are included.
 
 ## Running inside a Kubernetes Cluster
 
-Configuration and sbt-native-packager are included for running in K8s.
+Configuration and sbt-native-packager are included for running in K8s for larger scale tests.
 
 There are three deployments in the `kubernetes` folder. One for each role. They all join the same cluster
 and use the same image. They have imagePullPolicy set to Never for minikube, remove this for a real cluster.
@@ -50,8 +50,8 @@ and use the same image. They have imagePullPolicy set to Never for minikube, rem
 ### Configure your docker registry and username
 
 The app image must be in a registry the cluster can see.
-The build.sbt uses dockerhub and the `kubakka` user. Update this if your cluster can't 
-access dockerhub.
+The build.sbt uses DockerHub and the `kubakka` user. Update this if your cluster can't 
+access DockerHub.
 
 To push an image to docker hub run:
 
