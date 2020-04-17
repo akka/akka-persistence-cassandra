@@ -8,14 +8,16 @@ import java.util.UUID
 
 import akka.actor.ActorRef
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec }
-import akka.persistence.query.Offset
 import akka.persistence.{ DeleteMessagesSuccess, PersistentRepr }
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
-
 import scala.concurrent.duration._
+
+import akka.persistence.query.TimeBasedUUID
+import akka.stream.scaladsl.Sink
+import akka.util.UUIDComparator
 
 object EventsByPersistenceIdSpec {
   val config = ConfigFactory.parseString(s"""
@@ -111,16 +113,28 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       src.runWith(TestSink.probe[Any]).request(2).expectComplete()
     }
 
-    "produce correct sequence of sequence numbers and offsets" in {
+    "produce correct sequence of sequence numbers" in {
       setup("h", 3)
 
       val src = queries.currentEventsByPersistenceId("h", 0L, Long.MaxValue)
       src
-        .map(x => (x.persistenceId, x.sequenceNr, x.offset))
+        .map(x => (x.persistenceId, x.sequenceNr))
         .runWith(TestSink.probe[Any])
         .request(4)
-        .expectNext(("h", 1, Offset.sequence(1)), ("h", 2, Offset.sequence(2)), ("h", 3, Offset.sequence(3)))
+        .expectNext(("h", 1), ("h", 2), ("h", 3))
         .expectComplete()
+    }
+
+    "produce correct offsets" in {
+      setup("offset", 3)
+
+      val src = queries.currentEventsByPersistenceId("offset", 0L, Long.MaxValue)
+      val offsets =
+        src.map(x => x.offset).runWith(Sink.seq).futureValue
+
+      val timeUuids = offsets.map(_.asInstanceOf[TimeBasedUUID].value)
+      UUIDComparator.comparator.compare(timeUuids.head, timeUuids(1)) should be < 0
+      UUIDComparator.comparator.compare(timeUuids(1), timeUuids(2)) should be < 0
     }
 
     "produce correct sequence of events across multiple partitions" in {
@@ -146,13 +160,18 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       val (killKill, probe) = queries
         .eventsByPersistenceId("jo", 0L, Long.MaxValue)
         .viaMat(KillSwitches.single)(Keep.right)
-        .map(x => (x.persistenceId, x.sequenceNr, x.offset))
+        .map(x => (x.event, x.sequenceNr, x.offset))
         .toMat(TestSink.probe[Any])(Keep.both)
         .run()
 
       probe.request(5)
 
-      probe.expectNext(("jo", 1, Offset.sequence(1)), ("jo", 2, Offset.sequence(2)))
+      val (event1, seqNr1, TimeBasedUUID(uuid1)) = probe.requestNext()
+      event1 shouldBe "jo-1"
+      seqNr1 shouldBe 1
+      val (event2, seqNr2, TimeBasedUUID(uuid2)) = probe.requestNext()
+      event2 shouldBe "jo-2"
+      seqNr2 shouldBe 2
       system.log.debug("Saw evt 1 and 2")
 
       // 4 arrived out of order
@@ -169,7 +188,22 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       writeTestEvent(PersistentRepr("jo-3", 3L, "jo"))
       system.log.debug("Wrote evt 3")
 
-      probe.expectNext(("jo", 3, Offset.sequence(3)), ("jo", 4, Offset.sequence(4)), ("jo", 5, Offset.sequence(5)))
+      val (event3, seqNr3, TimeBasedUUID(uuid3)) = probe.requestNext()
+      event3 shouldBe "jo-3"
+      seqNr3 shouldBe 3
+
+      val (event4, seqNr4, TimeBasedUUID(uuid4)) = probe.requestNext()
+      event4 shouldBe "jo-4"
+      seqNr4 shouldBe 4
+
+      val (event5, seqNr5, TimeBasedUUID(uuid5)) = probe.requestNext()
+      event5 shouldBe "jo-5"
+      seqNr5 shouldBe 5
+
+      UUIDComparator.comparator.compare(uuid1, uuid2) should be < 0
+      UUIDComparator.comparator.compare(uuid2, uuid4) should be < 0
+      UUIDComparator.comparator.compare(uuid4, uuid5) should be < 0
+      UUIDComparator.comparator.compare(uuid5, uuid3) should be < 0
 
       killKill.shutdown()
       probe.expectComplete()

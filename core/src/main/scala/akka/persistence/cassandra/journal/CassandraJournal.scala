@@ -751,7 +751,7 @@ import akka.stream.scaladsl.Source
             settings.journalSettings.readProfile,
             "asyncReplayMessages",
             extractor = Extractors.persistentRepr(eventDeserializer, serialization))
-          .map(p => queries.mapEvent(p.persistentRepr))
+          .map(queries.mapEvent)
           .runForeach(replayCallback)
           .map(_ => ())
     }
