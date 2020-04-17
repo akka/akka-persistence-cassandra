@@ -182,6 +182,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
   "Cassandra query currentEventsByTag" must {
     "set ttl on table" in {
+      cluster.refreshSchema()
       val options = cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_views").get().getOptions
 
       options.get(CqlIdentifier.fromCql("default_time_to_live")) shouldEqual 86400
@@ -1394,10 +1395,12 @@ class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.di
 
   "Events by tag disabled" must {
     "stop tag_views being created" in {
+      cluster.refreshSchema()
       cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_views") shouldEqual Optional.empty()
     }
 
     "stop tag_progress being created" in {
+      cluster.refreshSchema()
       cluster.getMetadata.getKeyspace(journalName).get.getTable("tag_write_progress") shouldEqual Optional.empty()
     }
 

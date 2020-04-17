@@ -27,6 +27,8 @@ import com.typesafe.config.Config
   val snapshotSettings: SnapshotSettings = new SnapshotSettings(system, config)
 
   val healthCheckSettings: HealthCheckSettings = new HealthCheckSettings(system, config)
+
+  val cosmosDb: Boolean = config.getBoolean("compatibility.cosmosdb")
 }
 
 /**

@@ -131,7 +131,7 @@ import akka.stream.scaladsl.Source
   private def preparedDeleteMessages: Future[PreparedStatement] = {
     if (settings.journalSettings.supportDeletes) {
       session.serverMetaData.flatMap { meta =>
-        session.prepare(statements.journalStatements.deleteMessages(meta.isVersion2))
+        session.prepare(statements.journalStatements.deleteMessages(meta.isVersion2 || settings.cosmosDb))
       }
     } else
       deletesNotSupportedException
@@ -518,7 +518,7 @@ import akka.stream.scaladsl.Source
 
     def physicalDelete(lowestPartition: Long, highestPartition: Long, toSeqNr: Long): Future[Done] = {
       session.serverMetaData.flatMap { meta =>
-        if (meta.isVersion2) {
+        if (meta.isVersion2 || settings.cosmosDb) {
           physicalDelete2xCompat(lowestPartition, highestPartition, toSeqNr)
         } else {
           val deleteResult =

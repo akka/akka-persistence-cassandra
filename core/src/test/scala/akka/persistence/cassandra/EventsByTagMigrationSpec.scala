@@ -411,7 +411,6 @@ abstract class AbstractEventsByTagMigrationSpec
   override protected def afterAll(): Unit = {
     try {
       externalCassandraCleanup()
-      cluster.close()
     } catch {
       case NonFatal(e) =>
         println("Failed to cleanup cassandra")
