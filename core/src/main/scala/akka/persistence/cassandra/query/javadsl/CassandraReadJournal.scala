@@ -112,6 +112,8 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    *
    * The offset of each event is provided in the streamed envelopes returned,
    * which makes it possible to resume the stream at a later point from a given offset.
+   * The `offset` parameter is exclusive, i.e. the event corresponding to the given `offset` parameter is not
+   * included in the stream. The `Offset` type is `akka.persistence.query.TimeBasedUUID`.
    *
    * For querying events that happened after a long unix timestamp you can use [[timeBasedUUIDFrom]]
    * to create the offset to use with this method.
@@ -160,18 +162,18 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
   /**
    * `eventsByPersistenceId` is used to retrieve a stream of events for a particular persistenceId.
    *
-   * In addition to the `offset` the `EventEnvelope` also provides `persistenceId` and `sequenceNr`
+   * The `EventEnvelope` contains the event and provides `persistenceId` and `sequenceNr`
    * for each event. The `sequenceNr` is the sequence number for the persistent actor with the
    * `persistenceId` that persisted the event. The `persistenceId` + `sequenceNr` is an unique
    * identifier for the event.
    *
-   * `sequenceNr` and `offset` are always the same for an event and they define ordering for events
-   * emitted by this query. Causality is guaranteed (`sequenceNr`s of events for a particular
-   * `persistenceId` are always ordered in a sequence monotonically increasing by one). Multiple
-   * executions of the same bounded stream are guaranteed to emit exactly the same stream of events.
-   *
    * `fromSequenceNr` and `toSequenceNr` can be specified to limit the set of returned events.
    * The `fromSequenceNr` and `toSequenceNr` are inclusive.
+   *
+   * The `EventEnvelope` also provides an `offset`, which is the same kind of offset as is used in the
+   * `eventsByTag` query. The `Offset` type is `akka.persistence.query.TimeBasedUUID`.
+   *
+   * The returned event stream is ordered by `sequenceNr`.
    *
    * Deleted events are also deleted from the event stream.
    *
@@ -210,12 +212,6 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    * but it continues to push new `persistenceId`s when new events are persisted.
    * Corresponding query that is completed when it reaches the end of the currently
    * known `persistenceId`s is provided by `currentPersistenceIds`.
-   *
-   * Note the query is inefficient, especially for large numbers of `persistenceId`s, because
-   * of limitation of current internal implementation providing no information supporting
-   * ordering/offset queries. The query uses Cassandra's `select distinct` capabilities.
-   * More importantly the live query has to repeatedly execute the query each `refresh-interval`,
-   * because order is not defined and new `persistenceId`s may appear anywhere in the query results.
    */
   override def persistenceIds(): Source[String, NotUsed] =
     scaladslReadJournal.persistenceIds().asJava

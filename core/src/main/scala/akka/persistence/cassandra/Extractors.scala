@@ -7,17 +7,21 @@ package akka.persistence.cassandra
 import com.datastax.oss.driver.api.core.cql.Row
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal._
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.annotation.InternalApi
 import java.{ util => ju }
+
 import akka.util.OptionVal
 import akka.serialization.Serialization
 import scala.collection.JavaConverters._
 import java.nio.ByteBuffer
+
 import com.datastax.oss.protocol.internal.util.Bytes
 import akka.actor.ActorSystem
+import akka.persistence.query.TimeBasedUUID
 
 /**
  * An Extractor takes reads a row from the messages table. There are different extractors
@@ -48,10 +52,6 @@ import akka.actor.ActorSystem
   }
 
   final case class SeqNrValue(sequenceNr: Long)
-
-  final case class PersistentReprValue(persistentRepr: PersistentRepr) {
-    def sequenceNr: Long = persistentRepr.sequenceNr
-  }
 
   private[akka] def deserializeRawEvent(
       system: ActorSystem,
@@ -124,10 +124,17 @@ import akka.actor.ActorSystem
     }
   }
 
-  def persistentRepr(e: EventDeserializer, s: Serialization): Extractor[PersistentReprValue] =
-    new Extractor[PersistentReprValue] {
-      override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[PersistentReprValue] =
-        extractPersistentRepr(row, e, s, async).map(PersistentReprValue.apply)
+  def persistentRepr(e: EventDeserializer, s: Serialization): Extractor[PersistentRepr] =
+    new Extractor[PersistentRepr] {
+      override def extract(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[PersistentRepr] =
+        extractPersistentRepr(row, e, s, async)
+    }
+
+  def persistentReprAndOffset(e: EventDeserializer, s: Serialization): Extractor[(PersistentRepr, TimeBasedUUID)] =
+    new Extractor[(PersistentRepr, TimeBasedUUID)] {
+      override def extract(row: Row, async: Boolean)(
+          implicit ec: ExecutionContext): Future[(PersistentRepr, TimeBasedUUID)] =
+        extractPersistentRepr(row, e, s, async).map(repr => repr -> TimeBasedUUID(row.getUuid("timestamp")))
     }
 
   def taggedPersistentRepr(ed: EventDeserializer, s: Serialization): Extractor[TaggedPersistentRepr] =
