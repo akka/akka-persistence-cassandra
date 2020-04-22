@@ -26,9 +26,9 @@ These guidelines mainly apply to Lightbend's "mature" projects - not necessarily
 
 Depending on which version (or sometimes module) you want to work on, you should target a specific branch as explained below:
 
-* `master` – development branch for Cassandra 3.x and Akka 2.5
-* `release-2.4` – development/release branch for Cassandra 3.x and Akka 2.4
-* `cassandra-2.x` – old development branch for Cassandra 2.x, but master can also be used with a Cassandra 2.x server (and we are currently only making releases from `master` and `release-2.4`) 
+* 1.0 -> `master` - current active development and stable 1.0.x patch releases
+* 0.80+ (currently 0.100) -> `release-0.x`  - removed use of Cassandra Materialized Views after they were marked as not to be used in production. 
+* 0.50+ (currently 0.62) -> `release-0.50`- first release under this organisation, previously under krasserm. No planned releases for this version. 
 
 ## General Workflow
 
@@ -154,5 +154,5 @@ that automatically merges the code, builds it, runs the tests and comments on th
 
 ## Source style
 
-akka-persistence-cassandra uses [Scalariform](https://github.com/scala-ide/scalariform) to enforce some of the code style rules.
+akka-persistence-cassandra uses [Scalafmt](http://scalameta.org/scalafmt/) to enforce some of the code style rules.
 

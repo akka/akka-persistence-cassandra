@@ -1,30 +1,29 @@
 # Releasing
 
-From a direct clone (rather than a fork). You will need permission in sonatype to push to akka repositories.
+Create a new issue from the [Release Train Issue Template](docs/release-train-issue-template.md):
 
-* run `core/test:runMain akka.persistence.cassandra.PrintCreateStatements` if keyspace/table statements or config have changed,
-  paste into README.md
-* commit and push a new version number in the README.md
-* make sure to use JDK 8
-* sbt -Dpublish.maven.central=true
-  * clean
-  * release skip-tests
-* close the staging repo in sonatype (https://oss.sonatype.org/#welcome)
-* verify the contents of the staging
-* release the staging repo in sonatype
-* push to origin including tags
-* WhiteSource
-  * update the 'akka-persistence-cassandra-xx-stable' project name in [WhiteSource](https://saas.whitesourcesoftware.com)
-  * checkout the released version, e.g. v0.80
-  * `sbt whitesourceUpdate`
-* Ask someone in the Akka team to update the [Lightbend Platform "Library build dependencies" page](https://developer.lightbend.com/docs/lightbend-platform/introduction/getting-help/build-dependencies.html#_akka_persistence_cassandra) (requires Lightbend private GitHub permission). Only for stable releases, not milestones/RCs.
-* Make a release announcement 
-* When the tag is pushed the documentation will be built automatically, but you need to update the links: 
 ```
-ssh akkarepo@gustav.akka.io
-cd www
-ln -nsf $VERSION$ api/akka-persistence-cassandra/current
-ln -nsf $VERSION$ docs/akka-persistence-cassandra/current
-git add docs/akka-persistence-cassandra/current api/akka-persistence-cassandra/current api/akka-persistence-cassandra/$VERSION$ docs/akka-persistence-cassandra/$VERSION$
-git commit -m "akka persistence cassandra $VERSION$
+$ sh ./scripts/create-release-issue.sh 1.x.y
 ```
+
+### Releasing only updated docs
+
+It is possible to release a revised documentation to the already existing release.
+
+1. Create a new branch from a release tag. If a revised documentation is for the `v1.0.1` release, then the name of the new branch should be `docs/v1.0.1`.
+1. Add and commit `version.sbt` file that pins the version to the one, that is being revised. Also set `isSnapshot` to `false` for the stable documentation links. For example:
+    ```scala
+    ThisBuild / version := "1.0.1"
+    ThisBuild / isSnapshot := false
+    ```
+1. Make all of the required changes to the documentation.
+1. Build documentation locally with:
+    ```sh
+    sbt docs/previewSite
+    ```
+1. If the generated documentation looks good, send it to Gustav:
+    ```sh
+    rm -r docs/target/site
+    sbt docs/publishRsync
+    ```
+1. Do not forget to push the new branch back to GitHub.
