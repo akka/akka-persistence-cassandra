@@ -14,7 +14,7 @@ Implementation in the `master` branch is currently `1.0.x` release.
 
 ## Documentation
 
-Current Documentation is available at https://doc.akka.io/docs/akka-persistence-cassandra/current/.
+The current version's documentation is available at https://doc.akka.io/docs/akka-persistence-cassandra/current/.
 
 [Snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) and [snapshot artifacts](https://oss.sonatype.org/content/repositories/snapshots/com/typesafe/akka/akka-persistence-cassandra_2.12/) are published for every successful `master` branch build.
 
