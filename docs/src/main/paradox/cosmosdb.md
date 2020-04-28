@@ -9,8 +9,8 @@
 [CosmosDB](https://docs.microsoft.com/en-us/azure/cosmos-db/) is a wire compatible replacement for Cassandra.
 
 Initial testing shows that most things are working. There is one issue related to deletes.
-Delete of events isn't supported because CosmosDB has a different behavior for clustering columns than Cassandra.
-This is probably will probably be fixed in CosmosDB.
+Delete of events isn't supported because CosmosDB doesn't support range deletes yet, and has a different behavior
+for clustering columns than Cassandra. This will probably be fixed in CosmosDB.
 
 When using CosmosDB you need to configure:
 
