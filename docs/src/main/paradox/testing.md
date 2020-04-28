@@ -26,3 +26,5 @@ For testing it can be convenient to enable automatic creation of keyspace and ta
       snapshot.tables-autocreate = on
     }
 
+
+Another recommended configuration is to not run test in parallel to avoid contention around manipulating the cassandra keyspace. Using sbt, you are able to control the `parallelExecution` as described [here](https://www.scala-sbt.org/1.x/docs/Testing.html).
