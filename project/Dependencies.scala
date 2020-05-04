@@ -11,7 +11,7 @@ object Dependencies {
   val CassandraVersionInDocs = "4.0"
   val DriverVersionInDocs = "4.5"
 
-  val AlpakkaVersion = "2.0.0-RC1"
+  val AlpakkaVersion = "2.0.0"
   val AlpakkaVersionInDocs = AlpakkaVersion.take(3)
   // for example
   val AkkaManagementVersion = "1.0.6"

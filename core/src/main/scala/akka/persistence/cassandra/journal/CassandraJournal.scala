@@ -83,8 +83,9 @@ import akka.stream.scaladsl.Source
   // so fine to use an immutable list as the value
   private val pendingDeletes: JMap[String, List[PendingDelete]] = new JHMap
 
-  private val session: CassandraSession = CassandraSessionRegistry(context.system)
-    .sessionFor(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses))
+  private val session: CassandraSession =
+    CassandraSessionRegistry(context.system)
+      .sessionFor(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses, log))
 
   private val taggedPreparedStatements = new TaggedPreparedStatements(statements.journalStatements, session.prepare)
   private val tagWriterSession = TagWritersSession(
@@ -130,7 +131,7 @@ import akka.stream.scaladsl.Source
   private def preparedDeleteMessages: Future[PreparedStatement] = {
     if (settings.journalSettings.supportDeletes) {
       session.serverMetaData.flatMap { meta =>
-        session.prepare(statements.journalStatements.deleteMessages(meta.isVersion2))
+        session.prepare(statements.journalStatements.deleteMessages(meta.isVersion2 || settings.cosmosDb))
       }
     } else
       deletesNotSupportedException
@@ -517,7 +518,7 @@ import akka.stream.scaladsl.Source
 
     def physicalDelete(lowestPartition: Long, highestPartition: Long, toSeqNr: Long): Future[Done] = {
       session.serverMetaData.flatMap { meta =>
-        if (meta.isVersion2) {
+        if (meta.isVersion2 || settings.cosmosDb) {
           physicalDelete2xCompat(lowestPartition, highestPartition, toSeqNr)
         } else {
           val deleteResult =
@@ -750,7 +751,7 @@ import akka.stream.scaladsl.Source
             settings.journalSettings.readProfile,
             "asyncReplayMessages",
             extractor = Extractors.persistentRepr(eventDeserializer, serialization))
-          .map(p => queries.mapEvent(p.persistentRepr))
+          .map(queries.mapEvent)
           .runForeach(replayCallback)
           .map(_ => ())
     }

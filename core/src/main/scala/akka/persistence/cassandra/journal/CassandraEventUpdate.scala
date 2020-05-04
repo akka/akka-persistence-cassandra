@@ -121,7 +121,6 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
       .setLong("partition_nr", partitionNr)
       .setLong("sequence_nr", s.sequenceNr)
       .setUuid("timestamp", s.timeUuid)
-      .setString("timebucket", s.timeBucket.key.toString)
       .setInt("ser_id", s.serId)
       .setString("ser_manifest", s.serManifest)
       .setString("event_manifest", s.eventAdapterManifest)

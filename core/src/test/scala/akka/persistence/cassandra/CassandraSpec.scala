@@ -23,13 +23,13 @@ import org.scalatest.time.{ Milliseconds, Seconds, Span }
 import org.scalatest.{ Outcome, Suite }
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.matchers.should.Matchers
-
 import scala.collection.immutable
 import scala.concurrent.duration._
+
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
-
 import scala.util.control.NonFatal
+
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.actor.PoisonPill
 
@@ -46,12 +46,10 @@ object CassandraSpec {
     reduced.head.replaceFirst(""".*\.""", "").replaceAll("[^a-zA-Z_0-9]", "_").take(48) // Max length of a c* keyspace
   }
 
-  def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String, port: Int): Config =
+  def configOverrides(journalKeyspace: String, snapshotStoreKeyspace: String): Config =
     ConfigFactory.parseString(s"""
       akka.persistence.cassandra {
         journal.keyspace = $journalKeyspace
-        # FIXME this is not the way to configure port. Do we need port config in tests?
-        port = $port
         
         snapshot {
           keyspace = $snapshotStoreKeyspace
@@ -77,7 +75,8 @@ object CassandraSpec {
 
   val fallbackConfig = ConfigFactory.parseString(s"""
       akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
-      akka.loglevel = DEBUG
+      akka.loglevel = INFO
+      akka.use-slf4j = off
 
       datastax-java-driver {
         basic.request {
@@ -197,7 +196,6 @@ abstract class CassandraSpec(
       keyspaces().foreach { keyspace =>
         cluster.execute(s"drop keyspace if exists $keyspace")
       }
-      cluster.close()
     } catch {
       case NonFatal(t) =>
         println("Exception during cleanup")
@@ -208,7 +206,7 @@ abstract class CassandraSpec(
   final implicit lazy val system: ActorSystem = {
     // always use this port and keyspace generated here, then test config, then the lifecycle config
     val finalConfig =
-      configOverrides(journalName, snapshotName, port())
+      configOverrides(journalName, snapshotName)
         .withFallback(config) // test's config
         .withFallback(fallbackConfig) // generally good config that tests can override
         .withFallback(CassandraLifecycle.config)

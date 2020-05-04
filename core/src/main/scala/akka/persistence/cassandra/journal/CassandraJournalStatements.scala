@@ -10,6 +10,7 @@ import scala.concurrent.Future
 
 import akka.Done
 import akka.annotation.InternalApi
+import akka.event.LoggingAdapter
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.indent
 import com.datastax.oss.driver.api.core.CqlSession
@@ -49,7 +50,7 @@ import akka.persistence.cassandra.FutureDone
       |  meta_ser_manifest text,
       |  meta blob,
       |  tags set<text>,
-      |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp, timebucket))
+      |  PRIMARY KEY ((persistence_id, partition_nr), sequence_nr, timestamp))
       |  WITH gc_grace_seconds =${journalSettings.gcGraceSeconds}
       |  AND compaction = ${indent(journalSettings.tableCompactionStrategy.asCQL, "    ")}
     """.stripMargin.trim
@@ -135,20 +136,7 @@ import akka.persistence.cassandra.FutureDone
         persistence_id = ? AND
         partition_nr = ? AND
         sequence_nr = ? AND
-        timestamp = ? AND
-        timebucket = ?
-     """
-
-  def addTagsToMessagesTable: String =
-    s"""
-       UPDATE $tableName
-       SET tags = tags + ?
-       WHERE
-        persistence_id = ? AND
-        partition_nr = ? AND
-        sequence_nr = ? AND
-        timestamp = ? AND
-        timebucket = ?
+        timestamp = ?
      """
 
   def writeTags(withMeta: Boolean): String =
@@ -338,8 +326,11 @@ import akka.persistence.cassandra.FutureDone
    * Execute creation of keyspace and tables if that is enabled in config.
    * Avoid calling this from several threads at the same time to
    * reduce the risk of (annoying) "Column family ID mismatch" exception.
+   *
+   * Exceptions will be logged but will not fail the returned Future.
    */
-  def executeCreateKeyspaceAndTables(session: CqlSession)(implicit ec: ExecutionContext): Future[Done] = {
+  def executeCreateKeyspaceAndTables(session: CqlSession, log: LoggingAdapter)(
+      implicit ec: ExecutionContext): Future[Done] = {
 
     def tagStatements: Future[Done] =
       if (eventsByTagSettings.eventsByTagEnabled) {
@@ -368,9 +359,19 @@ import akka.persistence.cassandra.FutureDone
         session.setSchemaMetadataEnabled(null)
         Done
       }
-      result.failed.foreach(_ => session.setSchemaMetadataEnabled(null))
-      result
-    } else keyspace
+      result.recoverWith {
+        case e =>
+          log.warning("Failed to create journal keyspace and tables: {}", e)
+          session.setSchemaMetadataEnabled(null)
+          FutureDone
+      }
+    } else {
+      keyspace.recoverWith {
+        case e =>
+          log.warning("Failed to create journal keyspace: {}", e)
+          FutureDone
+      }
+    }
 
     done
   }

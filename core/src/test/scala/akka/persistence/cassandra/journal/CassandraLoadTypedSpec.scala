@@ -119,7 +119,7 @@ class CassandraLoadTypedSpec extends CassandraSpec(dumpRowsOnFailure = false) wi
 
   private def testThroughput(processor: ActorRef[Command], probe: TestProbe[String]): Unit = {
     val warmCycles = 100L
-    val loadCycles = 2000L
+    val loadCycles = 500L // increase for serious testing
 
     (1L to warmCycles).foreach { i =>
       processor ! "a"

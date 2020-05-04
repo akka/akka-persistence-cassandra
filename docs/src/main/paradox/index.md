@@ -16,6 +16,7 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 * [CQRS](cqrs.md)
 * [Health check](healthcheck.md)
 * [Configuration](configuration.md)
+* [CosmosDB](cosmosdb.md)
 * [ScyllaDB](scylladb.md)
 * [Migrations](migrations.md)
 

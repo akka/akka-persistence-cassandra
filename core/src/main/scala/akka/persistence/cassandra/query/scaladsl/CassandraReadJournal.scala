@@ -149,7 +149,7 @@ class CassandraReadJournal protected (
    */
   val session: CassandraSession = {
     CassandraSessionRegistry(system).sessionFor(
-      CassandraSessionSettings(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses)),
+      CassandraSessionSettings(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses, log)),
       sharedConfig)
   }
 
@@ -264,6 +264,8 @@ class CassandraReadJournal protected (
    *
    * The offset of each event is provided in the streamed envelopes returned,
    * which makes it possible to resume the stream at a later point from a given offset.
+   * The `offset` parameter is exclusive, i.e. the event corresponding to the given `offset` parameter is not
+   * included in the stream. The `Offset` type is `akka.persistence.query.TimeBasedUUID`.
    *
    * For querying events that happened after a long unix timestamp you can use [[timeBasedUUIDFrom]]
    * to create the offset to use with this method.
@@ -513,18 +515,18 @@ class CassandraReadJournal protected (
   /**
    * `eventsByPersistenceId` is used to retrieve a stream of events for a particular persistenceId.
    *
-   * In addition to the `offset` the `EventEnvelope` also provides `persistenceId` and `sequenceNr`
+   * The `EventEnvelope` contains the event and provides `persistenceId` and `sequenceNr`
    * for each event. The `sequenceNr` is the sequence number for the persistent actor with the
    * `persistenceId` that persisted the event. The `persistenceId` + `sequenceNr` is an unique
    * identifier for the event.
    *
-   * `sequenceNr` and `offset` are always the same for an event and they define ordering for events
-   * emitted by this query. Causality is guaranteed (`sequenceNr`s of events for a particular
-   * `persistenceId` are always ordered in a sequence monotonically increasing by one). Multiple
-   * executions of the same bounded stream are guaranteed to emit exactly the same stream of events.
-   *
    * `fromSequenceNr` and `toSequenceNr` can be specified to limit the set of returned events.
    * The `fromSequenceNr` and `toSequenceNr` are inclusive.
+   *
+   * The `EventEnvelope` also provides an `offset`, which is the same kind of offset as is used in the
+   * `eventsByTag` query. The `Offset` type is `akka.persistence.query.TimeBasedUUID`.
+   *
+   * The returned event stream is ordered by `sequenceNr`.
    *
    * Deleted events are also deleted from the event stream.
    *
@@ -545,10 +547,11 @@ class CassandraReadJournal protected (
       Some(querySettings.refreshInterval),
       querySettings.readProfile,
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
+      extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization))
+      .mapConcat {
+        case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
+      }
       .mapMaterializedValue(_ => NotUsed)
-      .map(p => mapEvent(p.persistentRepr))
-      .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
    * Same type of query as `eventsByPersistenceId` but the event stream
@@ -567,10 +570,11 @@ class CassandraReadJournal protected (
       None,
       querySettings.readProfile,
       s"currentEventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
+      extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization))
+      .mapConcat {
+        case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
+      }
       .mapMaterializedValue(_ => NotUsed)
-      .map(p => mapEvent(p.persistentRepr))
-      .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
    * INTERNAL API
@@ -589,8 +593,10 @@ class CassandraReadJournal protected (
       refreshInterval.orElse(Some(querySettings.refreshInterval)),
       settings.journalSettings.readProfile, // write journal read-profile
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization),
-      fastForwardEnabled = true).map(p => mapEvent(p.persistentRepr)).mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
+      extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization),
+      fastForwardEnabled = true).mapConcat {
+      case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
+    }
 
   /**
    * INTERNAL API: This is a low-level method that return journal events as they are persisted.
@@ -644,11 +650,6 @@ class CassandraReadJournal protected (
   @InternalApi private[akka] def mapEvent(persistentRepr: PersistentRepr): PersistentRepr =
     persistentRepr
 
-  private def toEventEnvelopes(persistentRepr: PersistentRepr, offset: Long): immutable.Iterable[EventEnvelope] =
-    adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope(Offset.sequence(offset), persistentRepr.persistenceId, persistentRepr.sequenceNr, payload, 0L)
-    }
-
   private def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
       EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload, timestampFrom(offset))
@@ -682,12 +683,6 @@ class CassandraReadJournal protected (
    * but it continues to push new `persistenceId`s when new events are persisted.
    * Corresponding query that is completed when it reaches the end of the currently
    * known `persistenceId`s is provided by `currentPersistenceIds`.
-   *
-   * Note the query is inefficient, especially for large numbers of `persistenceId`s, because
-   * of limitation of current internal implementation providing no information supporting
-   * ordering/offset queries. The query uses Cassandra's `select distinct` capabilities.
-   * More importantly the live query has to repeatedly execute the query each `refresh-interval`,
-   * because order is not defined and new `persistenceId`s may appear anywhere in the query results.
    */
   override def persistenceIds(): Source[String, NotUsed] =
     persistenceIds(Some(querySettings.refreshInterval), "allPersistenceIds")
