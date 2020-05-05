@@ -61,7 +61,9 @@ lazy val docs = project
     Preprocess / siteSubdirName := s"api/akka-persistence-cassandra/${projectInfoVersion.value}",
     Preprocess / sourceDirectory := (LocalRootProject / ScalaUnidoc / unidoc / target).value,
     Paradox / siteSubdirName := s"docs/akka-persistence-cassandra/${projectInfoVersion.value}",
-    paradoxProperties ++= Map(
+    Compile / paradoxProperties ++= Map(
+        "project.url" -> "https://doc.akka.io/docs/akka-persistence-cassandra/current/",
+        "canonical.base_url" -> "https://doc.akka.io/docs/akka-persistence-cassandra/current",
         "akka.version" -> Dependencies.AkkaVersion,
         // Akka
         "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${Dependencies.AkkaVersionInDocs}/%s",
