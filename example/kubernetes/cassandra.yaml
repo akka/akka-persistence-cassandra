@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: cassandra
+  name: cassandra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cassandra
+
+  template:
+    metadata:
+      labels:
+        app: cassandra
+    spec:
+      containers:
+        - name: cassandra
+          image: cassandra:3.11
+          ports:
+            - name: native
+              containerPort: 9042
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /var/lib/cassandra/
+              name: data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cassandra
+spec:
+  clusterIP: None
+  selector:
+    app: cassandra
+  ports:
+    - protocol: TCP
+      port: 9042
+      targetPort: 9042
+

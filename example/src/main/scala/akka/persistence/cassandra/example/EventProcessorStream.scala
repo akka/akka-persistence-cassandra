@@ -54,7 +54,10 @@ class EventProcessorStream[Event: ClassTag](
         case event: Event => {
           // Times from different nodes, take with a pinch of salt
           val latency = System.currentTimeMillis() - eventEnvelope.timestamp
-          histogram.recordValue(latency)
+          // when restarting without the offset the latency will be too big
+          if (latency < histogram.getMaxValue) {
+            histogram.recordValue(latency)
+          }
           log.debugN(
             "Tag {} Event {} persistenceId {}, sequenceNr {}. Latency {}",
             tag,

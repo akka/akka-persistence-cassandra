@@ -42,7 +42,6 @@ object Main {
               )
            """
 
-          // TODO don't block
           Await.ready(session.executeDDL(offsetTableStmt), 30.seconds)
         }
 
@@ -53,7 +52,7 @@ object Main {
               cluster.selfMember.roles,
               state.members)
             val ref = ConfigurablePersistentActor.init(writeSettings, ctx.system)
-            if (cluster.selfMember.hasRole("report")) {
+            if (cluster.selfMember.hasRole("read")) {
               ctx.spawnAnonymous(Reporter(topic))
             }
             ReadSide(ctx.system, topic, readSettings)
