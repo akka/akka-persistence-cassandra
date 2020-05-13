@@ -7,12 +7,14 @@ object Dependencies {
   val ScalaVersions = Seq(Scala212, Scala213)
 
   val AkkaVersion = System.getProperty("override.akka.version", "2.6.4")
-  val AkkaVersionInDocs = System.getProperty("override.akka.version", "2.6")
+  val AkkaVersionInDocs = AkkaVersion.take(3)
   val CassandraVersionInDocs = "4.0"
   val DriverVersionInDocs = "4.5"
 
   val AlpakkaVersion = "2.0.0"
-  val AlpakkaVersionInDocs = "2.0"
+  val AlpakkaVersionInDocs = AlpakkaVersion.take(3)
+  // for example
+  val AkkaManagementVersion = "1.0.6"
 
   val Logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
 
@@ -45,6 +47,18 @@ object Dependencies {
       "org.scalatest" %% "scalatest" % "3.1.0" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,
       "org.osgi" % "org.osgi.core" % "5.0.0" % Provided) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
+
+  val exampleDependencies = Seq(
+    Logback,
+    "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-cluster-sharding-typed" % AkkaVersion,
+    "com.lightbend.akka.management" %% "akka-management" % AkkaManagementVersion,
+    "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
+    "com.lightbend.akka.management" %% "akka-management-cluster-http" % AkkaManagementVersion,
+    "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
+    "org.hdrhistogram" % "HdrHistogram" % "2.1.12")
 
   val dseTestDependencies = Seq(
     "com.datastax.dse" % "dse-java-driver-core" % "2.3.0" % Test,

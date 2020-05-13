@@ -12,3 +12,6 @@ addSbtPlugin("com.lightbend.paradox" % "sbt-paradox-dependencies" % "0.2.1")
 addSbtPlugin("com.lightbend.sbt" % "sbt-publish-rsync" % "0.1")
 addSbtPlugin("com.eed3si9n" % "sbt-unidoc" % "0.4.3")
 addSbtPlugin("com.typesafe.sbt" % "sbt-site" % "1.4.0")
+
+// For example
+addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.7.0")

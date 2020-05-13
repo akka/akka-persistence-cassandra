@@ -1,7 +1,12 @@
+import com.typesafe.sbt.packager.docker._
+
 ThisBuild / resolvers ++= {
   if (System.getProperty("override.akka.version") != null) Seq("Akka Snapshots".at("https://repo.akka.io/snapshots/"))
   else Seq.empty
 }
+
+// make version compatible with docker for publishing example project
+ThisBuild / dynverSeparator := "-"
 
 lazy val root = (project in file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
@@ -42,6 +47,38 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     dependencyOverrides += "com.github.jbellis" % "jamm" % "0.3.3", // See jamm comment in https://issues.apache.org/jira/browse/CASSANDRA-9608
     target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assemblyJarName in assembly := "cassandra-bundle.jar")
+
+// Used for testing events by tag in various environments
+lazy val endToEndExample = (project in file("example"))
+  .dependsOn(core)
+  .settings(libraryDependencies ++= Dependencies.exampleDependencies, publish / skip := true)
+  .settings(
+    dockerBaseImage := "openjdk:8-jre-alpine",
+    dockerCommands :=
+      dockerCommands.value.flatMap {
+        case ExecCmd("ENTRYPOINT", args @ _*) => Seq(Cmd("ENTRYPOINT", args.mkString(" ")))
+        case v                                => Seq(v)
+      },
+    dockerExposedPorts := Seq(8080, 8558, 2552),
+    dockerUsername := Some("kubakka"),
+    dockerUpdateLatest := true,
+    // update if deploying to some where that can't see docker hu
+    //dockerRepository := Some("some-registry"),
+    dockerCommands ++= Seq(
+        Cmd("USER", "root"),
+        Cmd("RUN", "/sbin/apk", "add", "--no-cache", "bash", "bind-tools", "busybox-extras", "curl", "iptables"),
+        Cmd(
+          "RUN",
+          "/sbin/apk",
+          "add",
+          "--no-cache",
+          "jattach",
+          "--repository",
+          "http://dl-cdn.alpinelinux.org/alpine/edge/community/"),
+        Cmd("RUN", "chgrp -R 0 . && chmod -R g=u .")),
+    // Docker image is only for running in k8s
+    javaOptions in Universal ++= Seq("-J-Dconfig.resource=kubernetes.conf"))
+  .enablePlugins(DockerPlugin, JavaAppPackaging)
 
 lazy val dseTest =
   (project in file("dse-test"))
