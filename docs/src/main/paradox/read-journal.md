@@ -21,4 +21,4 @@ The default settings can be changed with the configuration properties defined in
 Query configuration is under `akka.persistence.cassandra.query`.
 
 Events by tag configuration is under `akka.persistence.cassandra.events-by-tag` and shared
-b `journal` and `query`.
+by `journal` and `query`.
