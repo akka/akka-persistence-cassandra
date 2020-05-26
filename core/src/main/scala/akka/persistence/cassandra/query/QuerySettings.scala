@@ -41,5 +41,4 @@ import com.typesafe.config.Config
   val eventsByPersistenceIdEventTimeout: FiniteDuration =
     queryConfig.getDuration("events-by-persistence-id-gap-timeout", MILLISECONDS).millis
 
-  val supportAllPersistenceIds: Boolean = queryConfig.getBoolean("support-all-persistence-ids")
 }

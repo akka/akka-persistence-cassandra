@@ -19,7 +19,7 @@ object ManyActorsLoadSpec {
   val config = ConfigFactory.parseString(s"""
       akka.persistence.cassandra.journal.keyspace=ManyActorsLoadSpec
       akka.persistence.cassandra.events-by-tag.enabled = on
-      akka.persistence.cassandra.query.support-all-persistence-ids = off
+      akka.persistence.cassandra.journal.support-all-persistence-ids = off
       # increase this to 3s when benchmarking
       akka.persistence.cassandra.events-by-tag.scanning-flush-interval = 1s
       #akka.persistence.cassandra.log-queries = on

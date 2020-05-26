@@ -197,7 +197,7 @@ import akka.stream.scaladsl.Source
       preparedWriteMessageWithMeta
       preparedSelectMessages
       preparedSelectHighestSequenceNr
-      if (settings.querySettings.supportAllPersistenceIds)
+      if (settings.journalSettings.supportAllPersistenceIds)
         preparedInsertIntoAllPersistenceIds
       if (settings.journalSettings.supportDeletes) {
         preparedDeleteMessages
@@ -349,7 +349,7 @@ import akka.stream.scaladsl.Source
   private def writeMessages(atomicWrites: Seq[SerializedAtomicWrite]): Future[Unit] = {
     // insert into the all_persistence_ids table for the first event, used by persistenceIds query
     val allPersistenceId =
-      if (settings.querySettings.supportAllPersistenceIds && atomicWrites.head.payload.head.sequenceNr == 1L)
+      if (settings.journalSettings.supportAllPersistenceIds && atomicWrites.head.payload.head.sequenceNr == 1L)
         preparedInsertIntoAllPersistenceIds.map(_.bind(atomicWrites.head.persistenceId)).flatMap(execute(_))
       else
         FutureUnit

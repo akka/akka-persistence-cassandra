@@ -354,7 +354,7 @@ import akka.persistence.cassandra.FutureDone
         _ <- session.executeAsync(createTable).toScala
         _ <- session.executeAsync(createMetadataTable).toScala
         _ <- {
-          if (settings.querySettings.supportAllPersistenceIds)
+          if (settings.journalSettings.supportAllPersistenceIds)
             session.executeAsync(createAllPersistenceIdsTable).toScala
           else
             FutureDone

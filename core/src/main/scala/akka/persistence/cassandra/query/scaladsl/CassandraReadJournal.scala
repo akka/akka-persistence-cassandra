@@ -699,7 +699,7 @@ class CassandraReadJournal protected (
     persistenceIds(None, "currentPersistenceIds")
 
   private def persistenceIds(refreshInterval: Option[FiniteDuration], name: String): Source[String, NotUsed] =
-    if (!querySettings.supportAllPersistenceIds)
+    if (!settings.journalSettings.supportAllPersistenceIds)
       Source.failed(
         new IllegalStateException(
           "persistenceIds queries are disabled with configuration " +
