@@ -353,7 +353,12 @@ import akka.persistence.cassandra.FutureDone
         _ <- keyspace
         _ <- session.executeAsync(createTable).toScala
         _ <- session.executeAsync(createMetadataTable).toScala
-        _ <- session.executeAsync(createAllPersistenceIdsTable).toScala
+        _ <- {
+          if (settings.querySettings.supportAllPersistenceIds)
+            session.executeAsync(createAllPersistenceIdsTable).toScala
+          else
+            FutureDone
+        }
         _ <- tagStatements
       } yield {
         session.setSchemaMetadataEnabled(null)
