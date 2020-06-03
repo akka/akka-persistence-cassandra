@@ -307,7 +307,10 @@ class CassandraReadJournal protected (
    */
   @InternalApi private[akka] def eventsByTagInternal(tag: String, offset: Offset): Source[UUIDPersistentRepr, NotUsed] =
     if (!eventsByTagSettings.eventsByTagEnabled)
-      Source.failed(new IllegalStateException("Events by tag queries are disabled"))
+      Source.failed(
+        new IllegalStateException(
+          "Events by tag queries are disabled with configuration " +
+          "events-by-tag.enabled=off"))
     else {
       try {
         val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
@@ -696,14 +699,21 @@ class CassandraReadJournal protected (
     persistenceIds(None, "currentPersistenceIds")
 
   private def persistenceIds(refreshInterval: Option[FiniteDuration], name: String): Source[String, NotUsed] =
-    createSource[String, PreparedStatement](
-      preparedSelectAllPersistenceIds,
-      (s, ps) =>
-        Source
-          .fromGraph(new AllPersistenceIdsStage(refreshInterval, ps, s, querySettings.readProfile))
-          .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
-          .mapMaterializedValue(_ => NotUsed)
-          .named(name))
+    if (!settings.journalSettings.supportAllPersistenceIds)
+      Source.failed(
+        new IllegalStateException(
+          "persistenceIds queries are disabled with configuration " +
+          "support-all-persistence-ids=off"))
+    else {
+      createSource[String, PreparedStatement](
+        preparedSelectAllPersistenceIds,
+        (s, ps) =>
+          Source
+            .fromGraph(new AllPersistenceIdsStage(refreshInterval, ps, s, querySettings.readProfile))
+            .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+            .mapMaterializedValue(_ => NotUsed)
+            .named(name))
+    }
 
   /**
    * INTERNAL API: Needed for migration to 1.0

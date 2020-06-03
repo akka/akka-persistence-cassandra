@@ -49,6 +49,8 @@ import com.typesafe.config.Config
 
   val supportDeletes: Boolean = journalConfig.getBoolean("support-deletes")
 
+  val supportAllPersistenceIds: Boolean = journalConfig.getBoolean("support-all-persistence-ids")
+
   val coordinatedShutdownOnError: Boolean = config.getBoolean("coordinated-shutdown-on-error")
 
 }

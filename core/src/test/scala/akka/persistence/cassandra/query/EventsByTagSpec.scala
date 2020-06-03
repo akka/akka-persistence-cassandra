@@ -1408,14 +1408,14 @@ class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.di
       val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
       val probe = greenSrc.runWith(TestSink.probe[Any])
       probe.request(1)
-      probe.expectError().getMessage shouldEqual "Events by tag queries are disabled"
+      probe.expectError().getMessage should include("Events by tag queries are disabled")
     }
 
     "fail live events by tag queries" in {
       val greenSrc = queries.eventsByTag(tag = "green", offset = NoOffset)
       val probe = greenSrc.runWith(TestSink.probe[Any])
       probe.request(1)
-      probe.expectError().getMessage shouldEqual "Events by tag queries are disabled"
+      probe.expectError().getMessage should include("Events by tag queries are disabled")
     }
 
     "allow recovery" in {
