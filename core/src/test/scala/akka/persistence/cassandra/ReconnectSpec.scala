@@ -9,7 +9,7 @@ import java.io.File
 import akka.actor.{ ActorSystem, Props }
 import akka.persistence.cassandra.CassandraLifecycle.AwaitPersistenceInit
 import akka.persistence.cassandra.testkit.CassandraLauncher
-import akka.testkit.{ ImplicitSender, SocketUtil, TestKit, TestKitBase }
+import akka.testkit.{ ImplicitSender, SocketUtil, TestKit }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.Suite
 import org.scalatest.concurrent.ScalaFutures
