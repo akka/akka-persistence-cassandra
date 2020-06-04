@@ -148,7 +148,7 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
       case Success(_) =>
         log.info("Cleanup completed {} of [{}] persistenceId.", operationName, size)
       case Failure(e) =>
-        log.error(e, "Cleanup {} failed.")
+        log.error(e, "Cleanup {} failed.", operationName)
     }
 
     result
