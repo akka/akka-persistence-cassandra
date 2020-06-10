@@ -14,7 +14,7 @@ All driver related configuration e.g. query consistency, query retries etc has b
 project's `reference.conf` and now each part of the plugin (journal, snapshot and query) specify a read and write 
 @extref:[execution profile](java-driver:manual/core/configuration/#execution-profiles) that gives
 fine grained control over consistencies and retires for each are. By default all read/write profiles are the same and under
-`datastax-java-driver.profile.akka.persistence.cassandra`. The only value in the profile provided by the plugin is setting the `basic.request.consistency`
+`datastax-java-driver.profile.akka-persistence-cassandra-profile`. The only value in the profile provided by the plugin is setting the `basic.request.consistency`
 to `QUORUM`.
 
 The new driver supports reconnection during initialization which was previously built into the plugin. It is recommended to turn this on with:
