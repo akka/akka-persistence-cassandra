@@ -9,7 +9,8 @@ object Dependencies {
   val AkkaVersion = System.getProperty("override.akka.version", "2.6.4")
   val AkkaVersionInDocs = AkkaVersion.take(3)
   val CassandraVersionInDocs = "4.0"
-  val DriverVersionInDocs = "4.5"
+  // Should be sync with the version of the driver in Alpakka Cassandra
+  val DriverVersionInDocs = "4.6"
 
   val AlpakkaVersion = "2.0.1"
   val AlpakkaVersionInDocs = AlpakkaVersion.take(3)
