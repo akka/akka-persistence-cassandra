@@ -13,6 +13,7 @@ import akka.persistence._
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.SnapshotWithMetaData
 import akka.persistence.snapshot.SnapshotStoreSpec
+import akka.persistence.typed.internal.ReplicatedSnapshotMetadata
 import akka.stream.alpakka.cassandra.CassandraMetricsRegistry
 import akka.testkit.TestProbe
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
@@ -157,6 +158,25 @@ class CassandraSnapshotStoreSpec
       // get most recent snapshot
       val loaded = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
       loaded.snapshot should equal(SnapshotWithMetaData("snap", "meta"))
+    }
+
+    "store and load additional replication metadata" in {
+      val probe = TestProbe()
+
+      // Somewhat confusing that three things are called meta data, SnapshotMetadata, SnapshotMetadata.metadata and SnapshotWithMetaData.
+      // However, at least this is just between the journal impl and Akka persistence, not really user api
+      val replicatedMeta = ReplicatedSnapshotMetadata.instanceForSnapshotStoreTest
+      snapshotStore.tell(
+        SaveSnapshot(SnapshotMetadata(pid, 100, System.currentTimeMillis(), Some(replicatedMeta)), "snap"),
+        probe.ref)
+      probe.expectMsgType[SaveSnapshotSuccess]
+
+      // load most recent snapshot
+      snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
+      // get most recent snapshot
+      val loaded = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot: SelectedSnapshot), _) => snapshot }
+      loaded.snapshot should equal("snap")
+      loaded.metadata.metadata should ===(Some(replicatedMeta))
     }
 
     "delete all snapshots matching upper sequence number and no timestamp bounds" in {

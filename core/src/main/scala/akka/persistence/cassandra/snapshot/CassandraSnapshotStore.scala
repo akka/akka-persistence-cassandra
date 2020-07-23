@@ -16,7 +16,6 @@ import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.Done
 import akka.actor._
 import akka.annotation.InternalApi
@@ -24,6 +23,7 @@ import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.serialization.Snapshot
+import akka.persistence.typed.internal.ReplicatedSnapshotMetadata
 import akka.persistence.snapshot.SnapshotStore
 import akka.serialization.AsyncSerializer
 import akka.serialization.Serialization
@@ -125,7 +125,12 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
     case md +: mds =>
       load1Async(md)
         .map {
-          case Snapshot(s) => Some(SelectedSnapshot(md, s))
+          case Snapshot(s) =>
+            Some(s match {
+              case SnapshotWithMetaData(snap, metadata: ReplicatedSnapshotMetadata) =>
+                SelectedSnapshot(md.withMetadata(metadata), snap)
+              case other => SelectedSnapshot(md, other)
+            })
         }
         .recoverWith {
           case _: NoSuchElementException if metadata.size == 1 =>
@@ -176,7 +181,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   }
 
   override def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] =
-    serialize(snapshot).flatMap { ser =>
+    serialize(snapshot, metadata).flatMap { ser =>
       // using two separate statements with or without the meta data columns because
       // then users doesn't have to alter table and add the new columns if they don't use
       // the meta data feature
@@ -259,19 +264,30 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
     session.underlying().flatMap(_.executeAsync(batch.build()).toScala).map(_ => ())
   }
 
-  private def serialize(payload: Any): Future[Serialized] =
+  private def serialize(payload: Any, metadata: SnapshotMetadata): Future[Serialized] =
     try {
-      def serializeMeta(): Option[SerializedMeta] =
+      def serializeMeta(): Option[SerializedMeta] = {
+        def toSerializedForm(m: Any): SerializedMeta = {
+          val m2 = m.asInstanceOf[AnyRef]
+          val serializer = serialization.findSerializerFor(m2)
+          val serManifest = Serializers.manifestFor(serializer, m2)
+          val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
+          SerializedMeta(metaBuf, serManifest, serializer.identifier)
+        }
         // meta data, if any
         payload match {
           case SnapshotWithMetaData(_, m) =>
-            val m2 = m.asInstanceOf[AnyRef]
-            val serializer = serialization.findSerializerFor(m2)
-            val serManifest = Serializers.manifestFor(serializer, m2)
-            val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
-            Some(SerializedMeta(metaBuf, serManifest, serializer.identifier))
-          case _ => None
+            // FIXME can we remove support for the commercial version of this?
+            Some(toSerializedForm(m))
+          case _ =>
+            metadata.metadata match {
+              case Some(aaMetadata) =>
+                // active active metadata
+                Some(toSerializedForm(aaMetadata))
+              case None => None
+            }
         }
+      }
 
       val p: AnyRef = (payload match {
         case SnapshotWithMetaData(snap, _) => snap // unwrap

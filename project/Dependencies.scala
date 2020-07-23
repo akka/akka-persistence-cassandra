@@ -6,7 +6,8 @@ object Dependencies {
   val Scala213 = "2.13.1"
   val ScalaVersions = Seq(Scala212, Scala213)
 
-  val AkkaVersion = System.getProperty("override.akka.version", "2.6.4")
+  // FIXME actual patch release with active active metadata
+  val AkkaVersion = System.getProperty("override.akka.version", "2.6.8+31-a9efe189+20200723-1641")
   val AkkaVersionInDocs = AkkaVersion.take(3)
   val CassandraVersionInDocs = "4.0"
   val DriverVersionInDocs = "4.5"
@@ -41,6 +42,7 @@ object Dependencies {
   val akkaPersistenceCassandraDependencies = Seq(
       "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % AlpakkaVersion,
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
+      "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion % Optional,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       Logback % Test,
