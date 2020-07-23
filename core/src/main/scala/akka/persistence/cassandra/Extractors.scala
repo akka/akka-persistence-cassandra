@@ -5,9 +5,9 @@
 package akka.persistence.cassandra
 
 import com.datastax.oss.driver.api.core.cql.Row
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal._
 import akka.persistence.cassandra.journal.CassandraJournal._
@@ -16,12 +16,14 @@ import java.{ util => ju }
 
 import akka.util.OptionVal
 import akka.serialization.Serialization
+
 import scala.collection.JavaConverters._
 import java.nio.ByteBuffer
 
 import com.datastax.oss.protocol.internal.util.Bytes
 import akka.actor.ActorSystem
 import akka.persistence.query.TimeBasedUUID
+import akka.persistence.typed.internal.ReplicatedEventMetadata
 
 /**
  * An Extractor takes reads a row from the messages table. There are different extractors
@@ -175,7 +177,7 @@ import akka.persistence.query.TimeBasedUUID
 
     def deserializeEvent(): Future[PersistentRepr] = {
       ed.deserializeEvent(row, async).map { payload =>
-        PersistentRepr(
+        val repr = PersistentRepr(
           payload,
           sequenceNr = row.getLong("sequence_nr"),
           persistenceId = row.getString("persistence_id"),
@@ -183,6 +185,11 @@ import akka.persistence.query.TimeBasedUUID
           deleted = false,
           sender = null,
           writerUuid = row.getString("writer_uuid"))
+
+        payload match {
+          case EventWithMetaData(p, m: ReplicatedEventMetadata) => repr.withMetadata(m).withPayload(p)
+          case _ => repr
+        }
       }
     }
 

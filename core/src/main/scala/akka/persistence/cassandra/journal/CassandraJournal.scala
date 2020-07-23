@@ -42,6 +42,7 @@ import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
+import akka.persistence.typed.internal.ReplicatedEventMetadata
 import akka.stream.scaladsl.Source
 
 /**

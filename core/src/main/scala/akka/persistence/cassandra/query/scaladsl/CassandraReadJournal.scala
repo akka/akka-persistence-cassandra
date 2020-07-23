@@ -655,7 +655,12 @@ class CassandraReadJournal protected (
 
   private def toEventEnvelope(persistentRepr: PersistentRepr, offset: Offset): immutable.Iterable[EventEnvelope] =
     adaptFromJournal(persistentRepr).map { payload =>
-      EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload, timestampFrom(offset))
+      val env =
+        EventEnvelope(offset, persistentRepr.persistenceId, persistentRepr.sequenceNr, payload, timestampFrom(offset))
+      persistentRepr.metadata match {
+        case Some(replicatedMeta) => env.withMetadata(replicatedMeta)
+        case None                 => env
+      }
     }
 
   private def offsetToInternalOffset(offset: Offset): (UUID, Boolean) =

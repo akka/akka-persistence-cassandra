@@ -60,17 +60,25 @@ package object cassandra {
       // use same clock source as the UUID for the timeBucket
       val timeBucket = TimeBucket(Uuids.unixTimestamp(uuid), bucketSize)
 
-      def serializeMeta(): Option[SerializedMeta] =
-        // meta data, if any
-        p.payload match {
-          case EventWithMetaData(_, m) =>
-            val m2 = m.asInstanceOf[AnyRef]
-            val serializer = serialization.findSerializerFor(m2)
-            val serManifest = Serializers.manifestFor(serializer, m2)
-            val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
-            Some(SerializedMeta(metaBuf, serManifest, serializer.identifier))
-          case _ => None
+      def serializeMeta(): Option[SerializedMeta] = {
+        def serialize(m: Any): SerializedMeta = {
+          val m2 = m.asInstanceOf[AnyRef]
+          val serializer = serialization.findSerializerFor(m2)
+          val serManifest = Serializers.manifestFor(serializer, m2)
+          val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
+          SerializedMeta(metaBuf, serManifest, serializer.identifier)
         }
+        // meta data, if any
+        p.metadata match {
+          case Some(replicatedMeta) => Some(serialize(replicatedMeta))
+          case None =>
+            p.payload match {
+              case EventWithMetaData(_, m) => Some(serialize(m))
+              case _                       => None
+            }
+
+        }
+      }
 
       val event: AnyRef = (p.payload match {
         case EventWithMetaData(evt, _) => evt // unwrap

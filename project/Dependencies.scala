@@ -37,7 +37,8 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-persistence-tck",
     "com.typesafe.akka" %% "akka-stream-testkit",
     "com.typesafe.akka" %% "akka-multi-node-testkit",
-    "com.typesafe.akka" %% "akka-cluster-sharding")
+    "com.typesafe.akka" %% "akka-cluster-sharding",
+    "com.typesafe.akka" %% "akka-serialization-jackson")
 
   val akkaPersistenceCassandraDependencies = Seq(
       "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % AlpakkaVersion,
