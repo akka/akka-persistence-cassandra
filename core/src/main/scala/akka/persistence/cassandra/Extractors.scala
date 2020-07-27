@@ -188,7 +188,7 @@ import akka.persistence.typed.internal.ReplicatedEventMetadata
 
         payload match {
           case EventWithMetaData(p, m: ReplicatedEventMetadata) => repr.withMetadata(m).withPayload(p)
-          case _ => repr
+          case _                                                => repr
         }
       }
     }

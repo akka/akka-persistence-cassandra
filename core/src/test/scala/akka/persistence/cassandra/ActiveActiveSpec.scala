@@ -36,6 +36,8 @@ object ActiveActiveSpec {
                 case GetTexts(replyTo) =>
                   replyTo ! Texts(state)
                   Effect.none
+                case Stop =>
+                  Effect.stop()
               },
             (state, event) => state + event).withJournalPluginId("akka.persistence.cassandra.journal")
       }

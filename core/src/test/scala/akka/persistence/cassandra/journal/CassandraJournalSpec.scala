@@ -42,6 +42,10 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
 
   override def supportsRejectingNonSerializableObjects = false
 
+  // we cannot enable this because we need to discern legacy metadata format from multidc support
+  // from active active by the actual type of the metadata
+  // override def supportsMetadata = CapabilityFlag.on()
+
   "A Cassandra Journal" must {
     "insert Cassandra metrics to Cassandra Metrics Registry" in {
       val registry = CassandraMetricsRegistry(system).getRegistry
