@@ -67,8 +67,8 @@ datastax-java-driver {
   advanced {
     auth-provider {
       class = PlainTextAuthProvider
-      username = user_name 
-      password = p@ssword1
+      username = <user name> 
+      password = <password>
     }
   }
 }
