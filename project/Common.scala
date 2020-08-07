@@ -51,6 +51,8 @@ object Common extends AutoPlugin {
           val branch = if (isSnapshot.value) "master" else s"v${version.value}"
           s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
         },
+        "-doc-canonical-base-url",
+        "https://doc.akka.io/api/akka-persistence-cassandra/current/",
         "-skip-packages",
         "akka.pattern" // for some reason Scaladoc creates this
       ),
