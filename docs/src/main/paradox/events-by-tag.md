@@ -164,7 +164,7 @@ See `events-by-tag.time-to-live` in reference.conf for how to set this.
 
 @@@ warning
 
-The TTL must be greater than any expected delay in using the tagged events to build a read side viewo
+The TTL must be greater than any expected delay in using the tagged events to build a read side view
 otherwise they'll be deleted before being read.
 
 @@@
