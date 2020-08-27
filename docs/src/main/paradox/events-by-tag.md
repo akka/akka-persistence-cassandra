@@ -50,7 +50,7 @@ With a low value it will happen frequently.
 Like with any tuning testing should be done to see what works for your environment. The values below may be too low
 depending on the load and performance of your Cassandra cluster.
 
-It is possible to flush the tag writes right away. By default they are batched and written as an unlogged back which increases throughput. To write each individually
+It is possible to flush the tag writes right away. By default they are batched and written as an unlogged batch which increases throughput. To write each individually
 without delay use:
 ```
 akka.persistence.cassandra.events-by-tag.flush-interval = 0s
