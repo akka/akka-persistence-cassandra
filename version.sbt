@@ -1,1 +1,2 @@
-version in ThisBuild := "0.103"
+ThisBuild / version := "0.103"
+ThisBuild / isSnapshot := false
