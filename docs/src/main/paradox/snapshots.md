@@ -34,6 +34,25 @@ The default table definitions look like this:
 
 @@snip [snapshot-tables](/target/snapshot-tables.txt) { #snapshot-tables}
 
+### Consistency
+
+By default the snapshot store uses `ONE` for all reads and writes, since snapshots
+should only be used as an optimization to reduce number of replayed events.
+If a recovery doesn't see the latest snapshot it will just start from an older snapshot
+and replay events from there. Be careful to not delete events too eagerly after storing
+snapshots since the deletes may be visible before the snapshot is visible. Keep a few
+snapshots and corresponding events before deleting older events and snapshots.
+
+The consistency level for snapshots can be changed with:
+
+```
+datastax-java-driver.profiles {
+  akka-persistence-cassandra-snapshot-profile {
+    basic.request.consistency = QUORUM
+  }
+}
+```
+
 ## Configuration
 
 To activate the snapshot-store plugin, add the following line to your Akka `application.conf`:

@@ -228,7 +228,9 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
           metadata(snapshotMetaPs, persistenceId, criteria, limit = None).flatMap {
             mds: immutable.Seq[SnapshotMetadata] =>
               val boundStatementBatches = mds
-                .map(md => preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)))
+                .map(md =>
+                  preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)
+                    .setExecutionProfileName(snapshotSettings.writeProfile)))
                 .grouped(0xFFFF - 1)
               if (boundStatementBatches.nonEmpty) {
                 Future
@@ -245,7 +247,8 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         }
       } else {
         val boundDeleteSnapshot = preparedDeleteAllSnapshotsForPidAndSequenceNrBetween.map(
-          _.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong))
+          _.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong)
+            .setExecutionProfileName(snapshotSettings.writeProfile))
         boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
       }
     }
@@ -304,7 +307,9 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       persistenceId: String,
       criteria: SnapshotSelectionCriteria,
       limit: Option[Int]): Future[immutable.Seq[SnapshotMetadata]] = {
-    val boundStmt = snapshotMetaPs.bind(persistenceId, criteria.maxSequenceNr: JLong, criteria.minSequenceNr: JLong)
+    val boundStmt = snapshotMetaPs
+      .bind(persistenceId, criteria.maxSequenceNr: JLong, criteria.minSequenceNr: JLong)
+      .setExecutionProfileName(snapshotSettings.readProfile)
     log.debug("Executing metadata query")
     val source: Source[SnapshotMetadata, NotUsed] = session
       .select(boundStmt)
@@ -325,7 +330,8 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
     session.prepare(deleteAllSnapshotForPersistenceIdAndSequenceNrBetween)
 
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
-    val boundDeleteSnapshot = preparedDeleteSnapshot.map(_.bind(metadata.persistenceId, metadata.sequenceNr: JLong))
+    val boundDeleteSnapshot = preparedDeleteSnapshot.map(
+      _.bind(metadata.persistenceId, metadata.sequenceNr: JLong).setExecutionProfileName(snapshotSettings.writeProfile))
     boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
   }
 
