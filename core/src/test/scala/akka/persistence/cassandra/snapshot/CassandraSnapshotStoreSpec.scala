@@ -11,13 +11,13 @@ import java.nio.ByteBuffer
 import akka.persistence.SnapshotProtocol._
 import akka.persistence._
 import akka.persistence.cassandra.CassandraLifecycle
-import akka.persistence.cassandra.SnapshotWithMetaData
 import akka.persistence.snapshot.SnapshotStoreSpec
 import akka.stream.alpakka.cassandra.CassandraMetricsRegistry
 import akka.testkit.TestProbe
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.typesafe.config.ConfigFactory
 
+import scala.annotation.meta
 import scala.collection.immutable.Seq
 
 object CassandraSnapshotStoreConfiguration {
@@ -36,6 +36,8 @@ object CassandraSnapshotStoreConfiguration {
 class CassandraSnapshotStoreSpec
     extends SnapshotStoreSpec(CassandraSnapshotStoreConfiguration.config)
     with CassandraLifecycle {
+
+  protected override def supportsMetadata: CapabilityFlag = true
 
   val snapshotSettings =
     new SnapshotSettings(system, system.settings.config.getConfig("akka.persistence.cassandra"))
@@ -149,14 +151,14 @@ class CassandraSnapshotStoreSpec
       // Somewhat confusing that two things are called meta data, SnapshotMetadata and SnapshotWithMetaData.
       // However, user facing is only SnapshotWithMetaData, and we can't change SnapshotMetadata because that
       // is in akka-persistence
-      snapshotStore.tell(SaveSnapshot(SnapshotMetadata(pid, 100), SnapshotWithMetaData("snap", "meta")), probe.ref)
+      snapshotStore.tell(SaveSnapshot(SnapshotMetadata(pid, 100).withMetadata("meta"), "snap"), probe.ref)
       probe.expectMsgType[SaveSnapshotSuccess]
 
       // load most recent snapshot
       snapshotStore.tell(LoadSnapshot(pid, SnapshotSelectionCriteria.Latest, Long.MaxValue), probe.ref)
       // get most recent snapshot
       val loaded = probe.expectMsgPF() { case LoadSnapshotResult(Some(snapshot), _) => snapshot }
-      loaded.snapshot should equal(SnapshotWithMetaData("snap", "meta"))
+      loaded.metadata.metadata should equal(Some("meta"))
     }
 
     "delete all snapshots matching upper sequence number and no timestamp bounds" in {

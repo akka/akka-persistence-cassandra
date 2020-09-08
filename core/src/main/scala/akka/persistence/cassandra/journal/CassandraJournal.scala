@@ -42,7 +42,6 @@ import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
-import akka.persistence.cassandra.SnapshotWithMetaData.UnknownMetaData
 import akka.stream.scaladsl.Source
 
 /**
@@ -873,7 +872,7 @@ import akka.stream.scaladsl.Source
                   case Success(m) => OptionVal.Some(m)
                   case Failure(ex) =>
                     log.warning(
-                      "Deserialization of metadata failed (pid: [{}], seq_nr: [{}], meta_ser_id: [{}], meta_ser_manifest: [{}], ignoring metadata content. Exception: {}",
+                      "Deserialization of event metadata failed (pid: [{}], seq_nr: [{}], meta_ser_id: [{}], meta_ser_manifest: [{}], ignoring metadata content. Exception: {}",
                       Array(
                         row.getString("persistence_id"),
                         row.getLong("sequence_nr"),

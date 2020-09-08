@@ -5,6 +5,7 @@
 package akka.persistence.cassandra.journal
 
 import akka.actor.Actor
+import akka.persistence.CapabilityFlag
 import akka.persistence.{ AtomicWrite, PersistentRepr }
 import akka.persistence.JournalProtocol.{ ReplayMessages, WriteMessageFailure, WriteMessages, WriteMessagesFailed }
 
@@ -74,6 +75,13 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
       probe.expectMsg(replayedMessage(5))
     }
   }
+}
+
+class CassandraJournalMetaSpec extends JournalSpec(CassandraJournalConfiguration.config) with CassandraLifecycle {
+  override def systemName: String = "CassandraJournalSpec"
+
+  override def supportsRejectingNonSerializableObjects = false
+  protected override def supportsMetadata: CapabilityFlag = true
 }
 
 class CassandraJournalPerfSpec
