@@ -62,21 +62,15 @@ package object cassandra {
 
       def serializeMeta(): Option[SerializedMeta] =
         // meta data, if any
-        p.payload match {
-          case EventWithMetaData(_, m) =>
-            val m2 = m.asInstanceOf[AnyRef]
-            val serializer = serialization.findSerializerFor(m2)
-            val serManifest = Serializers.manifestFor(serializer, m2)
-            val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
-            Some(SerializedMeta(metaBuf, serManifest, serializer.identifier))
-          case _ => None
+        p.metadata.map { m =>
+          val m2 = m.asInstanceOf[AnyRef]
+          val serializer = serialization.findSerializerFor(m2)
+          val serManifest = Serializers.manifestFor(serializer, m2)
+          val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
+          SerializedMeta(metaBuf, serManifest, serializer.identifier)
         }
 
-      val event: AnyRef = (p.payload match {
-        case EventWithMetaData(evt, _) => evt // unwrap
-        case evt                       => evt
-      }).asInstanceOf[AnyRef]
-
+      val event: AnyRef = p.payload.asInstanceOf[AnyRef]
       val serializer = serialization.findSerializerFor(event)
       val serManifest = Serializers.manifestFor(serializer, event)
 

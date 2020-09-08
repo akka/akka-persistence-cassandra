@@ -174,15 +174,20 @@ import akka.persistence.query.TimeBasedUUID
       implicit ec: ExecutionContext): Future[PersistentRepr] = {
 
     def deserializeEvent(): Future[PersistentRepr] = {
-      ed.deserializeEvent(row, async).map { payload =>
-        PersistentRepr(
-          payload,
-          sequenceNr = row.getLong("sequence_nr"),
-          persistenceId = row.getString("persistence_id"),
-          manifest = row.getString("event_manifest"), // manifest for event adapters
-          deleted = false,
-          sender = null,
-          writerUuid = row.getString("writer_uuid"))
+      ed.deserializeEvent(row, async).map {
+        case DeserializedEvent(payload, metadata) =>
+          val repr = PersistentRepr(
+            payload,
+            sequenceNr = row.getLong("sequence_nr"),
+            persistenceId = row.getString("persistence_id"),
+            manifest = row.getString("event_manifest"), // manifest for event adapters
+            deleted = false,
+            sender = null,
+            writerUuid = row.getString("writer_uuid"))
+          metadata match {
+            case OptionVal.None    => repr
+            case OptionVal.Some(m) => repr.withMetadata(m)
+          }
       }
     }
 
