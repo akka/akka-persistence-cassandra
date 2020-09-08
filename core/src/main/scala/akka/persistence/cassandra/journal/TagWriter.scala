@@ -161,7 +161,6 @@ import akka.util.UUIDComparator
       // reached to force a flush or that the batch size is met
       val (newTagPidSequenceNrs, events) =
         assignTagPidSequenceNumbers(payload.toVector, tagPidSequenceNrs)
-      log.debug("Assigned tag pid sequence nrs: {}", newTagPidSequenceNrs)
       val newBuffer = (buffer ++ events).sortBy(_._1.timeUuid)(timeUuidOrdering)
       flushIfRequired(newBuffer, newTagPidSequenceNrs)
     case twd: TagWriteDone =>
