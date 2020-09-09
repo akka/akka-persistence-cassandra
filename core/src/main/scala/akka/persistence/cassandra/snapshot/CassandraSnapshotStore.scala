@@ -390,7 +390,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
                         row.getLong("sequence_nr"),
                         metaSerId,
                         metaSerManifest,
-                        ex.getMessage))
+                        ex.toString))
                     OptionVal.None
                 }
             }

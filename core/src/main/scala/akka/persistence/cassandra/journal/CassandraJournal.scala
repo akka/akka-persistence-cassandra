@@ -878,7 +878,7 @@ import akka.stream.scaladsl.Source
                         row.getLong("sequence_nr"),
                         metaSerId,
                         metaSerManifest,
-                        ex.getMessage))
+                        ex.toString))
                     OptionVal.None
                 }
             }
