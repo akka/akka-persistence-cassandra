@@ -20,7 +20,7 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.query.PersistenceQuery
 import akka.serialization.SerializationExtension
-import akka.stream.{ ActorMaterializer, OverflowStrategy }
+import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
@@ -242,7 +242,7 @@ class EventsByTagMigration(
                   extractor =
                     EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system))
                 .map(sendMissingTagWriteRaw(tp, tagWriters))
-                .buffer(periodicFlush, OverflowStrategy.backpressure)
+                .grouped(periodicFlush)
                 .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])
             }
           }
