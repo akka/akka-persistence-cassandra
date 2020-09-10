@@ -185,7 +185,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 4, "e-4") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 2, "f-2") => }
       blueProbe.expectNextPF {
-        case EventEnvelope(_, `pidWithMeta`, 1, "Meta: This is the best event ever") =>
+        case EventEnvelope(_, `pidWithMeta`, 1, "g-1") =>
       }
       blueProbe.expectNoMessage(waitTime)
       blueProbe.cancel()
@@ -281,7 +281,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 4, "e-4") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 2, "f-2") => }
       blueProbe.expectNextPF {
-        case EventEnvelope(_, `pidWithMeta`, 1, "Meta: This is the best event ever") =>
+        case EventEnvelope(_, `pidWithMeta`, 1, "g-1") =>
       }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 4, "f-4")         => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 5, "new-event-1") => }
