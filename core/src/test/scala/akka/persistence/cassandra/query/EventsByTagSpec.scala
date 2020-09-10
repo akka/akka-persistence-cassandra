@@ -12,7 +12,7 @@ import java.util.UUID
 import akka.actor.{ PoisonPill, Props }
 import akka.event.Logging.Warning
 import akka.persistence.cassandra.journal.CassandraJournalStatements
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, Day, EventWithMetaData }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, Day }
 import akka.persistence.journal.{ Tagged, WriteEventAdapter }
 import akka.persistence.query.scaladsl.{ CurrentEventsByTagQuery, EventsByTagQuery }
 import akka.persistence.query.{ EventEnvelope, NoOffset, Offset, TimeBasedUUID }
@@ -51,12 +51,10 @@ object EventsByTagSpec {
 
         event-adapters {
           color-tagger  = akka.persistence.cassandra.query.ColorFruitTagger
-          metadata-tagger  = akka.persistence.cassandra.query.EventWithMetaDataTagger
         }
   
         event-adapter-bindings = {
           "java.lang.String" = color-tagger
-          "akka.persistence.cassandra.EventWithMetaData" = metadata-tagger
         }
       }
       
@@ -114,15 +112,6 @@ object EventsByTagSpec {
         events-by-tag.enabled = false
       }
     """).withFallback(config)
-}
-
-class EventWithMetaDataTagger extends WriteEventAdapter {
-  override def manifest(event: Any) = ""
-  override def toJournal(event: Any) = event match {
-    case evm: EventWithMetaData =>
-      Tagged(evm, Set("gotmeta"))
-    case _ => event
-  }
 }
 
 class ColorFruitTagger extends WriteEventAdapter {
@@ -534,18 +523,6 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
           probe.request(10)
           probe.expectNoMessage(waitTime)
         })
-    }
-
-    "return events with their metadata" in {
-      val w1 = system.actorOf(TestActor.props("W1"))
-      withProbe(queries.eventsByTag(tag = "gotmeta", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
-        w1 ! EventWithMetaData("e1", "this is such a good message")
-        probe.request(2)
-        probe.expectNextPF {
-          case EventEnvelope(_, "W1", 1L, EventWithMetaData("e1", "this is such a good message")) =>
-        }
-        probe.expectNoMessage(waitTime)
-      })
     }
 
     "not complete for empty query" in {

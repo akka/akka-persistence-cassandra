@@ -15,7 +15,6 @@ import akka.annotation.InternalApi
 import akka.event.{ Logging, LoggingAdapter }
 import akka.pattern.pipe
 import akka.persistence._
-import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
@@ -26,6 +25,7 @@ import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.Sink
+import akka.dispatch.ExecutionContexts
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
@@ -847,12 +847,16 @@ import akka.stream.scaladsl.Source
   case object HealthCheckQuery extends HealthCheck
   case object HealthCheckResponse extends HealthCheck
 
+  final case class DeserializedEvent(event: Any, meta: OptionVal[Any])
+
   class EventDeserializer(system: ActorSystem) {
+
+    private val log = Logging(system, this.getClass)
 
     private val serialization = SerializationExtension(system)
     val columnDefinitionCache = new ColumnDefinitionCache
 
-    def deserializeEvent(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[Any] =
+    def deserializeEvent(row: Row, async: Boolean)(implicit ec: ExecutionContext): Future[DeserializedEvent] =
       try {
 
         def meta: OptionVal[AnyRef] = {
@@ -864,14 +868,19 @@ import akka.stream.scaladsl.Source
                 // has meta data, wrap in EventWithMetaData
                 val metaSerId = row.getInt("meta_ser_id")
                 val metaSerManifest = row.getString("meta_ser_manifest")
-                val meta = serialization.deserialize(Bytes.getArray(metaBytes), metaSerId, metaSerManifest) match {
-                  case Success(m) => m
-                  case Failure(_) =>
-                    // don't fail replay/query because of deserialization problem with meta data
-                    // see motivation in UnknownMetaData
-                    UnknownMetaData(metaSerId, metaSerManifest)
+                serialization.deserialize(Bytes.getArray(metaBytes), metaSerId, metaSerManifest) match {
+                  case Success(m) => OptionVal.Some(m)
+                  case Failure(ex) =>
+                    log.warning(
+                      "Deserialization of event metadata failed (pid: [{}], seq_nr: [{}], meta_ser_id: [{}], meta_ser_manifest: [{}], ignoring metadata content. Exception: {}",
+                      Array(
+                        row.getString("persistence_id"),
+                        row.getLong("sequence_nr"),
+                        metaSerId,
+                        metaSerManifest,
+                        ex.toString))
+                    OptionVal.None
                 }
-                OptionVal.Some(meta)
             }
           } else {
             // for backwards compatibility, when table was not altered, meta columns not added
@@ -883,30 +892,20 @@ import akka.stream.scaladsl.Source
         val serId = row.getInt("ser_id")
         val manifest = row.getString("ser_manifest")
 
-        serialization.serializerByIdentity.get(serId) match {
+        (serialization.serializerByIdentity.get(serId) match {
           case Some(asyncSerializer: AsyncSerializer) =>
             Serialization.withTransportInformation(system.asInstanceOf[ExtendedActorSystem]) { () =>
-              asyncSerializer.fromBinaryAsync(bytes, manifest).map { event =>
-                meta match {
-                  case OptionVal.None    => event
-                  case OptionVal.Some(m) => EventWithMetaData(event, m)
-                }
-              }
+              asyncSerializer.fromBinaryAsync(bytes, manifest)
             }
 
           case _ =>
-            def deserializedEvent: AnyRef = {
+            def deserializedEvent: AnyRef =
               // Serialization.deserialize adds transport info
-              val event = serialization.deserialize(bytes, serId, manifest).get
-              meta match {
-                case OptionVal.None    => event
-                case OptionVal.Some(m) => EventWithMetaData(event, m)
-              }
-            }
+              serialization.deserialize(bytes, serId, manifest).get
 
             if (async) Future(deserializedEvent)
             else Future.successful(deserializedEvent)
-        }
+        }).map(event => DeserializedEvent(event, meta))(ExecutionContexts.parasitic)
 
       } catch {
         case NonFatal(e) => Future.failed(e)

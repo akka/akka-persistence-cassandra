@@ -6,8 +6,7 @@ package akka.persistence.cassandra.journal
 
 import akka.actor.{ ExtendedActorSystem, Props }
 import akka.persistence.RecoveryCompleted
-import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
-import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, EventWithMetaData, Persister }
+import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, Persister }
 import akka.serialization.BaseSerializer
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
@@ -62,40 +61,6 @@ class CassandraSerializationSpec extends CassandraSpec(CassandraSerializationSpe
       val incarnation2 = system.actorOf(Props(new Persister("id1", probe.ref)))
       probe.expectMsgType[RuntimeException].getMessage shouldBe "I can't deserialize a single thing"
       incarnation2
-    }
-
-    "be able to store meta data" in {
-      val probe = TestProbe()
-      val incarnation1 = system.actorOf(Props(new Persister("id2", probe.ref)))
-      probe.expectMsgType[RecoveryCompleted]
-
-      val eventWithMeta = EventWithMetaData("TheActualEvent", "TheAdditionalMetaData")
-      incarnation1 ! eventWithMeta
-      probe.expectMsg(eventWithMeta)
-
-      probe.watch(incarnation1)
-      system.stop(incarnation1)
-      probe.expectTerminated(incarnation1)
-
-      system.actorOf(Props(new Persister("id2", probe.ref)))
-      probe.expectMsg(eventWithMeta) // from replay
-    }
-
-    "not fail replay due to deserialization problem of meta data" in {
-      val probe = TestProbe()
-      val incarnation1 = system.actorOf(Props(new Persister("id3", probe.ref)))
-      probe.expectMsgType[RecoveryCompleted]
-
-      val eventWithMeta = EventWithMetaData("TheActualEvent", CrapEvent(13))
-      incarnation1 ! eventWithMeta
-      probe.expectMsg(eventWithMeta)
-
-      probe.watch(incarnation1)
-      system.stop(incarnation1)
-      probe.expectTerminated(incarnation1)
-
-      system.actorOf(Props(new Persister("id3", probe.ref)))
-      probe.expectMsg(EventWithMetaData("TheActualEvent", UnknownMetaData(666, ""))) // from replay, no meta
     }
 
   }

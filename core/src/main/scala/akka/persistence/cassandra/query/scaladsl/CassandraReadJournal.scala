@@ -27,17 +27,20 @@ import akka.stream.ActorAttributes
 import akka.util.ByteString
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
+
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
-
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.CassandraStatements
+import akka.persistence.cassandra.journal.CassandraJournal
+import akka.persistence.cassandra.journal.CassandraJournal.DeserializedEvent
 import akka.serialization.SerializationExtension
 import akka.stream.alpakka.cassandra.CassandraSessionSettings
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
+import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
@@ -345,16 +348,21 @@ class CassandraReadJournal protected (
     Flow[EventsByTagStage.UUIDRow]
       .mapAsync(querySettings.deserializationParallelism) { uuidRow =>
         val row = uuidRow.row
-        eventsByTagDeserializer.deserializeEvent(row, deserializeEventAsync).map { payload =>
-          val repr = mapEvent(PersistentRepr(
-            payload,
-            sequenceNr = uuidRow.sequenceNr,
-            persistenceId = uuidRow.persistenceId,
-            manifest = row.getString("event_manifest"),
-            deleted = false,
-            sender = null,
-            writerUuid = row.getString("writer_uuid")))
-          UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, repr)
+        eventsByTagDeserializer.deserializeEvent(row, deserializeEventAsync).map {
+          case DeserializedEvent(payload, metadata) =>
+            val repr = mapEvent(PersistentRepr(
+              payload,
+              sequenceNr = uuidRow.sequenceNr,
+              persistenceId = uuidRow.persistenceId,
+              manifest = row.getString("event_manifest"),
+              deleted = false,
+              sender = null,
+              writerUuid = row.getString("writer_uuid")))
+            val reprWithMeta = metadata match {
+              case OptionVal.None           => repr
+              case OptionVal.Some(metadata) => repr.withMetadata(metadata)
+            }
+            UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, reprWithMeta)
         }
       }
       .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))

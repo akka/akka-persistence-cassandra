@@ -9,7 +9,6 @@ import akka.actor.Props
 import akka.persistence.PersistentActor
 import akka.actor.ActorRef
 import akka.persistence.DeleteMessagesSuccess
-import akka.persistence.cassandra.EventWithMetaData
 import akka.persistence.journal.Tagged
 
 object TestActor {
@@ -32,10 +31,6 @@ class TestActor(override val persistenceId: String, override val journalPluginId
     case cmd: String =>
       persist(cmd) { evt =>
         sender() ! evt + "-done"
-      }
-    case cmd: EventWithMetaData =>
-      persist(cmd) { evt =>
-        sender() ! s"$evt-done"
       }
     case cmd: Tagged =>
       persist(cmd) { evt =>

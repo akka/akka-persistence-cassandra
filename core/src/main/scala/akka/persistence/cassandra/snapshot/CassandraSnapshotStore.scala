@@ -16,7 +16,6 @@ import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-
 import akka.Done
 import akka.actor._
 import akka.annotation.InternalApi
@@ -37,6 +36,8 @@ import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
 import akka.Done
 import akka.annotation.InternalApi
+import akka.dispatch.ExecutionContexts
+import akka.event.Logging
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 
 /**
@@ -125,7 +126,10 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
     case md +: mds =>
       load1Async(md)
         .map {
-          case Snapshot(s) => Some(SelectedSnapshot(md, s))
+          case DeserializedSnapshot(payload, OptionVal.Some(snapshotMeta)) =>
+            Some(SelectedSnapshot(md.withMetadata(snapshotMeta), payload))
+          case DeserializedSnapshot(payload, OptionVal.None) =>
+            Some(SelectedSnapshot(md, payload))
         }
         .recoverWith {
           case _: NoSuchElementException if metadata.size == 1 =>
@@ -154,7 +158,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         }
   }
 
-  private def load1Async(metadata: SnapshotMetadata): Future[Snapshot] = {
+  private def load1Async(metadata: SnapshotMetadata): Future[DeserializedSnapshot] = {
     val boundSelectSnapshot = preparedSelectSnapshot.map(
       _.bind(metadata.persistenceId, metadata.sequenceNr: JLong).setExecutionProfileName(snapshotSettings.readProfile))
     boundSelectSnapshot.flatMap(session.selectOne).flatMap {
@@ -167,16 +171,17 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       case Some(row) =>
         row.getByteBuffer("snapshot") match {
           case null =>
-            snapshotDeserializer.deserializeSnapshot(row).map(Snapshot.apply)
+            snapshotDeserializer.deserializeSnapshot(row)
           case bytes =>
             // for backwards compatibility
-            Future.successful(serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get)
+            val payload = serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get.data
+            Future.successful(DeserializedSnapshot(payload, OptionVal.None))
         }
     }
   }
 
   override def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] =
-    serialize(snapshot).flatMap { ser =>
+    serialize(snapshot, metadata.metadata).flatMap { ser =>
       // using two separate statements with or without the meta data columns because
       // then users doesn't have to alter table and add the new columns if they don't use
       // the meta data feature
@@ -262,24 +267,18 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
     session.underlying().flatMap(_.executeAsync(batch.build()).toScala).map(_ => ())
   }
 
-  private def serialize(payload: Any): Future[Serialized] =
+  private def serialize(payload: Any, meta: Option[Any]): Future[Serialized] =
     try {
       def serializeMeta(): Option[SerializedMeta] =
-        // meta data, if any
-        payload match {
-          case SnapshotWithMetaData(_, m) =>
-            val m2 = m.asInstanceOf[AnyRef]
-            val serializer = serialization.findSerializerFor(m2)
-            val serManifest = Serializers.manifestFor(serializer, m2)
-            val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
-            Some(SerializedMeta(metaBuf, serManifest, serializer.identifier))
-          case _ => None
+        meta.map { m =>
+          val m2 = m.asInstanceOf[AnyRef]
+          val serializer = serialization.findSerializerFor(m2)
+          val serManifest = Serializers.manifestFor(serializer, m2)
+          val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
+          SerializedMeta(metaBuf, serManifest, serializer.identifier)
         }
 
-      val p: AnyRef = (payload match {
-        case SnapshotWithMetaData(snap, _) => snap // unwrap
-        case snap                          => snap
-      }).asInstanceOf[AnyRef]
+      val p: AnyRef = payload.asInstanceOf[AnyRef]
       val serializer = serialization.findSerializerFor(p)
       val serManifest = Serializers.manifestFor(serializer, p)
       serializer match {
@@ -350,7 +349,11 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
 
   private case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
 
+  final case class DeserializedSnapshot(payload: Any, meta: OptionVal[Any])
+
   class SnapshotDeserializer(system: ActorSystem) {
+
+    private val log = Logging(system, this.getClass)
 
     private val serialization = SerializationExtension(system)
 
@@ -365,7 +368,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         b
     }
 
-    def deserializeSnapshot(row: Row)(implicit ec: ExecutionContext): Future[Any] =
+    def deserializeSnapshot(row: Row)(implicit ec: ExecutionContext): Future[DeserializedSnapshot] =
       try {
 
         def meta: OptionVal[AnyRef] =
@@ -377,14 +380,19 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
                 // has meta data, wrap in EventWithMetaData
                 val metaSerId = row.getInt("meta_ser_id")
                 val metaSerManifest = row.getString("meta_ser_manifest")
-                val meta = serialization.deserialize(Bytes.getArray(metaBytes), metaSerId, metaSerManifest) match {
-                  case Success(m) => m
-                  case Failure(_) =>
-                    // don't fail query because of deserialization problem with meta data
-                    // see motivation in UnknownMetaData
-                    SnapshotWithMetaData.UnknownMetaData(metaSerId, metaSerManifest)
+                serialization.deserialize(Bytes.getArray(metaBytes), metaSerId, metaSerManifest) match {
+                  case Success(m) => OptionVal.Some(m)
+                  case Failure(ex) =>
+                    log.warning(
+                      "Deserialization of snapshot metadata failed (pid: [{}], seq_nr: [{}], meta_ser_id: [{}], meta_ser_manifest: [{}], ignoring metadata content. Exception: {}",
+                      Array(
+                        row.getString("persistence_id"),
+                        row.getLong("sequence_nr"),
+                        metaSerId,
+                        metaSerManifest,
+                        ex.toString))
+                    OptionVal.None
                 }
-                OptionVal.Some(meta)
             }
           } else {
             // for backwards compatibility, when table was not altered, meta columns not added
@@ -394,28 +402,18 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         val bytes = Bytes.getArray(row.getByteBuffer("snapshot_data"))
         val serId = row.getInt("ser_id")
         val manifest = row.getString("ser_manifest")
-        serialization.serializerByIdentity.get(serId) match {
+        (serialization.serializerByIdentity.get(serId) match {
           case Some(asyncSerializer: AsyncSerializer) =>
             Serialization.withTransportInformation(system.asInstanceOf[ExtendedActorSystem]) { () =>
-              asyncSerializer.fromBinaryAsync(bytes, manifest).map { payload =>
-                meta match {
-                  case OptionVal.None    => payload
-                  case OptionVal.Some(m) => SnapshotWithMetaData(payload, m)
-                }
-              }
+              asyncSerializer.fromBinaryAsync(bytes, manifest)
             }
 
           case _ =>
             Future.successful {
               // Serialization.deserialize adds transport info
-              val payload =
-                serialization.deserialize(bytes, serId, manifest).get
-              meta match {
-                case OptionVal.None    => payload
-                case OptionVal.Some(m) => SnapshotWithMetaData(payload, m)
-              }
+              serialization.deserialize(bytes, serId, manifest).get
             }
-        }
+        }).map(payload => DeserializedSnapshot(payload, meta))(ExecutionContexts.parasitic)
 
       } catch {
         case NonFatal(e) => Future.failed(e)

@@ -125,7 +125,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       writeOldTestEventWithTags(
         PersistentRepr("g-1", 1L, pidWithMeta),
         Set("blue"),
-        Some("This is the best event ever"))
+        Some("Meta: This is the best event ever"))
 
       // These events have been snapshotted
       writeOldTestEventWithTags(PersistentRepr("h-1", 10L, pidWithSnapshot), Set("red"))
@@ -153,7 +153,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       writeOldTestEventWithTags(
         PersistentRepr("g-1", 1L, pidWithMeta),
         Set("blue"),
-        Some("This is the best event ever"))
+        Some("Meta: This is the best event ever"))
 
       // since we are writing the events directly the all_persistence_ids table must also be updated
       reconciler.rebuildAllPersistenceIds().futureValue
@@ -185,7 +185,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 4, "e-4") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 2, "f-2") => }
       blueProbe.expectNextPF {
-        case EventEnvelope(_, `pidWithMeta`, 1, EventWithMetaData("g-1", "This is the best event ever")) =>
+        case EventEnvelope(_, `pidWithMeta`, 1, "g-1") =>
       }
       blueProbe.expectNoMessage(waitTime)
       blueProbe.cancel()
@@ -281,7 +281,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 4, "e-4") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 2, "f-2") => }
       blueProbe.expectNextPF {
-        case EventEnvelope(_, `pidWithMeta`, 1, EventWithMetaData("g-1", "This is the best event ever")) =>
+        case EventEnvelope(_, `pidWithMeta`, 1, "g-1") =>
       }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 4, "f-4")         => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 5, "new-event-1") => }
