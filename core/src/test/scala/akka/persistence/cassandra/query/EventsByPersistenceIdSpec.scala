@@ -284,6 +284,14 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
         }
       }
     }
+
+    "return metadata" in {
+      val meta = "cats"
+      val pr1 = PersistentRepr("e1", 1L, "with-meta", "").withMetadata(meta)
+      writeTestEvent(pr1)
+      val src = queries.currentEventsByPersistenceId("with-meta", 0L, Long.MaxValue)
+      src.map(_.eventMetadata).runWith(TestSink.probe[Any]).request(2).expectNext(Some(meta)).expectComplete()
+    }
   }
 
   "Cassandra live query EventsByPersistenceId" must {
