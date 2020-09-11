@@ -30,7 +30,7 @@ trait DirectWriting extends BeforeAndAfterAll {
 
   private lazy val writeStatements: CassandraJournalStatements = new CassandraJournalStatements(settings)
 
-  private lazy val preparedWriteMessage = cluster.prepare(writeStatements.writeMessage(withMeta = false))
+  private lazy val preparedWriteMessage = cluster.prepare(writeStatements.writeMessage(withMeta = true))
 
   private lazy val preparedDeleteMessage = cluster.prepare(writeStatements.deleteMessage)
 
@@ -42,7 +42,7 @@ trait DirectWriting extends BeforeAndAfterAll {
     val now = Uuids.unixTimestamp(nowUuid)
     val serManifest = Serializers.manifestFor(serializer, persistent)
 
-    val bs = preparedWriteMessage
+    var bs = preparedWriteMessage
       .bind()
       .setString("persistence_id", persistent.persistenceId)
       .setLong("partition_nr", partitionNr)
@@ -53,6 +53,20 @@ trait DirectWriting extends BeforeAndAfterAll {
       .setString("ser_manifest", serManifest)
       .setString("event_manifest", persistent.manifest)
       .setByteBuffer("event", serialized)
+
+    bs = persistent.metadata match {
+      case Some(meta) =>
+        val metaPayload = meta.asInstanceOf[AnyRef]
+        val metaSerializer = serialization.findSerializerFor(metaPayload)
+        val metaSerialized = ByteBuffer.wrap(serialization.serialize(metaPayload).get)
+        val metaSerializedManifest = Serializers.manifestFor(metaSerializer, metaPayload)
+        bs.setString("meta_ser_manifest", metaSerializedManifest)
+          .setInt("meta_ser_id", metaSerializer.identifier)
+          .setByteBuffer("meta", metaSerialized)
+      case _ =>
+        bs
+    }
+
     cluster.execute(bs)
     system.log.debug("Directly wrote payload [{}] for entity [{}]", persistent.payload, persistent.persistenceId)
   }
