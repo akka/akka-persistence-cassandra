@@ -15,6 +15,7 @@ object Common extends AutoPlugin {
 
   override def globalSettings =
     Seq(
+      resolvers += Resolver.bintrayRepo("akka", "snapshots"),
       organization := "com.typesafe.akka",
       organizationName := "Lightbend Inc.",
       organizationHomepage := Some(url("https://www.lightbend.com/")),
