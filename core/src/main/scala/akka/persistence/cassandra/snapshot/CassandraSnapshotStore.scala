@@ -255,7 +255,9 @@ class CassandraSnapshotStore(cfg: Config)
   }
 
   def executeBatch(body: BatchStatement => Unit): Future[Unit] = {
-    val batch = new BatchStatement().setConsistencyLevel(writeConsistency).asInstanceOf[BatchStatement]
+    val batch = new BatchStatement(BatchStatement.Type.UNLOGGED)
+      .setConsistencyLevel(writeConsistency)
+      .asInstanceOf[BatchStatement]
     body(batch)
     session.underlying().flatMap(_.executeAsync(batch)).map(_ => ())
   }
