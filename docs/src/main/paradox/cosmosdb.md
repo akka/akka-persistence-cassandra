@@ -2,7 +2,7 @@
 
 @@@ warning
 
-**This project is not continuously tested against CosmosDB.**
+**This project is not continuously tested against CosmosDB, and CosmosDB is not supported as part of the [Lightbend Subscription](https://www.lightbend.com/lightbend-subscription).**
 
 @@@
 

@@ -19,6 +19,7 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 * [CosmosDB](cosmosdb.md)
 * [DataStax Astra](astra.md)
 * [ScyllaDB](scylladb.md)
+* [Amazon Keyspaces](keyspaces.md)
 * [Migrations](migrations.md)
 
 @@@
