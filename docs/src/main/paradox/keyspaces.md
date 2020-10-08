@@ -38,7 +38,7 @@ datastax-java-driver {
 }
 ```
 
-Note that the contact points must also be configured, which isn’t fully documented. You find the endpoints for different regions at https://docs.aws.amazon.com/keyspaces/latest/devguide/programmatic.endpoints.html
+Note that the contact points must also be configured. You find the endpoints for different regions at https://docs.aws.amazon.com/keyspaces/latest/devguide/programmatic.endpoints.html
 
 ## Notes
 
