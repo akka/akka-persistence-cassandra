@@ -16,9 +16,7 @@ import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
-import akka.Done
 import akka.actor._
-import akka.annotation.InternalApi
 import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra._
@@ -30,7 +28,7 @@ import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
-import akka.util.OptionVal
+import akka.util.{ unused, OptionVal }
 import com.datastax.oss.driver.api.core.cql._
 import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
@@ -43,7 +41,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class CassandraSnapshotStore(cfg: Config, cfgPath: String)
+@InternalApi private[akka] class CassandraSnapshotStore(@unused cfg: Config, cfgPath: String)
     extends SnapshotStore
     with ActorLogging {
 
@@ -57,7 +55,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   private val settings = new PluginSettings(context.system, sharedConfig)
   private val snapshotSettings = settings.snapshotSettings
   private val serialization = SerializationExtension(context.system)
-  private val snapshotDeserializer = new SnapshotDeserializer(context.system)
+  private val snapshotSerialization = new SnapshotSerialization(context.system)
   private val statements = new CassandraStatements(settings)
   import statements.snapshotStatements._
 
@@ -96,7 +94,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
       log.debug("Initialized")
 
-    case DeleteAllsnapshots(persistenceId) =>
+    case DeleteAllSnapshots(persistenceId) =>
       val result: Future[Done] =
         deleteAsync(persistenceId, SnapshotSelectionCriteria(maxSequenceNr = Long.MaxValue)).map(_ => Done)
       result.pipeTo(sender())
@@ -171,7 +169,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       case Some(row) =>
         row.getByteBuffer("snapshot") match {
           case null =>
-            snapshotDeserializer.deserializeSnapshot(row)
+            snapshotSerialization.deserializeSnapshot(row)
           case bytes =>
             // for backwards compatibility
             val payload = serialization.deserialize(Bytes.getArray(bytes), classOf[Snapshot]).get.data
@@ -181,7 +179,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   }
 
   override def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] =
-    serialize(snapshot, metadata.metadata).flatMap { ser =>
+    snapshotSerialization.serialize(snapshot, metadata.metadata).flatMap { ser =>
       // using two separate statements with or without the meta data columns because
       // then users doesn't have to alter table and add the new columns if they don't use
       // the meta data feature
@@ -190,26 +188,8 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         else preparedWriteSnapshot
 
       stmt.flatMap { ps =>
-        val bs = ps
-          .bind()
-          .setString("persistence_id", metadata.persistenceId)
-          .setLong("sequence_nr", metadata.sequenceNr)
-          .setLong("timestamp", metadata.timestamp)
-          .setInt("ser_id", ser.serId)
-          .setString("ser_manifest", ser.serManifest)
-          .setByteBuffer("snapshot_data", ser.serialized)
-
-        // meta data, if any
-        val finished = ser.meta match {
-          case Some(meta) =>
-            bs.setInt("meta_ser_id", meta.serId)
-              .setString("meta_ser_manifest", meta.serManifest)
-              .setByteBuffer("meta", meta.serialized)
-          case None =>
-            bs
-        }
-
-        session.executeWrite(finished.setExecutionProfileName(snapshotSettings.writeProfile)).map(_ => ())
+        val bound = CassandraSnapshotStore.prepareSnapshotWrite(ps, metadata, ser)
+        session.executeWrite(bound.setExecutionProfileName(snapshotSettings.writeProfile)).map(_ => ())
       }
     }
 
@@ -267,40 +247,6 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
     session.underlying().flatMap(_.executeAsync(batch.build()).toScala).map(_ => ())
   }
 
-  private def serialize(payload: Any, meta: Option[Any]): Future[Serialized] =
-    try {
-      def serializeMeta(): Option[SerializedMeta] =
-        meta.map { m =>
-          val m2 = m.asInstanceOf[AnyRef]
-          val serializer = serialization.findSerializerFor(m2)
-          val serManifest = Serializers.manifestFor(serializer, m2)
-          val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
-          SerializedMeta(metaBuf, serManifest, serializer.identifier)
-        }
-
-      val p: AnyRef = payload.asInstanceOf[AnyRef]
-      val serializer = serialization.findSerializerFor(p)
-      val serManifest = Serializers.manifestFor(serializer, p)
-      serializer match {
-        case asyncSer: AsyncSerializer =>
-          Serialization.withTransportInformation(context.system.asInstanceOf[ExtendedActorSystem]) { () =>
-            asyncSer.toBinaryAsync(p).map { bytes =>
-              val serPayload = ByteBuffer.wrap(bytes)
-              Serialized(serPayload, serManifest, serializer.identifier, serializeMeta())
-            }
-          }
-        case _ =>
-          Future {
-            // Serialization.serialize adds transport info
-            val serPayload = ByteBuffer.wrap(serialization.serialize(p).get)
-            Serialized(serPayload, serManifest, serializer.identifier, serializeMeta())
-          }
-      }
-
-    } catch {
-      case NonFatal(e) => Future.failed(e)
-    }
-
   private def metadata(
       snapshotMetaPs: PreparedStatement,
       persistenceId: String,
@@ -343,15 +289,19 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   private case object Init
 
   sealed trait CleanupCommand
-  final case class DeleteAllsnapshots(persistenceId: String) extends CleanupCommand
+  final case class DeleteAllSnapshots(persistenceId: String) extends CleanupCommand
 
-  private case class Serialized(serialized: ByteBuffer, serManifest: String, serId: Int, meta: Option[SerializedMeta])
+  final case class Serialized(serialized: ByteBuffer, serManifest: String, serId: Int, meta: Option[SerializedMeta])
 
-  private case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
+  final case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
 
   final case class DeserializedSnapshot(payload: Any, meta: OptionVal[Any])
 
-  class SnapshotDeserializer(system: ActorSystem) {
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] class SnapshotSerialization(system: ActorSystem)(implicit val ec: ExecutionContext) {
 
     private val log = Logging(system, this.getClass)
 
@@ -367,6 +317,40 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         _hasMetaColumns = Some(b)
         b
     }
+
+    def serialize(payload: Any, meta: Option[Any]): Future[Serialized] =
+      try {
+        def serializeMeta(): Option[SerializedMeta] =
+          meta.map { m =>
+            val m2 = m.asInstanceOf[AnyRef]
+            val serializer = serialization.findSerializerFor(m2)
+            val serManifest = Serializers.manifestFor(serializer, m2)
+            val metaBuf = ByteBuffer.wrap(serialization.serialize(m2).get)
+            SerializedMeta(metaBuf, serManifest, serializer.identifier)
+          }
+
+        val p: AnyRef = payload.asInstanceOf[AnyRef]
+        val serializer = serialization.findSerializerFor(p)
+        val serManifest = Serializers.manifestFor(serializer, p)
+        serializer match {
+          case asyncSer: AsyncSerializer =>
+            Serialization.withTransportInformation(system.asInstanceOf[ExtendedActorSystem]) { () =>
+              asyncSer.toBinaryAsync(p).map { bytes =>
+                val serPayload = ByteBuffer.wrap(bytes)
+                Serialized(serPayload, serManifest, serializer.identifier, serializeMeta())
+              }
+            }
+          case _ =>
+            Future {
+              // Serialization.serialize adds transport info
+              val serPayload = ByteBuffer.wrap(serialization.serialize(p).get)
+              Serialized(serPayload, serManifest, serializer.identifier, serializeMeta())
+            }
+        }
+
+      } catch {
+        case NonFatal(e) => Future.failed(e)
+      }
 
     def deserializeSnapshot(row: Row)(implicit ec: ExecutionContext): Future[DeserializedSnapshot] =
       try {
@@ -418,5 +402,32 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       } catch {
         case NonFatal(e) => Future.failed(e)
       }
+  }
+
+  /**
+   * INTERNAL API
+   */
+  private[akka] def prepareSnapshotWrite(
+      ps: PreparedStatement,
+      metadata: SnapshotMetadata,
+      ser: Serialized): BoundStatement = {
+    val bs = ps
+      .bind()
+      .setString("persistence_id", metadata.persistenceId)
+      .setLong("sequence_nr", metadata.sequenceNr)
+      .setLong("timestamp", metadata.timestamp)
+      .setInt("ser_id", ser.serId)
+      .setString("ser_manifest", ser.serManifest)
+      .setByteBuffer("snapshot_data", ser.serialized)
+
+    // meta data, if any
+    ser.meta match {
+      case Some(meta) =>
+        bs.setInt("meta_ser_id", meta.serId)
+          .setString("meta_ser_manifest", meta.serManifest)
+          .setByteBuffer("meta", meta.serialized)
+      case None =>
+        bs
+    }
   }
 }

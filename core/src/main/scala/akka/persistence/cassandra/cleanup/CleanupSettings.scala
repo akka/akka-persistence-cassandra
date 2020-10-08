@@ -17,4 +17,5 @@ class CleanupSettings(config: Config) {
   val pluginLocation: String = config.getString("plugin-location")
   val operationTimeout: FiniteDuration = config.getDuration("operation-timeout", TimeUnit.MILLISECONDS).millis
   val logProgressEvery: Int = config.getInt("log-progress-every")
+  val dryRun: Boolean = config.getBoolean("dry-run")
 }

@@ -65,6 +65,13 @@ import akka.persistence.cassandra.FutureDone
     AND sequence_nr <= ?
   """
 
+  def deleteSnapshotsBefore =
+    s"""
+        DELETE FROM ${tableName}
+        WHERE persistence_id = ?
+        AND sequence_nr < ?
+       """
+
   def selectSnapshot = s"""
       SELECT * FROM ${tableName} WHERE
         persistence_id = ? AND
@@ -77,6 +84,19 @@ import akka.persistence.cassandra.FutureDone
         sequence_nr <= ? AND
         sequence_nr >= ?
         ${limit.map(l => s"LIMIT ${l}").getOrElse("")}
+    """
+
+  def selectLatestSnapshotMeta =
+    s"""SELECT persistence_id, sequence_nr, timestamp FROM ${tableName} WHERE
+    persistence_id = ? 
+    ORDER BY sequence_nr DESC
+    LIMIT ?
+    """
+
+  def selectAllSnapshotMeta =
+    s"""SELECT sequence_nr, timestamp FROM ${tableName} WHERE
+    persistence_id = ? 
+    ORDER BY sequence_nr DESC
     """
 
   private def tableName = s"${snapshotSettings.keyspace}.${snapshotSettings.table}"
