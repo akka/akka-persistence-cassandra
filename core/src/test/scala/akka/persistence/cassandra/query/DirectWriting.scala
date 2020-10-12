@@ -7,11 +7,13 @@ package akka.persistence.cassandra.query
 import java.nio.ByteBuffer
 
 import akka.actor.ActorSystem
-import akka.persistence.PersistentRepr
+import akka.persistence.{ PersistentRepr, SnapshotMetadata }
 import akka.persistence.cassandra.Hour
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.journal.CassandraJournalStatements
 import akka.persistence.cassandra.journal.TimeBucket
+import akka.persistence.cassandra.snapshot.{ CassandraSnapshotStatements, CassandraSnapshotStore }
+import akka.persistence.cassandra.snapshot.CassandraSnapshotStore.SnapshotSerialization
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
 import com.datastax.oss.driver.api.core.CqlSession
@@ -19,22 +21,36 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Suite
 
+import scala.concurrent.{ ExecutionContext, Future }
+
 trait DirectWriting extends BeforeAndAfterAll {
   self: Suite =>
 
   def system: ActorSystem
   private lazy val serialization = SerializationExtension(system)
   private lazy val settings = PluginSettings(system)
+  private lazy implicit val ec: ExecutionContext = system.dispatcher
 
   def cluster: CqlSession
 
   private lazy val writeStatements: CassandraJournalStatements = new CassandraJournalStatements(settings)
+  private lazy val snapshotStatements: CassandraSnapshotStatements = new CassandraSnapshotStatements(
+    settings.snapshotSettings)
+  private lazy val snapshotSerialization = new SnapshotSerialization(system)(system.dispatcher)
 
   private lazy val preparedWriteMessage = cluster.prepare(writeStatements.writeMessage(withMeta = true))
-
   private lazy val preparedDeleteMessage = cluster.prepare(writeStatements.deleteMessage)
+  private lazy val preparedWriteSnapshot = cluster.prepare(snapshotStatements.writeSnapshot(withMeta = false))
 
-  protected def writeTestEvent(persistent: PersistentRepr, partitionNr: Long = 1L): Unit = {
+  def writeTestSnapshot(snapshotMeta: SnapshotMetadata, snapshot: AnyRef): Future[Unit] = {
+    snapshotSerialization.serialize(snapshot, None).map { ser =>
+      val bound = CassandraSnapshotStore.prepareSnapshotWrite(preparedWriteSnapshot, snapshotMeta, ser)
+      cluster.execute(bound)
+      ()
+    }
+  }
+
+  def writeTestEvent(persistent: PersistentRepr, partitionNr: Long = 1L): Unit = {
     val event = persistent.payload.asInstanceOf[AnyRef]
     val serializer = serialization.findSerializerFor(event)
     val serialized = ByteBuffer.wrap(serialization.serialize(event).get)

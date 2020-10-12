@@ -75,7 +75,7 @@ object CassandraSpec {
 
   val fallbackConfig = ConfigFactory.parseString(s"""
       akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
-      akka.loglevel = INFO
+      akka.loglevel = DEBUG
       akka.use-slf4j = off
 
       datastax-java-driver {
@@ -192,6 +192,16 @@ abstract class CassandraSpec(
             println(s"""Row:${row.getLong("partition_nr")}, ${row.getString("persistence_id")}, ${row.getLong(
               "sequence_nr")}""")
           })
+
+        println("snapshots")
+        cluster
+          .execute(s"select * from ${snapshotName}.snapshots")
+          .asScala
+          .foreach(row => {
+            println(
+              s"""Row:${row.getString("persistence_id")}, ${row.getLong("sequence_nr")}, ${row.getLong("timestamp")}""")
+          })
+
       }
       keyspaces().foreach { keyspace =>
         cluster.execute(s"drop keyspace if exists $keyspace")

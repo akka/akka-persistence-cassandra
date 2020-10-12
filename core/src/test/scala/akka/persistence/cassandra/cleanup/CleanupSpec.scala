@@ -9,11 +9,9 @@ import java.time.ZoneOffset
 
 import akka.actor.ActorRef
 import akka.actor.Props
-import akka.persistence.PersistentActor
-import akka.persistence.SaveSnapshotSuccess
-import akka.persistence.SnapshotOffer
+import akka.persistence.{ PersistentActor, SaveSnapshotSuccess, SnapshotMetadata, SnapshotOffer }
 import akka.persistence.cassandra.CassandraSpec
-import akka.persistence.cassandra.query.firstBucketFormatter
+import akka.persistence.cassandra.query.{ firstBucketFormatter, DirectWriting }
 import akka.persistence.journal.Tagged
 import akka.persistence.query.NoOffset
 import akka.stream.scaladsl.Sink
@@ -22,9 +20,10 @@ import com.typesafe.config.ConfigFactory
 object CleanupSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = INFO
+    akka.loglevel = DEBUG
     akka.persistence.cassandra.cleanup {
       log-progress-every = 2
+      dry-run = false
     }
     akka.persistence.cassandra.events-by-tag {
       first-time-bucket = "${today.minusDays(5).format(firstBucketFormatter)}"
@@ -79,7 +78,7 @@ object CleanupSpec {
   }
 }
 
-class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
+class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
   import CleanupSpec._
 
   "Cassandra cleanup" must {
@@ -203,6 +202,143 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       queries.currentEventsByTag(tag = "tag-b", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
     }
 
+    "delete some for one persistenceId" in {
+      val pid = nextPid
+      val p = system.actorOf(TestActor.props(pid))
+      (1 to 8).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      system.stop(p)
+
+      val cleanup = new Cleanup(system)
+      cleanup.deleteEventsTo(pid, 5).futureValue
+
+      val p2 = system.actorOf(TestActor.props(pid))
+      p2 ! GetRecoveredState
+      expectMsg(RecoveredState("", List("evt-6", "evt-7", "evt-8"), 8L))
+    }
+
+    "clean up before latest snapshot for one persistence id" in {
+      val pid = nextPid
+      val p = system.actorOf(TestActor.props(pid))
+      (1 to 3).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      p ! Snap
+      expectMsgType[Ack]
+      (1 to 3).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      p ! Snap
+      expectMsgType[Ack]
+      (1 to 3).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      system.stop(p)
+
+      val cleanup = new Cleanup(system)
+      cleanup.cleanupBeforeSnapshot(pid, 1).futureValue
+
+      val p2 = system.actorOf(TestActor.props(pid))
+      p2 ! GetRecoveredState
+      expectMsg(RecoveredState("snap-6", List("evt-7", "evt-8", "evt-9"), 9L))
+
+      // check old snapshots are done
+      val snapshots = allSnapshots(pid)
+      snapshots.size shouldEqual 1
+      snapshots.head.sequenceNr shouldEqual 6
+      // check old events are gone
+      queries
+        .currentEventsByPersistenceId(pid, 0, Long.MaxValue)
+        .map(_.event.toString)
+        .runWith(Sink.seq)
+        .futureValue shouldEqual List("evt-7", "evt-8", "evt-9")
+    }
+
+    "clean up before snapshot including timestamp that results in all events kept for one persistence id" in {
+      val pid = nextPid
+      val p = system.actorOf(TestActor.props(pid))
+      (1 to 3).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      p ! Snap
+      expectMsgType[Ack]
+      (1 to 3).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      p ! Snap
+      expectMsgType[Ack]
+      (1 to 3).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      system.stop(p)
+
+      val cleanup = new Cleanup(system)
+      // a long way in the past so keep everything
+      cleanup.cleanupBeforeSnapshot(pid, 1, 100).futureValue
+
+      val p2 = system.actorOf(TestActor.props(pid))
+      p2 ! GetRecoveredState
+      expectMsg(RecoveredState("snap-6", List("evt-7", "evt-8", "evt-9"), 9L))
+
+      // check old snapshots are done
+      val snapshots = allSnapshots(pid)
+      snapshots.size shouldEqual 2
+      // check old events are kept due to timestamp, all events before the oldest snapshot are still deleted
+      queries
+        .currentEventsByPersistenceId(pid, 0, Long.MaxValue)
+        .map(_.event.toString)
+        .runWith(Sink.seq)
+        .futureValue shouldEqual List("evt-4", "evt-5", "evt-6", "evt-7", "evt-8", "evt-9")
+    }
+
+    "clean up before snapshot including timestamp for one persistence id" in {
+      val pid = nextPid
+      val p = system.actorOf(TestActor.props(pid))
+      (1 to 3).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      p ! Snap
+      expectMsgType[Ack]
+      (1 to 3).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      p ! Snap
+      expectMsgType[Ack]
+      (1 to 3).foreach { i =>
+        p ! PersistEvent
+        expectMsgType[Ack]
+      }
+      system.stop(p)
+
+      val cleanup = new Cleanup(system)
+      // timestamp shouldn't result in any more events/snapshtos kept apart from the last one
+      cleanup.cleanupBeforeSnapshot(pid, 1, System.currentTimeMillis()).futureValue
+
+      val p2 = system.actorOf(TestActor.props(pid))
+      p2 ! GetRecoveredState
+      expectMsg(RecoveredState("snap-6", List("evt-7", "evt-8", "evt-9"), 9L))
+
+      // check old snapshots are done
+      val snapshots = allSnapshots(pid)
+      snapshots.size shouldEqual 1
+      // check old events are kept due to timestamp
+      queries
+        .currentEventsByPersistenceId(pid, 0, Long.MaxValue)
+        .map(_.event.toString)
+        .runWith(Sink.seq)
+        .futureValue shouldEqual List("evt-7", "evt-8", "evt-9")
+    }
+
     "delete all for several persistenceId" in {
       val pidA = nextPid
       val pidB = nextPid
@@ -301,6 +437,132 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) {
       expectMsg(RecoveredState("", Nil, 0L))
     }
 
+  }
+
+  "Time and snapshot based cleanup" must {
+    "keep the correct  number of snapshots" in {
+      val cleanup = new Cleanup(system)
+      val pid = nextPid
+      writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 2, 2000), "snapshot-2").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 3, 3000), "snapshot-3").futureValue
+
+      val oldestSnapshot = cleanup.deleteBeforeSnapshot(pid, 2).futureValue
+
+      val p1 = system.actorOf(TestActor.props(pid))
+      p1 ! GetRecoveredState
+      expectMsg(RecoveredState("snapshot-3", Nil, 3L))
+
+      allSnapshots(pid) shouldEqual List(SnapshotMetadata(pid, 2, 2000), SnapshotMetadata(pid, 3, 3000))
+
+      oldestSnapshot shouldEqual Some(SnapshotMetadata(pid, 2, 2000))
+    }
+    "keep the all snapshots if fewer than requested without timestamp" in {
+      val cleanup = new Cleanup(system)
+      val pid = nextPid
+      writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 2, 2000), "snapshot-2").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 3, 3000), "snapshot-3").futureValue
+
+      val oldestSnapshot = cleanup.deleteBeforeSnapshot(pid, 4).futureValue
+
+      val p1 = system.actorOf(TestActor.props(pid))
+      p1 ! GetRecoveredState
+      expectMsg(RecoveredState("snapshot-3", Nil, 3L))
+
+      allSnapshots(pid) shouldEqual List(
+        SnapshotMetadata(pid, 1, 1000),
+        SnapshotMetadata(pid, 2, 2000),
+        SnapshotMetadata(pid, 3, 3000))
+
+      oldestSnapshot shouldEqual Some(SnapshotMetadata(pid, 1, 1000))
+    }
+    "keep the all snapshots if fewer than requested with timestamp" in {
+      val cleanup = new Cleanup(system)
+      val pid = nextPid
+      writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 2, 2000), "snapshot-2").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 3, 3000), "snapshot-3").futureValue
+
+      val oldestSnapshot = cleanup.deleteBeforeSnapshot(pid, 4, 1500).futureValue
+
+      val p1 = system.actorOf(TestActor.props(pid))
+      p1 ! GetRecoveredState
+      expectMsg(RecoveredState("snapshot-3", Nil, 3L))
+
+      allSnapshots(pid) shouldEqual List(
+        SnapshotMetadata(pid, 1, 1000),
+        SnapshotMetadata(pid, 2, 2000),
+        SnapshotMetadata(pid, 3, 3000))
+
+      oldestSnapshot shouldEqual Some(SnapshotMetadata(pid, 1, 1000))
+    }
+
+    "work without timestamp when there are no snapshots" in {
+      val cleanup = new Cleanup(system)
+      val pid = nextPid
+      val oldestSnapshot = cleanup.deleteBeforeSnapshot(pid, 2).futureValue
+      oldestSnapshot shouldEqual None
+    }
+
+    "work with timestamp when there are no snapshots" in {
+      val cleanup = new Cleanup(system)
+      val pid = nextPid
+      val oldestSnapshot = cleanup.deleteBeforeSnapshot(pid, 2, 100).futureValue
+      oldestSnapshot shouldEqual None
+    }
+
+    "don't delete snapshots newer than the oldest date" in {
+      val cleanup = new Cleanup(system)
+      val pid = nextPid
+      writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 2, 2000), "snapshot-2").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 3, 3000), "snapshot-3").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 4, 4000), "snapshot-4").futureValue
+
+      val oldestSnapshot = cleanup.deleteBeforeSnapshot(pid, 2, 1500).futureValue
+
+      val p1 = system.actorOf(TestActor.props(pid))
+      p1 ! GetRecoveredState
+      expectMsg(RecoveredState("snapshot-4", Nil, 4L))
+
+      // here 3 snapshots are kept as snapshot 2 is newer than 1500
+      allSnapshots(pid) shouldEqual List(
+        SnapshotMetadata(pid, 2, 2000),
+        SnapshotMetadata(pid, 3, 3000),
+        SnapshotMetadata(pid, 4, 4000))
+
+      oldestSnapshot shouldEqual Some(SnapshotMetadata(pid, 2, 2000))
+    }
+    "keep snapshots older than the oldest date to meet snapshotsToKeep" in {
+      val cleanup = new Cleanup(system)
+      val pid = nextPid
+      writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 2, 2000), "snapshot-2").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 3, 3000), "snapshot-3").futureValue
+      writeTestSnapshot(SnapshotMetadata(pid, 4, 4000), "snapshot-4").futureValue
+
+      val oldestSnapshot = cleanup.deleteBeforeSnapshot(pid, 2, 5000).futureValue
+
+      val p1 = system.actorOf(TestActor.props(pid))
+      p1 ! GetRecoveredState
+      expectMsg(RecoveredState("snapshot-4", Nil, 4L))
+
+      // 2 snapshots are kept that are both older than the keepAfter as 2 should be kept
+      allSnapshots(pid) shouldEqual List(SnapshotMetadata(pid, 3, 3000), SnapshotMetadata(pid, 4, 4000))
+
+      oldestSnapshot shouldEqual Some(SnapshotMetadata(pid, 3, 3000))
+    }
+  }
+
+  private def allSnapshots(pid: String): Seq[SnapshotMetadata] = {
+    import scala.collection.JavaConverters._
+    cluster
+      .execute(s"select * from ${snapshotName}.snapshots where persistence_id = '${pid}' order by sequence_nr")
+      .asScala
+      .map(row =>
+        SnapshotMetadata(row.getString("persistence_id"), row.getLong("sequence_nr"), row.getLong("timestamp")))
+      .toList
   }
 
 }
