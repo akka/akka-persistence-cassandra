@@ -137,6 +137,15 @@ abstract class CassandraSpec(
             println(s"""Row:${row.getLong("partition_nr")}, ${row.getString("persistence_id")}, ${row.getLong(
               "sequence_nr")}""")
           })
+
+        println("snapshots")
+        c.execute(s"select * from ${snapshotName}.snapshots")
+          .asScala
+          .foreach(row => {
+            println(
+              s"""Row:${row.getString("persistence_id")}, ${row.getLong("sequence_nr")}, ${row.getLong("timestamp")}""")
+          })
+
       }
       keyspaces().foreach { keyspace =>
         c.execute(s"drop keyspace if exists $keyspace")
