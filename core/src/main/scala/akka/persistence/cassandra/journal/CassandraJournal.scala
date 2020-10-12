@@ -675,7 +675,7 @@ class CassandraJournal(cfg: Config)
   }
 
   private def executeBatch(body: BatchStatement => Unit, retryPolicy: RetryPolicy): Future[Unit] = {
-    val batch = new BatchStatement()
+    val batch = new BatchStatement(BatchStatement.Type.UNLOGGED)
       .setConsistencyLevel(writeConsistency)
       .setRetryPolicy(retryPolicy)
       .asInstanceOf[BatchStatement]
