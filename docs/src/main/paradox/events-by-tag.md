@@ -154,7 +154,7 @@ otherwise they'll be deleted before being read.
 
 @@@
 
-The @apidoc[akka.persistence.cassandra.cleanup.Cleanup] tool can also be used for deleting from the `tag_views`
+The `akka.persistence.cassandra.cleanup.Cleanup` tool can also be used for deleting from the `tag_views`
 table. See @ref[Database Cleanup](./cleanup.md) for more details.
 
 ## How it works

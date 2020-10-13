@@ -376,7 +376,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    * INTERNAL API
    */
   @InternalApi
-  private[akka] val tagViewScanner: Future[TagViewSequenceNumberScanner] = preparedSelectTagSequenceNrs.map { ps =>
+  private[akka] lazy val tagViewScanner: Future[TagViewSequenceNumberScanner] = preparedSelectTagSequenceNrs.map { ps =>
     new TagViewSequenceNumberScanner(TagViewSequenceNumberScanner.Session(session, ps))
   }
 
