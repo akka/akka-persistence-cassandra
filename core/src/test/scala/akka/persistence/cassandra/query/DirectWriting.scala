@@ -7,15 +7,18 @@ package akka.persistence.cassandra.query
 import java.nio.ByteBuffer
 
 import akka.actor.ActorSystem
-import akka.persistence.PersistentRepr
+import akka.persistence.{ PersistentRepr, SnapshotMetadata }
 import akka.persistence.cassandra.journal.{ CassandraJournalConfig, CassandraStatements, Hour, TimeBucket }
+import akka.persistence.cassandra.snapshot
+import akka.persistence.cassandra.snapshot.{ CassandraSnapshotStore, CassandraSnapshotStoreConfig }
+import akka.persistence.cassandra.snapshot.CassandraSnapshotStore.SnapshotSerialization
 import akka.serialization.SerializationExtension
 import com.datastax.driver.core.utils.UUIDs
 import org.scalatest.{ BeforeAndAfterAll, Suite }
-import scala.concurrent.Await
+
+import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration._
 import scala.util.Try
-
 import akka.serialization.Serializers
 
 trait DirectWriting extends BeforeAndAfterAll {
@@ -25,6 +28,9 @@ trait DirectWriting extends BeforeAndAfterAll {
   private lazy val serialization = SerializationExtension(system)
   private lazy val writePluginConfig =
     new CassandraJournalConfig(system, system.settings.config.getConfig("cassandra-journal"))
+
+  private lazy val snapshotPluginConfig =
+    new CassandraSnapshotStoreConfig(system, system.settings.config.getConfig("cassandra-snapshot-store"))
 
   private lazy val session = {
     Await.result(writePluginConfig.sessionProvider.connect()(system.dispatcher), 5.seconds)
@@ -43,6 +49,22 @@ trait DirectWriting extends BeforeAndAfterAll {
       def config: CassandraJournalConfig = writePluginConfig
     }
     session.prepare(writeStatements.writeMessage(withMeta = false))
+  }
+  private lazy val snapshotStatements = new snapshot.CassandraStatements {
+    override def snapshotConfig: CassandraSnapshotStoreConfig = snapshotPluginConfig
+  }
+
+  private lazy val snapshotSerialization = new SnapshotSerialization(system)
+  private lazy val preparedWriteSnapshot = session.prepare(snapshotStatements.writeSnapshot(withMeta = false))
+
+  def writeTestSnapshot(snapshotMeta: SnapshotMetadata, snapshot: AnyRef): Future[Unit] = {
+    snapshotSerialization
+      .serialize(snapshot)(system.dispatcher)
+      .map { ser =>
+        val bound = CassandraSnapshotStore.prepareSnapshotWrite(preparedWriteSnapshot, snapshotMeta, ser)
+        session.execute(bound)
+        ()
+      }(system.dispatcher)
   }
 
   protected def writeTestEvent(persistent: PersistentRepr): Unit = {

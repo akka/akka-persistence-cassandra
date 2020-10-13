@@ -14,5 +14,6 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 * [Serialization](serialization.md)
 * [scylladb](scylladb.md)
 * [migrations](migrations.md)
+* [Cleanup](cleanup.md)
 
 @@@

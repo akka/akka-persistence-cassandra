@@ -18,4 +18,5 @@ class CleanupSettings(config: Config) {
   val snapshotPlugin: String = config.getString("snapshot-plugin")
   val operationTimeout: FiniteDuration = config.getDuration("operation-timeout", TimeUnit.MILLISECONDS).millis
   val logProgressEvery: Int = config.getInt("log-progress-every")
+  val dryRun: Boolean = config.getBoolean("dry-run")
 }
