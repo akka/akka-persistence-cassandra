@@ -402,7 +402,7 @@ import scala.compat.java8.FutureConverters._
                 }
             }
             DistributedPubSub(system).mediator !
-            DistributedPubSubMediator.Subscribe("akka.persistence.cassandra.journal.tag", this.stageActor.ref)
+            DistributedPubSubMediator.Subscribe(s"apc.tags.${session.tag}", this.stageActor.ref)
           }
         }
         query()

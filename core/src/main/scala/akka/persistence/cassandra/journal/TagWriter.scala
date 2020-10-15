@@ -274,7 +274,7 @@ import akka.util.UUIDComparator
 
   private def sendPubsubNotification(): Unit = {
     pubsub.foreach {
-      _ ! DistributedPubSubMediator.Publish("akka.persistence.cassandra.journal.tag", tag)
+      _ ! DistributedPubSubMediator.Publish(s"apc.tags.$tag", tag)
     }
   }
 
