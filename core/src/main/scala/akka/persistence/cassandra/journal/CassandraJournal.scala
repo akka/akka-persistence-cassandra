@@ -31,7 +31,6 @@ import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -40,8 +39,12 @@ import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
+
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
+import akka.cluster.pubsub.DistributedPubSub
+import akka.cluster.pubsub.DistributedPubSubMediator
+import akka.persistence.cassandra.query.AllEvents
 import akka.stream.scaladsl.Source
 
 /**
@@ -107,6 +110,11 @@ import akka.stream.scaladsl.Source
 
   private val tagRecovery: Option[CassandraTagRecovery] =
     tagWrites.map(ref => new CassandraTagRecovery(context.system, session, settings, taggedPreparedStatements, ref))
+
+  private val pubsub: Option[ActorRef] = {
+    // FIXME config to disable
+    Option(DistributedPubSub(system).mediator)
+  }
 
   private def preparedWriteMessage =
     session.prepare(statements.journalStatements.writeMessage(withMeta = false))
@@ -292,6 +300,16 @@ import akka.stream.scaladsl.Source
       sendWriteFinished(pid, writeInProgressForPersistentId)
     }
 
+    toReturn.foreach { _ =>
+      writesWithUuids.foreach { aw =>
+        aw.foreach {
+          case (repr, _) =>
+            // FIXME we could use a new message type instead of PersistentRepr and reuse the already serialized bytes
+            publishEvent(repr)
+        }
+      }
+    }
+
     toReturn
   }
 
@@ -310,6 +328,16 @@ import akka.stream.scaladsl.Source
   private def sendWriteFinished(pid: String, writeInProgressForPid: Promise[Done]): Unit = {
     self ! WriteFinished(pid, writeInProgressForPid.future)
     writeInProgressForPid.success(Done)
+  }
+
+  private def publishEvent(repr: PersistentRepr): Unit = {
+    pubsub match {
+      case Some(mediator) =>
+        // FIXME config numberOfSlices
+        val topic = AllEvents.topicNameFromPersistenceId(repr.persistenceId, numberOfSlices = 1)
+        mediator ! DistributedPubSubMediator.Publish(topic, repr)
+      case None => // disabled
+    }
   }
 
   /**
