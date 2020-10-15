@@ -29,6 +29,30 @@ persistence id is received or if no more events are received for the persistence
 In both cases the query will go back and search for the delayed events. The search for missing events is an expensive operation
 so it is advised not to set the `eventual-consistency-delay` too low as it increased the liklihood of missed events.
 
+@@@ warning
+
+Back tracking only goes back to the offset the query is started from. Meaning that if a query is restarted from an offset and there have been events
+delayed greater than the `eventual-consistency-delay` those events will not be delivered.
+
+@@@
+
+### What can delay events?
+
+Events can be delayed for many reasons:
+
+* GC pause between serializing the event in the Akka node and writing it to the database
+* Event waiting to be written as part of a batch to the `tag_views` table
+* Out of sync clocks
+* Overloaded database
+
+#### Overloaded database
+
+Typical write timeouts for Cassandra are between 2 and 10 seconds. If these timeouts are hit when writing to the `tag_views` table
+it means that by the time the write is retried the event will have been delayed by 2-10 seconds while the original write timed out.
+
+Normally these delayed events will be picked up by [back tracking](#back-tracking) but if the events by tag query is restarted from a later
+offset then back tracking won't see these delayed events.
+
 ## Back tracking
 
 If another event for the same persistence id is received the sequence number is used to detect that an event has been missed.
