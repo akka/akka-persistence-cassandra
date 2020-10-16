@@ -27,6 +27,12 @@ import com.typesafe.config.Config
   case object Max extends Period
   case class Fixed(duration: FiniteDuration) extends Period
 
+  final case class RetrySettings(
+      retries: Int,
+      minDuration: FiniteDuration,
+      maxDuration: FiniteDuration,
+      randomFactor: Double)
+
   /**
    * Stores and validates the back track configuration.
    *
@@ -190,6 +196,12 @@ import com.typesafe.config.Config
     period(eventsByTagConfig, "back-track.period"),
     optionalDuration(eventsByTagConfig, "back-track.long-interval"),
     period(eventsByTagConfig, "back-track.long-period"))
+
+  val retrySettings = RetrySettings(
+    eventsByTagConfig.getInt("retries.attempts"),
+    eventsByTagConfig.getDuration("retries.min-backoff", TimeUnit.MILLISECONDS).millis,
+    eventsByTagConfig.getDuration("retries.max-backoff", TimeUnit.MILLISECONDS).millis,
+    eventsByTagConfig.getDouble("retries.random-factor"))
 
   val maxMissingToSearch: Long = eventsByTagConfig.getLong("max-missing-to-search")
 
