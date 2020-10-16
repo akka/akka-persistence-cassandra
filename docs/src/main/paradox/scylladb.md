@@ -2,7 +2,7 @@
 
 @@@ warning
 
-**This project is not continuously tested against ScyllaDB.**
+**This project is not continuously tested against ScyllaDB, and ScyllaDB is not supported as part of the [Lightbend Subscription](https://www.lightbend.com/lightbend-subscription).**
 
 @@@
 
