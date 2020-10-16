@@ -17,7 +17,6 @@ import akka.testkit.TestProbe
 import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.typesafe.config.ConfigFactory
 
-import scala.annotation.meta
 import scala.collection.immutable.Seq
 
 object CassandraSnapshotStoreConfiguration {
