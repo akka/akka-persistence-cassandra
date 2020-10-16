@@ -190,7 +190,9 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
   private var directPending: Vector[PersistenceId] = Vector.empty
 
   private var throttleDelay: FiniteDuration = Duration.Zero
+  private var queryCount = 0
   private var updateCount = 0
+  private var resetPendingTime = System.nanoTime()
 
   log.debug("Starting PersistenceIdsState [{}] with [{}] pids in offset.", self.path.name, offset.offsets.size)
 
@@ -224,10 +226,21 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
 
   private def nextPending(): Option[(PersistenceId, PidState)] = {
     if (pending.isEmpty && pidState.nonEmpty) {
-      log.debug("Reset pending pids, size [{}]. Found events for [{}] pids.", pidState.size, updateCount)
-      if (updateCount == 0)
-        throttleDelay = 50.millis // FIXME config
+      val durationMs = (System.nanoTime() - resetPendingTime).nanos.toMillis
+      log.info(
+        "Reset pending pids, size [{}]. Round took [{} ms]. Found events for [{}] pids.",
+        pidState.size,
+        durationMs,
+        updateCount)
+      resetPendingTime = System.nanoTime()
+      if (updateCount == 0) {
+        // delay every 100th query
+        // measured 10000 pids: 6 seconds without throttling, 1 minute with this (500 ms / 100) throttling
+        // measured 100000 pids: 70 seconds without throttling, 10 minutes with this (500 ms / 100) throttling
+        throttleDelay = 500.millis // FIXME config
+      }
       updateCount = 0
+      queryCount = 0
       pending = pidState.keysIterator.toVector.sorted
     }
 
@@ -322,10 +335,11 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
               log.debug("Next pid [{}] from seqNr [{}].", pid, state.seqNr + 1)
               pidState = pidState.updated(pid, state.copy(inFlight = true))
               val reply = NextPersistenceId(pid, state.seqNr, Vector.empty)
-              if (throttleDelay == Duration.Zero)
-                sender() ! reply
-              else
+              if (throttleDelay > Duration.Zero && queryCount % 100 == 0)
                 scheduler.scheduleOnce(throttleDelay, sender(), reply)(context.dispatcher)
+              else
+                sender() ! reply
+              queryCount += 1
             case None =>
               log.debug("No pending pids.")
               // slow down
