@@ -352,7 +352,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         case NonFatal(e) => Future.failed(e)
       }
 
-    def deserializeSnapshot(row: Row)(implicit ec: ExecutionContext): Future[DeserializedSnapshot] =
+    def deserializeSnapshot(row: Row): Future[DeserializedSnapshot] =
       try {
 
         def meta: OptionVal[AnyRef] =

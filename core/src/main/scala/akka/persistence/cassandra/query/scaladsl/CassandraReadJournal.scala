@@ -321,7 +321,7 @@ class CassandraReadJournal protected (
         createFutureSource(prereqs) {
           case (s, (statements, initialTagPidSequenceNrs, scanner)) =>
             val session =
-              new TagStageSession(tag, querySettings.readProfile, s, statements)
+              new TagStageSession(tag, querySettings.readProfile, s, statements, eventsByTagSettings.retrySettings)
             Source.fromGraph(
               EventsByTagStage(
                 session,
@@ -501,7 +501,7 @@ class CassandraReadJournal protected (
         createFutureSource(prereqs) {
           case (s, (statements, initialTagPidSequenceNrs, scanner)) =>
             val session =
-              new TagStageSession(tag, querySettings.readProfile, s, statements)
+              new TagStageSession(tag, querySettings.readProfile, s, statements, eventsByTagSettings.retrySettings)
             Source.fromGraph(
               EventsByTagStage(
                 session,

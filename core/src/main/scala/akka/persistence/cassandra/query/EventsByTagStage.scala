@@ -12,17 +12,19 @@ import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.TimeBucket
 import akka.persistence.cassandra.query.EventsByTagStage._
 import akka.stream.stage.{ GraphStage, _ }
-import akka.stream.{ ActorMaterializer, Attributes, Outlet, SourceShape }
+import akka.stream.{ Attributes, Outlet, SourceShape }
 import akka.util.PrettyDuration._
 
 import scala.annotation.tailrec
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContextExecutor, Future }
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
 import scala.util.{ Failure, Success, Try }
 import java.lang.{ Long => JLong }
 
+import akka.actor.Scheduler
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
+import akka.persistence.cassandra.EventsByTagSettings.RetrySettings
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
 import akka.util.UUIDComparator
@@ -30,7 +32,6 @@ import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.uuid.Uuids
-import com.github.ghik.silencer.silent
 
 import scala.compat.java8.FutureConverters._
 
@@ -87,12 +88,21 @@ import scala.compat.java8.FutureConverters._
       val tag: String,
       readProfile: String,
       session: CqlSession,
-      statements: EventByTagStatements) {
-    def selectEventsForBucket(bucket: TimeBucket, from: UUID, to: UUID): Future[AsyncResultSet] = {
-      val bound =
-        statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setExecutionProfileName(readProfile)
+      statements: EventByTagStatements,
+      retries: RetrySettings) {
 
-      session.executeAsync(bound).toScala
+    def selectEventsForBucket(
+        bucket: TimeBucket,
+        from: UUID,
+        to: UUID,
+        onFailure: (Int, Throwable, FiniteDuration) => Unit)(
+        implicit ec: ExecutionContext,
+        scheduler: Scheduler): Future[AsyncResultSet] = {
+      Retries.retry({ () =>
+        val bound =
+          statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setExecutionProfileName(readProfile)
+        session.executeAsync(bound).toScala
+      }, retries.retries, onFailure, retries.minDuration, retries.maxDuration, retries.randomFactor)
     }
   }
 
@@ -229,11 +239,8 @@ import scala.compat.java8.FutureConverters._
       val toOffsetMillis =
         toOffset.map(Uuids.unixTimestamp).getOrElse(Long.MaxValue)
 
-      lazy val system = materializer match {
-        case a: ActorMaterializer => a.system
-        case _ =>
-          throw new IllegalStateException("EventsByTagStage requires ActorMaterializer")
-      }
+      lazy val system = materializer.system
+      lazy implicit val scheduler = system.scheduler
 
       private def calculateToOffset(): UUID = {
         val to: Long = Uuids.unixTimestamp(Uuids.timeBased()) - eventsByTagSettings.eventualConsistency.toMillis
@@ -427,9 +434,8 @@ import scala.compat.java8.FutureConverters._
         optionallySchedule(ScanForDelayedEvents, eventsByTagSettings.backtrack.interval)
       }
 
-      @silent("deprecated")
       private def scheduleQueryPoll(initial: FiniteDuration, interval: FiniteDuration): Unit = {
-        schedulePeriodicallyWithInitialDelay(PeriodicQueryPoll, initial, interval)
+        scheduleWithFixedDelay(PeriodicQueryPoll, initial, interval)
       }
 
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
@@ -516,7 +522,19 @@ import scala.compat.java8.FutureConverters._
         }
         updateStageState(_.copy(state = QueryInProgress(abortForMissingSearch = false)))
         session
-          .selectEventsForBucket(stageState.currentTimeBucket, stageState.fromOffset, stageState.toOffset)
+          .selectEventsForBucket(
+            stageState.currentTimeBucket,
+            stageState.fromOffset,
+            stageState.toOffset, { (attempt, t, nextRetry) =>
+              if (log.isWarningEnabled) {
+                log.warning(
+                  s"[{}] Query failed. timeBucket: {} from offset: {} to offset: {}. Attempt ${attempt}. Next retry in: ${nextRetry.pretty}. Reason: ${t.getMessage}",
+                  stageUuid,
+                  stageState.currentTimeBucket,
+                  formatOffset(stageState.fromOffset),
+                  formatOffset(stageState.toOffset))
+              }
+            })
           .onComplete(newResultSetCb.invoke)
       }
 
@@ -545,7 +563,19 @@ import scala.compat.java8.FutureConverters._
               formatOffset(missing.maxOffset))
           }
           session
-            .selectEventsForBucket(missing.bucket, missing.minOffset, missing.maxOffset)
+            .selectEventsForBucket(
+              missing.bucket,
+              missing.minOffset,
+              missing.maxOffset, { (attempt, t, nextRetry) =>
+                if (log.isWarningEnabled) {
+                  log.warning(
+                    s"[{}] Looking for missing query failed. timeBucket: {} from offset: {} to offset: {}. Attempt ${attempt}. Next retry in: ${nextRetry.pretty}. Reason: ${t.getMessage}",
+                    stageUuid,
+                    stageState.currentTimeBucket,
+                    formatOffset(stageState.fromOffset),
+                    formatOffset(stageState.toOffset))
+                }
+              })
             .onComplete(newResultSetCb.invoke)
         }
       }
