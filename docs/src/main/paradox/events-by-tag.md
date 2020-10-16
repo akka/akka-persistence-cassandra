@@ -5,6 +5,11 @@ as a timebucket to prevent partitions becoming too big.
 
 Due to it being a separate table and events are written from multiple nodes the events by tag is eventually consistent.
 
+@@@ warning
+You should not use too many tags for each event. Each tag will result in a copy of the event in a separate table and
+that can impact write performance.
+@@@
+
 ## Consistency
 
 Event by tag queries are eventually consistent, i.e. if a persist for an event has completed
