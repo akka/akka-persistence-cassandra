@@ -30,12 +30,14 @@ class TestActor(override val persistenceId: String, override val journalPluginId
   val receiveCommand: Receive = {
     case cmd: String =>
       persist(cmd) { evt =>
-        sender() ! evt + "-done"
+        if (sender() != context.system.deadLetters)
+          sender() ! evt + "-done"
       }
     case cmd: Tagged =>
       persist(cmd) { evt =>
         val msg = s"${evt.payload}-done"
-        sender() ! msg
+        if (sender() != context.system.deadLetters)
+          sender() ! msg
       }
 
     case TestActor.PersistAll(events) =>
@@ -44,7 +46,7 @@ class TestActor(override val persistenceId: String, override val journalPluginId
         var count = 0
         evt: String => {
           count += 1
-          if (count == size)
+          if (count == size && sender() != context.system.deadLetters)
             sender() ! "PersistAll-done"
         }
       }

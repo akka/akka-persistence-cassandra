@@ -630,7 +630,7 @@ class CassandraReadJournal protected (
     val deserializeEventAsync = querySettings.deserializationParallelism > 1
 
     createFutureSource(combinedEventsByPersistenceIdStmts) { (s, c) =>
-      log.debug("Creating EventByPersistentIdState graph")
+      log.debug("Creating EventsByPersistenceIdStage pid [{}] from seqNr [{}]", persistenceId, fromSequenceNr)
       Source
         .fromGraph(
           new EventsByPersistenceIdStage(
