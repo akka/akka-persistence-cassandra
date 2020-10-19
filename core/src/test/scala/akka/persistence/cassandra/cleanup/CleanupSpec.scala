@@ -10,7 +10,7 @@ import java.time.ZoneOffset
 import akka.actor.ActorRef
 import akka.actor.Props
 import akka.persistence.{ PersistentActor, SaveSnapshotSuccess, SnapshotMetadata, SnapshotOffer }
-import akka.persistence.cassandra.CassandraSpec
+import akka.persistence.cassandra.{ CassandraSpec, RequiresCassandraThree }
 import akka.persistence.cassandra.query.{ firstBucketFormatter, DirectWriting }
 import akka.persistence.journal.Tagged
 import akka.persistence.query.NoOffset
@@ -202,7 +202,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
       queries.currentEventsByTag(tag = "tag-b", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
     }
 
-    "delete some for one persistenceId" in {
+    "delete some for one persistenceId" taggedAs (RequiresCassandraThree) in {
       val pid = nextPid
       val p = system.actorOf(TestActor.props(pid))
       (1 to 8).foreach { i =>
@@ -219,7 +219,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
       expectMsg(RecoveredState("", List("evt-6", "evt-7", "evt-8"), 8L))
     }
 
-    "clean up before latest snapshot for one persistence id" in {
+    "clean up before latest snapshot for one persistence id" taggedAs (RequiresCassandraThree) in {
       val pid = nextPid
       val p = system.actorOf(TestActor.props(pid))
       (1 to 3).foreach { i =>
@@ -259,7 +259,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
         .futureValue shouldEqual List("evt-7", "evt-8", "evt-9")
     }
 
-    "clean up before snapshot including timestamp that results in all events kept for one persistence id" in {
+    "clean up before snapshot including timestamp that results in all events kept for one persistence id" taggedAs (RequiresCassandraThree) in {
       val pid = nextPid
       val p = system.actorOf(TestActor.props(pid))
       (1 to 3).foreach { i =>
@@ -299,7 +299,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
         .futureValue shouldEqual List("evt-4", "evt-5", "evt-6", "evt-7", "evt-8", "evt-9")
     }
 
-    "clean up before snapshot including timestamp for one persistence id" in {
+    "clean up before snapshot including timestamp for one persistence id" taggedAs (RequiresCassandraThree) in {
       val pid = nextPid
       val p = system.actorOf(TestActor.props(pid))
       (1 to 3).foreach { i =>
@@ -440,7 +440,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
   }
 
   "Time and snapshot based cleanup" must {
-    "keep the correct  number of snapshots" in {
+    "keep the correct  number of snapshots" taggedAs (RequiresCassandraThree) in {
       val cleanup = new Cleanup(system)
       val pid = nextPid
       writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
@@ -457,7 +457,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
 
       oldestSnapshot shouldEqual Some(SnapshotMetadata(pid, 2, 2000))
     }
-    "keep the all snapshots if fewer than requested without timestamp" in {
+    "keep the all snapshots if fewer than requested without timestamp" taggedAs (RequiresCassandraThree) in {
       val cleanup = new Cleanup(system)
       val pid = nextPid
       writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
@@ -477,7 +477,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
 
       oldestSnapshot shouldEqual Some(SnapshotMetadata(pid, 1, 1000))
     }
-    "keep the all snapshots if fewer than requested with timestamp" in {
+    "keep the all snapshots if fewer than requested with timestamp" taggedAs (RequiresCassandraThree) in {
       val cleanup = new Cleanup(system)
       val pid = nextPid
       writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
@@ -512,7 +512,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
       oldestSnapshot shouldEqual None
     }
 
-    "don't delete snapshots newer than the oldest date" in {
+    "don't delete snapshots newer than the oldest date" taggedAs (RequiresCassandraThree) in {
       val cleanup = new Cleanup(system)
       val pid = nextPid
       writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
@@ -534,7 +534,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
 
       oldestSnapshot shouldEqual Some(SnapshotMetadata(pid, 2, 2000))
     }
-    "keep snapshots older than the oldest date to meet snapshotsToKeep" in {
+    "keep snapshots older than the oldest date to meet snapshotsToKeep" taggedAs (RequiresCassandraThree) in {
       val cleanup = new Cleanup(system)
       val pid = nextPid
       writeTestSnapshot(SnapshotMetadata(pid, 1, 1000), "snapshot-1").futureValue
