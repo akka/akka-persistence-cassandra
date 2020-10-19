@@ -117,6 +117,8 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
   }
 
   /**
+   * Requires Cassandra 3+
+   *
    * Keep all snapshots that occurred after `keepAfter`.
    * If fewer than `snapshotsToKeep` occurred after `keepAfter` at least that many
    * are kept. Setting this to 1 ensures that at least snapshot is kept even if it
@@ -158,6 +160,8 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
   }
 
   /**
+   * Requires Cassandra 3+
+   *
    * Keep N snapshots and delete all older snapshots along.
    *
    * This operation is much cheaper than including the timestamp because it can use the primary key and limit.
@@ -173,6 +177,8 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
   }
 
   /**
+   * Requires Cassandra 3+
+   *
    * Delete all events before a sequenceNr for the given persistence id.
    *
    * WARNING: deleting events is generally discouraged in event sourced systems.
@@ -186,6 +192,8 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
   }
 
   /**
+   * Requires Cassandra 3+
+   *
    * Deletes all but the last N snapshots and deletes all events before this snapshot
    * Does not delete from the tag_views table
    *
@@ -200,6 +208,8 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
   }
 
   /**
+   * Requires Cassandra 3+
+   *
    * Deletes all events for the given persistence id from before the first after keepAfter.
    * If there are not enough snapshots to satisfy nrSnapshotsToKeep then snapshots before
    * keepAfter will also be kept.
@@ -215,6 +225,8 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
   }
 
   /**
+   * Requires Cassandra 3+
+   *
    * See single persistenceId overload for what is done for each persistence id
    */
   def cleanupBeforeSnapshot(persistenceIds: immutable.Seq[String], nrSnapshotsToKeep: Int): Future[Done] = {
@@ -222,6 +234,8 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
   }
 
   /**
+   * Requires Cassandra 3+
+   *
    * See single persistenceId overload for what is done for each persistence id
    */
   def cleanupBeforeSnapshot(
