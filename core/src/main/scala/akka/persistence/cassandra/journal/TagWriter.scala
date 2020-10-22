@@ -112,11 +112,11 @@ import akka.util.{ OptionVal, UUIDComparator }
    * events from `pending` for the next batch.
    */
   case class Buffer(
-                     batchSize: Int,
-                     size: Int,
-                     nextBatch: Vector[AwaitingWrite],
-                     pending: Vector[AwaitingWrite],
-                     writeRequired: Boolean) {
+      batchSize: Int,
+      size: Int,
+      nextBatch: Vector[AwaitingWrite],
+      pending: Vector[AwaitingWrite],
+      writeRequired: Boolean) {
     require(batchSize > 0)
 
     def isEmpty: Boolean = nextBatch.isEmpty
