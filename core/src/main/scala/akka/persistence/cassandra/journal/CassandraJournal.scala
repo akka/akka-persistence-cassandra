@@ -13,7 +13,7 @@ import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
 import akka.annotation.InternalApi
 import akka.event.{ Logging, LoggingAdapter }
-import akka.pattern.pipe
+import akka.pattern.{ ask, pipe }
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.Extractors
@@ -26,7 +26,7 @@ import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtensi
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.Sink
 import akka.dispatch.ExecutionContexts
-import akka.util.OptionVal
+import akka.util.{ OptionVal, Timeout }
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.uuid.Uuids
@@ -43,6 +43,8 @@ import scala.compat.java8.FutureConverters._
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
 import akka.stream.scaladsl.Source
+
+import scala.concurrent.duration.DurationInt
 
 /**
  * INTERNAL API
@@ -280,9 +282,15 @@ import akka.stream.scaladsl.Source
 
             rec(groups)
           }
-        result.map { _ =>
-          tagWrites.foreach(_ ! extractTagWrites(serialized))
-          Nil
+
+        // TODO base this off some other timeout or put in config
+        // TODO make the error message helpful
+        implicit val timeout: Timeout = Timeout(10.seconds)
+        result.flatMap { _ =>
+          tagWrites match {
+            case Some(t) => t.ask(extractTagWrites(serialized)).map(_ => Nil)
+            case None    => Future.successful(Nil)
+          }
         }
 
     }
@@ -836,7 +844,10 @@ import akka.stream.scaladsl.Source
       writerUuid: String,
       meta: Option[SerializedMeta],
       timeUuid: UUID,
-      timeBucket: TimeBucket)
+      timeBucket: TimeBucket) {
+    // never log serialized byte buffer
+    override def toString: PersistenceId = s"Serialized($persistenceId, $sequenceNr, $timeBucket)"
+  }
 
   private[akka] case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
 

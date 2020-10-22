@@ -19,6 +19,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.matchers.should.Matchers
 import scala.concurrent.duration._
 
+// FIXME test for replies
 class TagWritersSpec
     extends TestKit(ActorSystem("TagWriterSpec"))
     with AnyWordSpecLike

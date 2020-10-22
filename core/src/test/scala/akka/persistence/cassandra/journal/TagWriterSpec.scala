@@ -21,27 +21,30 @@ import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Statement }
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.github.ghik.silencer.silent
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach }
 import org.scalatest.wordspec.AnyWordSpecLike
+
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.control.NoStackTrace
 
 object TagWriterSpec {
-  val config =
+  val config: Config =
     ConfigFactory.parseString("""
-      |akka {
-      |  actor {
-      |    debug {
-      |      # enable function of LoggingReceive, which is to log any received message at
-      |      # DEBUG level
-      |      receive = on
-      |      unhandled = on
-      |    }
-      |  }
-      |}
-    """.stripMargin)
+      akka {
+        use-slf4j = off
+        loglevel = DEBUG
+        actor {
+          debug {
+            # enable function of LoggingReceive, which is to log any received message at
+            # DEBUG level
+            receive = on
+            unhandled = on
+          }
+        }
+      }
+    """)
 
   case class ProgressWrite(persistenceId: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)
   case class EventWrite(persistenceId: String, seqNr: Long, tagPidSequenceNr: Long)
@@ -90,19 +93,24 @@ class TagWriterSpec
   "Tag writer batching" must {
 
     "external flush when idle" in {
+      val sender = TestProbe()
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 100, flushInterval = 1.hour))
       val bucket = nowBucket()
       val e1 = event("p1", 1L, "e-1", bucket)
-      ref ! TagWrite(tagName, Vector(e1))
+      ref.tell(TagWrite(tagName, Vector(e1)), sender.ref)
       probe.expectNoMessage(waitDuration)
       ref ! Flush
       probe.expectMsg(Vector(toEw(e1, 1)))
       probe.expectMsg(ProgressWrite("p1", 1, 1, e1.timeUuid))
+      sender.expectMsg(Done)
       expectMsg(FlushComplete)
     }
 
     "external flush when write in progress and messages in buffer" in {
       val promiseForWrite = Promise[Done]()
+      val sender1 = TestProbe()
+      val sender2 = TestProbe()
+      val sender3 = TestProbe()
       val (probe, ref) =
         setup(
           writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
@@ -113,21 +121,25 @@ class TagWriterSpec
       val e3 = event("p1", 3L, "e-3", bucket)
       val e4 = event("p1", 4L, "e-4", bucket)
 
-      ref ! TagWrite(tagName, Vector(e1, e2))
+      ref.tell(TagWrite(tagName, Vector(e1, e2)), sender1.ref)
       probe.expectMsg(Vector(toEw(e1, 1), toEw(e2, 2)))
       probe.expectNoMessage(waitDuration)
 
       val flushSender = TestProbe("flushSender")
-      ref ! TagWrite(tagName, Vector(e3))
+      ref.tell(TagWrite(tagName, Vector(e3)), sender2.ref)
       ref.tell(Flush, flushSender.ref)
-      ref ! TagWrite(tagName, Vector(e4)) // check adding to the buffer while in progress doesn't lose the flush
+      ref.tell(TagWrite(tagName, Vector(e4)), sender3.ref) // check adding to the buffer while in progress doesn't lose the flush
       probe.expectNoMessage(waitDuration)
+      sender2.expectNoMessage(waitDuration)
       promiseForWrite.success(Done)
       probe.expectMsg(ProgressWrite("p1", 2, 2, e2.timeUuid))
+      sender1.expectMsg(Done)
       // only happened due to the flush
       probe.expectMsg(Vector(toEw(e3, 3), toEw(e4, 4)))
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
       flushSender.expectMsg(FlushComplete)
+      sender2.expectMsg(Done)
+      sender3.expectMsg(Done)
     }
 
     "external flush when write in progress and receiving a ResetPersistenceId" in {
@@ -283,22 +295,29 @@ class TagWriterSpec
 
     "flush if time bucket changes within a single msg" in {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 3))
+      val sender1 = TestProbe()
+      val sender2 = TestProbe()
       val bucket = nowBucket()
       val nextBucket = bucket.next()
 
       val e1 = event("p1", 1L, "e-1", bucket)
       val e2 = event("p1", 2L, "e-2", nextBucket)
-      ref ! TagWrite(tagName, Vector(e1, e2))
+      ref.tell(TagWrite(tagName, Vector(e1, e2)), sender1.ref)
       probe.expectMsg(Vector(toEw(e1, 1)))
       probe.expectMsg(ProgressWrite("p1", 1, 1, e1.timeUuid))
       probe.expectNoMessage(waitDuration)
+      // e2 hasn't been written
+      sender1.expectNoMessage(waitDuration)
 
       val e3 = event("p1", 3L, "e-3", nextBucket)
       val e4 = event("p1", 4L, "e-4", nextBucket)
-      ref ! TagWrite(tagName, Vector(e3, e4))
+      ref.tell(TagWrite(tagName, Vector(e3, e4)), sender2.ref)
       // batch size has now been hit
       probe.expectMsg(Vector(toEw(e2, 2), toEw(e3, 3), toEw(e4, 4)))
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
+      // sender1 should only respond now as e2 wasn't writen until now
+      sender1.expectMsg(Done)
+      sender2.expectMsg(Done)
     }
 
     "not execute query N+1 while query N is outstanding" in {
@@ -457,6 +476,9 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 102, 12, e2.timeUuid))
     }
 
+    // Q. when would this ever happen? Time uuids are always increasing
+    // A. the send to the tag writer is in a future call back so writes
+    // from different persistence ids can over take each other
     "handle timeuuids coming out of order" in {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 4))
       val currentBucket = (0 to 2).map { _ =>
@@ -726,8 +748,8 @@ class TagWriterSpec
     val session =
       new TagWritersSession(null, "unused", "unused", null) {
 
-        override def writeBatch(tag: Tag, events: Seq[(Serialized, Long)])(implicit ec: ExecutionContext) = {
-          probe.ref ! events.map {
+        override def writeBatch(tag: Tag, write: Buffer)(implicit ec: ExecutionContext) = {
+          probe.ref ! write.nextBatch.flatten(_.events).map {
             case (event, tagPidSequenceNr) => toEw(event, tagPidSequenceNr)
           }
           val (result, tail) = (writeResponseStream.head, writeResponseStream.tail)
