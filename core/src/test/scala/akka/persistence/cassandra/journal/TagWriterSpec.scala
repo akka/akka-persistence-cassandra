@@ -17,7 +17,7 @@ import akka.persistence.cassandra.journal.TagWriters.TagWrite
 import akka.persistence.cassandra.journal.TagWriterSpec.{ EventWrite, ProgressWrite, TestEx }
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
-import akka.testkit.{ ImplicitSender, TestKit, TestProbe }
+import akka.testkit.{ TestKit, TestProbe }
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Statement }
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.github.ghik.silencer.silent
@@ -61,7 +61,6 @@ class TagWriterSpec
     extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.config))
     with AnyWordSpecLike
     with BeforeAndAfterEach
-    with ImplicitSender
     with BeforeAndAfterAll {
 
   override protected def afterAll(): Unit =
@@ -90,10 +89,14 @@ class TagWriterSpec
     super.afterEach()
   }
 
+  class Setup {
+    val sender = TestProbe()
+    implicit val senderRef: ActorRef = sender.ref
+  }
+
   "Tag writer batching" must {
 
-    "external flush when idle" in {
-      val sender = TestProbe()
+    "external flush when idle" in new Setup {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 100, flushInterval = 1.hour))
       val bucket = nowBucket()
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -103,10 +106,10 @@ class TagWriterSpec
       probe.expectMsg(Vector(toEw(e1, 1)))
       probe.expectMsg(ProgressWrite("p1", 1, 1, e1.timeUuid))
       sender.expectMsg(Done)
-      expectMsg(FlushComplete)
+      sender.expectMsg(FlushComplete)
     }
 
-    "external flush when write in progress and messages in buffer" in {
+    "external flush when write in progress and messages in buffer" in new Setup {
       val promiseForWrite = Promise[Done]()
       val sender1 = TestProbe()
       val sender2 = TestProbe()
@@ -142,7 +145,7 @@ class TagWriterSpec
       sender3.expectMsg(Done)
     }
 
-    "external flush when write in progress and receiving a ResetPersistenceId" in {
+    "external flush when write in progress and receiving a ResetPersistenceId" in new Setup {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
@@ -160,7 +163,7 @@ class TagWriterSpec
       ref ! TagWrite(tagName, Vector(e2))
       ref.tell(Flush, flushSender.ref)
       ref ! ResetPersistenceId("tag-1", TagProgress("some-other-pid", 2, 4)) // check this preserves flush request
-      expectMsg(ResetPersistenceIdComplete)
+      sender.expectMsg(ResetPersistenceIdComplete)
       promiseForWrite.success(Done)
       probe.expectMsg(ProgressWrite("p1", 1, 1, e1.timeUuid))
       probe.expectMsg(Vector(toEw(e2, 2)))
@@ -168,7 +171,7 @@ class TagWriterSpec
       flushSender.expectMsg(FlushComplete)
     }
 
-    "flush on demand when query in progress and no messages in buffer" in {
+    "flush on demand when query in progress and no messages in buffer" in new Setup {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
@@ -190,7 +193,7 @@ class TagWriterSpec
       flushSender.expectMsg(FlushComplete)
     }
 
-    "not write until batch has reached capacity" in {
+    "not write until batch has reached capacity" in new Setup {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -207,7 +210,7 @@ class TagWriterSpec
       probe.expectNoMessage(waitDuration)
     }
 
-    "write multiple persistenceIds in the same batch" in {
+    "write multiple persistenceIds in the same batch" in new Setup {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 3))
       val bucket = nowBucket()
       val p1e1 = event("p1", 1L, "e-1", bucket)
@@ -221,7 +224,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p2", 1, 1, p2e1.timeUuid))
     }
 
-    "flush after interval" in {
+    "flush after interval" in new Setup {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 2, flushInterval = 500.millis))
       val bucket = nowBucket()
 
@@ -238,7 +241,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 2, 2, e2.timeUuid))
     }
 
-    "flush after interval when new events are written" in {
+    "flush after interval when new events are written" in new Setup {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 100, flushInterval = 500.millis))
       val bucket = nowBucket()
 
@@ -251,7 +254,7 @@ class TagWriterSpec
             Thread.sleep(200)
             if (n == 3) {
               probe.within(200.millis) {
-                probe.expectMsg(events.map(evt => toEw(evt, evt.sequenceNr)).toVector)
+                probe.expectMsg(events.map(evt => toEw(evt, evt.sequenceNr)))
                 probe.expectMsg(
                   ProgressWrite("p1", events.last.sequenceNr, events.last.sequenceNr, events.last.timeUuid))
               }
@@ -260,7 +263,7 @@ class TagWriterSpec
         }
 
       val remainingFlushedEvents = allEvents.drop(3)
-      probe.expectMsg(remainingFlushedEvents.map(evt => toEw(evt, evt.sequenceNr)).toVector)
+      probe.expectMsg(remainingFlushedEvents.map(evt => toEw(evt, evt.sequenceNr)))
       probe.expectMsg(
         ProgressWrite(
           "p1",
@@ -270,7 +273,7 @@ class TagWriterSpec
 
     }
 
-    "flush when time bucket changes" in {
+    "flush when time bucket changes" in new Setup {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 3))
       val bucket = nowBucket()
       val nextBucket = bucket.next()
@@ -293,7 +296,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
     }
 
-    "flush if time bucket changes within a single msg" in {
+    "flush if time bucket changes within a single msg" in new Setup {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 3))
       val sender1 = TestProbe()
       val sender2 = TestProbe()
@@ -315,12 +318,12 @@ class TagWriterSpec
       // batch size has now been hit
       probe.expectMsg(Vector(toEw(e2, 2), toEw(e3, 3), toEw(e4, 4)))
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
-      // sender1 should only respond now as e2 wasn't writen until now
+      // sender1 should only respond now as e2 wasn't written until now
       sender1.expectMsg(Done)
       sender2.expectMsg(Done)
     }
 
-    "not execute query N+1 while query N is outstanding" in {
+    "not execute query N+1 while query N is outstanding" in new Setup {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
@@ -342,7 +345,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
     }
 
-    "internal flush time buckets one by one if arrive in same msg" in {
+    "internal flush time buckets one by one if arrive in same msg" in new Setup {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
@@ -373,7 +376,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
     }
 
-    "do not internal flush immediately if interval set to 0" in {
+    "do not internal flush immediately if interval set to 0" in new Setup {
       val (probe, ref) = setup(settings = defaultSettings.copy(flushInterval = Duration.Zero))
       val bucket = nowBucket()
 
@@ -387,7 +390,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 2, 2, e2.timeUuid))
     }
 
-    "do not internal flush if write in progress" in {
+    "do not internal flush if write in progress" in new Setup {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
@@ -410,7 +413,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
     }
 
-    "do not internal flush if write in progress with no interval" in {
+    "do not internal flush if write in progress with no interval" in new Setup {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
@@ -432,7 +435,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
     }
 
-    "not flush if internal flush is in progress" in {
+    "not flush if internal flush is in progress" in new Setup {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
         writeResponse = Stream(promiseForWrite.future) ++ Stream.continually(Future.successful(Done)),
@@ -457,12 +460,12 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 3, 3, e3.timeUuid))
     }
 
-    "resume from existing sequence nr" in {
+    "resume from existing sequence nr" in new Setup {
       val progress = TagProgress("p1", 100, 10)
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 1))
       val bucket = nowBucket()
       ref ! ResetPersistenceId(tagName, progress)
-      expectMsg(ResetPersistenceIdComplete)
+      sender.expectMsg(ResetPersistenceIdComplete)
 
       val e1 = event("p1", 101L, "e-1", bucket)
       ref ! TagWrite(tagName, Vector(e1))
@@ -479,7 +482,7 @@ class TagWriterSpec
     // Q. when would this ever happen? Time uuids are always increasing
     // A. the send to the tag writer is in a future call back so writes
     // from different persistence ids can over take each other
-    "handle timeuuids coming out of order" in {
+    "handle timeuuids coming out of order" in new Setup {
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 4))
       val currentBucket = (0 to 2).map { _ =>
         val uuid = Uuids.timeBased()
@@ -505,23 +508,24 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 2, 2, p1e2.timeUuid))
     }
 
-    "update expected sequence nr on reset persistence id request" in {
+    "update expected sequence nr on reset persistence id request" in new Setup {
       val pid = "p-1"
       val initialProgress = TagProgress(pid, 10, 10)
       val resetProgress = TagProgress(pid, 5, 5)
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 1))
       val bucket = nowBucket()
 
-      ref ! ResetPersistenceId(tagName, initialProgress)
-      expectMsg(ResetPersistenceIdComplete)
+      val resetPidSender = TestProbe("resetPidSender")
+      ref.tell(ResetPersistenceId(tagName, initialProgress), resetPidSender.ref)
+      resetPidSender.expectMsg(ResetPersistenceIdComplete)
 
       val e11 = event(pid, 11L, "e-11", bucket)
       ref ! TagWrite(tagName, Vector(e11))
       probe.expectMsg(Vector(toEw(e11, 11)))
       probe.expectMsg(ProgressWrite(pid, 11, 11, e11.timeUuid))
 
-      ref ! ResetPersistenceId(tagName, resetProgress)
-      expectMsg(ResetPersistenceIdComplete)
+      ref.tell(ResetPersistenceId(tagName, resetProgress), resetPidSender.ref)
+      resetPidSender.expectMsg(ResetPersistenceIdComplete)
 
       // simulating a restart and recovery starting earlier
       val e6 = event(pid, 6L, "e-6", bucket)
@@ -530,7 +534,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite(pid, 6, 6, e6.timeUuid))
     }
 
-    "update expected sequence nr on reset persistence id request (when write in progress)" in {
+    "update expected sequence nr on reset persistence id request (when write in progress)" in new Setup {
       val pid = "p-1"
       val initialProgress = TagProgress(pid, 10, 10)
       val resetProgress = TagProgress(pid, 5, 5)
@@ -542,13 +546,13 @@ class TagWriterSpec
       val bucket = nowBucket()
 
       ref ! ResetPersistenceId(tagName, initialProgress)
-      expectMsg(ResetPersistenceIdComplete)
+      sender.expectMsg(ResetPersistenceIdComplete)
       val e11 = event(pid, 11L, "e-11", bucket)
       ref ! TagWrite(tagName, Vector(e11))
       probe.expectMsg(Vector(toEw(e11, 11)))
 
       ref ! ResetPersistenceId(tagName, resetProgress)
-      expectMsg(ResetPersistenceIdComplete)
+      sender.expectMsg(ResetPersistenceIdComplete)
 
       writeInProgressPromise.success(Done)
       probe.expectMsg(ProgressWrite(pid, 11, 11, e11.timeUuid))
@@ -558,7 +562,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite(pid, 6, 6, e6.timeUuid))
     }
 
-    "drop outstanding events for a persistence id when reset" in {
+    "drop outstanding events for a persistence id when reset" in new Setup {
       val pid = "p-1"
       // disable any automatic flushing
       val (probe, ref) = setup(settings = defaultSettings.copy(maxBatchSize = 100, flushInterval = 60.seconds))
@@ -571,17 +575,18 @@ class TagWriterSpec
 
       val resetRequest = ResetPersistenceId(tagName, TagProgress(pid, 1, 1))
       ref ! resetRequest
-      expectMsg(ResetPersistenceIdComplete)
+      sender.expectMsg(ResetPersistenceIdComplete)
 
       // can send 2 and 3 again due to the reset
       ref ! TagWrite(tagName, Vector(e2, e3))
 
-      ref ! Flush
-      expectMsg(FlushComplete)
+      val flushSender = TestProbe("flushSender")
+      ref.tell(Flush, flushSender.ref)
+      flushSender.expectMsg(FlushComplete)
       probe.expectMsg(Vector(toEw(e2, 2), toEw(e3, 3)))
     }
 
-    "forget about a persistence id when idle" in {
+    "forget about a persistence id when idle" in new Setup {
       val (probe, underTest) = setup(settings = defaultSettings.copy(maxBatchSize = 1, flushInterval = 60.seconds))
       val pid = "p1"
       val bucket = nowBucket()
@@ -601,7 +606,7 @@ class TagWriterSpec
       probe.expectMsg(Vector(toEw(e2, 1)))
     }
 
-    "forget about a persistence id when write in progress)" in {
+    "forget about a persistence id when write in progress)" in new Setup {
       val pid = "p-1"
       val writeInProgressPromise = Promise[Done]()
       val (probe, underTest) =
@@ -625,20 +630,20 @@ class TagWriterSpec
 
     }
 
-    "passivate when idle" in {
+    "passivate when idle" in new Setup {
       val parent = TestProbe()
       val idleTimeout = 100.millis
-      val (probe, ref) =
+      val (_, ref) =
         setupWithParent(
           settings = defaultSettings.copy(maxBatchSize = 2, stopTagWriterWhenIdle = idleTimeout),
           parent = parent.ref)
       parent.expectMsg(PassivateTagWriter("tag-1"))
       ref.tell(StopTagWriter, parent.ref)
-      watch(ref)
-      expectTerminated(ref)
+      sender.watch(ref)
+      sender.expectTerminated(ref)
     }
 
-    "do not passivate if write in progress" in {
+    "do not passivate if write in progress" in new Setup {
       val promiseForWrite = Promise[Done]()
       val parent = TestProbe()
       val idleTimeout = 1.second
@@ -663,7 +668,7 @@ class TagWriterSpec
 
   "Tag writer error scenarios" must {
 
-    "handle tag writes view failing" in {
+    "handle tag writes view failing" in new Setup {
       val t = TestEx("Tag write failed")
       val (probe, ref) = setup(
         settings = defaultSettings.copy(maxBatchSize = 2),
@@ -694,7 +699,7 @@ class TagWriterSpec
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
     }
 
-    "handle tag progress write failing" in {
+    "handle tag progress write failing" in new Setup {
       val t = TestEx("Tag progress write has failed")
       val (probe, ref) =
         setup(

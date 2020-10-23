@@ -157,10 +157,10 @@ import akka.util.{ OptionVal, UUIDComparator }
           copy(size = newSize, pending = pending :+ write)
         } else if (nextBatch.headOption.exists(oldestEvent =>
                      UUIDComparator.comparator
-                       .compare(write.events.head._1.timeUuid, oldestEvent.events.last._1.timeUuid) < 0)) {
+                       .compare(write.events.head._1.timeUuid, oldestEvent.events.head._1.timeUuid) < 0)) {
           // rare case where events have been received out of order, just re-build the buffer
           require(pending.isEmpty)
-          val allWrites = (nextBatch :+ write).sortBy(_.events.head._1.timeUuid)
+          val allWrites = (nextBatch :+ write).sortBy(_.events.head._1.timeUuid)(timeUuidOrdering)
           rebuild(allWrites)
         } else if (nextBatch.headOption.exists(_.events.head._1.timeBucket != write.events.head._1.timeBucket)) {
           // time bucket has changed
@@ -185,8 +185,17 @@ import akka.util.{ OptionVal, UUIDComparator }
       }
     }
 
-    private def rebuild(writes: Vector[AwaitingWrite]): Buffer =
-      writes.foldLeft(Buffer.empty(batchSize)) { case (acc, next) => acc.add(next) }
+    private def rebuild(writes: Vector[AwaitingWrite]): Buffer = {
+      var buffer = Buffer.empty(batchSize)
+      var i = 0
+      while (!buffer.shouldWrite() && i < writes.size) {
+        buffer = buffer.add(writes(i))
+        i += 1
+      }
+//       pending may have one in it as the last one may have been a time bucket change rather than bach full
+      val done = buffer.copy(pending = buffer.pending ++ writes.drop(i))
+      done
+    }
 
     final def addPending(write: AwaitingWrite): Buffer = {
       copy(size = size + write.events.size, pending = pending :+ write)

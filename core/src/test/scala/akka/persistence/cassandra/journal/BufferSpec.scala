@@ -86,14 +86,17 @@ class BufferSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
 
       buffer.writeRequired shouldEqual true
       buffer.nextBatch shouldEqual Vector(awNoSender((e1, 1)))
+      buffer.pending shouldEqual Vector(awNoSender((e2, 2)), aw(sender, (e3, 3)))
 
       val nextBuffer = buffer.writeComplete()
       nextBuffer.writeRequired shouldEqual true
       nextBuffer.nextBatch shouldEqual Vector(awNoSender((e2, 2)))
+      nextBuffer.pending shouldEqual Vector(aw(sender, (e3, 3)))
 
       val nextNextBuffer = nextBuffer.writeComplete()
       nextNextBuffer.writeRequired shouldEqual false
       nextNextBuffer.nextBatch shouldEqual Vector(aw(sender, (e3, 3)))
+      nextNextBuffer.pending shouldEqual Vector()
     }
 
     "break up writes based on batch" in {
@@ -154,17 +157,32 @@ class BufferSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
       nextBuffer.nextBatch shouldEqual Vector(aw(sender2, (p2e1, 1)))
 
     }
+
+    "handle being overloaded" in {
+      val bucket = nowBucket()
+      var buffer = Buffer.empty(2)
+      val totalWrites = 1000000
+      for (i <- 1 to totalWrites) {
+        buffer = buffer.add(awNoSender((event("p1", seqNr = i, payload = "cats", bucket), i)))
+      }
+      var writes = 0
+      while (buffer.shouldWrite()) {
+        writes += 1
+        buffer = buffer.writeComplete()
+      }
+      writes shouldEqual totalWrites / 2
+    }
   }
 
   override protected def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
 
-  def awNoSender(events: (Serialized, TagPidSequenceNr)*): AwaitingWrite = {
+  private def awNoSender(events: (Serialized, TagPidSequenceNr)*): AwaitingWrite = {
     AwaitingWrite(events.toList, OptionVal.None)
   }
 
-  def aw(sender: ActorRef, events: (Serialized, TagPidSequenceNr)*): AwaitingWrite = {
+  private def aw(sender: ActorRef, events: (Serialized, TagPidSequenceNr)*): AwaitingWrite = {
     AwaitingWrite(events.toList, OptionVal(sender))
   }
 
