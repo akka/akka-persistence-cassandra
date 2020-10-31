@@ -44,6 +44,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
+      "com.typesafe.akka" %% "akka-distributed-data" % AkkaVersion,
       Logback % Test,
       "org.scalatest" %% "scalatest" % "3.1.0" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,

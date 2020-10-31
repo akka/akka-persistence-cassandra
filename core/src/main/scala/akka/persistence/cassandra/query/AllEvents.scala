@@ -4,9 +4,11 @@
 
 package akka.persistence.cassandra.query
 
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.annotation.tailrec
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
@@ -19,6 +21,7 @@ import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
 import akka.actor.PoisonPill
 import akka.actor.Props
+import akka.actor.Timers
 import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.pubsub.DistributedPubSubMediator
 import akka.dispatch.ExecutionContexts
@@ -31,6 +34,7 @@ import akka.stream.KillSwitches
 import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
+import akka.util.JavaDurationConverters._
 import akka.util.Timeout
 
 // FIXME this can probably be implemented in akka-persistence-query
@@ -115,22 +119,26 @@ object AllEvents {
         val system = mat.system.asInstanceOf[ExtendedActorSystem]
         implicit val ec: ExecutionContext = mat.executionContext
 
+        val name = s"persistenceIdsState-${actorNameCounter.incrementAndGet()}"
+        val killSwitch = KillSwitches.shared(name)
+
+        val runCurrentPersistenceIdQuery: ActorRef => Unit = { sendTo =>
+          queries
+            .currentPersistenceIds()
+            .via(killSwitch.flow)
+            .filterNot(offset.offsets.contains) // already known
+            .filter(matchingPersistenceId)
+            .groupedWithin(1000, 1.second)
+            .map(PersistenceIdsState.PidsFromQuery.apply)
+            .ask[Done](10)(sendTo)
+            .runWith(Sink.ignore)(mat)
+            .onComplete(_ => sendTo ! PersistenceIdsState.PidsQueryCompleted)
+        }
+
         val persistenceIdsState: ActorRef = system.systemActorOf(
-          PersistenceIdsState.props(offset, matchingPersistenceId),
-          s"persistenceIdsState-${actorNameCounter.incrementAndGet()}")
+          PersistenceIdsState.props(offset, matchingPersistenceId, runCurrentPersistenceIdQuery),
+          name)
         subscribeForDirectEvents(persistenceIdsState)
-
-        val killSwitch = KillSwitches.shared(persistenceIdsState.path.name)
-
-        // FIXME handle failures, restart
-        // TODO we could maybe have a single ActorSystem global persistenceIds and merge with a currentPersistenceIds
-        queries
-          .persistenceIds()
-          .via(killSwitch.flow)
-          .filterNot(offset.offsets.contains) // already known
-          .filter(matchingPersistenceId)
-          .ask[Done](10)(persistenceIdsState)
-          .runWith(Sink.ignore)(mat)
 
         Source
           .repeat(GetNextPersistenceId)
@@ -167,34 +175,74 @@ object PersistenceIdsState {
   final case class NextPersistenceId(pid: PersistenceId, seqNr: SeqNr, events: Vector[PersistentRepr])
   final case class UpdatePersistenceIdOffset(pid: PersistenceId, seqNr: SeqNr, directEvents: Boolean)
 
-  private object PidState {
-    val empty: PidState = PidState(0L, Vector.empty, inFlight = false)
-  }
-  private case class PidState(seqNr: SeqNr, bufferedDirect: Vector[PersistentRepr], inFlight: Boolean)
+  case object CurrentPersistenceIdsQueryTick
+  final case class PidsFromQuery(pids: immutable.Seq[PersistenceId])
+  case object PidsQueryCompleted
 
-  def props(offset: AllEventsOffset, matchingPersistenceId: PersistenceIdsState.PersistenceId => Boolean): Props =
-    Props(new PersistenceIdsState(offset, matchingPersistenceId))
+  sealed trait CurrentPersistenceIdsQueryState
+  object CurrentPersistenceIdsQueryIdle extends CurrentPersistenceIdsQueryState
+  object CurrentPersistenceIdsQueryInProgress extends CurrentPersistenceIdsQueryState
+  object UseAllPidsNextTime extends CurrentPersistenceIdsQueryState
+
+  private object PidState {
+    val empty: PidState = PidState(0L, Vector.empty, inFlight = false, lru = false)
+  }
+  private case class PidState(seqNr: SeqNr, bufferedDirect: Vector[PersistentRepr], inFlight: Boolean, lru: Boolean)
+
+  def props(
+      offset: AllEventsOffset,
+      matchingPersistenceId: PersistenceIdsState.PersistenceId => Boolean,
+      runCurrentPersistenceIdQuery: ActorRef => Unit): Props =
+    Props(new PersistenceIdsState(offset, matchingPersistenceId, runCurrentPersistenceIdQuery))
 
 }
 
-class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: PersistenceIdsState.PersistenceId => Boolean)
+class PersistenceIdsState(
+    offset: AllEventsOffset,
+    matchingPersistenceId: PersistenceIdsState.PersistenceId => Boolean,
+    runCurrentPersistenceIdsQuery: ActorRef => Unit)
     extends Actor
+    with Timers
     with ActorLogging {
   import PersistenceIdsState._
 
   private var pidState: Map[PersistenceId, PidState] = offset.offsets.iterator.map {
-    case (pid, seqNr) => pid -> PidState(seqNr, Vector.empty, inFlight = false)
+    case (pid, seqNr) => pid -> PidState(seqNr, Vector.empty, inFlight = false, lru = false)
   }.toMap
   // FIXME more efficient Queue?
   private var pending: Vector[PersistenceId] = pidState.keysIterator.toVector.sorted
   private var directPending: Vector[PersistenceId] = Vector.empty
 
-  private var throttleDelay: FiniteDuration = Duration.Zero
+  // delay every 100th query
+  // FIXME real config
+  private val lowThrottleDelay =
+    context.system.settings.config.getDuration("all-events-query.low-throttle-delay").asScala
+  private val highThrottleDelay =
+    context.system.settings.config.getDuration("all-events-query.high-throttle-delay").asScala
+
+  private var throttleDelay: FiniteDuration = lowThrottleDelay
   private var queryCount = 0
   private var updateCount = 0
   private var resetPendingTime = System.nanoTime()
 
+  // FIXME real config
+  private val currentPersistenceIdsQueryInitialDelay =
+    context.system.settings.config.getDuration("all-events-query.scan-all-initial-delay").asScala
+  private val currentPersistenceIdsQueryInterval =
+    context.system.settings.config.getDuration("all-events-query.scan-all-interval").asScala
+  private var currentPersistenceIdsQueryState: CurrentPersistenceIdsQueryState = CurrentPersistenceIdsQueryIdle
+
+  context.actorOf(LruPersistenceIds.props(self, matchingPersistenceId), "lruPids")
+
   log.debug("Starting PersistenceIdsState [{}] with [{}] pids in offset.", self.path.name, offset.offsets.size)
+
+  timers.startSingleTimer(
+    CurrentPersistenceIdsQueryTick,
+    CurrentPersistenceIdsQueryTick,
+    currentPersistenceIdsQueryInitialDelay + ThreadLocalRandom
+      .current()
+      .nextInt(currentPersistenceIdsQueryInitialDelay.toSeconds.toInt)
+      .seconds)
 
   private def scheduler = context.system.scheduler
 
@@ -227,21 +275,43 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
   private def nextPending(): Option[(PersistenceId, PidState)] = {
     if (pending.isEmpty && pidState.nonEmpty) {
       val durationMs = (System.nanoTime() - resetPendingTime).nanos.toMillis
+      // FIXME debug level
       log.info(
-        "Reset pending pids, size [{}]. Round took [{} ms]. Found events for [{}] pids.",
-        pidState.size,
+        "Reset pending pids. Previous round took [{} ms]. Queried [{}] pids. Found events for [{}] pids.",
         durationMs,
+        queryCount,
         updateCount)
       resetPendingTime = System.nanoTime()
-      if (updateCount == 0) {
+
+      if (currentPersistenceIdsQueryState == UseAllPidsNextTime) {
+        pending = pidState.keysIterator.toVector.sorted
         // delay every 100th query
-        // measured 10000 pids: 6 seconds without throttling, 1 minute with this (500 ms / 100) throttling
-        // measured 100000 pids: 70 seconds without throttling, 10 minutes with this (500 ms / 100) throttling
-        throttleDelay = 500.millis // FIXME config
+        throttleDelay = lowThrottleDelay
+        currentPersistenceIdsQueryState = CurrentPersistenceIdsQueryIdle
+        timers.startSingleTimer(
+          CurrentPersistenceIdsQueryTick,
+          CurrentPersistenceIdsQueryTick,
+          currentPersistenceIdsQueryInterval)
+      } else {
+        // use active pids
+        pending = pidState
+          .collect {
+            case (pid, state) if state.lru => pid
+          }
+          .toVector
+          .sorted
+        if (updateCount == 0) {
+          // delay every 100th query
+          // measured 10000 pids: 6 seconds without throttling, 1 minute with 500 ms/100 throttling
+          // measured 100000 pids: 70 seconds without throttling, 10 minutes with 500 ms/100 throttling
+          throttleDelay = highThrottleDelay
+        } else {
+          throttleDelay = lowThrottleDelay
+        }
       }
+
       updateCount = 0
       queryCount = 0
-      pending = pidState.keysIterator.toVector.sorted
     }
 
     @tailrec def findNext(): Option[(PersistenceId, PidState)] = {
@@ -262,20 +332,11 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
   }
 
   override def receive: Receive = {
-    case pid: PersistenceId =>
-      if (!pidState.contains(pid)) {
-        log.debug("New pid [{}].", pid)
-        pidState = pidState.updated(pid, PidState.empty)
-        // add first to give new pid priority
-        pending = pid +: pending
-      }
-      sender() ! Done
-
     case direct: PersistentRepr =>
       val pid = direct.persistenceId
       if (matchingPersistenceId(pid)) {
         pidState.get(pid) match {
-          case Some(s @ PidState(seqNr, buffered, _)) =>
+          case Some(s @ PidState(seqNr, buffered, _, _)) =>
             val expectedSeqNr =
               if (buffered.isEmpty) seqNr + 1
               else buffered.last.sequenceNr + 1
@@ -284,7 +345,7 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
               pidState = pidState.updated(pid, s.copy(bufferedDirect = buffered :+ direct))
               directPending :+= pid
             } else {
-              log.debug(
+              log.info(
                 "Received direct event pid [{}] seqNr [{}], but expected seqNr [{}].",
                 pid,
                 direct.sequenceNr,
@@ -295,10 +356,10 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
           case None =>
             if (direct.sequenceNr == 1L) {
               log.debug("Received direct event new pid [{}] seqNr [{}]", pid, direct.sequenceNr)
-              pidState = pidState.updated(pid, PidState(0L, Vector(direct), inFlight = false))
+              pidState = pidState.updated(pid, PidState.empty.copy(bufferedDirect = Vector(direct)))
               directPending :+= pid
             } else {
-              log.debug(
+              log.info(
                 "Received direct event new pid [{}] seqNr [{}], but expected seqNr [{}].",
                 pid,
                 direct.sequenceNr,
@@ -309,7 +370,7 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
             }
         }
       } else {
-        log.debug("Received direct event pid [{}] seqNr [{}], but not with matching pid", pid, direct.sequenceNr)
+        log.info("Received direct event pid [{}] seqNr [{}], but not with matching pid", pid, direct.sequenceNr)
       }
 
     case GetNextPersistenceId =>
@@ -343,7 +404,8 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
             case None =>
               log.debug("No pending pids.")
               // slow down
-              scheduler.scheduleOnce(200.millis, sender(), NextPersistenceId("", 0, Vector.empty))(context.dispatcher)
+              scheduler.scheduleOnce(highThrottleDelay, sender(), NextPersistenceId("", 0, Vector.empty))(
+                context.dispatcher)
           }
       }
 
@@ -354,7 +416,7 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
       } else if (seqNr == state.seqNr) {
         log.debug("No events found pid [{}] from seqNr [{}].", pid, seqNr + 1)
       } else {
-        throttleDelay = Duration.Zero
+        throttleDelay = lowThrottleDelay
         updateCount += 1
         log.debug("Updated pid [{}] with seqNr [{}]. Found events for [{}] pids.", pid, seqNr, updateCount)
       }
@@ -365,5 +427,55 @@ class PersistenceIdsState(offset: AllEventsOffset, matchingPersistenceId: Persis
           state.bufferedDirect.dropWhile(_.sequenceNr <= seqNr)
       pidState =
         pidState.updated(pid, state.copy(seqNr = seqNr, bufferedDirect = newBufferredDirrect, inFlight = false))
+
+    case LruPersistenceIds.ActivePids(pids) =>
+      log.debug("Adding [{}] active pids.", pids.size)
+      pids.foreach { pid =>
+        pidState.get(pid) match {
+          case Some(s) =>
+            pidState = pidState.updated(pid, s.copy(lru = true))
+          case None =>
+            log.debug("New pid [{}].", pid)
+            pidState = pidState.updated(pid, PidState.empty.copy(lru = true))
+            // add first to give query for new pid priority
+            pending = pid +: pending
+        }
+      }
+
+    case LruPersistenceIds.InactivePids(pids) =>
+      log.debug("Removing [{}] inactive pids.", pids.size)
+      pids.foreach { pid =>
+        pidState.get(pid) match {
+          case Some(s) => pidState = pidState.updated(pid, s.copy(lru = false))
+          case None    =>
+        }
+      }
+
+    case CurrentPersistenceIdsQueryTick =>
+      currentPersistenceIdsQueryState match {
+        case CurrentPersistenceIdsQueryIdle =>
+          currentPersistenceIdsQueryState = CurrentPersistenceIdsQueryInProgress
+          log.debug("Run currentPersistenceIdsQuery")
+          runCurrentPersistenceIdsQuery(self)
+        case CurrentPersistenceIdsQueryInProgress | UseAllPidsNextTime =>
+          timers.startSingleTimer(
+            CurrentPersistenceIdsQueryTick,
+            CurrentPersistenceIdsQueryTick,
+            currentPersistenceIdsQueryInterval)
+      }
+
+    case PidsFromQuery(pids) =>
+      // PersistenceId from currentPersistenceIds query
+      pids.foreach { pid =>
+        if (!pidState.contains(pid)) {
+          log.debug("New pid from currentPersistenceIds query [{}].", pid)
+          pidState = pidState.updated(pid, PidState.empty)
+        }
+      }
+      sender() ! Done
+
+    case PidsQueryCompleted =>
+      currentPersistenceIdsQueryState = UseAllPidsNextTime
+      log.debug("currentPersistenceIdsQuery completed")
   }
 }

@@ -42,9 +42,12 @@ import scala.compat.java8.FutureConverters._
 
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
+import akka.cluster.ddata.DistributedData
 import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.pubsub.DistributedPubSubMediator
 import akka.persistence.cassandra.query.AllEvents
+import akka.persistence.cassandra.query.LruPersistenceIds
+import akka.persistence.cassandra.query.LruPersistenceIdsExt
 import akka.stream.scaladsl.Source
 
 /**
@@ -112,8 +115,19 @@ import akka.stream.scaladsl.Source
     tagWrites.map(ref => new CassandraTagRecovery(context.system, session, settings, taggedPreparedStatements, ref))
 
   private val pubsub: Option[ActorRef] = {
-    // FIXME config to disable
-    Option(DistributedPubSub(system).mediator)
+    // FIXME real config
+    if (context.system.settings.config.getBoolean("all-events-query.direct-replication.enabled"))
+      Option(DistributedPubSub(system).mediator)
+    else
+      None
+  }
+
+  private val lruCache: Option[LruPersistenceIdsExt] = {
+    // FIXME real config
+    if (context.system.settings.config.getBoolean("all-events-query.lru-cache.enabled"))
+      Option(LruPersistenceIds(system))
+    else
+      None
   }
 
   private def preparedWriteMessage =
@@ -334,9 +348,13 @@ import akka.stream.scaladsl.Source
     pubsub match {
       case Some(mediator) =>
         // FIXME config numberOfSlices
-        val topic = AllEvents.topicNameFromPersistenceId(repr.persistenceId, numberOfSlices = 1)
+        val topic = AllEvents.topicNameFromPersistenceId(repr.persistenceId, numberOfSlices = 4)
         mediator ! DistributedPubSubMediator.Publish(topic, repr)
       case None => // disabled
+    }
+    lruCache match {
+      case Some(lru) => lru.touch(repr.persistenceId)
+      case None      => // disabled
     }
   }
 

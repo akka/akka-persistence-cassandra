@@ -72,7 +72,7 @@ class AllEventsSpec extends CassandraSpec(AllEventsSpec.config) with BeforeAndAf
       setup("b", 3)
       setup("c", 2)
 
-      val src = AllEvents.allEvents(queries, _.startsWith("pid-"), AllEventsOffset.empty, _ => ())
+      val src = AllEvents.allEvents(queries, _ => true, AllEventsOffset.empty, _ => ())
       val probe = src.runWith(TestSink.probe[EventEnvelope])
       probe.request(100)
       val received = probe.expectNextN(6)
@@ -217,7 +217,7 @@ class AllEventsSpec extends CassandraSpec(AllEventsSpec.config) with BeforeAndAf
       (1 until N1).foreach { n =>
         setup(s"pid-$n", 3, await = false)
       }
-      within(5.seconds + (3.millis * N1)) {
+      within(5.seconds + (5.millis * N1)) {
         setup(s"pid-$N1", 3, await = true)
       }
 
@@ -230,7 +230,7 @@ class AllEventsSpec extends CassandraSpec(AllEventsSpec.config) with BeforeAndAf
       }
 
       val received =
-        probe.within(5.seconds + (3.millis * N2)) {
+        probe.within(5.seconds + (5.millis * N2)) {
           probe.expectNextN((N1 + N2) * 3)
         }
 
