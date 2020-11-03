@@ -251,7 +251,6 @@ import scala.util.{ Failure, Success, Try }
             context.become(idle(nextBuffer, tagPidSequenceNrs))
           }
         case None =>
-          log.debug("write finished, checking if a new flush is required")
           flushIfRequired(nextBuffer, tagPidSequenceNrs)
       }
       sendPubsubNotification()
