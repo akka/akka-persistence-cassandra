@@ -10,7 +10,7 @@ import java.util.UUID
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.persistence.cassandra.Day
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
-import akka.persistence.cassandra.journal.TagWriter.{ AwaitingWrite, Buffer }
+import akka.persistence.cassandra.journal.TagWriter.AwaitingWrite
 import akka.testkit.{ TestKit, TestProbe }
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.uuid.Uuids

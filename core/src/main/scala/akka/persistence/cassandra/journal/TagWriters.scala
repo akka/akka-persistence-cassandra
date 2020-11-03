@@ -137,8 +137,6 @@ import scala.util.Try
   def props(settings: TagWriterSettings, tagWriterSession: TagWritersSession): Props =
     Props(new TagWriters(settings, tagWriterSession))
 
-  final case class TagFlush(tag: String)
-
   final case class FlushAllTagWriters(timeout: Timeout)
 
   case object AllFlushed
@@ -163,9 +161,8 @@ import scala.util.Try
 
   /**
    * @param message   the message to send
-   * @param tellOrAsk Left for the `sender` of tell, `right` for the promise of ask.
    */
-  private case class PassivateBufferEntry(message: Any, tellOrAsk: Either[ActorRef, Promise[Any]])
+  private case class PassivateBufferEntry(message: Any, response: Promise[Any])
 
 }
 
@@ -217,15 +214,12 @@ import scala.util.Try
           })
       }
       Future.sequence(flushes).map(_ => AllFlushed).pipeTo(replyTo)
-    case TagFlush(tag) =>
-      tellTagActor(tag, Flush, sender())
     case tw: TagWrite =>
       // this only comes from the replay, an ack is not required right now.
-      val toReply = sender()
-      forwardTagWrite(tw).map(_ => Done).pipeTo(toReply)
+      forwardTagWrite(tw).pipeTo(sender())
     case BulkTagWrite(tws, withoutTags) =>
       val toReply = sender()
-      Future.traverse(tws)(tw => forwardTagWrite(tw)).map(_ => Done).pipeTo(toReply)
+      Future.traverse(tws)(tw => forwardTagWrite(tw).pipeTo(toReply))
       updatePendingScanning(withoutTags)
     case WriteTagScanningTick =>
       writeTagScanning()
@@ -438,20 +432,11 @@ import scala.util.Try
       TagWriterTerminated(tag))
   }
 
-  private def tellTagActor(tag: String, message: Any, snd: ActorRef): Unit = {
-    passivatingTagActors.get(tag) match {
-      case Some(buffer) =>
-        passivatingTagActors = passivatingTagActors.updated(tag, buffer :+ PassivateBufferEntry(message, Left(snd)))
-      case None =>
-        tagActor(tag).tell(message, snd)
-    }
-  }
-
   private def askTagActor(tag: String, message: Any)(implicit timeout: Timeout): Future[Any] = {
     passivatingTagActors.get(tag) match {
       case Some(buffer) =>
         val p = Promise[Any]()
-        passivatingTagActors = passivatingTagActors.updated(tag, buffer :+ PassivateBufferEntry(message, Right(p)))
+        passivatingTagActors = passivatingTagActors.updated(tag, buffer :+ PassivateBufferEntry(message, p))
         p.future
       case None =>
         tagActor(tag).ask(message)
@@ -489,9 +474,8 @@ import scala.util.Try
   }
 
   private def sendPassivateBuffer(tag: String, buffer: Vector[PassivateBufferEntry]): Unit = {
-    buffer.foreach {
-      case PassivateBufferEntry(message, Left(snd))      => tellTagActor(tag, message, snd)
-      case PassivateBufferEntry(message, Right(promise)) => promise.completeWith(askTagActor(tag, message))
+    buffer.foreach { entry =>
+      entry.response.completeWith(askTagActor(tag, entry.message))
     }
   }
 }

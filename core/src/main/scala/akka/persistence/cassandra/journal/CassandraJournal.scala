@@ -44,8 +44,6 @@ import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
 import akka.stream.scaladsl.Source
 
-import scala.concurrent.duration.DurationInt
-
 /**
  * INTERNAL API
  *
@@ -96,7 +94,6 @@ import scala.concurrent.duration.DurationInt
     settings.journalSettings.readProfile,
     taggedPreparedStatements)
 
-  // TODO move all tag related things into a class that no-ops to remove these options
   private val tagWrites: Option[ActorRef] =
     if (settings.eventsByTagSettings.eventsByTagEnabled)
       Some(
@@ -219,11 +216,11 @@ import scala.concurrent.duration.DurationInt
           result
             .flatMap(_ => deleteDeletedToSeqNr(persistenceId))
             .flatMap(_ => deleteFromAllPersistenceIds(persistenceId))
-        else result.map(_ => Done)
+        else result.map(_ => Done)(ExecutionContexts.parasitic)
       result2.pipeTo(sender())
 
     case HealthCheckQuery =>
-      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse).pipeTo(sender)
+      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse)(ExecutionContexts.parasitic).pipeTo(sender)
   }
 
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
@@ -283,12 +280,12 @@ import scala.concurrent.duration.DurationInt
             rec(groups)
           }
 
-        // TODO base this off some other timeout or put in config
-        // TODO make the error message helpful
-        implicit val timeout: Timeout = Timeout(10.seconds)
+        // The tag writer keeps retrying but will drop writes for a persistent actor when it restarts
+        // due to this failing
+        implicit val timeout: Timeout = Timeout(settings.eventsByTagSettings.tagWriteTimeout)
         result.flatMap { _ =>
           tagWrites match {
-            case Some(t) => t.ask(extractTagWrites(serialized)).map(_ => Nil)
+            case Some(t) => t.ask(extractTagWrites(serialized)).map(_ => Nil)(ExecutionContexts.parasitic)
             case None    => Future.successful(Nil)
           }
         }
@@ -546,7 +543,7 @@ import scala.concurrent.duration.DurationInt
               e.getClass.getName,
               e.getMessage)
           }
-          deleteResult.map(_ => Done)
+          deleteResult.map(_ => Done)(ExecutionContexts.parasitic)
         }
       }
     }
@@ -586,7 +583,7 @@ import scala.concurrent.duration.DurationInt
                 }
             })
           })))
-      deleteResult.map(_ => Done)
+      deleteResult.map(_ => Done)(ExecutionContexts.parasitic)
     }
 
     // Deletes the events by inserting into the metadata table deleted_to and physically deletes the rows.

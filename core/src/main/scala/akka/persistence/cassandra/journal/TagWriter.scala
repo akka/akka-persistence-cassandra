@@ -7,22 +7,20 @@ package akka.persistence.cassandra.journal
 import java.util.UUID
 
 import akka.Done
-import akka.actor.{ Actor, ActorLogging, ActorRef, NoSerializationVerificationNeeded, Props, Timers }
+import akka.actor.{ Actor, ActorLogging, ActorRef, NoSerializationVerificationNeeded, Props, ReceiveTimeout, Timers }
 import akka.annotation.InternalApi
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
+import akka.event.LoggingAdapter
 import akka.pattern.pipe
 import akka.persistence.cassandra.formatOffset
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter.TagWriterSettings
 import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
+import akka.util.{ OptionVal, UUIDComparator }
 
-import scala.concurrent.duration.{ Duration, FiniteDuration }
+import scala.concurrent.duration.{ Duration, FiniteDuration, _ }
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
-import scala.concurrent.duration._
-import akka.actor.ReceiveTimeout
-import akka.event.LoggingAdapter
-import akka.util.{ OptionVal, UUIDComparator }
 
 /*
  * INTERNAL API
@@ -101,120 +99,6 @@ import akka.util.{ OptionVal, UUIDComparator }
    * In that case the later AwaitingWrite contains the ack.
    */
   case class AwaitingWrite(events: Seq[(Serialized, TagPidSequenceNr)], ack: OptionVal[ActorRef])
-
-  /**
-   * Buffered events waiting to be written.
-   * The next batch is maintained in `nextBatch` and will never contain more than the `batchSize`
-   * or events from different time buckets.
-   *
-   * Events should be added and then call shouldWrite() to see if a batch is ready to be written.
-   * Once a write is complete call `writeComplete` to discard the events in `nextBatch` and take
-   * events from `pending` for the next batch.
-   */
-  case class Buffer(
-      batchSize: Int,
-      size: Int,
-      nextBatch: Vector[AwaitingWrite],
-      pending: Vector[AwaitingWrite],
-      writeRequired: Boolean) {
-    require(batchSize > 0)
-
-    def isEmpty: Boolean = nextBatch.isEmpty
-
-    def nonEmpty: Boolean = nextBatch.nonEmpty
-
-    def remove(pid: String): Buffer = {
-      val (toFilter, without) = nextBatch.partition(_.events.head._1.persistenceId == pid)
-      val filteredPending = pending.filterNot(_.events.head._1.persistenceId == pid)
-      val removed = toFilter.foldLeft(0)((acc, next) => acc + next.events.size)
-      copy(size = size - removed, nextBatch = without, pending = filteredPending)
-    }
-
-    /**
-     * Any time a new time bucket is received or the max batch size is reached then
-     * a write should happen
-     */
-    def shouldWrite(): Boolean = {
-      if (!writeRequired)
-        require(size <= batchSize)
-      writeRequired
-    }
-
-    final def add(write: AwaitingWrite): Buffer = {
-      val firstTimeBucket = write.events.head._1.timeBucket
-      val lastTimeBucket = write.events.last._1.timeBucket
-      if (firstTimeBucket != lastTimeBucket) {
-        // this write needs broken up as it spans multiple time buckets
-        val (first, rest) = write.events.partition {
-          case (serialized, _) => serialized.timeBucket == firstTimeBucket
-        }
-        add(AwaitingWrite(first, OptionVal.None)).add(AwaitingWrite(rest, write.ack))
-      } else {
-        // common case
-        val newSize = size + write.events.size
-        if (writeRequired) {
-          // add them to pending, any time bucket changes will be detected later
-          copy(size = newSize, pending = pending :+ write)
-        } else if (nextBatch.headOption.exists(oldestEvent =>
-                     UUIDComparator.comparator
-                       .compare(write.events.head._1.timeUuid, oldestEvent.events.head._1.timeUuid) < 0)) {
-          // rare case where events have been received out of order, just re-build the buffer
-          require(pending.isEmpty)
-          val allWrites = (nextBatch :+ write).sortBy(_.events.head._1.timeUuid)(timeUuidOrdering)
-          rebuild(allWrites)
-        } else if (nextBatch.headOption.exists(_.events.head._1.timeBucket != write.events.head._1.timeBucket)) {
-          // time bucket has changed
-          copy(size = newSize, pending = pending :+ write, writeRequired = true)
-        } else if (newSize >= batchSize) {
-          require(pending.isEmpty, "Pending should be empty if write not required")
-          // does the new write need broken up?
-          if (newSize > batchSize) {
-            val toAdd = batchSize - size
-            val (forNextWrite, forPending) = write.events.splitAt(toAdd)
-            copy(
-              size = newSize,
-              nextBatch = nextBatch :+ AwaitingWrite(forNextWrite, OptionVal.None),
-              pending = Vector(AwaitingWrite(forPending, write.ack)),
-              writeRequired = true)
-          } else {
-            copy(size = newSize, nextBatch = nextBatch :+ write, writeRequired = true)
-          }
-        } else {
-          copy(size = size + write.events.size, nextBatch = nextBatch :+ write)
-        }
-      }
-    }
-
-    private def rebuild(writes: Vector[AwaitingWrite]): Buffer = {
-      var buffer = Buffer.empty(batchSize)
-      var i = 0
-      while (!buffer.shouldWrite() && i < writes.size) {
-        buffer = buffer.add(writes(i))
-        i += 1
-      }
-//       pending may have one in it as the last one may have been a time bucket change rather than bach full
-      val done = buffer.copy(pending = buffer.pending ++ writes.drop(i))
-      done
-    }
-
-    final def addPending(write: AwaitingWrite): Buffer = {
-      copy(size = size + write.events.size, pending = pending :+ write)
-    }
-
-    def writeComplete(): Buffer = {
-      // this could be more efficient by adding until a write is required but this is simpler and
-      // pending is expected to be small unless the database is falling behind
-      rebuild(pending)
-    }
-  }
-
-  object Buffer {
-    def empty(batchSize: Int): Buffer = {
-      require(batchSize > 0)
-      Buffer(batchSize, 0, Vector.empty, Vector.empty, writeRequired = false)
-    }
-  }
-
 }
 
 /** INTERNAL API */
@@ -230,8 +114,7 @@ import akka.util.{ OptionVal, UUIDComparator }
 
   import TagWriter._
   import TagWriters.TagWrite
-  import context.become
-  import context.dispatcher
+  import context.{ become, dispatcher }
 
   // eager init and val because used from Future callbacks
   override val log: LoggingAdapter = super.log
@@ -262,7 +145,7 @@ import akka.util.{ OptionVal, UUIDComparator }
   private def idle(buffer: Buffer, tagPidSequenceNrs: Map[PersistenceId, TagPidSequenceNr]): Receive = {
     case DropState(pid) =>
       log.debug("Dropping state for pid: {}", pid)
-      context.become(idle(buffer, tagPidSequenceNrs - pid))
+      context.become(idle(buffer.remove(pid), tagPidSequenceNrs - pid))
     case InternalFlush =>
       log.debug("Flushing")
       if (buffer.nonEmpty) {
@@ -270,7 +153,6 @@ import akka.util.{ OptionVal, UUIDComparator }
       }
     case Flush =>
       if (buffer.nonEmpty) {
-        // TODO this should br broken into batches https://github.com/akka/akka-persistence-cassandra/issues/405
         log.debug("External flush request from [{}]. Flushing.", sender())
         write(buffer, tagPidSequenceNrs, Some(sender()))
       } else {
@@ -278,7 +160,6 @@ import akka.util.{ OptionVal, UUIDComparator }
         sender() ! FlushComplete
       }
     case TagWrite(_, payload, _) =>
-      log.debug("Tag write {}", payload)
       val (newTagPidSequenceNrs, events: Seq[(Serialized, TagPidSequenceNr)]) = {
         assignTagPidSequenceNumbers(payload.toVector, tagPidSequenceNrs)
       }
@@ -309,8 +190,7 @@ import akka.util.{ OptionVal, UUIDComparator }
       awaitingFlush: Option[ActorRef]): Receive = {
     case DropState(pid) =>
       log.debug("Dropping state for pid: [{}]", pid)
-      // FIXME remove anything from the buffer
-      become(writeInProgress(buffer, tagPidSequenceNrs - pid, awaitingFlush))
+      become(writeInProgress(buffer.remove(pid), tagPidSequenceNrs - pid, awaitingFlush))
     case InternalFlush =>
     // Ignore, we will check when the write is done
     case Flush =>
@@ -332,7 +212,6 @@ import akka.util.{ OptionVal, UUIDComparator }
       // buffer until current query is finished
       // Don't sort until the write has finished
       val newBuffer = buffer.addPending(awaitingWrite)
-      log.debug("buffering write as write in progress. New buffer {}", newBuffer)
       become(writeInProgress(newBuffer, updatedTagPidSequenceNrs, awaitingFlush))
     case TagWriteDone(summary, doneNotify) =>
       log.debug("Tag write done: {}", summary)
@@ -366,7 +245,6 @@ import akka.util.{ OptionVal, UUIDComparator }
         case Some(replyTo) =>
           log.debug("External flush request")
           if (buffer.pending.nonEmpty) {
-            // TODO break into batches - check, but this is now done as buffer always batches
             write(nextBuffer, tagPidSequenceNrs, awaitingFlush)
           } else {
             replyTo ! FlushComplete
@@ -463,12 +341,12 @@ import akka.util.{ OptionVal, UUIDComparator }
         val (event, tagPidSequenceNr) = next
         acc.get(event.persistenceId) match {
           case Some(PidProgress(from, to, _, _)) =>
-            // FIXME make this log nicer
             if (event.sequenceNr <= to)
               throw new IllegalStateException(
                 s"Expected events to be ordered by seqNr. ${event.persistenceId} " +
                 s"Events: ${writes.nextBatch.map(e =>
                   (e.events.head._1.persistenceId, e.events.head._1.sequenceNr, e.events.head._1.timeUuid))}")
+
             acc + (event.persistenceId -> PidProgress(from, event.sequenceNr, tagPidSequenceNr, event.timeUuid))
           case None =>
             acc + (event.persistenceId -> PidProgress(
