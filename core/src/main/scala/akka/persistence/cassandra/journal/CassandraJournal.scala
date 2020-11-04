@@ -287,7 +287,7 @@ import akka.stream.scaladsl.Source
             case Some(t) =>
               implicit val timeout: Timeout = Timeout(settings.eventsByTagSettings.tagWriteTimeout)
               t.ask(extractTagWrites(serialized)).map(_ => Nil)(ExecutionContexts.parasitic)
-            case None    => Future.successful(Nil)
+            case None => Future.successful(Nil)
           }
         }
 
