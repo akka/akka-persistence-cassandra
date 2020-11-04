@@ -23,6 +23,7 @@ import akka.actor.Props
 import akka.actor.SupervisorStrategy
 import akka.actor.Timers
 import akka.annotation.InternalApi
+import akka.dispatch.ExecutionContexts
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
@@ -218,8 +219,9 @@ import scala.util.Try
       // this only comes from the replay, an ack is not required right now.
       forwardTagWrite(tw).pipeTo(sender())
     case BulkTagWrite(tws, withoutTags) =>
-      val toReply = sender()
-      Future.traverse(tws)(tw => forwardTagWrite(tw).pipeTo(toReply))
+      val replyTo = sender()
+      val forwards = tws.map(forwardTagWrite)
+      Future.sequence(forwards).map(_ => Done)(ExecutionContexts.parasitic).pipeTo(replyTo)
       updatePendingScanning(withoutTags)
     case WriteTagScanningTick =>
       writeTagScanning()
@@ -345,7 +347,7 @@ import scala.util.Try
       Future.successful(Done)
     } else {
       updatePendingScanning(tw.serialised)
-      askTagActor(tw.tag, tw).map(_ => Done)
+      askTagActor(tw.tag, tw).map(_ => Done)(ExecutionContexts.parasitic)
     }
   }
 

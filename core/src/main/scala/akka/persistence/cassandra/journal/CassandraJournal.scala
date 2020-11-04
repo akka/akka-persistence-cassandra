@@ -282,10 +282,11 @@ import akka.stream.scaladsl.Source
 
         // The tag writer keeps retrying but will drop writes for a persistent actor when it restarts
         // due to this failing
-        implicit val timeout: Timeout = Timeout(settings.eventsByTagSettings.tagWriteTimeout)
         result.flatMap { _ =>
           tagWrites match {
-            case Some(t) => t.ask(extractTagWrites(serialized)).map(_ => Nil)(ExecutionContexts.parasitic)
+            case Some(t) =>
+              implicit val timeout: Timeout = Timeout(settings.eventsByTagSettings.tagWriteTimeout)
+              t.ask(extractTagWrites(serialized)).map(_ => Nil)(ExecutionContexts.parasitic)
             case None    => Future.successful(Nil)
           }
         }

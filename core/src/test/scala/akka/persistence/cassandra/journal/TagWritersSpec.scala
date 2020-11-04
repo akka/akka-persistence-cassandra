@@ -68,7 +68,7 @@ class TagWritersSpec
 
   "Tag writers" must {
 
-    "replies when all tag writes are complete" in {
+    "reply when all tag writes are complete" in {
       val redProbe = TestProbe()
       val blueProbe = TestProbe()
       val probes = Map("red" -> redProbe, "blue" -> blueProbe)
