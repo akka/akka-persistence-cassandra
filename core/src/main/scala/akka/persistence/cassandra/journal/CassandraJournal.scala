@@ -13,7 +13,7 @@ import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
 import akka.annotation.InternalApi
 import akka.event.{ Logging, LoggingAdapter }
-import akka.pattern.pipe
+import akka.pattern.{ ask, pipe }
 import akka.persistence._
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.Extractors
@@ -26,7 +26,7 @@ import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtensi
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.Sink
 import akka.dispatch.ExecutionContexts
-import akka.util.OptionVal
+import akka.util.{ OptionVal, Timeout }
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.uuid.Uuids
@@ -94,7 +94,6 @@ import akka.stream.scaladsl.Source
     settings.journalSettings.readProfile,
     taggedPreparedStatements)
 
-  // TODO move all tag related things into a class that no-ops to remove these options
   private val tagWrites: Option[ActorRef] =
     if (settings.eventsByTagSettings.eventsByTagEnabled)
       Some(
@@ -217,11 +216,11 @@ import akka.stream.scaladsl.Source
           result
             .flatMap(_ => deleteDeletedToSeqNr(persistenceId))
             .flatMap(_ => deleteFromAllPersistenceIds(persistenceId))
-        else result.map(_ => Done)
+        else result.map(_ => Done)(ExecutionContexts.parasitic)
       result2.pipeTo(sender())
 
     case HealthCheckQuery =>
-      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse).pipeTo(sender)
+      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse)(ExecutionContexts.parasitic).pipeTo(sender)
   }
 
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
@@ -280,9 +279,16 @@ import akka.stream.scaladsl.Source
 
             rec(groups)
           }
-        result.map { _ =>
-          tagWrites.foreach(_ ! extractTagWrites(serialized))
-          Nil
+
+        // The tag writer keeps retrying but will drop writes for a persistent actor when it restarts
+        // due to this failing
+        result.flatMap { _ =>
+          tagWrites match {
+            case Some(t) =>
+              implicit val timeout: Timeout = Timeout(settings.eventsByTagSettings.tagWriteTimeout)
+              t.ask(extractTagWrites(serialized)).map(_ => Nil)(ExecutionContexts.parasitic)
+            case None => Future.successful(Nil)
+          }
         }
 
     }
@@ -538,7 +544,7 @@ import akka.stream.scaladsl.Source
               e.getClass.getName,
               e.getMessage)
           }
-          deleteResult.map(_ => Done)
+          deleteResult.map(_ => Done)(ExecutionContexts.parasitic)
         }
       }
     }
@@ -578,7 +584,7 @@ import akka.stream.scaladsl.Source
                 }
             })
           })))
-      deleteResult.map(_ => Done)
+      deleteResult.map(_ => Done)(ExecutionContexts.parasitic)
     }
 
     // Deletes the events by inserting into the metadata table deleted_to and physically deletes the rows.
@@ -836,7 +842,10 @@ import akka.stream.scaladsl.Source
       writerUuid: String,
       meta: Option[SerializedMeta],
       timeUuid: UUID,
-      timeBucket: TimeBucket)
+      timeBucket: TimeBucket) {
+    // never log serialized byte buffer
+    override def toString: PersistenceId = s"Serialized($persistenceId, $sequenceNr, $timeBucket)"
+  }
 
   private[akka] case class SerializedMeta(serialized: ByteBuffer, serManifest: String, serId: Int)
 

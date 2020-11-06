@@ -141,6 +141,8 @@ import com.typesafe.config.Config
       case _               => eventsByTagConfig.getDuration("pubsub-notification", TimeUnit.MILLISECONDS).millis
     }
 
+  val tagWriteTimeout = eventsByTagConfig.getDuration("tag-write-timeout", TimeUnit.MILLISECONDS).millis
+
   val tagWriterSettings = TagWriterSettings(
     eventsByTagConfig.getInt("max-message-batch-size"),
     eventsByTagConfig.getDuration("flush-interval", TimeUnit.MILLISECONDS).millis,
