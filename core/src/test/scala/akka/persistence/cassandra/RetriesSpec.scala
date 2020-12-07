@@ -4,16 +4,16 @@
 
 package akka.persistence.cassandra
 
+import scala.concurrent.Future
+import scala.concurrent.duration._
+
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
-import akka.util.ConstantFun
+import akka.testkit.TestProbe
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
-
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
 
 class RetriesSpec
     extends TestKit(ActorSystem("RetriesSpec"))
@@ -25,15 +25,20 @@ class RetriesSpec
   implicit val ec = system.dispatcher
   "Retries" should {
     "retry N number of times" in {
+      val failProbe = TestProbe()
       @volatile var called = 0
-      Retries
+      val result = Retries
         .retry(() => {
           called += 1
-          Future.failed(new RuntimeException("cats"))
-        }, 3, ConstantFun.scalaAnyThreeToUnit, 1.milli, 2.millis, 0.1)
+          Future.failed(new RuntimeException(s"cats $called"))
+        }, 3, (_, exc, _) => failProbe.ref ! exc, 1.milli, 2.millis, 0.1)
         .failed
         .futureValue
       called shouldEqual 3
+      result.getMessage shouldEqual "cats 3"
+      failProbe.expectMsgType[RuntimeException].getMessage shouldEqual "cats 1"
+      failProbe.expectMsgType[RuntimeException].getMessage shouldEqual "cats 2"
+      failProbe.expectNoMessage()
     }
   }
 
