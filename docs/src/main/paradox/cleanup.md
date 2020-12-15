@@ -28,4 +28,4 @@ Scala
 Java
 : @@snip [snapshot-keyspace](/docs/src/test/java/jdoc/cleanup/CleanupDocExample.java) { #cleanup } 
 
-By default, all operations only print what they were going to do. Once you're happy with what the cleanup tool is going todo set `akka.persistence.cassandra.dry-run = false`
+By default, all operations only print what they were going to do. Once you're happy with what the cleanup tool is going todo set `akka.persistence.cassandra.cleanup.dry-run = false`
