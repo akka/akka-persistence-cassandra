@@ -36,7 +36,7 @@ The default table definitions look like this:
 
 ### Consistency
 
-By default the snapshot store uses `ONE` for all reads and writes, since snapshots
+By default, the snapshot store uses `ONE` for all reads and writes, since snapshots
 should only be used as an optimization to reduce number of replayed events.
 If a recovery doesn't see the latest snapshot it will just start from an older snapshot
 and replay events from there. Be careful to not delete events too eagerly after storing
