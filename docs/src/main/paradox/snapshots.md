@@ -29,7 +29,7 @@ For local testing, and the default if you enable `akka.persistence.cassandra.sna
 @@snip [snapshot-keyspace](/target/snapshot-keyspace.txt) { #snapshot-keyspace } 
 
 A single table is required. This needs to be created before starting your application.
-For local testing you can enable `cassnadra-plugin.snapshot.table-autocreate`.
+For local testing you can enable `akka.persistence.cassandra.snapshot.tables-autocreate`.
 The default table definitions look like this:
 
 @@snip [snapshot-tables](/target/snapshot-tables.txt) { #snapshot-tables}
