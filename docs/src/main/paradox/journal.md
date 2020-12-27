@@ -33,7 +33,7 @@ For local testing, and the default if you enable `akka.persistence.cassandra.jou
 @@snip [journal-schema](/target/journal-keyspace.txt) { #journal-keyspace } 
 
 There are multiple tables required. These need to be created before starting your application.
-For local testing you can enable `cassandra-plugin.journal.table-autocreate`. The default table definitions look like this:
+For local testing you can enable `akka.persistence.cassandra.journal.tables-autocreate`. The default table definitions look like this:
 
 @@snip [journal-tables](/target/journal-tables.txt) { #journal-tables } 
 
