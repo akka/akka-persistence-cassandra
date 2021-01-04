@@ -22,3 +22,5 @@ Query configuration is under `akka.persistence.cassandra.query`.
 
 Events by tag configuration is under `akka.persistence.cassandra.events-by-tag` and shared
 by `journal` and `query`.
+
+If using events by tag query it is important to set the @ref:[first time bucket](events-by-tag.md#first-time-bucket)

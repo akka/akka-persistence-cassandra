@@ -10,6 +10,16 @@ You should not use too many tags for each event. Each tag will result in a copy 
 that can impact write performance.
 @@@
 
+<a id="first-time-bucket"><a/>
+## First time bucket
+
+Tagged events are written into time buckets. The events by tag query walks the buckets in time order.
+When there is no offset provided to a query then it is not known which bucket to start with.
+It is important to override the first time bucket used to a recent time as the default will
+result in a delay for queries without an offset as it is a long time ago:
+
+`akka.persistence.cassandra.events-by-tag.first-time-bucket = "20151120T00:00"`
+
 ## Consistency
 
 Event by tag queries are eventually consistent, i.e. if a persist for an event has completed
