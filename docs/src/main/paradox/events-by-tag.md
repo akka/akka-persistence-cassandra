@@ -132,12 +132,11 @@ the query starts with a search to look for the lowest sequence number per persis
 before delivering any events.
  
 The above scanning only looks in the current time bucket. For persistence ids that aren't found in this initial scan because they 
-don't have any events in the current time bucket then the expected tag pid sequence number is not known. 
-In this case the eventsByTag query searches for `new-persistence-id-scan-timeout` before assuming this is the first
-event for that persistence id. 
-
-This adds a delay each time a new persistence id is found by an offset query when the first event doesn't have a sequenceNr of `1`. 
-If this is an issue it can be set to 0s. If events are found out of order due to this the stage will fail.  
+don't have any events in the current time bucket then the expected tag pid sequence number is not known.
+If events are found out of order due to this the stage will fail.
+It is possible to enable configuration `new-persistence-id-scan-timeout`, which will use an additional query to search
+for more events before assuming this is the first event for that persistence id.
+This adds a delay each time a new persistence id is found by an offset query when the first event doesn't have a sequenceNr of `1`.
 
 ## Events by tag reconciliation
 
