@@ -9,7 +9,7 @@ When running any operation for a persistence id the actor with that persistence 
 If possible, it is best to keep all events in an event sourced system. That way new [projections](https://doc.akka.io/docs/akka-projection/current/index.html) 
 and the `tag_view` table can be re-built if it is corrupted (e.g. due to a two persistence ids writing events from two nodes in a split brain).
 
-In come cases keeping all events is not possible. `EventSourcedBehavior`s can automatically snapshot state and delete events as described in the [Akka docs](https://doc.akka.io/docs/akka/current/typed/persistence-snapshot.html#snapshot-deletion).
+In some cases keeping all events is not possible. `EventSourcedBehavior`s can automatically snapshot state and delete events as described in the [Akka docs](https://doc.akka.io/docs/akka/current/typed/persistence-snapshot.html#snapshot-deletion).
 Snapshotting is useful even if events aren't deleted as it speeds up recovery.
 
 The @apidoc[akka.persistence.cassandra.cleanup.Cleanup] tool can retrospectively clean up the journal. Its operations include:
