@@ -504,7 +504,7 @@ import akka.stream.scaladsl.Source
       case otherDeletes =>
         if (otherDeletes.length > settings.journalSettings.maxConcurrentDeletes) {
           log.error(
-            "[}}] Over [{}] outstanding deletes. Failing delete",
+            "[{}] Over [{}] outstanding deletes. Failing delete",
             persistenceId,
             settings.journalSettings.maxConcurrentDeletes)
           Future.failed(new RuntimeException(
