@@ -15,7 +15,6 @@ Snapshotting is useful even if events aren't deleted as it speeds up recovery.
 The `akka.persistence.cassandra.cleanup.Cleanup` tool can retrospectively clean up the journal. Its operations include:
 
 * Delete all events for a persistence id
-* Delete all events and tagged events for the `eventsByTag` query
 * Delete all snapshots for a persistence id
 * Delete all snapshots and events for a persistence id keeping the latest N snapshots and all the events after them. 
 
