@@ -2,8 +2,8 @@ import sbt._
 import Keys._
 
 object Dependencies {
-  val Scala212 = "2.12.10"
-  val Scala213 = "2.13.1"
+  val Scala212 = "2.12.13"
+  val Scala213 = "2.13.3"
   val ScalaVersions = Seq(Scala212, Scala213)
 
   val AkkaVersion = System.getProperty("override.akka.version", "2.6.9")
@@ -18,11 +18,6 @@ object Dependencies {
   val AkkaManagementVersion = "1.0.6"
 
   val Logback = "ch.qos.logback" % "logback-classic" % "1.2.3"
-
-  val silencerVersion = "1.5.0"
-  val silencer = Seq(
-    compilerPlugin(("com.github.ghik" %% "silencer-plugin" % silencerVersion).cross(CrossVersion.patch)),
-    ("com.github.ghik" %% "silencer-lib" % silencerVersion % Provided).cross(CrossVersion.patch))
 
   val reconcilerDependencies = Seq(
     "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,

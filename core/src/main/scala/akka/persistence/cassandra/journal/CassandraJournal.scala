@@ -220,7 +220,7 @@ import akka.stream.scaladsl.Source
       result2.pipeTo(sender())
 
     case HealthCheckQuery =>
-      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse)(ExecutionContexts.parasitic).pipeTo(sender)
+      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse)(ExecutionContexts.parasitic).pipeTo(sender())
   }
 
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
@@ -254,7 +254,7 @@ import akka.stream.scaladsl.Source
     val writesWithUuids: Seq[Seq[(PersistentRepr, UUID)]] =
       messages.map(aw => aw.payload.map(pr => (pr, generateUUID(pr))))
 
-    val writeInProgressForPersistentId = Promise[Done]
+    val writeInProgressForPersistentId = Promise[Done]()
     val pid = messages.head.persistenceId
     writeInProgress.put(pid, writeInProgressForPersistentId.future)
 

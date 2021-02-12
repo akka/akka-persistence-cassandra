@@ -12,7 +12,7 @@ import akka.stream.{ Attributes, Outlet, SourceShape }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet
 import com.datastax.oss.driver.api.core.cql.PreparedStatement
-import com.github.ghik.silencer.silent
+import scala.annotation.nowarn
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
@@ -98,7 +98,7 @@ import scala.concurrent.duration._
         }
       }
 
-      @silent("deprecated") // keep compatible with akka 2.5
+      @nowarn("msg=deprecated") // keep compatible with akka 2.5
       override def preStart(): Unit = {
         query()
         refreshInterval.foreach { interval =>

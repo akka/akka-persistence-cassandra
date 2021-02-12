@@ -22,7 +22,7 @@ lazy val core = (project in file("core"))
   .dependsOn(cassandraLauncher % Test)
   .settings(
     name := "akka-persistence-cassandra",
-    libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies ++ Dependencies.silencer,
+    libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
         "Automatic-Module-Name" -> "akka.persistence.cassandra"))
   .configs(MultiJvm)

@@ -35,7 +35,7 @@ import akka.annotation.InternalApi
 
     case msg =>
       if (seen.contains(msg)) {
-        repeated += (msg -> (repeated(msg) + sender))
+        repeated += (msg -> (repeated(msg) + sender()))
       } else {
         delegate.forward(msg)
         seen += msg

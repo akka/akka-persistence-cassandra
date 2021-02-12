@@ -72,7 +72,7 @@ class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoa
 
   private def validateTagStream(readJournal: CassandraReadJournal)(tag: String): Unit = {
     system.log.info(s"Validating tag $tag")
-    val probe = readJournal.eventsByTag("orange", NoOffset).toMat(TestSink.probe)(Keep.right).run
+    val probe = readJournal.eventsByTag("orange", NoOffset).toMat(TestSink.probe)(Keep.right).run()
     var sequenceNrsPerPid = Map[String, Long]()
     var allReceived: Map[String, List[Long]] = Map.empty.withDefaultValue(List.empty)
     probe.request(messagesPerPersistenceId * nrPersistenceIds)

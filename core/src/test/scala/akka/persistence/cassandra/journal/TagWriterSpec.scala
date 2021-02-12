@@ -20,7 +20,6 @@ import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
 import akka.testkit.{ TestKit, TestProbe }
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Statement }
 import com.datastax.oss.driver.api.core.uuid.Uuids
-import com.github.ghik.silencer.silent
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach }
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -56,7 +55,7 @@ object TagWriterSpec {
  * We have a lot of integration tests around eventsByTag queries so
  * writing this against a fake CassandraSession to test the batching
  */
-@silent // re-write to use lazy list
+// re-write to use lazy list
 class TagWriterSpec
     extends TestKit(ActorSystem("TagWriterSpec", TagWriterSpec.config))
     with AnyWordSpecLike
