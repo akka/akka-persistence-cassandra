@@ -330,7 +330,7 @@ import scala.util.Try
     case CancelPassivateTagWriter(tag) =>
       passivatingTagActors.get(tag).foreach { buffer =>
         passivatingTagActors = passivatingTagActors - tag
-        log.debug("Tag writer {} for tag [{}] canceled passivation.", sender, tag)
+        log.debug("Tag writer {} for tag [{}] canceled passivation.", sender(), tag)
         sendPassivateBuffer(tag, buffer)
       }
 

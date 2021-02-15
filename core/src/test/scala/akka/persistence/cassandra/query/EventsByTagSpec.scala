@@ -1060,7 +1060,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
 
       probe.request(100)
       probe.expectNextN(30)
-      probe.expectComplete
+      probe.expectComplete()
     }
   }
 }

@@ -18,6 +18,7 @@ import akka.persistence.cassandra.query.TagViewSequenceNumberScanner.Session
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row }
+import scala.annotation.nowarn
 import scala.concurrent.duration.{ Duration, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
 
@@ -47,7 +48,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
  */
 @InternalApi private[akka] class TagViewSequenceNumberScanner(session: Session)(
     implicit materializer: Materializer,
-    ec: ExecutionContext) {
+    @nowarn("msg=never used") ec: ExecutionContext) {
   private val log = Logging(materializer.system, getClass)
 
   /**

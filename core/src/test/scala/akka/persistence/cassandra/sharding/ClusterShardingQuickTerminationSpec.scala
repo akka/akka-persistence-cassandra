@@ -80,7 +80,7 @@ class ClusterShardingQuickTerminationSpec extends CassandraSpec("""
       }
       ClusterSharding(system).start(
         typeName = "tagging",
-        entityProps = Props[Counter],
+        entityProps = Props[Counter](),
         settings = ClusterShardingSettings(system),
         extractEntityId = extractEntityId,
         extractShardId = extractShardId)

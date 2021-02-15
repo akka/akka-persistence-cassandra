@@ -24,7 +24,7 @@ jobs:
     - stage: check
       script: sbt -jvm-opts .jvmopts-travis verifyCodeStyle
       name: "Code style check. Run locally with: sbt verifyCodeStyle"
-    - script: sbt -jvm-opts .jvmopts-travis ++2.13.1 Test/compile
+    - script: sbt -jvm-opts .jvmopts-travis ++2.13.3 Test/compile
       name: Compile all tests (with Scala 2.13)
     - script: sbt -jvm-opts .jvmopts-travis unidoc
       name: Create all API docs

@@ -166,7 +166,7 @@ class CassandraLoadTypedSpec extends CassandraSpec(dumpRowsOnFailure = false) wi
 
   "Typed EventSourcedBehavior with Cassandra journal" must {
     "have some reasonable write throughput" in {
-      val probe = testKit.createTestProbe[String]
+      val probe = testKit.createTestProbe[String]()
       val processor =
         system.spawnAnonymous(
           Processor.behavior(PersistenceId.ofUniqueId("p1"), probe.ref, notifyProbeInEventHandler = false))
@@ -176,7 +176,7 @@ class CassandraLoadTypedSpec extends CassandraSpec(dumpRowsOnFailure = false) wi
     }
 
     "work properly under load" in {
-      val probe = testKit.createTestProbe[String]
+      val probe = testKit.createTestProbe[String]()
       def spawnProcessor() =
         system.spawnAnonymous(
           Processor.behavior(PersistenceId.ofUniqueId("p2"), probe.ref, notifyProbeInEventHandler = true))
