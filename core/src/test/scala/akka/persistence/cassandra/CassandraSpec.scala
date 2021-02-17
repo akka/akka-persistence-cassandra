@@ -63,18 +63,18 @@ object CassandraSpec {
           eventual-consistency-delay = 200ms
         }
         snapshot {
-          keyspace-autocreate = true
-          tables-autocreate = true
+          keyspace-autocreate = false
+          tables-autocreate = false
         } 
         journal {
-          keyspace-autocreate = true
-          tables-autocreate = true
+          keyspace-autocreate = false
+          tables-autocreate = false
         }
       } 
      """)
 
   val fallbackConfig = ConfigFactory.parseString(s"""
-      akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
+      #akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
       akka.loglevel = DEBUG
       akka.use-slf4j = off
 
@@ -92,8 +92,8 @@ object CassandraSpec {
  */
 abstract class CassandraSpec(
     config: Config = CassandraLifecycle.config,
-    val journalName: String = getCallerName(getClass),
-    val snapshotName: String = getCallerName(getClass),
+    val journalName: String = "akka", // FIXME getCallerName(getClass),
+    val snapshotName: String = "akka", // FIXME getCallerName(getClass),
     dumpRowsOnFailure: Boolean = true)
     extends TestKitBase
     with Suite
@@ -203,9 +203,10 @@ abstract class CassandraSpec(
           })
 
       }
-      keyspaces().foreach { keyspace =>
-        cluster.execute(s"drop keyspace if exists $keyspace")
-      }
+      // FIXME
+//      keyspaces().foreach { keyspace =>
+//        cluster.execute(s"drop keyspace if exists $keyspace")
+//      }
     } catch {
       case NonFatal(t) =>
         println("Exception during cleanup")

@@ -26,7 +26,7 @@ import com.typesafe.config.Config
   val keyspaceAutoCreate: Boolean = journalConfig.getBoolean("keyspace-autocreate")
   val tablesAutoCreate: Boolean = journalConfig.getBoolean("tables-autocreate")
 
-  val keyspace: String = journalConfig.getString("keyspace")
+  val keyspace: String = "akka" // FIXME journalConfig.getString("keyspace")
 
   val table: String = journalConfig.getString("table")
   val metadataTable: String = journalConfig.getString("metadata-table")
