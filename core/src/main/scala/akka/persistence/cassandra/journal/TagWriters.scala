@@ -247,8 +247,7 @@ import scala.util.Try
               "Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]. New ref[{}]. Persistent Actors with the same PersistenceId should not run concurrently",
               pid,
               ref,
-              persistentActorRef
-            )
+              persistentActorRef)
           }
         }
         currentPersistentActors += (pid -> persistentActorRef)
