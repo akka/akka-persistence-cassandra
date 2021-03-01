@@ -238,18 +238,21 @@ import scala.util.Try
           log.warning("Writing tag scanning failed. Reason {}", t)
       }
 
-    case PersistentActorStarting(pid, persistentActor) =>
+    case PersistentActorStarting(pid, persistentActorRef) =>
       // migration and journal specs can use dead letters as sender
-      if (persistentActor != context.system.deadLetters) {
+      if (persistentActorRef != context.system.deadLetters) {
         currentPersistentActors.get(pid).foreach { ref =>
-          log.warning(
-            "Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]. Persistent Actors with the same PersistenceId should not run concurrently",
-            pid,
-            ref)
+          if (ref != persistentActorRef) {
+            log.warning(
+              "Persistent actor starting for pid [{}]. Old ref hasn't terminated yet: [{}]. New ref[{}]. Persistent Actors with the same PersistenceId should not run concurrently",
+              pid,
+              ref,
+              persistentActorRef)
+          }
         }
-        currentPersistentActors += (pid -> persistentActor)
-        log.debug("Watching pid [{}] actor [{}]", pid, persistentActor)
-        context.watchWith(persistentActor, PersistentActorTerminated(pid, persistentActor))
+        currentPersistentActors += (pid -> persistentActorRef)
+        log.debug("Watching pid [{}] actor [{}]", pid, persistentActorRef)
+        context.watchWith(persistentActorRef, PersistentActorTerminated(pid, persistentActorRef))
       }
       sender() ! PersistentActorStartingAck
 
