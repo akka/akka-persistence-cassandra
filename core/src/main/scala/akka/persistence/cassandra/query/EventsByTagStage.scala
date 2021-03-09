@@ -794,6 +794,9 @@ import scala.compat.java8.FutureConverters._
       @tailrec def tryPushOne(): Unit =
         stageState.state match {
           case QueryResult(rs) if isAvailable(out) =>
+            // FIXME remove
+            if (Thread.currentThread().getName.contains("akka.actor.default-dispatcher"))
+              throw new RuntimeException("Wrong akka.actor.default-dispatcher")
             if (isExhausted(rs)) {
               queryExhausted()
             } else if (rs.remaining() == 0) {

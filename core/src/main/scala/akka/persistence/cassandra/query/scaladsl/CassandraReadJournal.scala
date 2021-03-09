@@ -333,7 +333,9 @@ class CassandraReadJournal protected (
                 usingOffset,
                 initialTagPidSequenceNrs,
                 scanner))
-        }.via(deserializeEventsByTagRow).mapMaterializedValue(_ => NotUsed)
+        }.via(deserializeEventsByTagRow)
+          .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+          .mapMaterializedValue(_ => NotUsed)
 
       } catch {
         case NonFatal(e) =>
@@ -345,12 +347,15 @@ class CassandraReadJournal protected (
 
   private def deserializeEventsByTagRow: Flow[EventsByTagStage.UUIDRow, UUIDPersistentRepr, NotUsed] = {
     val deserializeEventAsync = querySettings.deserializationParallelism > 1
-    Flow[EventsByTagStage.UUIDRow]
-      .mapAsync(querySettings.deserializationParallelism) { uuidRow =>
-        val row = uuidRow.row
-        eventsByTagDeserializer.deserializeEvent(row, deserializeEventAsync).map {
-          case DeserializedEvent(payload, metadata) =>
-            val repr = mapEvent(PersistentRepr(
+    Flow[EventsByTagStage.UUIDRow].mapAsync(querySettings.deserializationParallelism) { uuidRow =>
+      val row = uuidRow.row
+      // FIXME remove
+      if (Thread.currentThread().getName.contains("akka.actor.default-dispatcher"))
+        throw new RuntimeException("Wrong akka.actor.default-dispatcher")
+      eventsByTagDeserializer.deserializeEvent(row, deserializeEventAsync).map {
+        case DeserializedEvent(payload, metadata) =>
+          val repr = mapEvent(
+            PersistentRepr(
               payload,
               sequenceNr = uuidRow.sequenceNr,
               persistenceId = uuidRow.persistenceId,
@@ -358,14 +363,13 @@ class CassandraReadJournal protected (
               deleted = false,
               sender = null,
               writerUuid = row.getString("writer_uuid")))
-            val reprWithMeta = metadata match {
-              case OptionVal.None           => repr
-              case OptionVal.Some(metadata) => repr.withMetadata(metadata)
-            }
-            UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, reprWithMeta)
-        }
+          val reprWithMeta = metadata match {
+            case OptionVal.None           => repr
+            case OptionVal.Some(metadata) => repr.withMetadata(metadata)
+          }
+          UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, reprWithMeta)
       }
-      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+    }
   }
 
   private def eventsByTagPrereqs(tag: String, usingOffset: Boolean, fromOffset: UUID)
@@ -390,7 +394,9 @@ class CassandraReadJournal protected (
    */
   @InternalApi
   private[akka] val tagViewScanner: Future[TagViewSequenceNumberScanner] = preparedSelectTagSequenceNrs.map { ps =>
-    new TagViewSequenceNumberScanner(TagViewSequenceNumberScanner.Session(session, ps, querySettings.readProfile))
+    new TagViewSequenceNumberScanner(
+      TagViewSequenceNumberScanner.Session(session, ps, querySettings.readProfile),
+      querySettings.pluginDispatcher)
   }
 
   /**
@@ -513,7 +519,9 @@ class CassandraReadJournal protected (
                 usingOffset,
                 initialTagPidSequenceNrs,
                 scanner))
-        }.via(deserializeEventsByTagRow).mapMaterializedValue(_ => NotUsed)
+        }.via(deserializeEventsByTagRow)
+          .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+          .mapMaterializedValue(_ => NotUsed)
 
       } catch {
         case NonFatal(e) =>
@@ -647,9 +655,12 @@ class CassandraReadJournal protected (
               querySettings.readProfile),
             settings,
             fastForwardEnabled))
-        .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
         .named(name)
     }.mapAsync(querySettings.deserializationParallelism) { row =>
+        // FIXME remove
+        if (Thread.currentThread().getName.contains("akka.actor.default-dispatcher"))
+          throw new RuntimeException("Wrong akka.actor.default-dispatcher")
+
         extractor.extract(row, deserializeEventAsync)
       }
       .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
@@ -724,9 +735,8 @@ class CassandraReadJournal protected (
         (s, ps) =>
           Source
             .fromGraph(new AllPersistenceIdsStage(refreshInterval, ps, s, querySettings.readProfile))
-            .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
             .mapMaterializedValue(_ => NotUsed)
-            .named(name))
+            .named(name)).withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
     }
 
   /**
@@ -738,8 +748,8 @@ class CassandraReadJournal protected (
       (s, ps) =>
         Source
           .fromGraph(new AllPersistenceIdsStage(None, ps, s, querySettings.readProfile))
-          .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
           .named("currentPersistenceIdsFromMessages"))
+      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
 
 }
