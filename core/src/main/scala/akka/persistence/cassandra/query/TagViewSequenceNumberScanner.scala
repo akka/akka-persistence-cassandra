@@ -20,9 +20,12 @@ import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import com.datastax.driver.core.PreparedStatement
 import com.datastax.driver.core.Row
-
 import scala.concurrent.duration.{ Deadline, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
+
+import akka.stream.ActorAttributes
+import akka.stream.scaladsl.Keep
+import akka.stream.scaladsl.Sink
 
 @InternalApi
 private[akka] object TagViewSequenceNumberScanner {
@@ -41,7 +44,7 @@ private[akka] object TagViewSequenceNumberScanner {
 }
 
 @InternalApi
-private[akka] class TagViewSequenceNumberScanner(session: Session)(
+private[akka] class TagViewSequenceNumberScanner(session: Session, pluginDispatcher: String)(
     implicit materializer: ActorMaterializer,
     ec: ExecutionContext) {
   private val log = Logging(materializer.system, getClass)
@@ -93,7 +96,7 @@ private[akka] class TagViewSequenceNumberScanner(session: Session)(
           session.selectTagSequenceNrs(tag, bucket, fromOffset, toOffset)
         })
         .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUUID("timestamp")))
-        .runFold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) {
+        .toMat(Sink.fold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) {
           case (acc, (pid, tagPidSequenceNr, timestamp)) =>
             val (newTagPidSequenceNr, newTimestamp) = acc.get(pid) match {
               case None =>
@@ -105,7 +108,9 @@ private[akka] class TagViewSequenceNumberScanner(session: Session)(
                   (currentTagPidSequenceNr, currentTimestamp)
             }
             acc + (pid -> ((newTagPidSequenceNr, newTimestamp)))
-        }
+        })(Keep.right)
+        .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
+        .run()
         .flatMap { result =>
           if (deadline.hasTimeLeft()) {
             doIt()
