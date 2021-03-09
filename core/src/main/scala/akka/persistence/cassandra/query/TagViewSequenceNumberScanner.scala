@@ -97,20 +97,11 @@ import akka.stream.scaladsl.Sink
         })
         .flatMapConcat(bucket => {
           log.debug("Scanning bucket {}", bucket)
-
-          // FIXME remove
-          if (Thread.currentThread().getName.contains("akka.actor.default-dispatcher"))
-            throw new RuntimeException("Wrong akka.actor.default-dispatcher")
-
           session.selectTagSequenceNrs(tag, bucket, fromOffset, toOffset)
         })
         .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUuid("timestamp")))
         .toMat(Sink.fold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) {
           case (acc, (pid, tagPidSequenceNr, timestamp)) =>
-            // FIXME remove
-            if (Thread.currentThread().getName.contains("akka.actor.default-dispatcher"))
-              throw new RuntimeException("Wrong akka.actor.default-dispatcher")
-
             val (newTagPidSequenceNr, newTimestamp) = acc.get(pid) match {
               case None =>
                 (tagPidSequenceNr, timestamp)

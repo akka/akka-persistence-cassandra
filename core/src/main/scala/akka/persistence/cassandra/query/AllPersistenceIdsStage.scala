@@ -121,10 +121,6 @@ import scala.concurrent.duration._
       }
 
       def onPull(): Unit = {
-        // FIXME remove
-        if (Thread.currentThread().getName.contains("akka.actor.default-dispatcher"))
-          throw new RuntimeException("Wrong akka.actor.default-dispatcher")
-
         flush()
         if (buffer.isEmpty && isAvailable(out)) {
           maybeResultSet match {

@@ -349,9 +349,6 @@ class CassandraReadJournal protected (
     val deserializeEventAsync = querySettings.deserializationParallelism > 1
     Flow[EventsByTagStage.UUIDRow].mapAsync(querySettings.deserializationParallelism) { uuidRow =>
       val row = uuidRow.row
-      // FIXME remove
-      if (Thread.currentThread().getName.contains("akka.actor.default-dispatcher"))
-        throw new RuntimeException("Wrong akka.actor.default-dispatcher")
       eventsByTagDeserializer.deserializeEvent(row, deserializeEventAsync).map {
         case DeserializedEvent(payload, metadata) =>
           val repr = mapEvent(
@@ -657,10 +654,6 @@ class CassandraReadJournal protected (
             fastForwardEnabled))
         .named(name)
     }.mapAsync(querySettings.deserializationParallelism) { row =>
-        // FIXME remove
-        if (Thread.currentThread().getName.contains("akka.actor.default-dispatcher"))
-          throw new RuntimeException("Wrong akka.actor.default-dispatcher")
-
         extractor.extract(row, deserializeEventAsync)
       }
       .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
