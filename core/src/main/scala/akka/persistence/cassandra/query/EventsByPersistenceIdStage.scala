@@ -344,7 +344,6 @@ import akka.persistence.cassandra.PluginSettings
         tryPushOne()
 
       @tailrec private def tryPushOne(): Unit = {
-
         queryState match {
           case QueryResult(rs, empty, switchPartition) if isAvailable(out) =>
             def afterExhausted(): Unit = {

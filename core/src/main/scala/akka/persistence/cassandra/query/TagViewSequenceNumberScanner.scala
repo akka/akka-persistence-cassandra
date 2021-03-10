@@ -23,7 +23,10 @@ import scala.concurrent.duration.{ Duration, FiniteDuration }
 import scala.concurrent.{ ExecutionContext, Future }
 
 import akka.persistence.cassandra.BucketSize
+import akka.stream.ActorAttributes
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
+import akka.stream.scaladsl.Keep
+import akka.stream.scaladsl.Sink
 
 /**
  * INTERNAL API
@@ -46,7 +49,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class TagViewSequenceNumberScanner(session: Session)(
+@InternalApi private[akka] class TagViewSequenceNumberScanner(session: Session, pluginDispatcher: String)(
     implicit materializer: Materializer,
     @nowarn("msg=never used") ec: ExecutionContext) {
   private val log = Logging(materializer.system, getClass)
@@ -97,7 +100,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
           session.selectTagSequenceNrs(tag, bucket, fromOffset, toOffset)
         })
         .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUuid("timestamp")))
-        .runFold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) {
+        .toMat(Sink.fold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) {
           case (acc, (pid, tagPidSequenceNr, timestamp)) =>
             val (newTagPidSequenceNr, newTimestamp) = acc.get(pid) match {
               case None =>
@@ -109,7 +112,9 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
                   (currentTagPidSequenceNr, currentTimestamp)
             }
             acc + (pid -> ((newTagPidSequenceNr, newTimestamp)))
-        }
+        })(Keep.right)
+        .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
+        .run()
     }
 
     if (scanningPeriod > Duration.Zero) {
