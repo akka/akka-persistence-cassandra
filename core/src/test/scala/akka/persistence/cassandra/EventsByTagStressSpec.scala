@@ -5,7 +5,6 @@
 package akka.persistence.cassandra
 
 import akka.persistence.cassandra.query.TestActor
-import akka.persistence.cassandra.query._
 import akka.persistence.journal.Tagged
 import akka.persistence.query.NoOffset
 import akka.stream.testkit.TestSubscriber
