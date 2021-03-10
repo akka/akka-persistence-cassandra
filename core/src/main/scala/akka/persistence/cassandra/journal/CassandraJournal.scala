@@ -33,7 +33,7 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
 
 import scala.annotation.tailrec
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.immutable
 import scala.collection.immutable.Seq
 import scala.concurrent._
