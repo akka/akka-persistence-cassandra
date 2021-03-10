@@ -307,7 +307,7 @@ import akka.stream.scaladsl.Source
       reversed: List[SerializedAtomicWrite],
       currentGroup: List[SerializedAtomicWrite],
       grouped: List[List[SerializedAtomicWrite]]): List[List[SerializedAtomicWrite]] = reversed match {
-    case Nil => currentGroup +: grouped
+    case Nil => (currentGroup +: grouped).filterNot(_.isEmpty)
     case x :: xs if currentGroup.size + x.payload.size < journalSettings.maxMessageBatchSize =>
       groupedWrites(xs, x +: currentGroup, grouped)
     case x :: xs => groupedWrites(xs, List(x), currentGroup +: grouped)
@@ -354,6 +354,8 @@ import akka.stream.scaladsl.Source
 
   private def writeMessages(atomicWrites: Seq[SerializedAtomicWrite]): Future[Unit] = {
     // insert into the all_persistence_ids table for the first event, used by persistenceIds query
+    require(atomicWrites.nonEmpty)
+    require(atomicWrites.head.payload.nonEmpty)
     val allPersistenceId =
       if (settings.journalSettings.supportAllPersistenceIds && atomicWrites.head.payload.head.sequenceNr == 1L)
         preparedInsertIntoAllPersistenceIds.map(_.bind(atomicWrites.head.persistenceId)).flatMap(execute(_))
