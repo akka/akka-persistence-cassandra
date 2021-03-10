@@ -325,7 +325,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
                 usingOffset,
                 initialTagPidSequenceNrs,
                 scanner))
-        }.via(deserializeEventsByTagRow).mapMaterializedValue(_ => NotUsed)
+        }.via(deserializeEventsByTagRow)
+          .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
+          .mapMaterializedValue(_ => NotUsed)
 
       } catch {
         case NonFatal(e) =>
@@ -337,11 +339,11 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
 
   private def deserializeEventsByTagRow: Flow[EventsByTagStage.UUIDRow, UUIDPersistentRepr, NotUsed] = {
     val deserializeEventAsync = queryPluginConfig.deserializationParallelism > 1
-    Flow[EventsByTagStage.UUIDRow]
-      .mapAsync(queryPluginConfig.deserializationParallelism) { uuidRow =>
-        val row = uuidRow.row
-        eventsByTagDeserializer.deserializeEvent(row, deserializeEventAsync).map { payload =>
-          val repr = mapEvent(PersistentRepr(
+    Flow[EventsByTagStage.UUIDRow].mapAsync(queryPluginConfig.deserializationParallelism) { uuidRow =>
+      val row = uuidRow.row
+      eventsByTagDeserializer.deserializeEvent(row, deserializeEventAsync).map { payload =>
+        val repr = mapEvent(
+          PersistentRepr(
             payload,
             sequenceNr = uuidRow.sequenceNr,
             persistenceId = uuidRow.persistenceId,
@@ -349,10 +351,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
             deleted = false,
             sender = null,
             writerUuid = row.getString("writer_uuid")))
-          UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, repr)
-        }
+        UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, repr)
       }
-      .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
+    }
   }
 
   private def eventsByTagPrereqs(tag: String, usingOffset: Boolean, fromOffset: UUID)
@@ -377,7 +378,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
    */
   @InternalApi
   private[akka] lazy val tagViewScanner: Future[TagViewSequenceNumberScanner] = preparedSelectTagSequenceNrs.map { ps =>
-    new TagViewSequenceNumberScanner(TagViewSequenceNumberScanner.Session(session, ps))
+    new TagViewSequenceNumberScanner(
+      TagViewSequenceNumberScanner.Session(session, ps),
+      queryPluginConfig.pluginDispatcher)
   }
 
   /**
@@ -497,7 +500,9 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
                 usingOffset,
                 initialTagPidSequenceNrs,
                 scanner))
-        }.via(deserializeEventsByTagRow).mapMaterializedValue(_ => NotUsed)
+        }.via(deserializeEventsByTagRow)
+          .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
+          .mapMaterializedValue(_ => NotUsed)
 
       } catch {
         case NonFatal(e) =>
@@ -630,7 +635,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
               customRetryPolicy),
             queryPluginConfig,
             fastForwardEnabled))
-        .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
         .named(name)
     }.mapAsync(queryPluginConfig.deserializationParallelism) { row =>
         extractor.extract(row, deserializeEventAsync)
@@ -706,7 +710,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       (s, ps) =>
         Source
           .fromGraph(new AllPersistenceIdsStage(refreshInterval, queryPluginConfig.fetchSize, ps, s))
-          .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
-          .named(name))
+          .named(name)).withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
 }
