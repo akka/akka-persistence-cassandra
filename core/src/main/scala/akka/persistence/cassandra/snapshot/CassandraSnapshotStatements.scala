@@ -117,18 +117,18 @@ import akka.persistence.cassandra.FutureDone
 
     if (snapshotSettings.tablesAutoCreate) {
       // reason for setSchemaMetadataEnabled is that it speed up tests by multiple factors
-      session.setSchemaMetadataEnabled(false)
+//      session.setSchemaMetadataEnabled(false)
       val result = for {
         _ <- keyspace
         _ <- session.executeAsync(createTable).toScala
       } yield {
-        session.setSchemaMetadataEnabled(null)
+//        session.setSchemaMetadataEnabled(null)
         Done
       }
       result.recoverWith {
         case e =>
           log.warning("Failed to create snapshot keyspace and tables: {}", e)
-          session.setSchemaMetadataEnabled(null)
+//          session.setSchemaMetadataEnabled(null)
           FutureDone
       }
     } else {

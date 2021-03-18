@@ -18,6 +18,7 @@ import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
@@ -37,6 +38,8 @@ object CassandraLifecycle {
     akka.persistence.journal.plugin = "akka.persistence.cassandra.journal"
     akka.persistence.snapshot-store.plugin = "akka.persistence.cassandra.snapshot"
     akka.persistence.cassandra.journal.circuit-breaker.call-timeout = 30s
+    akka.persistence.cassandra.journal.max-failures = 20
+    akka.persistence.cassandra.snapshot.max-failures = 20
     akka.persistence.cassandra.events-by-tag.first-time-bucket = "$firstTimeBucket"
     akka.test.single-expect-default = 20s
     akka.test.filter-leeway = 20s
@@ -45,6 +48,25 @@ object CassandraLifecycle {
     akka.actor.allow-java-serialization = on
     akka.actor.warn-about-java-serializer-usage = off
     akka.use-slf4j = off
+    
+    datastax-java-driver { 
+      basic.contact-points = [ "cassandra.eu-central-1.amazonaws.com:9142"]
+      basic.request.consistency = LOCAL_QUORUM
+      basic.load-balancing-policy {
+        class = DefaultLoadBalancingPolicy
+        local-datacenter = eu-central-1
+      }
+      advanced {
+        auth-provider = {
+          class = software.aws.mcs.auth.SigV4AuthProvider
+          aws-region = eu-central-1
+        }
+        ssl-engine-factory {
+          class = DefaultSslEngineFactory
+        }
+      }
+    }
+    
     """).withFallback(CassandraSpec.enableAutocreate).resolve()
 
   def awaitPersistenceInit(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
@@ -112,27 +134,48 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   }
 
   override protected def beforeAll(): Unit = {
-    awaitPersistenceInit()
+    try {
+      awaitPersistenceInit()
+    } catch {
+      case NonFatal(e) =>
+//        Try(externalCassandraCleanup())
+        shutdown(system, verifySystemShutdown = false)
+        throw e
+    }
     super.beforeAll()
   }
 
+  private var initOk = false
+
   def awaitPersistenceInit(): Unit = {
     CassandraLifecycle.awaitPersistenceInit(system)
+    initOk = true
   }
 
   override protected def afterAll(): Unit = {
-    externalCassandraCleanup()
+    if (initOk)
+      externalCassandraCleanup()
     shutdown(system, verifySystemShutdown = true)
     super.afterAll()
   }
 
   def dropKeyspaces(): Unit = {
-    val journalKeyspace = system.settings.config.getString("akka.persistence.cassandra.journal.keyspace")
-    val snapshotKeyspace = system.settings.config.getString("akka.persistence.cassandra.snapshot.keyspace")
+    val journalKeyspace = "akka" // FIXME system.settings.config.getString("akka.persistence.cassandra.journal.keyspace")
+    val snapshotKeyspace = "akka" // FIXME system.settings.config.getString("akka.persistence.cassandra.snapshot.keyspace")
     val dropped = Try {
-      cluster.execute(s"drop keyspace if exists ${journalKeyspace}")
-      cluster.execute(s"drop keyspace if exists ${snapshotKeyspace}")
+//      cluster.execute(s"drop table if exists ${journalKeyspace}.all_persistence_ids")
+//      cluster.execute(s"drop table if exists ${journalKeyspace}.messages")
+//      cluster.execute(s"drop table if exists ${journalKeyspace}.metadata")
+//      cluster.execute(s"drop table if exists ${journalKeyspace}.tag_scanning")
+//      cluster.execute(s"drop table if exists ${journalKeyspace}.tag_views")
+//      cluster.execute(s"drop table if exists ${journalKeyspace}.tag_write_progress")
+//
+//      cluster.execute(s"drop table if exists ${snapshotKeyspace}.snapshots")
+
+      //cluster.execute(s"drop keyspace if exists ${journalKeyspace}")
+      //cluster.execute(s"drop keyspace if exists ${snapshotKeyspace}")
     }
+
     dropped match {
       case Failure(t) => system.log.error(t, "Failed to drop keyspaces {} {}", journalKeyspace, snapshotKeyspace)
       case Success(_) =>

@@ -8,8 +8,8 @@
     </encoder>
   </appender>
   <logger name="org.apache.cassandra" level="ERROR" />
-  <logger name="com.datastax" level="INFO" />
-  <logger name="io.netty" level="ERROR" />
+  <logger name="com.datastax" level="DEBUG" />
+  <logger name="io.netty" level="DEBUG" />
   <root level="INFO">
     <appender-ref ref="CONSOLE" />
   </root>

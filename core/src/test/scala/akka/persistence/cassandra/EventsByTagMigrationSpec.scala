@@ -52,8 +52,8 @@ object EventsByTagMigrationSpec {
        }
        akka.persistence.cassandra {
          journal {
-           keyspace-autocreate = true
-           tables-autocreate = true
+           keyspace-autocreate = false
+           tables-autocreate = false
          }
          query {
            events-by-persistence-id-gap-timeout = 1s
