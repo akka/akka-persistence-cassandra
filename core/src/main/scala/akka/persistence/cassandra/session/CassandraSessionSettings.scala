@@ -26,4 +26,5 @@ class CassandraSessionSettings(val config: Config) {
   val connectionRetries: Int = config.getInt("connect-retries")
   val connectionRetryDelay: FiniteDuration =
     config.getDuration("connect-retry-delay", TimeUnit.MILLISECONDS).millis
+  val pluginDispatcher: String = config.getString("plugin-dispatcher")
 }

@@ -15,7 +15,6 @@ import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, Listenabl
 import akka.stream.testkit.scaladsl.TestSink
 import com.datastax.driver.core.{ BatchStatement, Session, SimpleStatement }
 import com.typesafe.config.ConfigFactory
-
 import scala.collection.JavaConverters._
 import scala.compat.java8.FutureConverters._
 import scala.compat.java8.OptionConverters._
@@ -90,7 +89,8 @@ class CassandraSessionSpec extends CassandraSpec(CassandraSessionSpec.config) {
     "select prepared statement as Source" in {
       val stmt = Await.result(session.prepare("SELECT count FROM testcounts WHERE partition = ?").toScala, 5.seconds)
       val bound = stmt.bind("A")
-      val rows = session.select(bound).asScala
+      val rows =
+        session.select(bound).asScala
       val probe = rows.map(_.getLong("count")).runWith(TestSink.probe[Long])
       probe.within(10.seconds) {
         probe.request(10).expectNextUnordered(1L, 2L, 3L, 4L).expectComplete()
