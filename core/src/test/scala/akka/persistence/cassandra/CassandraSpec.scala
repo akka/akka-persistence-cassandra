@@ -159,7 +159,7 @@ abstract class CassandraSpec(
         override def write(b: Int): Unit = oldOut.write(b)
       }) {
         override def println(x: Any): Unit =
-          oldOut.println(prefix + String.valueOf(x).replaceAllLiterally("\n", s"\n$prefix"))
+          oldOut.println(prefix + String.valueOf(x).replace("\n", s"\n$prefix"))
       }
 
     Console.withOut(prefixingOut) {
@@ -171,7 +171,7 @@ abstract class CassandraSpec(
     try {
       if (failed && dumpRowsOnFailure) {
         println("RowDump::")
-        import scala.collection.JavaConverters._
+        import scala.jdk.CollectionConverters._
         if (system.settings.config.getBoolean("akka.persistence.cassandra.events-by-tag.enabled")) {
           println("tag_views")
           cluster

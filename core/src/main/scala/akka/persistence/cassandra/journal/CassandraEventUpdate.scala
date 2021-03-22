@@ -10,7 +10,7 @@ import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row, Statement }
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import java.lang.{ Long => JLong }
 
