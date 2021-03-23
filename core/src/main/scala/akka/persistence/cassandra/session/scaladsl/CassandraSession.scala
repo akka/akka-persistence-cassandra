@@ -45,6 +45,7 @@ import com.datastax.driver.core.Session
 import com.datastax.driver.core.Statement
 import akka.annotation.InternalApi
 import akka.persistence.cassandra.FutureDone
+import akka.stream.ActorAttributes
 
 /**
  * Data Access Object for Cassandra. The statements are expressed in
@@ -309,7 +310,9 @@ final class CassandraSession(
   def select(stmt: Statement): Source[Row, NotUsed] = {
     if (stmt.getConsistencyLevel == null)
       stmt.setConsistencyLevel(readConsistency)
-    Source.fromGraph(new SelectSource(Future.successful(stmt)))
+    Source
+      .fromGraph(new SelectSource(Future.successful(stmt)))
+      .withAttributes(ActorAttributes.dispatcher(settings.pluginDispatcher))
   }
 
   /**
@@ -330,7 +333,7 @@ final class CassandraSession(
       bs.setConsistencyLevel(readConsistency)
       bs
     }
-    Source.fromGraph(new SelectSource(bound))
+    Source.fromGraph(new SelectSource(bound)).withAttributes(ActorAttributes.dispatcher(settings.pluginDispatcher))
   }
 
   /**
@@ -349,6 +352,7 @@ final class CassandraSession(
       stmt.setConsistencyLevel(readConsistency)
     Source
       .fromGraph(new SelectSource(Future.successful(stmt)))
+      .withAttributes(ActorAttributes.dispatcher(settings.pluginDispatcher))
       .runWith(Sink.seq)
       .map(_.toVector) // Sink.seq returns Seq, not immutable.Seq (compilation issue in Eclipse)
   }
