@@ -1,6 +1,6 @@
-language: scala
-sudo: true
-dist: trusty
+version: ~> 1.0 # needed for imports
+
+import: scala/scala-dev:travis/default.yml
 
 services:
   - docker
@@ -10,13 +10,20 @@ before_install:
   - git remote set-branches --add origin master && git fetch
   # fetch full history for correct current and previous version detection
   - git fetch --unshallow
-  # using jabba for custom jdk management
-  - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.1/install.sh | bash && . ~/.jabba/jabba.sh
-  - jabba install adopt@~1.8-0
-  - jabba install adopt@~1.11-0
+  # latest JDK 8 is installed by the super YAML (in https://github.com/scala/scala-dev/blob/scala-dev/travis/default.yml) 
+  # via `env:` below. We also manually install 11.0.10 manually.
+  - export JDK11=11.0.10.hs-adpt
+  - sdk install java $JDK11
+  # then, the variable $sdkJava, created in https://github.com/scala/scala-dev/blob/scala-dev/travis/default.yml, contains 
+  # the name of the JDK8 version we need.
+  - export JDK8=$sdkJava
 
 before_script:
   - unset _JAVA_OPTIONS
+
+# latest JDK 8 will be installed by the super YAML (in https://github.com/scala/scala-dev/blob/scala-dev/travis/default.yml)
+env:
+  - ADOPTOPENJDK=8
 
 jobs:
   include:
@@ -35,9 +42,9 @@ jobs:
       name: Create site with Paradox
 
     - stage: test
-      script: jabba use adopt@~1.8-0 && java -version && docker-compose up -d cassandra && sbt +test
+      script: sdk use java $JDK8 && java -version && docker-compose up -d cassandra && sbt +test
       name: Run all tests with Jdk 8
-    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra && sbt +test
+    - script: sdk use java $JDK11 && java -version && docker-compose up -d cassandra && sbt +test
       name: Run all tests with Jdk 11
 
     - stage: whitesource
@@ -76,7 +83,6 @@ cache:
   directories:
     - $HOME/.ivy2/cache
     - $HOME/.sbt/boot
-    - $HOME/.jabba/jdk
 
 env:
   global:
