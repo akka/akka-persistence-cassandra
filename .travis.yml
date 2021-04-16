@@ -10,13 +10,10 @@ before_install:
   - git remote set-branches --add origin master && git fetch
   # fetch full history for correct current and previous version detection
   - git fetch --unshallow
-  # latest JDK 8 is installed by the super YAML (in https://github.com/scala/scala-dev/blob/scala-dev/travis/default.yml) 
-  # via `env:` below. We also manually install 11.0.10 manually.
-  - export JDK11=11.0.10.hs-adpt
+  - export JDK11=$(sdk list java | grep -o " 11\.[0-9\.]*hs-adpt" | head -1 | cut -c2-)
   - sdk install java $JDK11
-  # then, the variable $sdkJava, created in https://github.com/scala/scala-dev/blob/scala-dev/travis/default.yml, contains 
-  # the name of the JDK8 version we need.
-  - export JDK8=$sdkJava
+  - export JDK8=$(sdk list java | grep -o " 8\.[0-9\.]*hs-adpt" | head -1 | cut -c2-)
+  - sdk install java $JDK8
 
 before_script:
   - unset _JAVA_OPTIONS
@@ -75,15 +72,22 @@ stages:
 after_failure:
   - docker-compose logs
 
+
 before_cache:
-  - find $HOME/.ivy2/ -name "ivydata-*.properties" -print -delete
-  - find $HOME/.sbt   -name "*.lock"               -print -delete
+  - rm -fv $HOME/.ivy2/.sbt.ivy.lock
+  - rm -fv $HOME/.sdkman/var/broadcast
+  - rm -fv $HOME/.sdkman/var/broadcast_id
+  - find $HOME/.ivy2/cache -name "ivydata-*.properties"     -print -delete
+  - find $HOME/.sbt        -name "*.lock"                   -print -delete
+  - find $HOME/.sbt        -name "*compiler-bridge_*-bin-*" -print -delete
 
 cache:
   directories:
     - $HOME/.ivy2/cache
-    - $HOME/.sbt/boot
-
+    - $HOME/.sbt
+    - $HOME/.sdkman
+    - $HOME/.cache/coursier
+    
 env:
   global:
     # encrypt with: travis encrypt WHITESOURCE_PASSWORD=...
