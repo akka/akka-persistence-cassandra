@@ -7,7 +7,6 @@ package akka.persistence.cassandra.journal
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 import java.util.{ UUID, HashMap => JHMap, Map => JMap }
-
 import akka.Done
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor.ActorRef
@@ -23,20 +22,21 @@ import akka.pattern.pipe
 import akka.persistence._
 import akka.persistence.cassandra.EventWithMetaData.UnknownMetaData
 import akka.persistence.cassandra._
-import akka.persistence.cassandra.journal.TagWriters.{ BulkTagWrite, TagWrite, TagWritersSession }
+import akka.persistence.cassandra.journal.TagWriters.{ TagWritersSession, TagWrite, BulkTagWrite }
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.Extractors
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
+import akka.persistence.journal.{ Tagged, AsyncWriteJournal }
 import akka.persistence.query.PersistenceQuery
-import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
+import akka.serialization.{ Serialization, SerializationExtension, AsyncSerializer }
+import akka.stream.ActorAttributes
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
 import com.datastax.driver.core._
 import com.datastax.driver.core.exceptions.DriverException
 import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
-import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
+import com.datastax.driver.core.policies.{ RetryPolicy, LoggingRetryPolicy }
 import com.datastax.driver.core.utils.{ Bytes, UUIDs }
 import com.typesafe.config.Config
 
@@ -45,7 +45,7 @@ import scala.collection.immutable
 import scala.collection.immutable.Seq
 import scala.concurrent._
 import scala.util.control.NonFatal
-import scala.util.{ Failure, Success, Try }
+import scala.util.{ Try, Success, Failure }
 
 /**
  * Journal implementation of the cassandra plugin.
@@ -639,6 +639,8 @@ class CassandraJournal(cfg: Config)
         readConsistency,
         retryPolicy,
         extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
+      // run the query on the journal dispatcher (not the queries dispatcher)
+      .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
       .map(_.sequenceNr)
       .runWith(Sink.headOption)
       .map {
