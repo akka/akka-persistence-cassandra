@@ -12,7 +12,6 @@ import akka.persistence.cassandra.journal.CassandraJournal.Tag
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.persistence.cassandra.journal.TagWriters.TagWrite
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extractors, TaggedPersistentRepr }
-import akka.stream.ActorAttributes
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.OptionVal
 
@@ -70,10 +69,10 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
               "asyncReplayMessages",
               someReadConsistency,
               someReadRetryPolicy,
-              extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
+              extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization),
+              // run the query on the journal dispatcher (not the queries dispatcher)
+              dispatcher = sessionSettings.pluginDispatcher)
             .mapAsync(1)(sendMissingTagWrite(tp, tagWrites.get))
-            // run the query on the journal dispatcher (not the queries dispatcher)
-            .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
         }))
         .map(te => queries.mapEvent(te.pr))
         .runForeach(replayCallback)
@@ -91,9 +90,9 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
           "asyncReplayMessages",
           someReadConsistency,
           someReadRetryPolicy,
-          extractor = Extractors.persistentRepr(eventDeserializer, serialization))
-        // run the query on the journal dispatcher (not the queries dispatcher)
-        .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
+          extractor = Extractors.persistentRepr(eventDeserializer, serialization),
+          // run the query on the journal dispatcher (not the queries dispatcher)
+          dispatcher = sessionSettings.pluginDispatcher)
         .map(p => queries.mapEvent(p.persistentRepr))
         .runForeach(replayCallback)
         .map(_ => ())
@@ -124,7 +123,9 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
           "asyncReplayMessagesPreSnapshot",
           someReadConsistency,
           someReadRetryPolicy,
-          Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization))
+          Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization),
+          // run the query on the journal dispatcher (not the queries dispatcher)
+          dispatcher = sessionSettings.pluginDispatcher)
         .mapAsync(1) { t =>
           t.tagged match {
             case OptionVal.Some(tpr) =>
@@ -132,8 +133,6 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
             case OptionVal.None => FutureDone // no tags, skip
           }
         }
-        // run the query on the journal dispatcher (not the queries dispatcher)
-        .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
         .runWith(Sink.ignore)
     } else {
       log.debug(

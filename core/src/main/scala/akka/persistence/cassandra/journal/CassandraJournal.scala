@@ -29,7 +29,6 @@ import akka.persistence.cassandra.session.scaladsl.CassandraSession
 import akka.persistence.journal.{ AsyncWriteJournal, Tagged }
 import akka.persistence.query.PersistenceQuery
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
-import akka.stream.ActorAttributes
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
 import akka.util.OptionVal
@@ -638,9 +637,9 @@ class CassandraJournal(cfg: Config)
         "asyncReadLowestSequenceNr",
         readConsistency,
         retryPolicy,
-        extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
-      // run the query on the journal dispatcher (not the queries dispatcher)
-      .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
+        extractor = Extractors.sequenceNumber(eventDeserializer, serialization),
+        // run the query on the journal dispatcher (not the queries dispatcher)
+        dispatcher = sessionSettings.pluginDispatcher)
       .map(_.sequenceNr)
       .runWith(Sink.headOption)
       .map {
