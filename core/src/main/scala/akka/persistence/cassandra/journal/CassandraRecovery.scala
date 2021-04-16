@@ -12,8 +12,10 @@ import akka.persistence.cassandra.journal.CassandraJournal.Tag
 import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.persistence.cassandra.journal.TagWriters.TagWrite
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extractors, TaggedPersistentRepr }
+import akka.stream.ActorAttributes
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.OptionVal
+
 import scala.concurrent._
 
 trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatements {
@@ -70,6 +72,8 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
               someReadRetryPolicy,
               extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
             .mapAsync(1)(sendMissingTagWrite(tp, tagWrites.get))
+            // run the query on the journal dispatcher (not the queries dispatcher)
+            .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
         }))
         .map(te => queries.mapEvent(te.pr))
         .runForeach(replayCallback)
@@ -88,6 +92,8 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
           someReadConsistency,
           someReadRetryPolicy,
           extractor = Extractors.persistentRepr(eventDeserializer, serialization))
+        // run the query on the journal dispatcher (not the queries dispatcher)
+        .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
         .map(p => queries.mapEvent(p.persistentRepr))
         .runForeach(replayCallback)
         .map(_ => ())
@@ -126,6 +132,8 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
             case OptionVal.None => FutureDone // no tags, skip
           }
         }
+        // run the query on the journal dispatcher (not the queries dispatcher)
+        .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
         .runWith(Sink.ignore)
     } else {
       log.debug(
