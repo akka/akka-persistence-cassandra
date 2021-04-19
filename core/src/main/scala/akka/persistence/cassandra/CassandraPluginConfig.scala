@@ -14,10 +14,6 @@ import akka.persistence.cassandra.session.CassandraSessionSettings
 
 case class StorePathPasswordConfig(path: String, password: String)
 
-object CassandraDispatchers {
-  val nameOfDefaultDispatcher = "cassandra-plugin-default-dispatcher"
-}
-
 class CassandraPluginConfig(system: ActorSystem, config: Config) {
 
   import akka.persistence.cassandra.CassandraPluginConfig._
