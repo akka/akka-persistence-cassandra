@@ -39,9 +39,9 @@ jobs:
       name: Create site with Paradox
 
     - stage: test
-      script: sdk use java $JDK8 && java -version && docker-compose up -d cassandra && sbt +test
+      script: date && sdk use java $JDK8 && java -version && date && docker-compose up -d cassandra && date && sbt +test && date
       name: Run all tests with Jdk 8
-    - script: sdk use java $JDK11 && java -version && docker-compose up -d cassandra && sbt +test
+    - script: date && sdk use java $JDK11 && java -version && date && docker-compose up -d cassandra && date && sbt +test && date
       name: Run all tests with Jdk 11
 
     - stage: whitesource
