@@ -207,7 +207,8 @@ abstract class CassandraSpec(
         100,
         None,
         "test",
-        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
+        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)),
+        dispatcher = "cassandra-plugin-default-dispatcher")
       .toMat(Sink.seq)(Keep.right)
       .run()
       .futureValue
@@ -222,7 +223,8 @@ abstract class CassandraSpec(
         100,
         None,
         "test",
-        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
+        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)),
+        dispatcher = "cassandra-plugin-default-dispatcher")
       .map { tpr =>
         (tpr.pr.payload, tpr.tags)
       }

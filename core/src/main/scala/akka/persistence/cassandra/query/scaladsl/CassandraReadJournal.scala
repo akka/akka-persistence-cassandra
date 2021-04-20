@@ -7,7 +7,6 @@ package akka.persistence.cassandra.query.scaladsl
 import java.net.URLEncoder
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
-
 import akka.{ Done, NotUsed }
 import akka.actor.ExtendedActorSystem
 import akka.annotation.InternalApi
@@ -547,7 +546,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       Some(queryPluginConfig.refreshInterval),
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization),
+      dispatcher = queryPluginConfig.pluginDispatcher)
       .mapMaterializedValue(_ => NotUsed)
       .map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
@@ -569,7 +569,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       queryPluginConfig.fetchSize,
       None,
       s"currentEventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization))
+      extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization),
+      dispatcher = queryPluginConfig.pluginDispatcher)
       .mapMaterializedValue(_ => NotUsed)
       .map(p => mapEvent(p.persistentRepr))
       .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
@@ -592,7 +593,10 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       refreshInterval.orElse(Some(queryPluginConfig.refreshInterval)),
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentRepr(eventsByPersistenceIdDeserializer, serialization),
-      fastForwardEnabled = true).map(p => mapEvent(p.persistentRepr)).mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
+      fastForwardEnabled = true,
+      dispatcher = queryPluginConfig.pluginDispatcher)
+      .map(p => mapEvent(p.persistentRepr))
+      .mapConcat(r => toEventEnvelopes(r, r.sequenceNr))
 
   /**
    * INTERNAL API: This is a low-level method that return journal events as they are persisted.
@@ -612,7 +616,8 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       customConsistencyLevel: Option[ConsistencyLevel] = None,
       customRetryPolicy: Option[RetryPolicy] = None,
       extractor: Extractor[T],
-      fastForwardEnabled: Boolean = false): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
+      fastForwardEnabled: Boolean = false,
+      dispatcher: String): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
 
     val deserializeEventAsync = queryPluginConfig.deserializationParallelism > 1
 
@@ -639,7 +644,7 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
     }.mapAsync(queryPluginConfig.deserializationParallelism) { row =>
         extractor.extract(row, deserializeEventAsync)
       }
-      .withAttributes(ActorAttributes.dispatcher(queryPluginConfig.pluginDispatcher))
+      .withAttributes(ActorAttributes.dispatcher(dispatcher))
   }
 
   /**

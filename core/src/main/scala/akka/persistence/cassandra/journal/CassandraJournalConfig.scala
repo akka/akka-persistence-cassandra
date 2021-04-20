@@ -70,6 +70,8 @@ class CassandraJournalConfig(system: ActorSystem, config: Config)
 
   val eventsByTagEnabled: Boolean = config.getBoolean("events-by-tag.enabled")
 
+  val pluginDispatcher: String = config.getString("plugin-dispatcher")
+
   val bucketSize: BucketSize =
     BucketSize.fromString(config.getString("events-by-tag.bucket-size"))
 
