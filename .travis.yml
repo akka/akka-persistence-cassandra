@@ -54,7 +54,7 @@ jobs:
       script: |-
         export JAVA_HOME=/usr/lib/jvm/adoptopenjdk-8-hotspot-amd64
         export PATH=/usr/lib/jvm/adoptopenjdk-8-hotspot-amd64/bin:$PATH
-        jabba use adopt@~1.8-0 && java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis +test
+        java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis +test
       name: Run all tests with Jdk 8
     - script: java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis +test
       name: Run all tests with Jdk 11
