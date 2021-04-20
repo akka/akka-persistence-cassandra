@@ -7,7 +7,6 @@ package akka.persistence.cassandra.journal
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 import java.util.{ UUID, HashMap => JHMap, Map => JMap }
-
 import akka.Done
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor.ActorRef
@@ -638,7 +637,9 @@ class CassandraJournal(cfg: Config)
         "asyncReadLowestSequenceNr",
         readConsistency,
         retryPolicy,
-        extractor = Extractors.sequenceNumber(eventDeserializer, serialization))
+        extractor = Extractors.sequenceNumber(eventDeserializer, serialization),
+        // run the query on the journal dispatcher (not the queries dispatcher)
+        dispatcher = sessionSettings.pluginDispatcher)
       .map(_.sequenceNr)
       .runWith(Sink.headOption)
       .map {

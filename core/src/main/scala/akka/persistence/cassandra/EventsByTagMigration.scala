@@ -111,9 +111,9 @@ class EventsByTagMigration(
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](readJournalNamespace)
   private implicit val materialiser = ActorMaterializer()(system)
 
-  implicit val ec = system.dispatchers.lookup(system.settings.config.getString(s"$journalNamespace.plugin-dispatcher"))
   override def config: CassandraJournalConfig =
     new CassandraJournalConfig(system, system.settings.config.getConfig(journalNamespace))
+  implicit val ec = system.dispatchers.lookup(config.pluginDispatcher)
   val session: CassandraSession = {
     new CassandraSession(
       system,
@@ -240,7 +240,8 @@ class EventsByTagMigration(
                   None,
                   s"migrateToTag-$pid",
                   extractor =
-                    EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system))
+                    EventsByTagMigration.rawPayloadOldTagSchemaExtractor(config.bucketSize, eventDeserializer, system),
+                  dispatcher = config.pluginDispatcher)
                 .map(sendMissingTagWriteRaw(tp, tagWriters))
                 .grouped(periodicFlush)
                 .mapAsync(1)(_ => (tagWriters ? FlushAllTagWriters(timeout)).mapTo[AllFlushed.type])

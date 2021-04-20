@@ -1,19 +1,39 @@
+version: ~> 1.0
+
+os: linux
+dist: xenial
+
 language: scala
 sudo: true
-dist: trusty
 
 services:
   - docker
+
+addons:
+  apt:
+    sources:
+      # Official debian package for AdoptOpenJDK from https://adoptopenjdk.net/installation.html#linux-pkg
+      - sourceline: deb https://adoptopenjdk.jfrog.io/adoptopenjdk/deb/ xenial main
+        key_url: https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public
+    packages:
+      - adoptopenjdk-8-hotspot
+      - adoptopenjdk-11-hotspot
 
 before_install:
   # make comparing to origin/master work
   - git remote set-branches --add origin master && git fetch
   # fetch full history for correct current and previous version detection
   - git fetch --unshallow
-  # using jabba for custom jdk management
-  - curl -sL https://raw.githubusercontent.com/shyiko/jabba/0.11.1/install.sh | bash && . ~/.jabba/jabba.sh
-  - jabba install adopt@~1.8-0
-  - jabba install adopt@~1.11-0
+  - whereis java
+  - export JAVA_HOME=/usr/lib/jvm/adoptopenjdk-8-hotspot-amd64
+  - export PATH=/usr/lib/jvm/adoptopenjdk-8-hotspot-amd64/bin:$PATH
+  - java -version
+
+  # Initialize launcher from the correct URL so that later sbt runs work out of the box.
+  # Travis' default sbt launch script refers to `repo.scala-sbt.org` for downloading the launcher
+  # which currently doesn't work any more
+  - sbt -sbt-launch-repo https://repo1.maven.org/maven2 exit
+
 
 before_script:
   - unset _JAVA_OPTIONS
@@ -35,10 +55,14 @@ jobs:
       name: Create site with Paradox
 
     - stage: test
-      script: jabba use adopt@~1.8-0 && java -version && docker-compose up -d cassandra && sbt +test
       name: Run all tests with Jdk 8
-    - script: jabba use adopt@~1.11-0 && java -version && docker-compose up -d cassandra && sbt +test
-      name: Run all tests with Jdk 11
+      script: java -version && docker-compose up -d cassandra && date && sbt +test && date
+    - name: Run all tests with Jdk 11
+      script: |-
+        export JAVA_HOME=/usr/lib/jvm/adoptopenjdk-11-hotspot-amd64
+        export PATH=/usr/lib/jvm/adoptopenjdk-11-hotspot-amd64/bin:$PATH
+        java -version && docker-compose up -d cassandra && date && sbt +test && date
+
 
     - stage: whitesource
       name: White Source
@@ -76,7 +100,6 @@ cache:
   directories:
     - $HOME/.ivy2/cache
     - $HOME/.sbt/boot
-    - $HOME/.jabba/jdk
 
 env:
   global:
