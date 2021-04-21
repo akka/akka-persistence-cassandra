@@ -21,8 +21,8 @@ import scala.collection.immutable.Seq
 
 object CassandraSnapshotStoreConfiguration {
   lazy val config = ConfigFactory.parseString(s"""
-       akka.persistence.cassandra.journal.keyspace=CassandraSnapshotStoreSpec
-       akka.persistence.cassandra.snapshot.keyspace=CassandraSnapshotStoreSpecSnapshot
+       akka.persistence.cassandra.journal.keyspace=ignasi20210419002 # FIXME CassandraSnapshotStoreSpecSnapshot
+       akka.persistence.cassandra.snapshot.keyspace=ignasi20210419002 # FIXME CassandraSnapshotStoreSpecSnapshot
        datastax-java-driver {
          basic.session-name = CassandraSnapshotStoreSpec
          advanced.metrics {
@@ -53,6 +53,7 @@ class CassandraSnapshotStoreSpec
 
   // ByteArraySerializer
   val serId: JInteger = 4
+  val invalidSerId: JInteger = -1
 
   "A Cassandra snapshot store" must {
     "insert Cassandra metrics to Cassandra Metrics Registry" in {
@@ -76,12 +77,12 @@ class CassandraSnapshotStoreSpec
       cluster.execute(
         SimpleStatement.newInstance(
           writeSnapshot(withMeta = false),
-          pid,
-          17L: JLong,
-          123L: JLong,
-          serId,
-          "",
-          ByteBuffer.wrap("fail-1".getBytes("UTF-8"))))
+          pid, // persistence_id : text
+          17L: JLong, // sequence_nr : bigint
+          123L: JLong, // timestamp : bigint
+          "invalid_manifest", // ser_manifest : text
+          invalidSerId, // ser_id : int
+          ByteBuffer.wrap("fail-1".getBytes("UTF-8")))) // snapshot_data : blob
 
       cluster.execute(
         SimpleStatement.newInstance(
@@ -89,8 +90,8 @@ class CassandraSnapshotStoreSpec
           pid,
           18L: JLong,
           124L: JLong,
-          serId,
-          "",
+          "invalid_manifest",
+          invalidSerId,
           ByteBuffer.wrap("fail-2".getBytes("UTF-8"))))
 
       // load most recent snapshot, first two attempts will fail ...
@@ -115,8 +116,8 @@ class CassandraSnapshotStoreSpec
           pid,
           17L: JLong,
           123L: JLong,
-          serId,
-          "",
+          "invalid_manifest",
+          invalidSerId,
           ByteBuffer.wrap("fail-1".getBytes("UTF-8"))))
       cluster.execute(
         SimpleStatement.newInstance(
@@ -124,8 +125,8 @@ class CassandraSnapshotStoreSpec
           pid,
           18L: JLong,
           124L: JLong,
-          serId,
-          "",
+          "invalid_manifest",
+          invalidSerId,
           ByteBuffer.wrap("fail-2".getBytes("UTF-8"))))
       cluster.execute(
         SimpleStatement.newInstance(
@@ -133,8 +134,8 @@ class CassandraSnapshotStoreSpec
           pid,
           19L: JLong,
           125L: JLong,
-          serId,
-          "",
+          "invalid_manifest",
+          invalidSerId,
           ByteBuffer.wrap("fail-3".getBytes("UTF-8"))))
 
       // load most recent snapshot, first three attempts will fail ...
