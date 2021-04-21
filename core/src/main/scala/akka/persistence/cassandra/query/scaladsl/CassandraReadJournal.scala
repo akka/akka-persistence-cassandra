@@ -619,8 +619,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
       fastForwardEnabled: Boolean = false,
       dispatcher: String): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
 
-    println(s"# eventsByPersistenceId call on ${Thread.currentThread().getName}") // FIXME
-
     val deserializeEventAsync = queryPluginConfig.deserializationParallelism > 1
 
     createFutureSource(combinedEventsByPersistenceIdStmts) { (s, c) =>
@@ -644,7 +642,6 @@ class CassandraReadJournal(system: ExtendedActorSystem, cfg: Config)
             fastForwardEnabled))
         .named(name)
     }.mapAsync(queryPluginConfig.deserializationParallelism) { row =>
-        println(s"# eventsByPersistenceId deserialization mapAsync ${Thread.currentThread().getName}") // FIXME
         extractor.extract(row, deserializeEventAsync)
       }
       .withAttributes(ActorAttributes.dispatcher(dispatcher))
