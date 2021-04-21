@@ -295,7 +295,7 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
   }
 
   /**
-   * Delete all events from `tag_views` table related to to one single `persistenceId`.
+   * Delete all events from `tag_views` table related to one single `persistenceId`.
    * Events in `messages` (journal) table are not deleted and snapshots are not deleted.
    */
   def deleteAllTaggedEvents(persistenceId: String): Future[Done] = {
