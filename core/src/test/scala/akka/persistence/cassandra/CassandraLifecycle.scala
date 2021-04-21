@@ -134,7 +134,7 @@ object CassandraLifecycle {
     val probe = TestProbe()(system)
     val t0 = System.nanoTime()
     var n = 0
-    probe.within(45.seconds) {
+    probe.within(75.seconds) {
       probe.awaitAssert(
         {
           n += 1
@@ -144,7 +144,7 @@ object CassandraLifecycle {
               "persistenceInit" + n)
           a.tell("hello", probe.ref)
           try {
-            probe.expectMsg(5.seconds, "hello")
+            probe.expectMsg(10.seconds, "hello")
           } catch {
             case t: Throwable =>
               probe.watch(a)
