@@ -14,8 +14,10 @@ import akka.persistence.cassandra.journal.TagWriters.TagWrite
 import akka.persistence.cassandra.query.EventsByPersistenceIdStage.{ Extractors, TaggedPersistentRepr }
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.OptionVal
-
 import scala.concurrent._
+
+import akka.stream.ActorAttributes
+import akka.stream.scaladsl.Keep
 
 trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatements {
   this: CassandraJournal =>
@@ -74,9 +76,18 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
               dispatcher = sessionSettings.pluginDispatcher)
             .mapAsync(1)(sendMissingTagWrite(tp, tagWrites.get))
         }))
-        .map(te => queries.mapEvent(te.pr))
-        .runForeach(replayCallback)
-        .map(_ => ())
+        .map { te =>
+          println(s"# asyncReplayMessages mapEvent ${Thread.currentThread().getName}") // FIXME
+          queries.mapEvent(te.pr)
+        }
+        .map { p =>
+          println(s"# asyncReplayMessages replayCallback ${Thread.currentThread().getName}") // FIXME
+          replayCallback(p)
+        }
+        .toMat(Sink.ignore)(Keep.right)
+        .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
+        .run()
+        .map(_ => ())(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
 
     } else {
       queries
@@ -93,9 +104,18 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
           extractor = Extractors.persistentRepr(eventDeserializer, serialization),
           // run the query on the journal dispatcher (not the queries dispatcher)
           dispatcher = sessionSettings.pluginDispatcher)
-        .map(p => queries.mapEvent(p.persistentRepr))
-        .runForeach(replayCallback)
-        .map(_ => ())
+        .map { p =>
+          println(s"# asyncReplayMessages mapEvent ${Thread.currentThread().getName}") // FIXME
+          queries.mapEvent(p.persistentRepr)
+        }
+        .map { p =>
+          println(s"# asyncReplayMessages replayCallback ${Thread.currentThread().getName}") // FIXME
+          replayCallback(p)
+        }
+        .toMat(Sink.ignore)(Keep.right)
+        .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
+        .run()
+        .map(_ => ())(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
     }
   }
 
@@ -133,7 +153,9 @@ trait CassandraRecovery extends CassandraTagRecovery with TaggedPreparedStatemen
             case OptionVal.None => FutureDone // no tags, skip
           }
         }
-        .runWith(Sink.ignore)
+        .toMat(Sink.ignore)(Keep.right)
+        .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
+        .run()
     } else {
       log.debug(
         "[{}] Recovery is starting before the latest tag writes tag progress. Min progress [{}]. From sequence nr of recovery: [{}]",

@@ -14,6 +14,7 @@ import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
+
 import akka.Done
 import akka.actor._
 import akka.annotation.InternalApi
@@ -28,7 +29,9 @@ import akka.serialization.AsyncSerializer
 import akka.serialization.Serialization
 import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
+import akka.stream.ActorAttributes
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Sink
 import com.datastax.driver.core._
 import com.datastax.driver.core.policies.LoggingRetryPolicy
@@ -257,10 +260,14 @@ class CassandraSnapshotStore(cfg: Config)
         SnapshotMetadata(row.getString("persistence_id"), row.getLong("sequence_nr"), row.getLong("timestamp")))
       .dropWhile(_.timestamp > criteria.maxTimestamp)
 
-    limit match {
-      case Some(n) => source.take(n.toLong).runWith(Sink.seq)
-      case None    => source.runWith(Sink.seq)
+    val limitedSource = limit match {
+      case Some(n) => source.take(n.toLong)
+      case None    => source
     }
+    limitedSource
+      .toMat(Sink.seq)(Keep.right)
+      .withAttributes(ActorAttributes.dispatcher(snapshotConfig.sessionSettings.pluginDispatcher))
+      .run()
   }
 
 }

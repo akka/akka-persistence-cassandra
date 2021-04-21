@@ -86,8 +86,10 @@ import akka.util.OptionVal
       executeStatement(selectDeletedToQuery.bind(persistenceId)).map(r =>
         Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
 
-    private def executeStatement(statement: Statement)(implicit ec: ExecutionContext): Future[ResultSet] =
+    private def executeStatement(statement: Statement)(implicit ec: ExecutionContext): Future[ResultSet] = {
+      println(s"# EventsByPersistenceIdStage: ${Thread.currentThread().getName}") // FIXME
       session.executeAsync(withCustom(statement)).asScala
+    }
 
     private def withCustom(statement: Statement): Statement = {
       customConsistencyLevel.foreach(statement.setConsistencyLevel)
