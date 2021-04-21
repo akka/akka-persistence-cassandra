@@ -802,7 +802,6 @@ akka.persistence.cassandra.events-by-tag.refresh-internal = 100ms
             val ExpectedPid = s"a$n"
             withClue(s"Expected: $ExpectedPid") {
               // (TimeBasedUUID(01ee9b90-a29a-11eb-b02d-733db7663e58),a101,2,A101-2,1619006790601,None)
-              println(s"Expecting message:  EventEnvelope(_, $ExpectedPid, 2L, _) ...")
               probe.expectNextPF { case e @ EventEnvelope(_, ExpectedPid, 2L, _) => e }
             }
           }

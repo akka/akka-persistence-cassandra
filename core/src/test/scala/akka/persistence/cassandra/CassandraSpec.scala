@@ -173,42 +173,45 @@ abstract class CassandraSpec(
     }
   }
 
+  private def logDatabaseContents(): Unit = {
+    println("RowDump::")
+    import scala.collection.JavaConverters._
+    if (system.settings.config.getBoolean("akka.persistence.cassandra.events-by-tag.enabled")) {
+      println("tag_views")
+      cluster
+        .execute(s"select * from ${journalName}.tag_views")
+        .asScala
+        .foreach(row => {
+          println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(
+            row.getUuid("timestamp"))},${row.getString("persistence_id")},${row.getLong("tag_pid_sequence_nr")},${row
+            .getLong("sequence_nr")}""")
+
+        })
+    }
+    println("messages")
+    cluster
+      .execute(s"select * from ${journalName}.messages")
+      .asScala
+      .foreach(row => {
+        println(
+          s"""Row:${row.getLong("partition_nr")}, ${row.getString("persistence_id")}, ${row.getLong("sequence_nr")}""")
+      })
+
+    println("snapshots")
+    cluster
+      .execute(s"select * from ${snapshotName}.snapshots")
+      .asScala
+      .foreach(row => {
+        println(
+          s"""Row:${row.getString("persistence_id")}, ${row.getLong("sequence_nr")}, ${row.getLong("timestamp")}""")
+      })
+  }
+
   override protected def externalCassandraCleanup(): Unit = {
     try {
-      if (failed && dumpRowsOnFailure) {
-        println("RowDump::")
-        import scala.collection.JavaConverters._
-        if (system.settings.config.getBoolean("akka.persistence.cassandra.events-by-tag.enabled")) {
-          println("tag_views")
-          cluster
-            .execute(s"select * from ${journalName}.tag_views")
-            .asScala
-            .foreach(row => {
-              println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(
-                row.getUuid("timestamp"))},${row.getString("persistence_id")},${row
-                .getLong("tag_pid_sequence_nr")},${row.getLong("sequence_nr")}""")
+      if (failed && dumpRowsOnFailure && false)
+        logDatabaseContents()
 
-            })
-        }
-        println("messages")
-        cluster
-          .execute(s"select * from ${journalName}.messages")
-          .asScala
-          .foreach(row => {
-            println(s"""Row:${row.getLong("partition_nr")}, ${row.getString("persistence_id")}, ${row.getLong(
-              "sequence_nr")}""")
-          })
-
-        println("snapshots")
-        cluster
-          .execute(s"select * from ${snapshotName}.snapshots")
-          .asScala
-          .foreach(row => {
-            println(
-              s"""Row:${row.getString("persistence_id")}, ${row.getLong("sequence_nr")}, ${row.getLong("timestamp")}""")
-          })
-
-      }
       // FIXME
 //      keyspaces().foreach { keyspace =>
 //        cluster.execute(s"drop keyspace if exists $keyspace")
