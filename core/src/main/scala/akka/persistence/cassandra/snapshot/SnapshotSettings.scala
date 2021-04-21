@@ -21,7 +21,7 @@ import com.typesafe.config.Config
   val keyspaceAutoCreate: Boolean = snapshotConfig.getBoolean("keyspace-autocreate")
   val tablesAutoCreate: Boolean = snapshotConfig.getBoolean("tables-autocreate")
 
-  val keyspace: String = "akka" // FIXME snapshotConfig.getString("keyspace")
+  val keyspace: String = "ignasi20210419002" // FIXME snapshotConfig.getString("keyspace")
 
   val table: String = snapshotConfig.getString("table")
 

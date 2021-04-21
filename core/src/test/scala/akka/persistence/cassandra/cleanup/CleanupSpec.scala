@@ -6,7 +6,6 @@ package akka.persistence.cassandra.cleanup
 
 import java.time.LocalDateTime
 import java.time.ZoneOffset
-
 import akka.actor.ActorRef
 import akka.actor.Props
 import akka.persistence.{ PersistentActor, SaveSnapshotSuccess, SnapshotMetadata, SnapshotOffer }
@@ -16,11 +15,14 @@ import akka.persistence.journal.Tagged
 import akka.persistence.query.NoOffset
 import akka.stream.scaladsl.Sink
 import com.typesafe.config.ConfigFactory
+import org.scalatest.time.Milliseconds
+import org.scalatest.time.Seconds
+import org.scalatest.time.Span
 
 object CleanupSpec {
   val today = LocalDateTime.now(ZoneOffset.UTC)
   val config = ConfigFactory.parseString(s"""
-    akka.loglevel = DEBUG
+    akka.loglevel = INFO
     akka.persistence.cassandra.cleanup {
       log-progress-every = 2
       dry-run = false
@@ -80,6 +82,8 @@ object CleanupSpec {
 
 class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
   import CleanupSpec._
+
+  override implicit val patience = PatienceConfig(timeout = Span(30, Seconds), interval = Span(100, Milliseconds))
 
   "Cassandra cleanup" must {
     "delete events for one persistenceId" in {
@@ -158,7 +162,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
       queries.currentEventsByTag(tag = "tag-a", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(10)
 
       val cleanup = new Cleanup(system)
-      cleanup.deleteAllTaggedEvents(pid).futureValue
+      cleanup.deleteAllTaggedEvents(pid).futureValue // FIXME
 
       queries.currentEventsByTag(tag = "tag-a", offset = NoOffset).runWith(Sink.seq).futureValue.size should ===(0)
     }
@@ -189,7 +193,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
       system.stop(p)
 
       val cleanup = new Cleanup(system)
-      cleanup.deleteAll(pid, neverUsePersistenceIdAgain = true).futureValue
+      cleanup.deleteAll(pid, neverUsePersistenceIdAgain = true).futureValue // FIXME
 
       // also delete from all_persistence_ids
       queries.currentPersistenceIds().runWith(Sink.seq).futureValue should not contain (pid)
@@ -379,7 +383,7 @@ class CleanupSpec extends CassandraSpec(CleanupSpec.config) with DirectWriting {
       system.stop(pA)
 
       val cleanup = new Cleanup(system)
-      cleanup.deleteAll(List(pidA, pidB, pidC), neverUsePersistenceIdAgain = true).futureValue
+      cleanup.deleteAll(List(pidA, pidB, pidC), neverUsePersistenceIdAgain = true).futureValue // FIXME
 
       val pA2 = system.actorOf(TestActor.props(pidA))
       pA2 ! GetRecoveredState

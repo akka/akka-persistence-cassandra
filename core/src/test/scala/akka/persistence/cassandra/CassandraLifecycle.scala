@@ -8,21 +8,25 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
-
 import scala.concurrent.Await
-
 import akka.actor.{ ActorSystem, PoisonPill, Props }
 import akka.persistence.PersistentActor
+import akka.persistence.cassandra.CassandraLifecycle.journalTables
+import akka.persistence.cassandra.CassandraLifecycle.snapshotTables
 import akka.testkit.{ TestKitBase, TestProbe }
 import com.datastax.oss.driver.api.core.CqlSession
 import com.typesafe.config.ConfigFactory
 import org.scalatest._
+
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
-
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
+import com.datastax.oss.driver.api.core.CqlIdentifier
+import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata
+
+import java.util
 
 object CassandraLifecycle {
 
@@ -70,6 +74,63 @@ object CassandraLifecycle {
     """).withFallback(CassandraSpec.enableAutocreate).resolve()
 
   def awaitPersistenceInit(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
+    // Order matters!!
+    // awaitPersistencePluginInit will do a best effort attempt to wait for the plugin to be
+    // ready and trigger the creation of tables.
+    awaitPersistencePluginInit(system, journalPluginId, snapshotPluginId)
+    // awaitTablesCreated is a hard wait ensuring tables were indeed created
+    awaitTablesCreated(system, journalPluginId, snapshotPluginId)
+  }
+
+  val journalTables =
+    Set("all_persistence_ids", "messages", "metadata", "tag_scanning", "tag_views", "tag_write_progress")
+  val snapshotTables = Set("snapshots")
+
+  def awaitTablesCreated(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
+    val journalName =
+      if (journalPluginId == "")
+        system.settings.config.getString("akka.persistence.cassandra.journal.keyspace")
+      else journalPluginId
+    val snapshotName =
+      if (snapshotPluginId == "")
+        system.settings.config.getString("akka.persistence.cassandra.snapshot.keyspace")
+      else snapshotPluginId
+    lazy val cluster: CqlSession =
+      Await.result(session.underlying(), 10.seconds)
+
+    def session: CassandraSession = {
+      CassandraSessionRegistry(system).sessionFor("akka.persistence.cassandra")
+    }
+    awaitTableCount(cluster, 45, journalName, actual => journalTables.subsetOf(actual.toSet))
+    awaitTableCount(cluster, 45, snapshotName, actual => snapshotTables.subsetOf(actual.toSet))
+  }
+
+  def awaitTableCount(
+      cluster: CqlSession,
+      retries: Int,
+      keyspaceName: String,
+      readinessCheck: Array[String] => Boolean): Unit = {
+    val tables: util.Map[CqlIdentifier, TableMetadata] =
+      cluster.getMetadata.getKeyspace(keyspaceName).get().getTables
+
+    val tableNames = tables.keySet().toArray.map(_.toString)
+
+    if (retries == 0) {
+      println(s"Awaiting table creation/drop timed out. Current list of tables:  [${tableNames.mkString(", ")}]")
+      throw new RuntimeException("Awaiting table creation/drop timed out.")
+    } else if (readinessCheck(tableNames)) {
+      ()
+    } else {
+      println(s"Awaiting table creation/deletion. Existing tables: [${tableNames.mkString(", ")}].")
+      Thread.sleep(1000)
+      awaitTableCount(cluster, retries - 1, keyspaceName, readinessCheck)
+    }
+  }
+
+  private def awaitPersistencePluginInit(
+      system: ActorSystem,
+      journalPluginId: String = "",
+      snapshotPluginId: String = ""): Unit = {
     val probe = TestProbe()(system)
     val t0 = System.nanoTime()
     var n = 0
@@ -160,17 +221,31 @@ trait CassandraLifecycle extends BeforeAndAfterAll with TestKitBase {
   }
 
   def dropKeyspaces(): Unit = {
-    val journalKeyspace = "akka" // FIXME system.settings.config.getString("akka.persistence.cassandra.journal.keyspace")
-    val snapshotKeyspace = "akka" // FIXME system.settings.config.getString("akka.persistence.cassandra.snapshot.keyspace")
+    val journalKeyspace = "ignasi20210419002" // FIXME system.settings.config.getString("akka.persistence.cassandra.journal.keyspace")
+    val snapshotKeyspace = "ignasi20210419002" // FIXME system.settings.config.getString("akka.persistence.cassandra.snapshot.keyspace")
     val dropped = Try {
-//      cluster.execute(s"drop table if exists ${journalKeyspace}.all_persistence_ids")
-//      cluster.execute(s"drop table if exists ${journalKeyspace}.messages")
-//      cluster.execute(s"drop table if exists ${journalKeyspace}.metadata")
-//      cluster.execute(s"drop table if exists ${journalKeyspace}.tag_scanning")
-//      cluster.execute(s"drop table if exists ${journalKeyspace}.tag_views")
-//      cluster.execute(s"drop table if exists ${journalKeyspace}.tag_write_progress")
-//
-//      cluster.execute(s"drop table if exists ${snapshotKeyspace}.snapshots")
+
+      println("  -------------------  DROPPING TABLES....")
+
+      cluster.execute(s"drop table if exists ${journalKeyspace}.all_persistence_ids")
+      cluster.execute(s"drop table if exists ${journalKeyspace}.messages")
+      cluster.execute(s"drop table if exists ${journalKeyspace}.metadata")
+      cluster.execute(s"drop table if exists ${journalKeyspace}.tag_scanning")
+      cluster.execute(s"drop table if exists ${journalKeyspace}.tag_views")
+      cluster.execute(s"drop table if exists ${journalKeyspace}.tag_write_progress")
+
+      cluster.execute(s"drop table if exists ${snapshotKeyspace}.snapshots")
+
+      CassandraLifecycle.awaitTableCount(
+        cluster,
+        45,
+        journalKeyspace,
+        actual => actual.toSet.intersect(journalTables).isEmpty)
+      CassandraLifecycle.awaitTableCount(
+        cluster,
+        45,
+        snapshotKeyspace,
+        actual => actual.toSet.intersect(snapshotTables).isEmpty)
 
       //cluster.execute(s"drop keyspace if exists ${journalKeyspace}")
       //cluster.execute(s"drop keyspace if exists ${snapshotKeyspace}")

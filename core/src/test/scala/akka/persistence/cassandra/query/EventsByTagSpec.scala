@@ -8,7 +8,6 @@ import java.time.temporal.ChronoUnit
 import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.Optional
 import java.util.UUID
-
 import akka.actor.{ PoisonPill, Props }
 import akka.event.Logging.Warning
 import akka.persistence.cassandra.journal.CassandraJournalStatements
@@ -22,13 +21,14 @@ import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 import EventsByTagSpec._
 import akka.event.Logging
+import akka.persistence.cassandra.CassandraLifecycle.AwaitPersistenceInit
 import akka.testkit.TestProbe
 import com.datastax.oss.driver.api.core.CqlIdentifier
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.BeforeAndAfterEach
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import akka.persistence.cassandra.PluginSettings
 
 object EventsByTagSpec {
@@ -159,10 +159,27 @@ abstract class AbstractEventsByTagSpec(config: Config)
 
   override protected def afterEach(): Unit = {
     // check for the buffer exceeded log (and other issues)
-    val messages = logProbe.receiveWhile(waitTime)(logCheck)
+
+    val messages = logProbe
+      .receiveWhile(waitTime)(logCheck)
+      // but ignore errors caused by a slo initialization (see note below)
+      .filterNot(_.asInstanceOf[Logging.Error].logClass == classOf[AwaitPersistenceInit])
     messages shouldEqual Nil
     super.afterEach()
   }
+
+  /**
+ * Note: sometimes AwaitPersistenceInit enters a crashLoop because table creation is slow. That
+ * produces harmless error messages:
+        Error(
+         com.datastax.oss.driver.api.core.servererrors.InvalidQueryException:
+              unconfigured table ignasi20210419002.snapshots,
+         akka://ignasi20210419002/user/persistenceInit1,
+         class akka.persistence.cassandra.CassandraLifecycle$AwaitPersistenceInit,
+         Persistence failure when replaying events for persistenceId [persistenceInit1].
+              Last known sequence number [0])
+ */
+
 }
 
 class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
@@ -751,33 +768,41 @@ akka.persistence.cassandra.events-by-tag.refresh-internal = 100ms
           probe.request(1000)
 
           // A101-2 to A200-2
-          (101L to 200L).foreach { n =>
-            val eventA2 =
-              PersistentRepr(
-                s"A$n-2",
-                sequenceNr = 2,
-                persistenceId = s"a$n",
-                "",
-                writerUuid = UUID.randomUUID().toString)
-            writeTaggedEvent(t1.plus(500 + n, ChronoUnit.MILLIS), eventA2, Set("T11"), 1, bucketSize)
+          (101L to 200L).foreach {
+            n =>
+              val persistenceRepr =
+                PersistentRepr(
+                  payload = s"A$n-2",
+                  sequenceNr = 2,
+                  persistenceId = s"a$n",
+                  manifest = "",
+                  writerUuid = UUID.randomUUID().toString)
+              // Testing on AWS Keyspaces, the insertion of events is so slow that, in order
+              // for the inserted data to reproduce the case we are testing we need to
+              // write the events at least 10 seconds in the future.
+              val time = t1.plus(10, ChronoUnit.SECONDS).plus(n, ChronoUnit.MILLIS)
+              writeTaggedEvent(time, persistenceRepr, tags = Set("T11"), tagPidSequenceNr = 1, bucketSize = bucketSize)
           }
 
           // limit is 50, so let's use something not divisible by 50
           // A1-2 to A70-2
           (1L to 70L).foreach { n =>
-            val eventA2 =
+            val persistentRepr =
               PersistentRepr(
                 s"A$n-2",
                 sequenceNr = 2,
                 persistenceId = s"a$n",
                 "",
                 writerUuid = UUID.randomUUID().toString)
-            writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA2, Set("T11"), 1, bucketSize)
+            val time = t1.plus(n, ChronoUnit.MILLIS)
+            writeTaggedEvent(time, persistentRepr, tags = Set("T11"), tagPidSequenceNr = 1, bucketSize = bucketSize)
           }
 
           (1L to 70L).foreach { n =>
             val ExpectedPid = s"a$n"
             withClue(s"Expected: $ExpectedPid") {
+              // (TimeBasedUUID(01ee9b90-a29a-11eb-b02d-733db7663e58),a101,2,A101-2,1619006790601,None)
+              println(s"Expecting message:  EventEnvelope(_, $ExpectedPid, 2L, _) ...")
               probe.expectNextPF { case e @ EventEnvelope(_, ExpectedPid, 2L, _) => e }
             }
           }

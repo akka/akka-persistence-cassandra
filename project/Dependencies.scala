@@ -39,7 +39,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
-      "software.aws.mcs" % "aws-sigv4-auth-cassandra-java-driver-plugin" % "4.0.2",
+      "software.aws.mcs" % "aws-sigv4-auth-cassandra-java-driver-plugin" % "4.0.2", // FIXME: 4.0.4 is out already
       Logback % Test,
       "org.scalatest" %% "scalatest" % "3.1.0" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,

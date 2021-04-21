@@ -6,7 +6,6 @@ package akka.persistence.cassandra
 
 import java.io.{ OutputStream, PrintStream }
 import java.util.concurrent.atomic.AtomicInteger
-
 import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.event.Logging.{ LogEvent, StdOutLogger }
@@ -23,15 +22,22 @@ import org.scalatest.time.{ Milliseconds, Seconds, Span }
 import org.scalatest.{ Outcome, Suite }
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.matchers.should.Matchers
+
 import scala.collection.immutable
 import scala.concurrent.duration._
-
 import akka.persistence.cassandra.journal.CassandraJournal
 import akka.serialization.SerializationExtension
-import scala.util.control.NonFatal
 
+import scala.util.control.NonFatal
 import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.actor.PoisonPill
+import akka.persistence.cassandra.CassandraLifecycle.journalTables
+import akka.persistence.cassandra.CassandraLifecycle.snapshotTables
+import akka.persistence.cassandra.journal.CassandraJournalStatements
+import com.datastax.oss.driver.api.core.CqlIdentifier
+import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata
+
+import java.util
 
 object CassandraSpec {
   def getCallerName(clazz: Class[_]): String = {
@@ -64,18 +70,18 @@ object CassandraSpec {
         }
         snapshot {
           keyspace-autocreate = false
-          tables-autocreate = false
+          tables-autocreate = true
         } 
         journal {
           keyspace-autocreate = false
-          tables-autocreate = false
+          tables-autocreate = true
         }
       } 
      """)
 
   val fallbackConfig = ConfigFactory.parseString(s"""
       #akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
-      akka.loglevel = DEBUG
+      akka.loglevel = INFO
       akka.use-slf4j = off
 
       datastax-java-driver {
@@ -92,8 +98,8 @@ object CassandraSpec {
  */
 abstract class CassandraSpec(
     config: Config = CassandraLifecycle.config,
-    val journalName: String = "akka", // FIXME getCallerName(getClass),
-    val snapshotName: String = "akka", // FIXME getCallerName(getClass),
+    val journalName: String = "ignasi20210419002", // FIXME getCallerName(getClass),
+    val snapshotName: String = "ignasi20210419002", // FIXME getCallerName(getClass),
     dumpRowsOnFailure: Boolean = true)
     extends TestKitBase
     with Suite
@@ -207,6 +213,29 @@ abstract class CassandraSpec(
 //      keyspaces().foreach { keyspace =>
 //        cluster.execute(s"drop keyspace if exists $keyspace")
 //      }
+
+      println("  -------------------  DROPPING TABLES....")
+
+      cluster.execute(s"drop table if exists ${journalName}.all_persistence_ids")
+      cluster.execute(s"drop table if exists ${journalName}.messages")
+      cluster.execute(s"drop table if exists ${journalName}.metadata")
+      cluster.execute(s"drop table if exists ${journalName}.tag_scanning")
+      cluster.execute(s"drop table if exists ${journalName}.tag_views")
+      cluster.execute(s"drop table if exists ${journalName}.tag_write_progress")
+
+      cluster.execute(s"drop table if exists ${snapshotName}.snapshots")
+
+      CassandraLifecycle.awaitTableCount(
+        cluster,
+        45,
+        journalName,
+        actual => actual.toSet.intersect(journalTables).isEmpty)
+      CassandraLifecycle.awaitTableCount(
+        cluster,
+        45,
+        snapshotName,
+        actual => actual.toSet.intersect(snapshotTables).isEmpty)
+
     } catch {
       case NonFatal(t) =>
         println("Exception during cleanup")
