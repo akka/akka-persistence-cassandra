@@ -17,7 +17,7 @@ By default it will try to query the `system.local` table. The query can be confi
 
 ```
 akka.persistence.cassandra.healthcheck {
-  health-check-cql = "SELECT now() FROM system.local"
+  health-check-cql = "SELECT * FROM system.local""
 }
 ``` 
 
