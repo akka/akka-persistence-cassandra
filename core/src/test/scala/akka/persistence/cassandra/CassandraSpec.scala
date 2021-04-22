@@ -33,11 +33,6 @@ import akka.persistence.cassandra.TestTaggingActor.Ack
 import akka.actor.PoisonPill
 import akka.persistence.cassandra.CassandraLifecycle.journalTables
 import akka.persistence.cassandra.CassandraLifecycle.snapshotTables
-import akka.persistence.cassandra.journal.CassandraJournalStatements
-import com.datastax.oss.driver.api.core.CqlIdentifier
-import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata
-
-import java.util
 
 object CassandraSpec {
   def getCallerName(clazz: Class[_]): String = {

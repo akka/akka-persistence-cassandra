@@ -7,7 +7,6 @@ package akka.persistence.cassandra.query
 import java.nio.ByteBuffer
 import java.time.{ LocalDateTime, ZoneOffset }
 import java.util.UUID
-
 import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.BucketSize
@@ -18,6 +17,7 @@ import akka.persistence.cassandra.journal._
 import akka.serialization.Serialization
 import akka.serialization.Serializers
 import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
 private[akka] trait TestTagWriter {
@@ -33,8 +33,25 @@ private[akka] trait TestTagWriter {
     (cluster.prepare(writeStatements.writeTags(false)), cluster.prepare(writeStatements.writeTags(true)))
   }
 
+  private var pairs: Set[(String, Long)] = Set.empty
+
   def clearAllEvents(): Unit = {
-    cluster.execute(s"truncate ${journalSettings.keyspace}.${eventsByTagSettings.tagTable.name}")
+    import scala.collection.JavaConverters._
+    val resultSet = cluster.execute(
+      s"select tag_name, timebucket  from ${journalSettings.keyspace}.${eventsByTagSettings.tagTable.name}")
+    val pairs = resultSet
+      .iterator()
+      .asScala
+      .map { row =>
+        (row.getString("tag_name"), row.getLong("timebucket"))
+      }
+      .toSet
+    pairs
+      .map {
+        case (tag, bucket) =>
+          s"delete from ${journalSettings.keyspace}.${eventsByTagSettings.tagTable.name} where tag_name='$tag' and timebucket=$bucket"
+      }
+      .foreach(cluster.execute)
   }
 
   def writeTaggedEvent(
