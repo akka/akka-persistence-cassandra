@@ -7,6 +7,7 @@ package akka.persistence.cassandra.journal
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
 import java.util.{ UUID, HashMap => JHMap, Map => JMap }
+
 import akka.Done
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor.ActorRef
@@ -38,13 +39,15 @@ import com.datastax.driver.core.policies.RetryPolicy.RetryDecision
 import com.datastax.driver.core.policies.{ LoggingRetryPolicy, RetryPolicy }
 import com.datastax.driver.core.utils.{ Bytes, UUIDs }
 import com.typesafe.config.Config
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.collection.immutable.Seq
 import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
+
+import akka.stream.ActorAttributes
+import akka.stream.scaladsl.Keep
 
 /**
  * Journal implementation of the cassandra plugin.
@@ -641,11 +644,13 @@ class CassandraJournal(cfg: Config)
         // run the query on the journal dispatcher (not the queries dispatcher)
         dispatcher = sessionSettings.pluginDispatcher)
       .map(_.sequenceNr)
-      .runWith(Sink.headOption)
+      .toMat(Sink.headOption)(Keep.right)
+      .withAttributes(ActorAttributes.dispatcher(sessionSettings.pluginDispatcher))
+      .run()
       .map {
         case Some(sequenceNr) => sequenceNr
         case None             => fromSequenceNr
-      }
+      }(akka.dispatch.ExecutionContexts.sameThreadExecutionContext)
   }
 
   private[akka] def asyncFindHighestSequenceNr(
