@@ -97,6 +97,8 @@ object CassandraSpec {
  * Picks a free port for Cassandra before starting the ActorSystem
  */
 abstract class CassandraSpec(
+    // FIXME: is this default config correct? the construction of `val finalConfig` below already
+    //  takes CassandraLifecycle.config into consideration. I think the default should be an empty Config
     config: Config = CassandraLifecycle.config,
     val journalName: String = "ignasi20210419002", // FIXME getCallerName(getClass),
     val snapshotName: String = "ignasi20210419002", // FIXME getCallerName(getClass),
@@ -111,6 +113,8 @@ abstract class CassandraSpec(
 
   def this(config: String) = this(ConfigFactory.parseString(config))
 
+  // FIXME: is this correct? the construction of `val finalConfig` below already
+  //  takes CassandraLifecycle.config into consideration. I think the default should be an empty Config
   def this() = this(CassandraLifecycle.config)
 
   private var failed = false
@@ -209,7 +213,7 @@ abstract class CassandraSpec(
 
   override protected def externalCassandraCleanup(): Unit = {
     try {
-      if (failed && dumpRowsOnFailure && false)
+      if (failed && dumpRowsOnFailure && false) // FIXME if (failed && dumpRowsOnFailure)
         logDatabaseContents()
 
       // FIXME
