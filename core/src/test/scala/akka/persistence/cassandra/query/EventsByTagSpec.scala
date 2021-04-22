@@ -1378,13 +1378,13 @@ class EventsByTagPersistenceIdCleanupSpec extends AbstractEventsByTagSpec(Events
       val probe = query.runWith(TestSink.probe[Any])
       probe.request(10)
       probe.expectNextPF { case e @ EventEnvelope(_, "cleanup", 1L, "cleanup-1") => e }
-      probe.expectNoMessage(cleanupPeriod + 250.millis)
+      probe.expectNoMessage(cleanupPeriod + 5.seconds)
 
       // the metadata for pid cleanup should have been removed meaning the next event will be delayed
       val event2 = PersistentRepr(s"cleanup-2", 2, "cleanup")
       writeTaggedEvent(event2, Set("cleanup-tag"), 2, bucketSize)
 
-      probe.expectNoMessage(newPersistenceIdScan - 50.millis)
+      probe.expectNoMessage(newPersistenceIdScan - 1.second)
       probe.expectNextPF { case e @ EventEnvelope(_, "cleanup", 2L, "cleanup-2") => e }
 
     }
