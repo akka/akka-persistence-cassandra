@@ -751,7 +751,14 @@ import akka.stream.scaladsl.Source
                 ec)
               .mapAsync(1)(tr.sendMissingTagWrite(tp))
           }))
-          .map(te => queries.mapEvent(te.pr))
+          .map { te =>
+            if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+              println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+              new RuntimeException("Wrong thread").printStackTrace()
+            }
+
+            queries.mapEvent(te.pr)
+          }
           .map(replayCallback)
           .toMat(Sink.ignore)(Keep.right)
           .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
@@ -771,6 +778,14 @@ import akka.stream.scaladsl.Source
             extractor = Extractors.persistentRepr(eventDeserializer, serialization),
             ec)
           .map(queries.mapEvent)
+          .map { x =>
+            if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+              println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+              new RuntimeException("Wrong thread").printStackTrace()
+            }
+
+            x
+          }
           .map(replayCallback)
           .toMat(Sink.ignore)(Keep.right)
           .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
@@ -804,12 +819,32 @@ import akka.stream.scaladsl.Source
           "asyncReplayMessagesPreSnapshot",
           Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization),
           ec)
+        .map { x =>
+          if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+            println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+            new RuntimeException("Wrong thread").printStackTrace()
+          }
+
+          x
+        }
         .mapAsync(1) { t =>
+          if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+            println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+            new RuntimeException("Wrong thread").printStackTrace()
+          }
           t.tagged match {
             case OptionVal.Some(tpr) =>
               tr.sendMissingTagWrite(tp)(tpr)
             case OptionVal.None => FutureDone // no tags, skip
           }
+        }
+        .map { x =>
+          if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+            println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+            new RuntimeException("Wrong thread").printStackTrace()
+          }
+
+          x
         }
         .toMat(Sink.ignore)(Keep.right)
         .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))

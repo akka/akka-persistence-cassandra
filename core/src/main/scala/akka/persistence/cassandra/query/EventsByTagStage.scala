@@ -101,6 +101,11 @@ import scala.compat.java8.FutureConverters._
         implicit ec: ExecutionContext,
         scheduler: Scheduler): Future[AsyncResultSet] = {
       Retries.retry({ () =>
+        if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+          println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+          new RuntimeException("Wrong thread").printStackTrace()
+        }
+
         val bound =
           statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setExecutionProfileName(readProfile)
         session.executeAsync(bound).toScala
@@ -793,7 +798,12 @@ import scala.compat.java8.FutureConverters._
           new RuntimeException(s"$total missing tagged events for tag [${session.tag}]. Failing without search"))
       }
 
-      @tailrec def tryPushOne(): Unit =
+      @tailrec def tryPushOne(): Unit = {
+        if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+          println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+          new RuntimeException("Wrong thread").printStackTrace()
+        }
+
         stageState.state match {
           case QueryResult(rs) if isAvailable(out) =>
             if (isExhausted(rs)) {
@@ -857,6 +867,7 @@ import scala.compat.java8.FutureConverters._
                 stageState.state,
                 isAvailable(out))
         }
+      }
 
       private def shouldSearchInPreviousBucket(bucket: TimeBucket, fromOffset: UUID): Boolean =
         !bucket.within(fromOffset)

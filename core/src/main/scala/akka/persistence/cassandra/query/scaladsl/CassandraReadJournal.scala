@@ -601,8 +601,6 @@ class CassandraReadJournal protected (
 
   /**
    * INTERNAL API
-   *
-   * FIXME This is not used. Was ori
    */
   @InternalApi private[akka] def eventsByPersistenceIdWithControl(
       persistenceId: String,
