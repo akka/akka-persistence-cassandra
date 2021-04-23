@@ -26,6 +26,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.actor.ClassicActorSystemProvider
+import akka.stream.ActorAttributes
 
 object EventsByTagMigration {
   def apply(systemProvider: ClassicActorSystemProvider): EventsByTagMigration =
@@ -79,10 +80,9 @@ class EventsByTagMigration(
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](pluginConfigPath + ".query")
   private implicit val sys: ActorSystem = system
 
-  implicit val ec =
-    system.dispatchers.lookup(system.settings.config.getString(s"$pluginConfigPath.journal.plugin-dispatcher"))
   private val settings: PluginSettings =
     new PluginSettings(system, system.settings.config.getConfig(pluginConfigPath))
+  implicit val ec = system.dispatchers.lookup(settings.journalSettings.pluginDispatcher)
   private val journalStatements = new CassandraJournalStatements(settings)
   private val taggedPreparedStatements = new TaggedPreparedStatements(journalStatements, session.prepare)
   private val tagWriterSession =
@@ -224,6 +224,7 @@ class EventsByTagMigration(
                 .map(tagRecovery.sendMissingTagWriteRaw(tp, actorRunning = false))
                 .grouped(flushBatchSize)
                 .mapAsync(1)(_ => tagRecovery.flush(timeout))
+                .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
             }
           }
         }

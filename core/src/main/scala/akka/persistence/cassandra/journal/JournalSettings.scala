@@ -53,4 +53,6 @@ import com.typesafe.config.Config
 
   val coordinatedShutdownOnError: Boolean = config.getBoolean("coordinated-shutdown-on-error")
 
+  val pluginDispatcher: String = journalConfig.getString("plugin-dispatcher")
+
 }

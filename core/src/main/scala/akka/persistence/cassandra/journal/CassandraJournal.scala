@@ -31,7 +31,6 @@ import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
-
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
 import scala.collection.immutable
@@ -40,8 +39,12 @@ import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
+
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
+import akka.dispatch.ExecutionContexts
+import akka.stream.ActorAttributes
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 
 /**
@@ -703,7 +706,9 @@ import akka.stream.scaladsl.Source
     partitionNr * journalSettings.targetPartitionSize + 1
 
   private def execute[T <: Statement[T]](stmt: Statement[T]): Future[Unit] = {
-    session.executeWrite(stmt.setExecutionProfileName(journalSettings.writeProfile)).map(_ => ())
+    session
+      .executeWrite(stmt.setExecutionProfileName(journalSettings.writeProfile))
+      .map(_ => ())(ExecutionContexts.parasitic)
   }
 
   // TODO this serialises and re-serialises the messages for fixing tag_views
@@ -746,8 +751,11 @@ import akka.stream.scaladsl.Source
               .mapAsync(1)(tr.sendMissingTagWrite(tp))
           }))
           .map(te => queries.mapEvent(te.pr))
-          .runForeach(replayCallback)
-          .map(_ => ())
+          .map(replayCallback)
+          .toMat(Sink.ignore)(Keep.right)
+          .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
+          .run()
+          .map(_ => ())(ExecutionContexts.parasitic)
 
       case None =>
         queries
@@ -761,8 +769,11 @@ import akka.stream.scaladsl.Source
             "asyncReplayMessages",
             extractor = Extractors.persistentRepr(eventDeserializer, serialization))
           .map(queries.mapEvent)
-          .runForeach(replayCallback)
-          .map(_ => ())
+          .map(replayCallback)
+          .toMat(Sink.ignore)(Keep.right)
+          .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
+          .run()
+          .map(_ => ())(ExecutionContexts.parasitic)
     }
   }
 
@@ -797,7 +808,9 @@ import akka.stream.scaladsl.Source
             case OptionVal.None => FutureDone // no tags, skip
           }
         }
-        .runWith(Sink.ignore)
+        .toMat(Sink.ignore)(Keep.right)
+        .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
+        .run()
     } else {
       log.debug(
         "[{}] Recovery is starting before the latest tag writes tag progress. Min progress [{}]. From sequence nr of recovery: [{}]",

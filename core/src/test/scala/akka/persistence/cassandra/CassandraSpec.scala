@@ -255,12 +255,7 @@ abstract class CassandraSpec(
   }
 
   def eventsPayloads(pid: String): Seq[Any] =
-    queries
-      .currentEventsByPersistenceId(pid, 0, Long.MaxValue)
-      .map(e => e.event)
-      .toMat(Sink.seq)(Keep.right)
-      .run()
-      .futureValue
+    queries.currentEventsByPersistenceId(pid, 0, Long.MaxValue).map(e => e.event).runWith(Sink.seq).futureValue
 
   def events(pid: String): immutable.Seq[Extractors.TaggedPersistentRepr] =
     queries
@@ -273,8 +268,7 @@ abstract class CassandraSpec(
         readProfile = "akka-persistence-cassandra-profile",
         "test",
         extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
-      .toMat(Sink.seq)(Keep.right)
-      .run()
+      .runWith(Sink.seq)
       .futureValue
 
   def eventPayloadsWithTags(pid: String): immutable.Seq[(Any, Set[String])] =
@@ -291,8 +285,7 @@ abstract class CassandraSpec(
       .map { tpr =>
         (tpr.pr.payload, tpr.tags)
       }
-      .toMat(Sink.seq)(Keep.right)
-      .run()
+      .runWith(Sink.seq)
       .futureValue
 
   def eventsByTag(tag: String): TestSubscriber.Probe[Any] =

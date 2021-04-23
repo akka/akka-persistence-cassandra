@@ -567,6 +567,7 @@ class CassandraReadJournal protected (
       .mapConcat {
         case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
       }
+      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
       .mapMaterializedValue(_ => NotUsed)
 
   /**
@@ -590,17 +591,20 @@ class CassandraReadJournal protected (
       .mapConcat {
         case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
       }
+      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
       .mapMaterializedValue(_ => NotUsed)
 
   /**
    * INTERNAL API
+   *
+   * FIXME This is not used. Was ori
    */
   @InternalApi private[akka] def eventsByPersistenceIdWithControl(
       persistenceId: String,
       fromSequenceNr: Long,
       toSequenceNr: Long,
       refreshInterval: Option[FiniteDuration] = None)
-      : Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] =
+      : Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] = {
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -610,9 +614,12 @@ class CassandraReadJournal protected (
       settings.journalSettings.readProfile, // write journal read-profile
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization),
-      fastForwardEnabled = true).mapConcat {
-      case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
-    }
+      fastForwardEnabled = true)
+      .mapConcat {
+        case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
+      }
+      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+  }
 
   /**
    * INTERNAL API: This is a low-level method that return journal events as they are persisted.
@@ -649,14 +656,13 @@ class CassandraReadJournal protected (
               c.prepareSelectHighestNr,
               c.preparedSelectDeletedTo,
               s,
-              querySettings.readProfile),
+              readProfile),
             settings,
             fastForwardEnabled))
         .named(name)
     }.mapAsync(querySettings.deserializationParallelism) { row =>
-        extractor.extract(row, deserializeEventAsync)
-      }
-      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+      extractor.extract(row, deserializeEventAsync)
+    }
   }
 
   /**

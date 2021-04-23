@@ -10,6 +10,7 @@ import akka.Done
 import akka.persistence.cassandra.journal.TagWriter._
 import scala.concurrent.duration._
 import scala.concurrent.Future
+
 import akka.stream.scaladsl.Source
 import akka.actor.ExtendedActorSystem
 import akka.persistence.query.PersistenceQuery
@@ -22,6 +23,7 @@ import akka.stream.OverflowStrategy
 import akka.stream.scaladsl.Sink
 import akka.annotation.InternalApi
 import akka.serialization.SerializationExtension
+import akka.stream.ActorAttributes
 
 /**
  * INTERNAL API
@@ -68,6 +70,7 @@ private[akka] final class BuildTagViewForPersisetceId(
           .map(recovery.sendMissingTagWriteRaw(tp, actorRunning = false))
           .buffer(flushEvery, OverflowStrategy.backpressure)
           .mapAsync(1)(_ => recovery.flush(flushTimeout))
+          .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
       }))
       .runWith(Sink.ignore)
 

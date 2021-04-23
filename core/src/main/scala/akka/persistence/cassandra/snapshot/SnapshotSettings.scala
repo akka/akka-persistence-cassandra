@@ -37,4 +37,6 @@ import com.typesafe.config.Config
 
   val maxLoadAttempts: Int = snapshotConfig.getInt("max-load-attempts")
 
+  val pluginDispatcher: String = snapshotConfig.getString("plugin-dispatcher")
+
 }
