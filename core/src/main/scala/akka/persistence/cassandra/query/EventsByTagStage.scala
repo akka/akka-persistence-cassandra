@@ -18,7 +18,7 @@ import akka.util.PrettyDuration._
 import scala.annotation.tailrec
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.{ Failure, Success, Try }
 import java.lang.{ Long => JLong }
 
@@ -72,7 +72,8 @@ import scala.compat.java8.FutureConverters._
       bucketSize: BucketSize,
       usingOffset: Boolean,
       initialTagPidSequenceNrs: Map[Tag, (TagPidSequenceNr, UUID)],
-      scanner: TagViewSequenceNumberScanner): EventsByTagStage =
+      scanner: TagViewSequenceNumberScanner,
+      executionContext: ExecutionContext): EventsByTagStage =
     new EventsByTagStage(
       session,
       fromOffset,
@@ -82,7 +83,8 @@ import scala.compat.java8.FutureConverters._
       bucketSize,
       usingOffset,
       initialTagPidSequenceNrs,
-      scanner)
+      scanner,
+      executionContext)
 
   private[akka] class TagStageSession(
       val tag: String,
@@ -215,7 +217,8 @@ import scala.compat.java8.FutureConverters._
     bucketSize: BucketSize,
     usingOffset: Boolean,
     initialTagPidSequenceNrs: Map[PersistenceId, (TagPidSequenceNr, UUID)],
-    scanner: TagViewSequenceNumberScanner)
+    scanner: TagViewSequenceNumberScanner,
+    executionContext: ExecutionContext)
     extends GraphStage[SourceShape[UUIDRow]] {
 
   import settings.querySettings
@@ -241,6 +244,7 @@ import scala.compat.java8.FutureConverters._
 
       lazy val system = materializer.system
       lazy implicit val scheduler = system.scheduler
+      implicit def ec: ExecutionContext = executionContext
 
       private def calculateToOffset(): UUID = {
         val to: Long = Uuids.unixTimestamp(Uuids.timeBased()) - eventsByTagSettings.eventualConsistency.toMillis
@@ -266,8 +270,6 @@ import scala.compat.java8.FutureConverters._
 
       private def updateQueryState(state: QueryState): Unit =
         updateStageState(_.copy(state = state))
-
-      implicit def ec: ExecutionContextExecutor = materializer.executionContext
 
       setHandler(out, this)
 

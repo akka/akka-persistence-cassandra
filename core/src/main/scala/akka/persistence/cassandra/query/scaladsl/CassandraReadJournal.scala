@@ -332,7 +332,8 @@ class CassandraReadJournal protected (
                 eventsByTagSettings.bucketSize,
                 usingOffset,
                 initialTagPidSequenceNrs,
-                scanner))
+                scanner,
+                ec))
         }.via(deserializeEventsByTagRow)
           .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
@@ -515,7 +516,8 @@ class CassandraReadJournal protected (
                 eventsByTagSettings.bucketSize,
                 usingOffset,
                 initialTagPidSequenceNrs,
-                scanner))
+                scanner,
+                ec))
         }.via(deserializeEventsByTagRow)
           .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
