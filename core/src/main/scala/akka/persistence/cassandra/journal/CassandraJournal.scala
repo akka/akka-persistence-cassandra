@@ -747,7 +747,8 @@ import akka.stream.scaladsl.Source
                 None,
                 settings.journalSettings.readProfile,
                 "asyncReplayMessages",
-                extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
+                extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization),
+                ec)
               .mapAsync(1)(tr.sendMissingTagWrite(tp))
           }))
           .map(te => queries.mapEvent(te.pr))
@@ -767,7 +768,8 @@ import akka.stream.scaladsl.Source
             None,
             settings.journalSettings.readProfile,
             "asyncReplayMessages",
-            extractor = Extractors.persistentRepr(eventDeserializer, serialization))
+            extractor = Extractors.persistentRepr(eventDeserializer, serialization),
+            ec)
           .map(queries.mapEvent)
           .map(replayCallback)
           .toMat(Sink.ignore)(Keep.right)
@@ -800,7 +802,8 @@ import akka.stream.scaladsl.Source
           None,
           settings.journalSettings.readProfile,
           "asyncReplayMessagesPreSnapshot",
-          Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization))
+          Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization),
+          ec)
         .mapAsync(1) { t =>
           t.tagged match {
             case OptionVal.Some(tpr) =>

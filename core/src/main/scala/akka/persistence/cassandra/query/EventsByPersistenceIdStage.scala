@@ -110,6 +110,7 @@ import akka.persistence.cassandra.PluginSettings
     refreshInterval: Option[FiniteDuration],
     session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
     settings: PluginSettings,
+    executionContext: ExecutionContext,
     fastForwardEnabled: Boolean = false)
     extends GraphStageWithMaterializedValue[SourceShape[Row], EventsByPersistenceIdStage.Control] {
 
@@ -123,10 +124,10 @@ import akka.persistence.cassandra.PluginSettings
   override def createLogicAndMaterializedValue(inheritedAttributes: Attributes): (GraphStageLogic, Control) = {
     val logic = new TimerGraphStageLogic(shape) with OutHandler with StageLogging with Control {
 
+      implicit def ec: ExecutionContext = executionContext
+
       override protected def logSource: Class[_] =
         classOf[EventsByPersistenceIdStage]
-
-      implicit def ec = materializer.executionContext
 
       val donePromise = Promise[Done]()
 

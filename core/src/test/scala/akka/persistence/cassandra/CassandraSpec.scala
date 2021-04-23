@@ -13,7 +13,7 @@ import akka.event.Logging.{ LogEvent, StdOutLogger }
 import akka.persistence.cassandra.CassandraSpec._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ NoOffset, PersistenceQuery }
-import akka.stream.scaladsl.{ Keep, Sink }
+import akka.stream.scaladsl.Sink
 import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.{ EventFilter, ImplicitSender, SocketUtil, TestKitBase }
@@ -267,7 +267,8 @@ abstract class CassandraSpec(
         None,
         readProfile = "akka-persistence-cassandra-profile",
         "test",
-        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
+        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)),
+        system.dispatcher)
       .runWith(Sink.seq)
       .futureValue
 
@@ -281,7 +282,8 @@ abstract class CassandraSpec(
         None,
         readProfile = "akka-persistence-cassandra-profile",
         "test",
-        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)))
+        extractor = Extractors.taggedPersistentRepr(eventDeserializer, SerializationExtension(system)),
+        system.dispatcher)
       .map { tpr =>
         (tpr.pr.payload, tpr.tags)
       }

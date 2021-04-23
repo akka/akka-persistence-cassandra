@@ -66,7 +66,8 @@ private[akka] final class BuildTagViewForPersisetceId(
             None,
             settings.journalSettings.readProfile,
             "BuildTagViewForPersistenceId",
-            extractor = Extractors.rawEvent(settings.eventsByTagSettings.bucketSize, serialization, system))
+            extractor = Extractors.rawEvent(settings.eventsByTagSettings.bucketSize, serialization, system),
+            system.dispatcher)
           .map(recovery.sendMissingTagWriteRaw(tp, actorRunning = false))
           .buffer(flushEvery, OverflowStrategy.backpressure)
           .mapAsync(1)(_ => recovery.flush(flushTimeout))
