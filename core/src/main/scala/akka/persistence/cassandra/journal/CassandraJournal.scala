@@ -738,6 +738,7 @@ import akka.stream.scaladsl.Source
               fromSequenceNr,
               toSequenceNr)
 
+            println(s"# asyncReplayMessages-1 Thread: ${Thread.currentThread().getName}") // FIXME
             queries
               .eventsByPersistenceId(
                 persistenceId,
@@ -749,9 +750,13 @@ import akka.stream.scaladsl.Source
                 "asyncReplayMessages",
                 extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization),
                 ec)
-              .mapAsync(1)(tr.sendMissingTagWrite(tp))
+              .mapAsync(1) { x =>
+                println(s"# asyncReplayMessages-2 Thread: ${Thread.currentThread().getName}") // FIXME
+                tr.sendMissingTagWrite(tp)(x)
+              }
           }))
           .map { te =>
+            println(s"# asyncReplayMessages-3 Thread: ${Thread.currentThread().getName}") // FIXME
             if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
               println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
               new RuntimeException("Wrong thread").printStackTrace()

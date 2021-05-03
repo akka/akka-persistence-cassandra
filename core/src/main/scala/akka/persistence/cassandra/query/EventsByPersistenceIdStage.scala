@@ -71,6 +71,7 @@ import akka.persistence.cassandra.PluginSettings
     }
 
     def selectSingleRow(persistenceId: String, pnr: Long)(implicit ec: ExecutionContext): Future[Option[Row]] = {
+      println(s"# EventsByPersistenceIdStage Thread: ${Thread.currentThread().getName}") // FIXME
       if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
         println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
         new RuntimeException("Wrong thread").printStackTrace()
@@ -85,6 +86,7 @@ import akka.persistence.cassandra.PluginSettings
         Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
 
     private def executeStatement(statement: Statement[_]): Future[AsyncResultSet] = {
+      println(s"# EventsByPersistenceIdStage Thread: ${Thread.currentThread().getName}") // FIXME
       if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
         println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
         new RuntimeException("Wrong thread").printStackTrace()
@@ -260,6 +262,7 @@ import akka.persistence.cassandra.PluginSettings
         queryState = QueryInProgress(switchPartition = false, fetchMore = false, System.nanoTime())
         session.highestDeletedSequenceNumber(persistenceId).onComplete(highestDeletedSequenceNrCb.invoke)
 
+        println(s"# EventsByPersistenceIdStage Thread: ${Thread.currentThread().getName}") // FIXME
         if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
           println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
           new RuntimeException("Wrong thread").printStackTrace()
