@@ -3,7 +3,7 @@ import Keys._
 
 object Dependencies {
   val Scala212 = "2.12.13"
-  val Scala213 = "2.13.3"
+  val Scala213 = "2.13.5"
   val ScalaVersions = Seq(Scala212, Scala213)
 
   val AkkaVersion = System.getProperty("override.akka.version", "2.6.9")
