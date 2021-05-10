@@ -16,11 +16,13 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object PersistAllSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
       akka.persistence.cassandra.journal.max-message-batch-size = 100
       akka.persistence.cassandra.journal.keyspace=PersistAllSpec
       akka.persistence.cassandra.snapshot.keyspace=PersistAllSpecSnapshot
-      """).withFallback(CassandraLifecycle.config)
+      """)
+    .withFallback(CassandraLifecycle.config)
 
   case class DeleteTo(snr: Long)
 
@@ -34,11 +36,10 @@ object PersistAllSpec {
         persistAll(payload)(handle)
     }
 
-    def handle: Receive = {
-      case payload: String =>
-        receiver ! payload
-        receiver ! lastSequenceNr
-        receiver ! recoveryRunning
+    def handle: Receive = { case payload: String =>
+      receiver ! payload
+      receiver ! lastSequenceNr
+      receiver ! recoveryRunning
     }
   }
 }

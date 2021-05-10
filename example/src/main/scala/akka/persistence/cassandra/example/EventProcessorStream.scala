@@ -38,8 +38,8 @@ class EventProcessorStream[Event: ClassTag](
           readOffset().map { offset =>
             log.infoN("Starting stream for tag [{}] from offset [{}]", tag, offset)
             processEventsByTag(offset, histogram)
-            // groupedWithin can be used here to improve performance by reducing number of offset writes,
-            // with the trade-off of possibility of more duplicate events when stream is restarted
+              // groupedWithin can be used here to improve performance by reducing number of offset writes,
+              // with the trade-off of possibility of more duplicate events when stream is restarted
               .mapAsync(1)(writeOffset)
           }
         }
@@ -51,22 +51,23 @@ class EventProcessorStream[Event: ClassTag](
   private def processEventsByTag(offset: Offset, histogram: Histogram): Source[Offset, NotUsed] = {
     query.eventsByTag(tag, offset).mapAsync(1) { eventEnvelope =>
       eventEnvelope.event match {
-        case event: Event => {
-          // Times from different nodes, take with a pinch of salt
-          val latency = System.currentTimeMillis() - eventEnvelope.timestamp
-          // when restarting without the offset the latency will be too big
-          if (latency < histogram.getMaxValue) {
-            histogram.recordValue(latency)
-          }
-          log.debugN(
-            "Tag {} Event {} persistenceId {}, sequenceNr {}. Latency {}",
-            tag,
-            event,
-            PersistenceId.ofUniqueId(eventEnvelope.persistenceId),
-            eventEnvelope.sequenceNr,
-            latency)
-          Future.successful(Done)
-        }.map(_ => eventEnvelope.offset)
+        case event: Event =>
+          {
+            // Times from different nodes, take with a pinch of salt
+            val latency = System.currentTimeMillis() - eventEnvelope.timestamp
+            // when restarting without the offset the latency will be too big
+            if (latency < histogram.getMaxValue) {
+              histogram.recordValue(latency)
+            }
+            log.debugN(
+              "Tag {} Event {} persistenceId {}, sequenceNr {}. Latency {}",
+              tag,
+              event,
+              PersistenceId.ofUniqueId(eventEnvelope.persistenceId),
+              eventEnvelope.sequenceNr,
+              latency)
+            Future.successful(Done)
+          }.map(_ => eventEnvelope.offset)
         case other =>
           Future.failed(new IllegalArgumentException(s"Unexpected event [${other.getClass.getName}]"))
       }

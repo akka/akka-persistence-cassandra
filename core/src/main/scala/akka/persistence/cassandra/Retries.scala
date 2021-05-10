@@ -46,13 +46,12 @@ private[cassandra] object Retries {
     }
 
     if (maxAttempts == -1 || maxAttempts - attempted != 1) {
-      tryAttempt().recoverWith {
-        case NonFatal(exc) =>
-          val nextDelay = BackoffSupervisor.calculateDelay(attempted, minBackoff, maxBackoff, randomFactor)
-          onFailure(attempted + 1, exc, nextDelay)
-          after(nextDelay, scheduler) {
-            retry(attempt, maxAttempts, onFailure, minBackoff, maxBackoff, randomFactor, attempted + 1)
-          }
+      tryAttempt().recoverWith { case NonFatal(exc) =>
+        val nextDelay = BackoffSupervisor.calculateDelay(attempted, minBackoff, maxBackoff, randomFactor)
+        onFailure(attempted + 1, exc, nextDelay)
+        after(nextDelay, scheduler) {
+          retry(attempt, maxAttempts, onFailure, minBackoff, maxBackoff, randomFactor, attempted + 1)
+        }
       }
     } else {
       tryAttempt()

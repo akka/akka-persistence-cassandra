@@ -222,24 +222,23 @@ import scala.util.{ Failure, Success, Try }
           case OptionVal.Some(ref) => ref ! Done
         }
       }
-      summary.foreach {
-        case (id, PidProgress(_, seqNrTo, tagPidSequenceNr, offset)) =>
-          // These writes do not block future writes. We don't read the tag progress again from C*
-          // until a restart has happened. This is best effort and expect recovery to replay any
-          // events that aren't in the tag progress table
-          session.writeProgress(tag, id, seqNrTo, tagPidSequenceNr, offset).onComplete {
-            case Success(_) =>
-            case Failure(t) =>
-              log.warning(
-                "Tag progress write has failed for pid: {} seqNrTo: {} tagPidSequenceNr: {} offset: {}. " +
-                "If this is the only Cassandra error things will continue to work but if this keeps happening it will " +
-                s" mean slower recovery as tag_views will need to be repaired. Reason: $t",
-                id,
-                seqNrTo,
-                tagPidSequenceNr,
-                formatOffset(offset))
-              parent ! TagWriters.TagWriteFailed(t)
-          }
+      summary.foreach { case (id, PidProgress(_, seqNrTo, tagPidSequenceNr, offset)) =>
+        // These writes do not block future writes. We don't read the tag progress again from C*
+        // until a restart has happened. This is best effort and expect recovery to replay any
+        // events that aren't in the tag progress table
+        session.writeProgress(tag, id, seqNrTo, tagPidSequenceNr, offset).onComplete {
+          case Success(_) =>
+          case Failure(t) =>
+            log.warning(
+              "Tag progress write has failed for pid: {} seqNrTo: {} tagPidSequenceNr: {} offset: {}. " +
+              "If this is the only Cassandra error things will continue to work but if this keeps happening it will " +
+              s" mean slower recovery as tag_views will need to be repaired. Reason: $t",
+              id,
+              seqNrTo,
+              tagPidSequenceNr,
+              formatOffset(offset))
+            parent ! TagWriters.TagWriteFailed(t)
+        }
       }
       awaitingFlush match {
         case Some(replyTo) =>
@@ -321,10 +320,10 @@ import scala.util.{ Failure, Success, Try }
       notifyWhenDone: Option[ActorRef]): Unit = {
     val writeSummary = createTagWriteSummary(buffer)
     log.debug("Starting tag write of {} events. Summary: {}", buffer.nextBatch.size, writeSummary)
-    val withFailure = session.writeBatch(tag, buffer).map(_ => TagWriteDone(writeSummary, notifyWhenDone)).recover {
-      case NonFatal(t) =>
+    val withFailure =
+      session.writeBatch(tag, buffer).map(_ => TagWriteDone(writeSummary, notifyWhenDone)).recover { case NonFatal(t) =>
         TagWriteFailed(t, buffer.nextBatch)
-    }
+      }
 
     import context.dispatcher
     withFailure.pipeTo(self)

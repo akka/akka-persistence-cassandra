@@ -318,21 +318,20 @@ class CassandraReadJournal protected (
       try {
         val (fromOffset, usingOffset) = offsetToInternalOffset(offset)
         val prereqs = eventsByTagPrereqs(tag, usingOffset, fromOffset)
-        createFutureSource(prereqs) {
-          case (s, (statements, initialTagPidSequenceNrs, scanner)) =>
-            val session =
-              new TagStageSession(tag, querySettings.readProfile, s, statements, eventsByTagSettings.retrySettings)
-            Source.fromGraph(
-              EventsByTagStage(
-                session,
-                fromOffset,
-                None,
-                settings,
-                Some(querySettings.refreshInterval),
-                eventsByTagSettings.bucketSize,
-                usingOffset,
-                initialTagPidSequenceNrs,
-                scanner))
+        createFutureSource(prereqs) { case (s, (statements, initialTagPidSequenceNrs, scanner)) =>
+          val session =
+            new TagStageSession(tag, querySettings.readProfile, s, statements, eventsByTagSettings.retrySettings)
+          Source.fromGraph(
+            EventsByTagStage(
+              session,
+              fromOffset,
+              None,
+              settings,
+              Some(querySettings.refreshInterval),
+              eventsByTagSettings.bucketSize,
+              usingOffset,
+              initialTagPidSequenceNrs,
+              scanner))
         }.via(deserializeEventsByTagRow)
           .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
@@ -416,10 +415,9 @@ class CassandraReadJournal protected (
           eventsByTagSettings.offsetScanning,
           math.min)
         .map { progress =>
-          progress.map {
-            case (key, (tagPidSequenceNr, uuid)) =>
-              val unixTime = Uuids.unixTimestamp(uuid)
-              (key, (tagPidSequenceNr - 1, Uuids.startOf(unixTime - 1)))
+          progress.map { case (key, (tagPidSequenceNr, uuid)) =>
+            val unixTime = Uuids.unixTimestamp(uuid)
+            (key, (tagPidSequenceNr - 1, Uuids.startOf(unixTime - 1)))
           }
         }
     }
@@ -479,7 +477,6 @@ class CassandraReadJournal protected (
    *
    * Use `NoOffset` when you want all events from the beginning of time.
    * To acquire an offset from a long unix timestamp to use with this query, you can use [[timeBasedUUIDFrom]].
-   *
    */
   override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] =
     currentEventsByTagInternal(tag, offset)
@@ -501,21 +498,20 @@ class CassandraReadJournal protected (
         // pick up all the events written this millisecond
         val toOffset = Some(Uuids.endOf(System.currentTimeMillis()))
 
-        createFutureSource(prereqs) {
-          case (s, (statements, initialTagPidSequenceNrs, scanner)) =>
-            val session =
-              new TagStageSession(tag, querySettings.readProfile, s, statements, eventsByTagSettings.retrySettings)
-            Source.fromGraph(
-              EventsByTagStage(
-                session,
-                fromOffset,
-                toOffset,
-                settings,
-                None,
-                eventsByTagSettings.bucketSize,
-                usingOffset,
-                initialTagPidSequenceNrs,
-                scanner))
+        createFutureSource(prereqs) { case (s, (statements, initialTagPidSequenceNrs, scanner)) =>
+          val session =
+            new TagStageSession(tag, querySettings.readProfile, s, statements, eventsByTagSettings.retrySettings)
+          Source.fromGraph(
+            EventsByTagStage(
+              session,
+              fromOffset,
+              toOffset,
+              settings,
+              None,
+              eventsByTagSettings.bucketSize,
+              usingOffset,
+              initialTagPidSequenceNrs,
+              scanner))
         }.via(deserializeEventsByTagRow)
           .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
@@ -564,8 +560,8 @@ class CassandraReadJournal protected (
       querySettings.readProfile,
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization))
-      .mapConcat {
-        case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
+      .mapConcat { case (persistentRepr, offset) =>
+        toEventEnvelope(mapEvent(persistentRepr), offset)
       }
       .mapMaterializedValue(_ => NotUsed)
 
@@ -587,8 +583,8 @@ class CassandraReadJournal protected (
       querySettings.readProfile,
       s"currentEventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization))
-      .mapConcat {
-        case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
+      .mapConcat { case (persistentRepr, offset) =>
+        toEventEnvelope(mapEvent(persistentRepr), offset)
       }
       .mapMaterializedValue(_ => NotUsed)
 
@@ -610,8 +606,8 @@ class CassandraReadJournal protected (
       settings.journalSettings.readProfile, // write journal read-profile
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization),
-      fastForwardEnabled = true).mapConcat {
-      case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
+      fastForwardEnabled = true).mapConcat { case (persistentRepr, offset) =>
+      toEventEnvelope(mapEvent(persistentRepr), offset)
     }
 
   /**
@@ -654,9 +650,8 @@ class CassandraReadJournal protected (
             fastForwardEnabled))
         .named(name)
     }.mapAsync(querySettings.deserializationParallelism) { row =>
-        extractor.extract(row, deserializeEventAsync)
-      }
-      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+      extractor.extract(row, deserializeEventAsync)
+    }.withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
   }
 
   /**

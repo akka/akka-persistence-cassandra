@@ -149,14 +149,13 @@ import akka.stream.scaladsl.Source
       .readJournalFor[CassandraReadJournal](s"$sharedConfigPath.query")
 
   // For TagWriters/TagWriter children
-  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
-    case e: Exception =>
-      log.error(e, "Cassandra Journal has experienced an unexpected error and requires an ActorSystem restart.")
-      if (settings.journalSettings.coordinatedShutdownOnError) {
-        CoordinatedShutdown(context.system).run(CassandraJournalUnexpectedError)
-      }
-      context.stop(context.self)
-      Stop
+  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() { case e: Exception =>
+    log.error(e, "Cassandra Journal has experienced an unexpected error and requires an ActorSystem restart.")
+    if (settings.journalSettings.coordinatedShutdownOnError) {
+      CoordinatedShutdown(context.system).run(CassandraJournalUnexpectedError)
+    }
+    context.stop(context.self)
+    Stop
   }
 
   override def preStart(): Unit = {
@@ -235,15 +234,14 @@ import akka.stream.scaladsl.Source
     // the case for Akka 2.4.2.
     def serialize(aw: Seq[(PersistentRepr, UUID)]): Future[SerializedAtomicWrite] = {
       val serializedEventsFut: Future[Seq[Serialized]] =
-        Future.sequence(aw.map {
-          case (pr, uuid) =>
-            val (pr2, tags) = pr.payload match {
-              case Tagged(payload, ts) =>
-                (pr.withPayload(payload), ts)
-              case _ =>
-                (pr, Set.empty[String])
-            }
-            serializeEvent(pr2, tags, uuid, settings.eventsByTagSettings.bucketSize, serialization, context.system)
+        Future.sequence(aw.map { case (pr, uuid) =>
+          val (pr2, tags) = pr.payload match {
+            case Tagged(payload, ts) =>
+              (pr.withPayload(payload), ts)
+            case _ =>
+              (pr, Set.empty[String])
+          }
+          serializeEvent(pr2, tags, uuid, settings.eventsByTagSettings.bucketSize, serialization, context.system)
         })
 
       serializedEventsFut.map { serializedEvents =>
@@ -258,8 +256,8 @@ import akka.stream.scaladsl.Source
     val pid = messages.head.persistenceId
     writeInProgress.put(pid, writeInProgressForPersistentId.future)
 
-    val toReturn: Future[Nil.type] = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap {
-      serialized: Seq[SerializedAtomicWrite] =>
+    val toReturn: Future[Nil.type] =
+      Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap { serialized: Seq[SerializedAtomicWrite] =>
         val result: Future[Any] =
           if (messages.map(_.payload.size).sum <= journalSettings.maxMessageBatchSize) {
             // optimize for the common case
@@ -291,7 +289,7 @@ import akka.stream.scaladsl.Source
           }
         }
 
-    }
+      }
 
     // if the write fails still need to remove state from the map
     toReturn.onComplete { _ =>
@@ -333,8 +331,8 @@ import akka.stream.scaladsl.Source
       else BulkTagWrite(s.tags.map(tag => TagWrite(tag, s :: Nil)).toList, Nil)
     } else {
       val messagesByTag: Map[String, Seq[Serialized]] =
-        serialized.flatMap(_.payload).flatMap(s => s.tags.map((_, s))).groupBy(_._1).map {
-          case (tag, messages) => (tag, messages.map(_._2))
+        serialized.flatMap(_.payload).flatMap(s => s.tags.map((_, s))).groupBy(_._1).map { case (tag, messages) =>
+          (tag, messages.map(_._2))
         }
       val messagesWithoutTag =
         for {
@@ -343,8 +341,8 @@ import akka.stream.scaladsl.Source
           if b.tags.isEmpty
         } yield b
 
-      val writesWithTags: immutable.Seq[TagWrite] = messagesByTag.map {
-        case (tag, writes) => TagWrite(tag, writes)
+      val writesWithTags: immutable.Seq[TagWrite] = messagesByTag.map { case (tag, writes) =>
+        TagWrite(tag, writes)
       }.toList
 
       BulkTagWrite(writesWithTags, messagesWithoutTag)
@@ -450,23 +448,24 @@ import akka.stream.scaladsl.Source
         for {
           seqNr <- highestSequenceNr
           _ <- tagRecovery.get.sendPersistentActorStarting(persistenceId, persistentActor)
-          _ <- if (seqNr == fromSequenceNr && seqNr != 0) {
-            log.debug(
-              "[{}] snapshot is current so replay won't be required. Calculating tag progress now",
-              persistenceId)
-            val scanningSeqNrFut = tr.tagScanningStartingSequenceNr(persistenceId)
-            for {
-              tp <- tr.lookupTagProgress(persistenceId)
-              _ <- tr.setTagProgress(persistenceId, tp)
-              scanningSeqNr <- scanningSeqNrFut
-              _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp, tr)
-            } yield seqNr
-          } else if (seqNr == 0) {
-            log.debug("[{}] New pid. Sending blank tag progress. [{}]", persistenceId, persistentActor)
-            tr.setTagProgress(persistenceId, Map.empty)
-          } else {
-            FutureUnit
-          }
+          _ <-
+            if (seqNr == fromSequenceNr && seqNr != 0) {
+              log.debug(
+                "[{}] snapshot is current so replay won't be required. Calculating tag progress now",
+                persistenceId)
+              val scanningSeqNrFut = tr.tagScanningStartingSequenceNr(persistenceId)
+              for {
+                tp <- tr.lookupTagProgress(persistenceId)
+                _ <- tr.setTagProgress(persistenceId, tp)
+                scanningSeqNr <- scanningSeqNrFut
+                _ <- sendPreSnapshotTagWrites(scanningSeqNr, fromSequenceNr, persistenceId, Long.MaxValue, tp, tr)
+              } yield seqNr
+            } else if (seqNr == 0) {
+              log.debug("[{}] New pid. Sending blank tag progress. [{}]", persistenceId, persistentActor)
+              tr.setTagProgress(persistenceId, Map.empty)
+            } else {
+              FutureUnit
+            }
         } yield seqNr
       case None =>
         highestSequenceNr
@@ -593,7 +592,8 @@ import akka.stream.scaladsl.Source
     def logicalAndPhysicalDelete(highestDeletedSequenceNumber: Long, highestSequenceNr: Long): Future[Done] = {
       val lowestPartition = partitionNr(highestDeletedSequenceNumber + 1, journalSettings.targetPartitionSize)
       val toSeqNr = math.min(toSequenceNr, highestSequenceNr)
-      val highestPartition = partitionNr(toSeqNr, journalSettings.targetPartitionSize) + 1 // may have been moved to the next partition
+      val highestPartition =
+        partitionNr(toSeqNr, journalSettings.targetPartitionSize) + 1 // may have been moved to the next partition
       val logicalDelete =
         if (toSeqNr <= highestDeletedSequenceNumber) {
           // already deleted same or higher sequence number, don't update highestDeletedSequenceNumber,
@@ -639,12 +639,11 @@ import akka.stream.scaladsl.Source
     val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, partitionNr: JLong))
     boundSelectHighestSequenceNr
       .flatMap(selectOne)
-      .map(
-        row =>
-          row
-            .map(s =>
-              PartitionInfo(partitionNr, minSequenceNr(partitionNr), math.min(s.getLong("sequence_nr"), maxSequenceNr)))
-            .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
+      .map(row =>
+        row
+          .map(s =>
+            PartitionInfo(partitionNr, minSequenceNr(partitionNr), math.min(s.getLong("sequence_nr"), maxSequenceNr)))
+          .getOrElse(PartitionInfo(partitionNr, minSequenceNr(partitionNr), -1)))
   }
 
   private def asyncHighestDeletedSequenceNumber(persistenceId: String): Future[Long] = {

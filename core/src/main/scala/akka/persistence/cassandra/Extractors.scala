@@ -132,8 +132,8 @@ import akka.persistence.query.TimeBasedUUID
 
   def persistentReprAndOffset(e: EventDeserializer, s: Serialization): Extractor[(PersistentRepr, TimeBasedUUID)] =
     new Extractor[(PersistentRepr, TimeBasedUUID)] {
-      override def extract(row: Row, async: Boolean)(
-          implicit ec: ExecutionContext): Future[(PersistentRepr, TimeBasedUUID)] =
+      override def extract(row: Row, async: Boolean)(implicit
+          ec: ExecutionContext): Future[(PersistentRepr, TimeBasedUUID)] =
         extractPersistentRepr(row, e, s, async).map(repr => repr -> TimeBasedUUID(row.getUuid("timestamp")))
     }
 
@@ -170,24 +170,23 @@ import akka.persistence.query.TimeBasedUUID
         Future.successful(SeqNrValue(row.getLong("sequence_nr")))
     }
 
-  private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization, async: Boolean)(
-      implicit ec: ExecutionContext): Future[PersistentRepr] = {
+  private def extractPersistentRepr(row: Row, ed: EventDeserializer, s: Serialization, async: Boolean)(implicit
+      ec: ExecutionContext): Future[PersistentRepr] = {
 
     def deserializeEvent(): Future[PersistentRepr] = {
-      ed.deserializeEvent(row, async).map {
-        case DeserializedEvent(payload, metadata) =>
-          val repr = PersistentRepr(
-            payload,
-            sequenceNr = row.getLong("sequence_nr"),
-            persistenceId = row.getString("persistence_id"),
-            manifest = row.getString("event_manifest"), // manifest for event adapters
-            deleted = false,
-            sender = null,
-            writerUuid = row.getString("writer_uuid"))
-          metadata match {
-            case OptionVal.None    => repr
-            case OptionVal.Some(m) => repr.withMetadata(m)
-          }
+      ed.deserializeEvent(row, async).map { case DeserializedEvent(payload, metadata) =>
+        val repr = PersistentRepr(
+          payload,
+          sequenceNr = row.getLong("sequence_nr"),
+          persistenceId = row.getString("persistence_id"),
+          manifest = row.getString("event_manifest"), // manifest for event adapters
+          deleted = false,
+          sender = null,
+          writerUuid = row.getString("writer_uuid"))
+        metadata match {
+          case OptionVal.None    => repr
+          case OptionVal.Some(m) => repr.withMetadata(m)
+        }
       }
     }
 
@@ -212,11 +211,10 @@ import akka.persistence.query.TimeBasedUUID
     // Unless we allow migration from pre 0.80 versions to 1.0?
     val oldTags: Set[String] =
       if (columnDefinitionCache.hasOldTagsColumns(row)) {
-        (1 to 3).foldLeft(Set.empty[String]) {
-          case (acc, i) =>
-            val tag = row.getString(s"tag$i")
-            if (tag != null) acc + tag
-            else acc
+        (1 to 3).foldLeft(Set.empty[String]) { case (acc, i) =>
+          val tag = row.getString(s"tag$i")
+          if (tag != null) acc + tag
+          else acc
         }
       } else Set.empty
 

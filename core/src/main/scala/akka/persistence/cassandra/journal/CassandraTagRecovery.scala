@@ -85,39 +85,37 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
     else {
       val completed: List[Future[Done]] =
         tpr.tags.toList
-          .map(
-            tag =>
-              tag -> serializeEvent(
-                tpr.pr,
-                tpr.tags,
-                tpr.offset,
-                settings.eventsByTagSettings.bucketSize,
-                serialization,
-                system))
-          .map {
-            case (tag, serializedFut) =>
-              serializedFut.map { serialized =>
-                tagProgress.get(tag) match {
-                  case None =>
+          .map(tag =>
+            tag -> serializeEvent(
+              tpr.pr,
+              tpr.tags,
+              tpr.offset,
+              settings.eventsByTagSettings.bucketSize,
+              serialization,
+              system))
+          .map { case (tag, serializedFut) =>
+            serializedFut.map { serialized =>
+              tagProgress.get(tag) match {
+                case None =>
+                  log.debug(
+                    "[{}] Tag write not in progress. Sending to TagWriter. Tag [{}] Sequence Nr [{}]",
+                    tpr.pr.persistenceId,
+                    tag,
+                    tpr.sequenceNr)
+                  tagWriters ! TagWrite(tag, serialized :: Nil)
+                  Done
+                case Some(progress) =>
+                  if (tpr.sequenceNr > progress.sequenceNr) {
                     log.debug(
-                      "[{}] Tag write not in progress. Sending to TagWriter. Tag [{}] Sequence Nr [{}]",
+                      "[{}] Sequence nr > than write progress. Sending to TagWriter. Tag [{}] Sequence Nr [{}]",
                       tpr.pr.persistenceId,
                       tag,
                       tpr.sequenceNr)
                     tagWriters ! TagWrite(tag, serialized :: Nil)
-                    Done
-                  case Some(progress) =>
-                    if (tpr.sequenceNr > progress.sequenceNr) {
-                      log.debug(
-                        "[{}] Sequence nr > than write progress. Sending to TagWriter. Tag [{}] Sequence Nr [{}]",
-                        tpr.pr.persistenceId,
-                        tag,
-                        tpr.sequenceNr)
-                      tagWriters ! TagWrite(tag, serialized :: Nil)
-                    }
-                    Done
-                }
+                  }
+                  Done
               }
+            }
           }
 
       Future.sequence(completed).map(_ => tpr)

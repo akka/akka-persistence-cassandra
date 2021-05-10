@@ -108,8 +108,8 @@ import akka.persistence.cassandra.FutureDone
    *
    * Exceptions will be logged but will not fail the returned Future.
    */
-  def executeCreateKeyspaceAndTables(session: CqlSession, log: LoggingAdapter)(
-      implicit ec: ExecutionContext): Future[Done] = {
+  def executeCreateKeyspaceAndTables(session: CqlSession, log: LoggingAdapter)(implicit
+      ec: ExecutionContext): Future[Done] = {
     def keyspace: Future[Done] =
       if (snapshotSettings.keyspaceAutoCreate)
         session.executeAsync(createKeyspace).toScala.map(_ => Done)
@@ -125,17 +125,15 @@ import akka.persistence.cassandra.FutureDone
         session.setSchemaMetadataEnabled(null)
         Done
       }
-      result.recoverWith {
-        case e =>
-          log.warning("Failed to create snapshot keyspace and tables: {}", e)
-          session.setSchemaMetadataEnabled(null)
-          FutureDone
+      result.recoverWith { case e =>
+        log.warning("Failed to create snapshot keyspace and tables: {}", e)
+        session.setSchemaMetadataEnabled(null)
+        FutureDone
       }
     } else {
-      keyspace.recoverWith {
-        case e =>
-          log.warning("Failed to create snapshot keyspace: {}", e)
-          FutureDone
+      keyspace.recoverWith { case e =>
+        log.warning("Failed to create snapshot keyspace: {}", e)
+        FutureDone
       }
     }
   }

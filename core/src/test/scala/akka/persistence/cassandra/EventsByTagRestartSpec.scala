@@ -23,7 +23,8 @@ object EventsByTagRestartSpec {
   val firstBucketFormat: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyyMMdd'T'HH:mm")
 
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
        |akka {
        |  actor.debug.unhandled = on
        |}
@@ -36,7 +37,8 @@ object EventsByTagRestartSpec {
        |}
        |
        |akka.actor.serialize-messages=off
-    """.stripMargin).withFallback(CassandraLifecycle.config)
+    """.stripMargin)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config) with Matchers {

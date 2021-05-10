@@ -54,8 +54,8 @@ private[akka] case class Buffer(
     val lastTimeBucket = write.events.last._1.timeBucket
     if (firstTimeBucket != lastTimeBucket) {
       // this write needs broken up as it spans multiple time buckets
-      val (first, rest) = write.events.partition {
-        case (serialized, _) => serialized.timeBucket == firstTimeBucket
+      val (first, rest) = write.events.partition { case (serialized, _) =>
+        serialized.timeBucket == firstTimeBucket
       }
       add(AwaitingWrite(first, OptionVal.None)).add(AwaitingWrite(rest, write.ack))
     } else {
@@ -65,8 +65,7 @@ private[akka] case class Buffer(
         // add them to pending, any time bucket changes will be detected later
         copy(size = newSize, pending = pending :+ write)
       } else if (nextBatch.headOption.exists(oldestEvent =>
-                   UUIDComparator.comparator
-                     .compare(write.events.head._1.timeUuid, oldestEvent.events.head._1.timeUuid) < 0)) {
+          UUIDComparator.comparator.compare(write.events.head._1.timeUuid, oldestEvent.events.head._1.timeUuid) < 0)) {
         // rare case where events have been received out of order, just re-build the buffer
         require(pending.isEmpty)
         val allWrites = (nextBatch :+ write).sortBy(_.events.head._1.timeUuid)(timeUuidOrdering)

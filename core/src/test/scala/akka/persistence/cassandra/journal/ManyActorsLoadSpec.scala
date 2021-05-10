@@ -16,7 +16,8 @@ import akka.persistence.journal.Tagged
 import com.typesafe.config.ConfigFactory
 
 object ManyActorsLoadSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
       akka.persistence.cassandra.journal.keyspace=ManyActorsLoadSpec
       akka.persistence.cassandra.events-by-tag.enabled = on
       akka.persistence.cassandra.journal.support-all-persistence-ids = off
@@ -24,7 +25,8 @@ object ManyActorsLoadSpec {
       akka.persistence.cassandra.events-by-tag.scanning-flush-interval = 1s
       #akka.persistence.cassandra.log-queries = on
       akka.persistence.cassandra.snapshot.keyspace=ManyActorsLoadSpecSnapshot
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 
   final case class Init(numberOfEvents: Int)
   case object InitDone
@@ -43,19 +45,17 @@ object ManyActorsLoadSpec {
 
   class ProcessorA(val persistenceId: String, tagging: Long => Set[String]) extends PersistentActor {
 
-    def receiveRecover: Receive = {
-      case _: String =>
+    def receiveRecover: Receive = { case _: String =>
     }
 
-    def receiveCommand: Receive = {
-      case s: String =>
-        val tags = tagging(lastSequenceNr)
-        val event =
-          if (tags.isEmpty) s"event-$lastSequenceNr"
-          else Tagged(s"event-$lastSequenceNr", tags)
-        persist(event) { _ =>
-          sender() ! s
-        }
+    def receiveCommand: Receive = { case s: String =>
+      val tags = tagging(lastSequenceNr)
+      val event =
+        if (tags.isEmpty) s"event-$lastSequenceNr"
+        else Tagged(s"event-$lastSequenceNr", tags)
+      persist(event) { _ =>
+        sender() ! s
+      }
     }
   }
 

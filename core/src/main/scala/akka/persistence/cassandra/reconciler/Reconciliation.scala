@@ -39,8 +39,8 @@ import akka.actor.ExtendedActorSystem
  * INTERNAL API
  */
 @InternalApi
-final private[akka] class ReconciliationSession(session: CassandraSession, statements: CassandraStatements)(
-    implicit ec: ExecutionContext) {
+final private[akka] class ReconciliationSession(session: CassandraSession, statements: CassandraStatements)(implicit
+    ec: ExecutionContext) {
   private val deleteTagView = session.prepare(statements.journalStatements.deleteTag)
   private val deleteTagProgress = session.prepare(statements.journalStatements.deleteTagProgress)
   private val deleteTagScanning = session.prepare(statements.journalStatements.deleteTagScanning)

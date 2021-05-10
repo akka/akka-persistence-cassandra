@@ -17,7 +17,8 @@ import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 
 object CassandraJournalConfiguration {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
        akka.persistence.cassandra.journal.keyspace=CassandraJournalSpec
        akka.persistence.cassandra.snapshot.keyspace=CassandraJournalSpecSnapshot
        datastax-java-driver {
@@ -26,14 +27,17 @@ object CassandraJournalConfiguration {
            session.enabled = [ "bytes-sent", "cql-requests"]
          }
        }  
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 
   lazy val perfConfig =
-    ConfigFactory.parseString("""
+    ConfigFactory
+      .parseString("""
     akka.actor.serialize-messages=off
     akka.persistence.cassandra.journal.keyspace=CassandraJournalPerfSpec
     akka.persistence.cassandra.snapshot.keyspace=CassandraJournalPerfSpecSnapshot
-    """).withFallback(config)
+    """)
+      .withFallback(config)
 
 }
 
@@ -66,8 +70,8 @@ class CassandraJournalSpec extends JournalSpec(CassandraJournalConfiguration.con
       val probe = TestProbe()
 
       journal ! WriteMessages(List(AtomicWrite(msg)), probe.ref, actorInstanceId)
-      val err = probe.expectMsgPF() {
-        case fail: WriteMessagesFailed => fail.cause
+      val err = probe.expectMsgPF() { case fail: WriteMessagesFailed =>
+        fail.cause
       }
       probe.expectMsg(WriteMessageFailure(msg, err, actorInstanceId))
 

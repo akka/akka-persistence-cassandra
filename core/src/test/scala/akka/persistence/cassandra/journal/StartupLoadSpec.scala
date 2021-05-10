@@ -13,20 +13,17 @@ import scala.concurrent.duration._
 
 object StartupLoadSpec {
   class ProcessorA(val persistenceId: String, receiver: ActorRef) extends PersistentActor {
-    def receiveRecover: Receive = {
-      case _ =>
+    def receiveRecover: Receive = { case _ =>
     }
 
-    def receiveCommand: Receive = {
-      case payload: String =>
-        persist(payload)(handle)
+    def receiveCommand: Receive = { case payload: String =>
+      persist(payload)(handle)
     }
 
-    def handle: Receive = {
-      case payload: String =>
-        receiver ! payload
-        receiver ! lastSequenceNr
-        saveSnapshot(payload)
+    def handle: Receive = { case payload: String =>
+      receiver ! payload
+      receiver ! lastSequenceNr
+      saveSnapshot(payload)
     }
   }
 
@@ -52,16 +49,15 @@ class StartupLoadSpec extends CassandraSpec {
           (probe, r)
         }
 
-        probesAndRefs.foreach {
-          case (p, r) =>
-            if (i == 1 && p == probesAndRefs.head._1)
-              p.expectMsg(30.seconds, s"a-$i")
-            else
-              p.expectMsg(s"a-$i")
-            p.expectMsg(i.toLong) // seq number
-            p.watch(r)
-            r ! PoisonPill
-            p.expectTerminated(r)
+        probesAndRefs.foreach { case (p, r) =>
+          if (i == 1 && p == probesAndRefs.head._1)
+            p.expectMsg(30.seconds, s"a-$i")
+          else
+            p.expectMsg(s"a-$i")
+          p.expectMsg(i.toLong) // seq number
+          p.watch(r)
+          r ! PoisonPill
+          p.expectTerminated(r)
         }
       }
     }

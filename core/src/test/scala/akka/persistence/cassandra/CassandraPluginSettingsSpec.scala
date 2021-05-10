@@ -72,31 +72,37 @@ class CassandraPluginSettingsSpec
 
     "parse config with a list of datacenters configured for NetworkTopologyStrategy" in {
       lazy val configWithNetworkStrategy =
-        ConfigFactory.parseString("""
+        ConfigFactory
+          .parseString("""
           |journal.replication-strategy = "NetworkTopologyStrategy"
           |journal.data-center-replication-factors = ["dc1:3", "dc2:2"]
-        """.stripMargin).withFallback(defaultConfig)
+        """.stripMargin)
+          .withFallback(defaultConfig)
       val config = new JournalSettings(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }
 
     "parse config with a list of datacenters configured for NetworkTopologyStrategy using dot syntax" in {
       lazy val configWithNetworkStrategy =
-        ConfigFactory.parseString("""
+        ConfigFactory
+          .parseString("""
           |journal.replication-strategy = "NetworkTopologyStrategy"
           |journal.data-center-replication-factors.0 = "dc1:3"
           |journal.data-center-replication-factors.1 = "dc2:2"
-        """.stripMargin).withFallback(defaultConfig)
+        """.stripMargin)
+          .withFallback(defaultConfig)
       val config = new JournalSettings(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }
 
     "parse config with comma-separated data-center-replication-factors" in {
       lazy val configWithNetworkStrategy =
-        ConfigFactory.parseString("""
+        ConfigFactory
+          .parseString("""
           |journal.replication-strategy = "NetworkTopologyStrategy"
           |journal.data-center-replication-factors = "dc1:3,dc2:2"
-        """.stripMargin).withFallback(defaultConfig)
+        """.stripMargin)
+          .withFallback(defaultConfig)
       val config = new JournalSettings(system, configWithNetworkStrategy)
       config.replicationStrategy must be("'NetworkTopologyStrategy','dc1':3,'dc2':2")
     }

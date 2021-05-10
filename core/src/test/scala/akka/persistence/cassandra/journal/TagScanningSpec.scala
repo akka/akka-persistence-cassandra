@@ -9,12 +9,14 @@ import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, TestTaggi
 import com.typesafe.config.ConfigFactory
 
 object TagScanningSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
       akka.persistence.cassandra.events-by-tag.enabled = on
       akka.persistence.cassandra.events-by-tag.scanning-flush-interval = 2s
       akka.persistence.cassandra.journal.replay-filter.mode = off
       akka.persistence.cassandra.log-queries = off
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class TagScanningSpec extends CassandraSpec(TagScanningSpec.config) {

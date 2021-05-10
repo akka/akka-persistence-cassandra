@@ -19,7 +19,8 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterEach
 
 object AllPersistenceIdsSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
     akka.persistence.cassandra {
       journal.target-partition-size = 15
       query {
@@ -28,7 +29,8 @@ object AllPersistenceIdsSpec {
         max-result-size-query = 10
       }
     }  
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) with BeforeAndAfterEach {

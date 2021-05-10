@@ -28,10 +28,16 @@ class RetriesSpec
       val failProbe = TestProbe()
       @volatile var called = 0
       val result = Retries
-        .retry(() => {
-          called += 1
-          Future.failed(new RuntimeException(s"cats $called"))
-        }, 3, (_, exc, _) => failProbe.ref ! exc, 1.milli, 2.millis, 0.1)
+        .retry(
+          () => {
+            called += 1
+            Future.failed(new RuntimeException(s"cats $called"))
+          },
+          3,
+          (_, exc, _) => failProbe.ref ! exc,
+          1.milli,
+          2.millis,
+          0.1)
         .failed
         .futureValue
       called shouldEqual 3

@@ -44,7 +44,6 @@ object CassandraReadJournal {
  * Configuration settings can be defined in the configuration section with the
  * absolute path corresponding to the identifier, which is `"akka.persistence.cassandra.query"`
  * for the default [[CassandraReadJournal#Identifier]]. See `reference.conf`.
- *
  */
 class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query.scaladsl.CassandraReadJournal)
     extends ReadJournal
@@ -154,7 +153,6 @@ class CassandraReadJournal(scaladslReadJournal: akka.persistence.cassandra.query
    *
    * Use `NoOffset` when you want all events from the beginning of time.
    * To acquire an offset from a long unix timestamp to use with this query, you can use [[timeBasedUUIDFrom]].
-   *
    */
   override def currentEventsByTag(tag: String, offset: Offset): Source[EventEnvelope, NotUsed] =
     scaladslReadJournal.currentEventsByTag(tag, offset).asJava

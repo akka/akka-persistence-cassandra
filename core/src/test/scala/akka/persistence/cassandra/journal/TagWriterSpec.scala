@@ -130,7 +130,10 @@ class TagWriterSpec
       val flushSender = TestProbe("flushSender")
       ref.tell(TagWrite(tagName, Vector(e3)), sender2.ref)
       ref.tell(Flush, flushSender.ref)
-      ref.tell(TagWrite(tagName, Vector(e4)), sender3.ref) // check adding to the buffer while in progress doesn't lose the flush
+      ref.tell(
+        TagWrite(tagName, Vector(e4)),
+        sender3.ref
+      ) // check adding to the buffer while in progress doesn't lose the flush
       probe.expectNoMessage(waitDuration)
       sender2.expectNoMessage(waitDuration)
       promiseForWrite.success(Done)
@@ -245,20 +248,18 @@ class TagWriterSpec
       val bucket = nowBucket()
 
       val allEvents =
-        (1 to 6).foldLeft(Vector.empty[Serialized]) {
-          case (acc, n) =>
-            val evt = event("p1", n, s"e-$n", bucket)
-            val events = acc :+ evt
-            ref ! TagWrite(tagName, Vector(evt))
-            Thread.sleep(200)
-            if (n == 3) {
-              probe.within(200.millis) {
-                probe.expectMsg(events.map(evt => toEw(evt, evt.sequenceNr)))
-                probe.expectMsg(
-                  ProgressWrite("p1", events.last.sequenceNr, events.last.sequenceNr, events.last.timeUuid))
-              }
+        (1 to 6).foldLeft(Vector.empty[Serialized]) { case (acc, n) =>
+          val evt = event("p1", n, s"e-$n", bucket)
+          val events = acc :+ evt
+          ref ! TagWrite(tagName, Vector(evt))
+          Thread.sleep(200)
+          if (n == 3) {
+            probe.within(200.millis) {
+              probe.expectMsg(events.map(evt => toEw(evt, evt.sequenceNr)))
+              probe.expectMsg(ProgressWrite("p1", events.last.sequenceNr, events.last.sequenceNr, events.last.timeUuid))
             }
-            events
+          }
+          events
         }
 
       val remainingFlushedEvents = allEvents.drop(3)
@@ -753,8 +754,8 @@ class TagWriterSpec
       new TagWritersSession(null, "unused", "unused", null) {
 
         override def writeBatch(tag: Tag, write: Buffer)(implicit ec: ExecutionContext) = {
-          probe.ref ! write.nextBatch.flatten(_.events).map {
-            case (event, tagPidSequenceNr) => toEw(event, tagPidSequenceNr)
+          probe.ref ! write.nextBatch.flatten(_.events).map { case (event, tagPidSequenceNr) =>
+            toEw(event, tagPidSequenceNr)
           }
           val (result, tail) = (writeResponseStream.head, writeResponseStream.tail)
           writeResponseStream = tail

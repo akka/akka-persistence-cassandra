@@ -49,8 +49,8 @@ import akka.stream.scaladsl.Sink
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class TagViewSequenceNumberScanner(session: Session, pluginDispatcher: String)(
-    implicit materializer: Materializer,
+@InternalApi private[akka] class TagViewSequenceNumberScanner(session: Session, pluginDispatcher: String)(implicit
+    materializer: Materializer,
     @nowarn("msg=never used") ec: ExecutionContext) {
   private val log = Logging(materializer.system, getClass)
 
@@ -100,18 +100,17 @@ import akka.stream.scaladsl.Sink
           session.selectTagSequenceNrs(tag, bucket, fromOffset, toOffset)
         })
         .map(row => (row.getString("persistence_id"), row.getLong("tag_pid_sequence_nr"), row.getUuid("timestamp")))
-        .toMat(Sink.fold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) {
-          case (acc, (pid, tagPidSequenceNr, timestamp)) =>
-            val (newTagPidSequenceNr, newTimestamp) = acc.get(pid) match {
-              case None =>
+        .toMat(Sink.fold(Map.empty[Tag, (TagPidSequenceNr, UUID)]) { case (acc, (pid, tagPidSequenceNr, timestamp)) =>
+          val (newTagPidSequenceNr, newTimestamp) = acc.get(pid) match {
+            case None =>
+              (tagPidSequenceNr, timestamp)
+            case Some((currentTagPidSequenceNr, currentTimestamp)) =>
+              if (whichToKeep(tagPidSequenceNr, currentTagPidSequenceNr) == tagPidSequenceNr)
                 (tagPidSequenceNr, timestamp)
-              case Some((currentTagPidSequenceNr, currentTimestamp)) =>
-                if (whichToKeep(tagPidSequenceNr, currentTagPidSequenceNr) == tagPidSequenceNr)
-                  (tagPidSequenceNr, timestamp)
-                else
-                  (currentTagPidSequenceNr, currentTimestamp)
-            }
-            acc + (pid -> ((newTagPidSequenceNr, newTimestamp)))
+              else
+                (currentTagPidSequenceNr, currentTimestamp)
+          }
+          acc + (pid -> ((newTagPidSequenceNr, newTimestamp)))
         })(Keep.right)
         .withAttributes(ActorAttributes.dispatcher(pluginDispatcher))
         .run()

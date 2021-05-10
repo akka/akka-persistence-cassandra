@@ -23,8 +23,7 @@ class TestActor(override val persistenceId: String, override val journalPluginId
 
   var lastDelete: ActorRef = _
 
-  val receiveRecover: Receive = {
-    case evt: String =>
+  val receiveRecover: Receive = { case evt: String =>
   }
 
   val receiveCommand: Receive = {
