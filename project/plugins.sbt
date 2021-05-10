@@ -14,4 +14,4 @@ addSbtPlugin("com.eed3si9n" % "sbt-unidoc" % "0.4.3")
 addSbtPlugin("com.typesafe.sbt" % "sbt-site" % "1.4.0")
 
 // For example
-addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.7.0")
+addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.7.6")
