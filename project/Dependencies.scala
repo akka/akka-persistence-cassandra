@@ -39,7 +39,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
-      "org.scala-lang.modules" %% "scala-collection-compat" % "2.4.2",
+      "org.scala-lang.modules" %% "scala-collection-compat" % "2.4.4",
       Logback % Test,
       "org.scalatest" %% "scalatest" % "3.1.0" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,
