@@ -41,7 +41,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       "org.scala-lang.modules" %% "scala-collection-compat" % "2.4.2",
       Logback % Test,
-      "org.scalatest" %% "scalatest" % "3.1.0" % Test,
+      "org.scalatest" %% "scalatest" % "3.1.4" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,
       "org.osgi" % "org.osgi.core" % "5.0.0" % Provided) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
 
