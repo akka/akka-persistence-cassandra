@@ -116,6 +116,11 @@ class EventsByTagMigration(
     } yield Done
   }
 
+  private def periodicFlushBatchSize(periodicFlushParameter: Int): Int = {
+    if (periodicFlushParameter == 0) eventsByTagSettings.tagWriterSettings.maxBatchSize
+    else periodicFlushParameter
+  }
+
   // TODO might be nice to return a summary of what was done rather than just Done
 
   /**
@@ -132,12 +137,15 @@ class EventsByTagMigration(
    *
    * It is recommended you use this if the `messages` table is large.
    *
+   * Events are batched with the given `periodicFlush`. By default the value equals
+   * configured `events-by-tag.max-message-batch-size`.
+   *
    * @param pids PersistenceIds to migrate
    * @return A Future that completes when the migration is complete
    */
   def migratePidsToTagViews(
       pids: Seq[PersistenceId],
-      periodicFlush: Int = 1000,
+      periodicFlush: Int = 0,
       flushTimeout: Timeout = Timeout(30.seconds)): Future[Done] = {
     migrateToTagViewsInternal(Source.fromIterator(() => pids.iterator), periodicFlush, flushTimeout)
   }
@@ -153,12 +161,15 @@ class EventsByTagMigration(
    * the version of this method can be used where the persistenceIds are provided.
    *
    * Persistence ids can be excluded (e.g. useful if you know certain persistenceIds
-   * don't use tags
+   * don't use tags.
+   *
+   * Events are batched with the given `periodicFlush`. By default the value equals
+   * configured `events-by-tag.max-message-batch-size`.
    *
    * @return A Future that completes when the migration is complete.
    */
   def migrateToTagViews(
-      periodicFlush: Int = 1000,
+      periodicFlush: Int = 0,
       filter: String => Boolean = _ => true,
       flushTimeout: Timeout = Timeout(30.seconds)): Future[Done] = {
     migrateToTagViewsInternal(queries.currentPersistenceIds().filter(filter), periodicFlush, flushTimeout)
@@ -187,6 +198,8 @@ class EventsByTagMigration(
           } yield (tp, startingSeq)
         }
 
+        val flushBatchSize = periodicFlushBatchSize(periodicFlush)
+
         // would be nice to group these up into a TagWrites message but also
         // nice that this reuses the recovery code :-/
         Source.futureSource {
@@ -209,7 +222,7 @@ class EventsByTagMigration(
                   extractor =
                     EventsByTagMigration.rawPayloadOldTagSchemaExtractor(eventsByTagSettings.bucketSize, system))
                 .map(tagRecovery.sendMissingTagWriteRaw(tp, actorRunning = false))
-                .grouped(periodicFlush)
+                .grouped(flushBatchSize)
                 .mapAsync(1)(_ => tagRecovery.flush(timeout))
             }
           }
