@@ -12,7 +12,8 @@ import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.ConfigFactory
 
 object EventsByPersistenceIdMultiPartitionGapSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
     akka.loglevel = INFO
     akka.persistence.cassandra.journal.target-partition-size = 15
     akka.persistence.cassandra.query.refresh-interval = 0.5s
@@ -20,7 +21,8 @@ object EventsByPersistenceIdMultiPartitionGapSpec {
     akka.persistence.cassandra.query.events-by-persistence-id-gap-timeout = 4 seconds
     akka.persistence.cassandra.query.gap-free-sequence-numbers = off
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class EventsByPersistenceIdMultiPartitionGapSpec

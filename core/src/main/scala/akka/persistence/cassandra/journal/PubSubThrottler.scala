@@ -27,7 +27,7 @@ import akka.annotation.InternalApi
   def receive = {
     case Tick =>
       for ((msg, clients) <- repeated;
-           client <- clients) {
+        client <- clients) {
         delegate.tell(msg, client)
       }
       seen.clear()

@@ -20,7 +20,8 @@ import com.typesafe.config.ConfigFactory
 import scala.collection.immutable.Seq
 
 object CassandraSnapshotStoreConfiguration {
-  lazy val config = ConfigFactory.parseString(s"""
+  lazy val config = ConfigFactory
+    .parseString(s"""
        akka.persistence.cassandra.journal.keyspace=CassandraSnapshotStoreSpec
        akka.persistence.cassandra.snapshot.keyspace=CassandraSnapshotStoreSpecSnapshot
        datastax-java-driver {
@@ -29,7 +30,8 @@ object CassandraSnapshotStoreConfiguration {
            session.enabled = [ "bytes-sent", "cql-requests"]
          }
        }
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class CassandraSnapshotStoreSpec

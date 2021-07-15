@@ -27,7 +27,9 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
 
   val name = "EventsByTagMuliJvmSpec"
 
-  commonConfig(ConfigFactory.parseString(s"""
+  commonConfig(
+    ConfigFactory
+      .parseString(s"""
       akka {
         loglevel = INFO 
         actor.provider = cluster
@@ -47,7 +49,8 @@ object EventsByTagMultiJvmSpec extends MultiNodeConfig {
           keyspace = $name
         }
       }
-    """).withFallback(CassandraLifecycle.config))
+    """)
+      .withFallback(CassandraLifecycle.config))
 
 }
 

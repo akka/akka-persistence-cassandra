@@ -65,51 +65,48 @@ import scala.util.Try
       } yield (withMeta, withoutMeta)
 
       tagWritePSs
-        .map {
-          case (withMeta, withoutMeta) =>
-            events.nextBatch.foreach { awaitingWrite =>
-              awaitingWrite.events.foreach {
-                case (event, pidTagSequenceNr) =>
-                  val ps = if (event.meta.isDefined) withMeta else withoutMeta
-                  val bound = ps.bind(
-                    tag,
-                    event.timeBucket.key: JLong,
-                    event.timeUuid,
-                    pidTagSequenceNr: JLong,
-                    event.serialized,
-                    event.eventAdapterManifest,
-                    event.persistenceId,
-                    event.sequenceNr: JLong,
-                    event.serId: JInt,
-                    event.serManifest,
-                    event.writerUuid)
+        .map { case (withMeta, withoutMeta) =>
+          events.nextBatch.foreach { awaitingWrite =>
+            awaitingWrite.events.foreach { case (event, pidTagSequenceNr) =>
+              val ps = if (event.meta.isDefined) withMeta else withoutMeta
+              val bound = ps.bind(
+                tag,
+                event.timeBucket.key: JLong,
+                event.timeUuid,
+                pidTagSequenceNr: JLong,
+                event.serialized,
+                event.eventAdapterManifest,
+                event.persistenceId,
+                event.sequenceNr: JLong,
+                event.serId: JInt,
+                event.serManifest,
+                event.writerUuid)
 
-                  val finished = event.meta match {
-                    case Some(m) =>
-                      bound
-                        .setByteBuffer("meta", m.serialized)
-                        .setString("meta_ser_manifest", m.serManifest)
-                        .setInt("meta_ser_id", m.serId)
-                    case None =>
-                      bound
-                  }
-
-                  // this is a mutable builder
-                  batch.addStatement(finished)
+              val finished = event.meta match {
+                case Some(m) =>
+                  bound
+                    .setByteBuffer("meta", m.serialized)
+                    .setString("meta_ser_manifest", m.serManifest)
+                    .setInt("meta_ser_id", m.serId)
+                case None =>
+                  bound
               }
+
+              // this is a mutable builder
+              batch.addStatement(finished)
             }
-            batch.build()
+          }
+          batch.build()
         }
         .flatMap(executeWrite)
     }
 
-    def writeProgress(tag: Tag, persistenceId: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)(
-        implicit ec: ExecutionContext): Future[Done] = {
+    def writeProgress(tag: Tag, persistenceId: String, seqNr: Long, tagPidSequenceNr: Long, offset: UUID)(implicit
+        ec: ExecutionContext): Future[Done] = {
       WriteTagProgress
-        .map(
-          ps =>
-            ps.bind(persistenceId, tag, seqNr: JLong, tagPidSequenceNr: JLong, offset)
-              .setExecutionProfileName(writeProfile))
+        .map(ps =>
+          ps.bind(persistenceId, tag, seqNr: JLong, tagPidSequenceNr: JLong, offset)
+            .setExecutionProfileName(writeProfile))
         .flatMap(executeWrite)
     }
 
@@ -182,8 +179,8 @@ import scala.util.Try
   override val log: LoggingAdapter = super.log
 
   // Escalate to the journal so it can stop
-  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {
-    case _: Exception => Escalate
+  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy() { case _: Exception =>
+    Escalate
   }
 
   private var tagActors = Map.empty[String, ActorRef]
@@ -266,10 +263,9 @@ import scala.util.Try
 
       val replyTo = sender()
       pendingScanning -= pid
-      val tagWriterAcks = Future.sequence(tagProgresses.map {
-        case (tag, progress) =>
-          log.debug("Sending tag progress: [{}] [{}]", tag, progress)
-          askTagActor(tag, ResetPersistenceId(tag, progress)).mapTo[ResetPersistenceIdComplete.type]
+      val tagWriterAcks = Future.sequence(tagProgresses.map { case (tag, progress) =>
+        log.debug("Sending tag progress: [{}] [{}]", tag, progress)
+        askTagActor(tag, ResetPersistenceId(tag, progress)).mapTo[ResetPersistenceIdComplete.type]
       })
       // We send an empty progress in case the tag actor has buffered events
       // and has never written any tag progress for this tag/pid
@@ -299,8 +295,8 @@ import scala.util.Try
             "Persistent actor terminated [{}]. Informing TagWriter actors to drop state for pid: [{}]",
             ref,
             pid)
-          tagActors.foreach {
-            case (_, tagWriterRef) => tagWriterRef ! DropState(pid)
+          tagActors.foreach { case (_, tagWriterRef) =>
+            tagWriterRef ! DropState(pid)
           }
           currentPersistentActors -= pid
         case Some(currentRef) =>
@@ -389,8 +385,8 @@ import scala.util.Try
         val startTime = System.nanoTime()
 
         def writeTagScanningBatch(group: Seq[(String, Long)]): Future[Done] = {
-          val statements: Seq[BoundStatement] = group.map {
-            case (pid, seqNr) => ps.bind(pid, seqNr: JLong)
+          val statements: Seq[BoundStatement] = group.map { case (pid, seqNr) =>
+            ps.bind(pid, seqNr: JLong)
           }
           Future.traverse(statements)(tagWriterSession.executeWrite).map(_ => Done)
         }

@@ -15,7 +15,8 @@ import com.typesafe.config.ConfigFactory
 import scala.concurrent.duration._
 
 object CassandraReadJournalSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
     akka.actor.serialize-messages=off
     akka.persistence.cassandra.query.max-buffer-size = 10
     akka.persistence.cassandra.query.refresh-interval = 0.5s
@@ -26,7 +27,8 @@ object CassandraReadJournalSpec {
       "java.lang.String" = test-tagger
     }
     akka.persistence.cassandra.log-queries = off
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class TestTagger extends WriteEventAdapter {

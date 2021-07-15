@@ -16,7 +16,8 @@ object MultiPluginSpec {
   val journalKeyspace = s"multiplugin_spec_journal_$now"
   val snapshotKeyspace = s"multiplugin_spec_snapshot_$now"
   val cassandraPort = CassandraLauncher.randomPort
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
        |akka.test.single-expect-default = 20s
        |akka.test.filter-leeway = 20s
        |
@@ -40,12 +41,12 @@ object MultiPluginSpec {
        |cassandra-plugin-d.journal.table=processor_d_messages
        |cassandra-plugin-d.snapshot.table=snapshot_d_messages
        |
-    """.stripMargin).withFallback(CassandraLifecycle.config)
+    """.stripMargin)
+    .withFallback(CassandraLifecycle.config)
 
   trait Processor extends PersistentActor {
 
-    override def receiveRecover: Receive = {
-      case _ =>
+    override def receiveRecover: Receive = { case _ =>
     }
 
     override def receiveCommand: Receive = {
@@ -57,8 +58,7 @@ object MultiPluginSpec {
         }
     }
 
-    def noop: Receive = {
-      case _: String =>
+    def noop: Receive = { case _: String =>
     }
   }
 

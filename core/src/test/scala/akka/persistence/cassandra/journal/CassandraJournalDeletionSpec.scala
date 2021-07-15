@@ -32,9 +32,8 @@ object CassandraJournalDeletionSpec {
 
     var recoveredEvents: List[Any] = List.empty
 
-    override def receiveRecover: Receive = {
-      case event =>
-        recoveredEvents = event :: recoveredEvents
+    override def receiveRecover: Receive = { case event =>
+      recoveredEvents = event :: recoveredEvents
     }
 
     var lastDeletedTo: Long = 0
@@ -155,8 +154,8 @@ class CassandraJournalDeletionSpec extends CassandraSpec(s"""
       msg.getMessage shouldEqual "Over 5 outstanding deletes for persistenceId p2"
 
       // Does't matter how many as long as they are all in order
-      val successes: immutable.Seq[Long] = deleteSuccess.receiveWhile(max = 100.millis) {
-        case Deleted(i) => i
+      val successes: immutable.Seq[Long] = deleteSuccess.receiveWhile(max = 100.millis) { case Deleted(i) =>
+        i
       }
       successes shouldEqual successes.sorted
     }

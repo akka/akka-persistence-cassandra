@@ -20,13 +20,15 @@ import akka.stream.scaladsl.Sink
 import akka.util.UUIDComparator
 
 object EventsByPersistenceIdSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
     akka.persistence.cassandra.journal.target-partition-size = 15
     akka.persistence.cassandra.query.refresh-interval = 0.5s
     akka.persistence.cassandra.query.max-result-size-query = 2
     akka.persistence.cassandra.query.events-by-persistence-id-gap-timeout = 4 seconds
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.config) with DirectWriting {

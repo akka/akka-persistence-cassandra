@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.matchers.should.Matchers
 
 object CassandraIntegrationSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
       |akka.persistence.journal.max-deletion-batch-size = 3
       |akka.persistence.publish-confirmations = on
       |akka.persistence.publish-plugin-commands = on
@@ -23,7 +24,8 @@ object CassandraIntegrationSpec {
       |akka.persistence.cassandra.max-result-size = 3
       |akka.persistence.cassandra.journal.keyspace=CassandraIntegrationSpec
       |akka.persistence.cassandra.snapshot.keyspace=CassandraIntegrationSpecSnapshot
-    """.stripMargin).withFallback(CassandraLifecycle.config)
+    """.stripMargin)
+    .withFallback(CassandraLifecycle.config)
 
   case class DeleteTo(snr: Long)
 
@@ -37,11 +39,10 @@ object CassandraIntegrationSpec {
         persistAll(payload)(handle)
     }
 
-    def handle: Receive = {
-      case payload: String =>
-        receiver ! payload
-        receiver ! lastSequenceNr
-        receiver ! recoveryRunning
+    def handle: Receive = { case payload: String =>
+      receiver ! payload
+      receiver ! lastSequenceNr
+      receiver ! recoveryRunning
     }
   }
 
@@ -55,11 +56,10 @@ object CassandraIntegrationSpec {
         persist(payload)(handle)
     }
 
-    def handle: Receive = {
-      case payload: String =>
-        receiver ! payload
-        receiver ! lastSequenceNr
-        receiver ! recoveryRunning
+    def handle: Receive = { case payload: String =>
+      receiver ! payload
+      receiver ! lastSequenceNr
+      receiver ! recoveryRunning
     }
   }
 
@@ -86,10 +86,9 @@ object CassandraIntegrationSpec {
 
     }
 
-    def handle: Receive = {
-      case payload: String =>
-        last = s"${payload}-${lastSequenceNr}"
-        probe ! s"updated-${last}"
+    def handle: Receive = { case payload: String =>
+      last = s"${payload}-${lastSequenceNr}"
+      probe ! s"updated-${last}"
     }
   }
 

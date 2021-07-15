@@ -193,20 +193,22 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       }
     }
 
-  /** Plugin API: deletes all snapshots matching `criteria`. This call is protected with a circuit-breaker.
+  /**
+   * Plugin API: deletes all snapshots matching `criteria`. This call is protected with a circuit-breaker.
    *
    * @param persistenceId id of the persistent actor.
    * @param criteria selection criteria for deleting. If no timestamp constraints are specified this routine
    * @note Due to the limitations of Cassandra deletion requests, this routine makes an initial query in order to obtain the
    * records matching the criteria which are then deleted in a batch deletion. Improvements in Cassandra v3.0+ mean a single
    * range deletion on the sequence number is used instead, except if timestamp constraints are specified, which still
-   * requires the original two step routine.*/
+   * requires the original two step routine.
+   */
   override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
     session.serverMetaData.flatMap { meta =>
       if (meta.isVersion2
-          || settings.cosmosDb
-          || 0L < criteria.minTimestamp
-          || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
+        || settings.cosmosDb
+        || 0L < criteria.minTimestamp
+        || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
         preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
           // this meta query gets slower than slower if snapshots are deleted without a criteria.minSequenceNr as
           // all previous tombstones are scanned in the meta data query
@@ -216,7 +218,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
                 .map(md =>
                   preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)
                     .setExecutionProfileName(snapshotSettings.writeProfile)))
-                .grouped(0xFFFF - 1)
+                .grouped(0xffff - 1)
               if (boundStatementBatches.nonEmpty) {
                 Future
                   .sequence(

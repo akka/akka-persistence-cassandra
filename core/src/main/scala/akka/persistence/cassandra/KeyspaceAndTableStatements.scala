@@ -31,7 +31,6 @@ class KeyspaceAndTableStatements(
    *
    * This can be queried in for example a startup script without accessing the actual
    * Cassandra plugin actor.
-   *
    */
   def createJournalTablesStatements: immutable.Seq[String] =
     journalStatements.createTable ::

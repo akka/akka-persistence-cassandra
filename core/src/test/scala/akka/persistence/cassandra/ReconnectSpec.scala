@@ -18,14 +18,16 @@ import org.scalatest.wordspec.AnyWordSpecLike
 
 object ReconnectSpec {
   val freePort = SocketUtil.temporaryLocalPort()
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
       datastax-java-driver {
         basic.load-balancing-policy.local-datacenter = "datacenter1"
         // Will fail without this setting 
         advanced.reconnect-on-init = true      
         basic.contact-points = ["127.0.0.1:$freePort"]
       }
-      """).withFallback(CassandraLifecycle.config)
+      """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 // not using Cassandra Spec

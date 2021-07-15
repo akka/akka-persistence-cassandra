@@ -45,12 +45,11 @@ object EventsByTagMigration {
         // Get the tags from the old location i.e. tag1, tag2, tag3
         val tags: Set[String] =
           if (columnDefinitionCache.hasOldTagsColumns(row)) {
-            (1 to 3).foldLeft(Set.empty[String]) {
-              case (acc, i) =>
-                val tag = row.getString(s"tag$i")
-                if (tag != null) {
-                  acc + tag
-                } else acc
+            (1 to 3).foldLeft(Set.empty[String]) { case (acc, i) =>
+              val tag = row.getString(s"tag$i")
+              if (tag != null) {
+                acc + tag
+              } else acc
             }
           } else {
             Set.empty
@@ -68,7 +67,6 @@ object EventsByTagMigration {
 }
 
 /**
- *
  * @param pluginConfigPath The config namespace where the plugin is configured, default is `akka.persistence.cassandra`
  */
 class EventsByTagMigration(

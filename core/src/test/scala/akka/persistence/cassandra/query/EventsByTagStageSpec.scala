@@ -29,10 +29,14 @@ import akka.persistence.cassandra.PluginSettings
 object EventsByTagStageSpec {
   val fetchSize = 3L
   val eventualConsistencyDelay: FiniteDuration = 400.millis
-  val waitTime: FiniteDuration = (eventualConsistencyDelay * 1.5).asInstanceOf[FiniteDuration] // bigger than the eventual consistency delay but less than the new pid timeout
+  val waitTime: FiniteDuration =
+    (eventualConsistencyDelay * 1.5)
+      .asInstanceOf[FiniteDuration] // bigger than the eventual consistency delay but less than the new pid timeout
   val longWaitTime: FiniteDuration = waitTime * 2
-  val newPersistenceIdTimeout = 3 * longWaitTime // Give time for 2-3 long waits before a new persistenceId search gives up
-  val config = ConfigFactory.parseString(s"""
+  val newPersistenceIdTimeout =
+    3 * longWaitTime // Give time for 2-3 long waits before a new persistenceId search gives up
+  val config = ConfigFactory
+    .parseString(s"""
         akka.actor.serialize-messages=on
 
         akka.persistence.cassandra {
@@ -54,7 +58,8 @@ object EventsByTagStageSpec {
             new-persistence-id-scan-timeout = ${newPersistenceIdTimeout.toMillis}ms
           }
         }
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 
 }
 

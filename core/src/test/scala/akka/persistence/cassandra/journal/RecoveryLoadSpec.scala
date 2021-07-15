@@ -13,13 +13,15 @@ import com.typesafe.config.ConfigFactory
 import scala.concurrent.duration._
 
 object RecoveryLoadSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
       akka.loglevel = INFO
       akka.persistence.cassandra.events-by-tag.enabled = on
       akka.persistence.cassandra.events-by-tag.scanning-flush-interval = 2s
       akka.persistence.cassandra.journal.replay-filter.mode = off
       akka.persistence.cassandra.log-queries = off
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 
   final case class Init(numberOfEvents: Int)
   case object InitDone
@@ -72,23 +74,22 @@ object RecoveryLoadSpec {
           totalDuration = (replayEndTime - startTime).nanos)
     }
 
-    def init(replyTo: ActorRef): Receive = {
-      case Next(remaining) =>
-        if (remaining == 0)
-          replyTo ! InitDone
-        else {
-          val tags = tagging(lastSequenceNr)
-          val event =
-            if (tags.isEmpty) s"event-$lastSequenceNr"
-            else Tagged(s"event-$lastSequenceNr", tags)
+    def init(replyTo: ActorRef): Receive = { case Next(remaining) =>
+      if (remaining == 0)
+        replyTo ! InitDone
+      else {
+        val tags = tagging(lastSequenceNr)
+        val event =
+          if (tags.isEmpty) s"event-$lastSequenceNr"
+          else Tagged(s"event-$lastSequenceNr", tags)
 
-          persist(event) { _ =>
-            if (lastSequenceNr % snapshotEvery == 0) {
-              saveSnapshot(s"snap-$lastSequenceNr")
-            }
-            self ! Next(remaining - 1)
+        persist(event) { _ =>
+          if (lastSequenceNr % snapshotEvery == 0) {
+            saveSnapshot(s"snap-$lastSequenceNr")
           }
+          self ! Next(remaining - 1)
         }
+      }
     }
 
   }

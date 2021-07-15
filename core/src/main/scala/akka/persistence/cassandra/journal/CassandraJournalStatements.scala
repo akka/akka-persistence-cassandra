@@ -76,8 +76,8 @@ import akka.persistence.cassandra.FutureDone
       |  WITH gc_grace_seconds =${eventsByTagSettings.tagTable.gcGraceSeconds}
       |  AND compaction = ${indent(eventsByTagSettings.tagTable.compactionStrategy.asCQL, "    ")}
       |  ${if (eventsByTagSettings.tagTable.ttl.isDefined)
-         "AND default_time_to_live = " + eventsByTagSettings.tagTable.ttl.get.toSeconds
-       else ""}
+      "AND default_time_to_live = " + eventsByTagSettings.tagTable.ttl.get.toSeconds
+    else ""}
     """.stripMargin.trim
 
   def createTagsProgressTable: String =
@@ -329,8 +329,8 @@ import akka.persistence.cassandra.FutureDone
    *
    * Exceptions will be logged but will not fail the returned Future.
    */
-  def executeCreateKeyspaceAndTables(session: CqlSession, log: LoggingAdapter)(
-      implicit ec: ExecutionContext): Future[Done] = {
+  def executeCreateKeyspaceAndTables(session: CqlSession, log: LoggingAdapter)(implicit
+      ec: ExecutionContext): Future[Done] = {
 
     def tagStatements: Future[Done] =
       if (eventsByTagSettings.eventsByTagEnabled) {
@@ -364,17 +364,15 @@ import akka.persistence.cassandra.FutureDone
         session.setSchemaMetadataEnabled(null)
         Done
       }
-      result.recoverWith {
-        case e =>
-          log.warning("Failed to create journal keyspace and tables: {}", e)
-          session.setSchemaMetadataEnabled(null)
-          FutureDone
+      result.recoverWith { case e =>
+        log.warning("Failed to create journal keyspace and tables: {}", e)
+        session.setSchemaMetadataEnabled(null)
+        FutureDone
       }
     } else {
-      keyspace.recoverWith {
-        case e =>
-          log.warning("Failed to create journal keyspace: {}", e)
-          FutureDone
+      keyspace.recoverWith { case e =>
+        log.warning("Failed to create journal keyspace: {}", e)
+        FutureDone
       }
     }
 

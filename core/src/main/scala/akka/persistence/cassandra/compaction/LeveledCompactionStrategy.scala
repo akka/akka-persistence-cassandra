@@ -10,7 +10,10 @@ import com.typesafe.config.Config
  * https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/LeveledCompactionStrategy.java
  */
 class LeveledCompactionStrategy(config: Config)
-    extends BaseCompactionStrategy(config, LeveledCompactionStrategy.ClassName, LeveledCompactionStrategy.propertyKeys) {
+    extends BaseCompactionStrategy(
+      config,
+      LeveledCompactionStrategy.ClassName,
+      LeveledCompactionStrategy.propertyKeys) {
   val ssTableSizeInMB: Long =
     if (config.hasPath("sstable_size_in_mb"))
       config.getLong("sstable_size_in_mb")

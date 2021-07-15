@@ -27,9 +27,11 @@ import akka.persistence.cassandra.PluginSettings
 object TagViewSequenceNumberScannerSpec {
   val bucketSize = Hour
   val name = "EventsByTagSequenceNumberScanningSpec"
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
       |akka.persistence.cassandra.events-by-tag.bucket-size = ${bucketSize.toString}
-    """.stripMargin).withFallback(CassandraLifecycle.config)
+    """.stripMargin)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTagWriter with BeforeAndAfter {
@@ -85,8 +87,8 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
       val pidSequenceNrs = queries.tagViewScanner.futureValue
         .scan("blue", before, after, bucketSize, Duration.Zero, math.max)
         .futureValue
-        .map {
-          case (persistenceId, (tagSeqNr, _)) => (persistenceId, tagSeqNr)
+        .map { case (persistenceId, (tagSeqNr, _)) =>
+          (persistenceId, tagSeqNr)
         }
       pidSequenceNrs should equal(Map("p1" -> 2, "p2" -> 6))
     }
@@ -106,8 +108,8 @@ class TagViewSequenceNumberScannerSpec extends CassandraSpec(config) with TestTa
       val pidSequenceNrs = queries.tagViewScanner.futureValue
         .scan("blue", before, after, bucketSize, Duration.Zero, math.max)
         .futureValue
-        .map {
-          case (persistenceId, (tagSeqNr, _)) => (persistenceId, tagSeqNr)
+        .map { case (persistenceId, (tagSeqNr, _)) =>
+          (persistenceId, tagSeqNr)
         }
       pidSequenceNrs should equal(Map("p1" -> 2, "p2" -> 1, "p3" -> 6))
     }

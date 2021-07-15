@@ -16,7 +16,8 @@ import scala.concurrent.duration._
 
 object EventsByTagRecoverySpec {
   val keyspaceName = "EventsByTagRecoverySpec"
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
        akka {
          actor.debug.unhandled = on
        }
@@ -31,7 +32,8 @@ object EventsByTagRecoverySpec {
        }
        
        akka.actor.serialize-messages=off
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.config) {

@@ -4,7 +4,8 @@ import akka.persistence.journal.JournalSpec
 import com.typesafe.config.ConfigFactory
 
 object JournalDseSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
    akka.persistence.cassandra.journal.keyspace=JournalDseSpec
    akka.persistence.cassandra.snapshot.keyspace=JournalDseSpec
                                  
@@ -13,7 +14,8 @@ object JournalDseSpec {
      session-provider = "your.pack.DseSessionProvider"
    }
    //# override-session-provider
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 
 }
 

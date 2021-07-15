@@ -22,8 +22,8 @@ object Whitesource extends AutoPlugin {
                            else
                              CrossVersion
                                .partialVersion((version in LocalRootProject).value)
-                               .map {
-                                 case (major, minor) => s"$major.$minor-stable"
+                               .map { case (major, minor) =>
+                                 s"$major.$minor-stable"
                                }
                                .getOrElse("adhoc"))
     },

@@ -61,7 +61,7 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
   override def equals(other: Any): Boolean = other match {
     case that: TimeBucket =>
       key == that.key &&
-      bucketSize == that.bucketSize
+        bucketSize == that.bucketSize
     case _ => false
   }
 

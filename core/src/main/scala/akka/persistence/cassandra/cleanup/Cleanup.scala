@@ -131,7 +131,6 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
    * snapshot.
    *
    * @return the snapshot meta of the oldest remaining snapshot. None if there are no snapshots
-   *
    */
   def deleteBeforeSnapshot(
       persistenceId: String,
@@ -143,15 +142,14 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
       .flatMap { ps =>
         val allRows: Source[Row, NotUsed] = session.select(ps.bind(persistenceId))
         allRows.zipWithIndex
-          .takeWhile {
-            case (row, index) =>
-              if (row.getLong("timestamp") > keepAfterUnixTimestamp) {
-                true
-              } else if (index < snapshotsToKeep) {
-                true
-              } else {
-                false
-              }
+          .takeWhile { case (row, index) =>
+            if (row.getLong("timestamp") > keepAfterUnixTimestamp) {
+              true
+            } else if (index < snapshotsToKeep) {
+              true
+            } else {
+              false
+            }
           }
           .map(_._1)
           .runWith(Sink.seq)

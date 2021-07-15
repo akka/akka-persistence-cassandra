@@ -16,12 +16,14 @@ import org.scalatest.time.{ Milliseconds, Seconds, Span }
 object EventsByPersistenceIdFastForwardSpec {
 
   // separate from EventsByPersistenceIdWithControlSpec since it needs the refreshing enabled
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
     akka.persistence.cassandra.journal.keyspace=EventsByPersistenceIdFastForwardSpec
     akka.persistence.cassandra.query.refresh-interval = 250ms
     akka.persistence.cassandra.query.max-result-size-query = 2
     akka.persistence.cassandra.journal.target-partition-size = 15
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class EventsByPersistenceIdFastForwardSpec
