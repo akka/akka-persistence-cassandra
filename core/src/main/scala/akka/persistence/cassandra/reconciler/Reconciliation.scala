@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ClassicActorSystemProvider
 import akka.actor.ExtendedActorSystem
+import akka.dispatch.ExecutionContexts
 
 /**
  * Database actions for reconciliation
@@ -110,7 +111,9 @@ final private[akka] class ReconciliationSession(session: CassandraSession, state
     val pstmt = session.prepare(statements.journalStatements.insertIntoAllPersistenceIds)
     Sink
       .futureSink(pstmt.map(p =>
-        Sink.foreachAsync[String](1)(persistenceId => session.executeWrite(p.bind(persistenceId)).map(_ => ()))))
+        Sink.foreachAsync[String](1) { persistenceId =>
+          session.executeWrite(p.bind(persistenceId)).map(_ => ())(ExecutionContexts.parasitic)
+        }))
       .mapMaterializedValue(_.flatten)
   }
 
