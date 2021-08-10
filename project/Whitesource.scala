@@ -15,13 +15,13 @@ object Whitesource extends AutoPlugin {
     whitesourceProduct := "Lightbend Reactive Platform",
     whitesourceAggregateProjectName := {
       val projectName =
-        (moduleName in LocalRootProject).value.replace("-root", "")
+        (LocalRootProject / moduleName).value.replace("-root", "")
       projectName + "-" + (if (isSnapshot.value)
                              if (describe(baseDirectory.value) contains "master") "master"
                              else "adhoc"
                            else
                              CrossVersion
-                               .partialVersion((version in LocalRootProject).value)
+                               .partialVersion((LocalRootProject / version).value)
                                .map {
                                  case (major, minor) => s"$major.$minor-stable"
                                }

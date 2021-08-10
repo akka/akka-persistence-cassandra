@@ -46,7 +46,7 @@ object Common extends AutoPlugin {
         "-doc-version",
         version.value,
         "-sourcepath",
-        (baseDirectory in ThisBuild).value.toString,
+        (ThisBuild / baseDirectory).value.toString,
         "-doc-source-url", {
           val branch = if (isSnapshot.value) "master" else s"v${version.value}"
           s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
