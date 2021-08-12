@@ -1,16 +1,56 @@
-version: '2'
+version: '2.2'
 services:
-  cassandra:
+  cassandra-service:
     image: cassandra:latest
     ports:
       - "9042:9042"
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
 
-  cassandra2:
-    image: cassandra:2.2
+  cassandra3-service:
+    image: cassandra:3
+    ports:
+      - "9042:9042"
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  cassandra2-service:
+    image: cassandra:2
     ports:
       - "9042:9042"
     volumes:
       - ${PWD}/docker-files/cassandra.yaml:/etc/cassandra/cassandra.yaml
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  # These exists to force the condition of having the Cassandra service is up before starting the tests.
+  # The healthcheck above is not enough because it does not provide a condition to wait for the service
+  # to be up. And this is simpler than installing cqlsh and using it to check the service status on the
+  # CI server. This uses alpine since it is a pretty small image.
+  cassandra:
+    image: alpine:latest
+    depends_on:
+      cassandra-service:
+        condition: service_healthy
+  cassandra3:
+    image: alpine:latest
+    depends_on:
+      cassandra3-service:
+        condition: service_healthy
+  cassandra2:
+    image: alpine:latest
+    depends_on:
+      cassandra2-service:
+        condition: service_healthy
 
   dse:
     image: datastax/dse-server
