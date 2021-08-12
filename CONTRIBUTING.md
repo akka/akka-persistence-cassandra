@@ -34,8 +34,8 @@ Depending on which version (or sometimes module) you want to work on, you should
 
 This is the process for committing code into master. There are of course exceptions to these rules, for example minor changes to comments and documentation, fixing a broken build etc.
 
-1. To avoid duplicated effort, it might be good to check the [issue tracker](https://github.com/akka/akka/issues) and [existing pull requests](https://github.com/akka/akka/pulls) for existing work.
-   - If there is no ticket yet, feel free to [create one](https://github.com/akka/akka/issues/new) to discuss the problem and the approach you want to take to solve it.
+1. To avoid duplicated effort, it might be good to check the [issue tracker](https://github.com/akka/akka-persistence-cassandra/issues) and [existing pull requests](https://github.com/akka/akka-persistence-cassandra/pulls) for existing work.
+   - If there is no ticket yet, feel free to [create one](https://github.com/akka/akka-persistence-cassandra/issues/new) to discuss the problem and the approach you want to take to solve it.
 1. Make sure you have signed the Lightbend CLA, if not, [sign it online](https://www.lightbend.com/contribute/cla).
 3. You should always perform your work in a Git feature branch. The branch should be given a descriptive name that explains its intent. Some teams also like adding the ticket number and/or the [GitHub](https://github.com) user ID to the branch name, these details is up to each of the individual teams.
 
