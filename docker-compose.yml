@@ -4,6 +4,9 @@ services:
     image: cassandra:latest
     ports:
       - "9042:9042"
+    volumes:
+      # This configuration is customized to enable materialized views.
+      - ${PWD}/docker-files/cassandra.yaml:/etc/cassandra/cassandra.yaml
     healthcheck:
       test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
       interval: 5s
