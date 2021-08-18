@@ -25,7 +25,7 @@ services:
     ports:
       - "9042:9042"
     volumes:
-      - ${PWD}/docker-files/cassandra.yaml:/etc/cassandra/cassandra.yaml
+      - ${PWD}/docker-files/cassandra2.yaml:/etc/cassandra/cassandra.yaml
     healthcheck:
       test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
       interval: 5s
