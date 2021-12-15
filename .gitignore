@@ -14,3 +14,4 @@ target/
 /bin/
 ext-lib-src/
 .classpath_nb
+.bsp

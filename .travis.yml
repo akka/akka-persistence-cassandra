@@ -31,7 +31,7 @@ before_install:
 
   # Initialize launcher from the correct URL so that later sbt runs work out of the box.
   # Travis' default sbt launch script refers to `repo.scala-sbt.org` for downloading the launcher
-  # which currently doesn't work any more
+  # which currently doesn't work anymore
   - sbt -sbt-launch-repo https://repo1.maven.org/maven2 exit
 
 
@@ -43,7 +43,7 @@ jobs:
     - stage: check
       script: sbt -jvm-opts .jvmopts-travis verifyCodeStyle
       name: "Code style check. Run locally with: sbt verifyCodeStyle"
-    - script: sbt -jvm-opts .jvmopts-travis ++2.13.3 Test/compile
+    - script: sbt -jvm-opts .jvmopts-travis ++2.13.6 Test/compile
       name: Compile all tests (with Scala 2.13)
     - script: sbt -jvm-opts .jvmopts-travis unidoc
       name: Create all API docs
@@ -55,19 +55,18 @@ jobs:
         export JAVA_HOME=/usr/lib/jvm/adoptopenjdk-8-hotspot-amd64
         export PATH=/usr/lib/jvm/adoptopenjdk-8-hotspot-amd64/bin:$PATH
         java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis +test
-      name: Run all tests with Jdk 8
+      name: Test / JDK 8 / Cassandra Latest
     - script: java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis +test
-      name: Run all tests with Jdk 11
+      name: Test / JDK 11 / Cassandra Latest
+    - script: java -version && docker-compose up -d cassandra3 && sbt -jvm-opts .jvmopts-travis +test
+      name: Test / JDK 11 / Cassandra 3
+      if: type = cron
     - script: java -version && docker-compose up -d cassandra && ./testLatestAkkaSnapshot.sh
-      name: "Run against latest Akka snapshot"
+      name: Test / JDK 11 / Cassandra Latest / Akka Snapshot
       if: type = cron
     - script: java -version && docker-compose up -d cassandra2 && sbt -jvm-opts .jvmopts-travis "testOnly -- -l RequiresCassandraThree"
-      name: "Run against Cassandra 2.2"
+      name: Test / JDK 11 / Cassandra 2
       if: type = cron
-
-    - stage: whitesource
-      name: White Source
-      script: git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH" && sbt -jvm-opts .jvmopts-travis whitesourceCheckPolicies whitesourceUpdate
 
     - stage: publish
       script: openssl aes-256-cbc -K $encrypted_fb56f898a62a_key -iv $encrypted_fb56f898a62a_iv -in .travis/sign_key.enc -out sign_key -d && gpg --import sign_key && sbt -jvm-opts .jvmopts-travis +publish
@@ -84,10 +83,6 @@ stages:
   # runs on master commits and PRs
   - name: test
     if: NOT tag =~ ^v
-
-  # runs on main repo master commits or version-tagged commits
-  - name: whitesource
-    if: repo = akka/akka-persistence-cassandra AND ( ( branch = master AND type = push ) OR tag =~ ^v )
 
   # runs on main repo master commits or version-tagged commits
   - name: publish
@@ -109,8 +104,6 @@ cache:
 
 env:
   global:
-    # encrypt with: travis encrypt --pro WHITESOURCE_PASSWORD=... 
-    - secure: "InIVb2M8beewAql4wgqsnOnlMNFpJf9uRVuaSZG8m0lIJGsF9XvciqUZiLyPDMjPtXvnsRNaAAe+EzboQ/fdu8yAN8ZrnR3qu1AWZckyY5wI/ycAyxSFW8RwaLcKidnIYbda3jHce3iNSPcujy/2qPEx/isPvw799BYmkHsPD4FXUMVa+eC6rgv686HzWqkIBd9dYho9GCuXWfrd68GlwhNjgjEIytfGGrm6b6+105do/D+HycQ1+Q9tfoeUYOW3IEtoX8W9z+c9NeFxSxfo45rR94F/Omxt8XYjzTjHdZLjxW0r+cRjTK2/zxZFerctZlCH8WPpNzZ0d1O0b1uLiezUGy2E/LDezH+ZYezByMbgCEBRwXE0xxJ7iInHDeqameacBqjwgAeK+MxE5YYEpNRCh601WE6dO2v74iGpnFm4eKLIvvQazVKsRzAED3DK6R8QBOjj232h6xyCYrpEsKn8b/7vwy3tepMgicjWqFYsMX+sNVOfAKUkiBt/pS88mOr6DICA5le39Vvwq5f0UHflsu+RG2zDRpsnMaxicdA+WXsCFYjSBiF6ukY8iGVLByjGjAUTbKaoVO7zfql87R0MuqyzkPmysbhcX3zJSvb2d+M/ZLryUNdSArog3sAI9TU8tZWvWsDuGTnH28/vJ5cvqbruKry441ODv5g8v28="
     # encrypt with: travis encrypt --pro DEPLOY_PASSPHRASE=...
     - secure: "OtUii5z56vdrpH9oj2YhFC8r7ypXUi7GDaDyj0X+SjTyOMmKKwqp8z9J+PrwJBr6oJ3azBzbXDE72P7Y296WcZAw5Ac3zLN3zdkMpOdDGuYH8pxp4ynvC56g1qPUbJsK6zfYvzfT2pGZA0WDhz1dB2i4TZZDPtfaoktUMJSgk03TZOmfaQwbx2t5fgN6/ntimQ+F0Gjp3ZIXbUJldpVMbpDOeCDe+l/GyRivnM3t9ny4SUAMJcLlonvbsZG6ilL4Clssd5kFAfG4JsPeAPU2NorEyBRZx/oSQMFH+DzexNa5Wavru6xzmu2/7v/EdRhXJNn2EY/BBjHzC3RtT2Mh6fprGuJ7qT21F/W5j00eNMP1AdQRGgMovQEEu69mvJVytLAMtnxBl+BYi1SLRw9fL6frW1flZ8AEa74wlnUEW87odYeoGVXh2rCGoFuAmdPGyw4hzo7w+dy9FobV9aund1a0OWTq+utzqoUdwxoHUV0UIL8JYlE+u3bcdlwaoKc9XMEm16fe/7zhmuyOY3HQEH4eoTPrRtOJSQ7tEj9uDPX56xKlK1NliHrVmviSrlEFRSQvIvRVjOezFhD0bVmydMKbIENqkSfDYehfDn/Y33RY5BuncRrzuMTLcfRzTr1lZNHH53q+XJxFEyGZe0ZZP7f2eoBaKLvlt034FKmVf54="
     # encrypt with: travis encrypt --pro BINTRAY_USER=...

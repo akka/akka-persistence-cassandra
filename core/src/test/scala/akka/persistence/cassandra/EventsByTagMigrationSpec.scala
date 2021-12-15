@@ -361,7 +361,7 @@ abstract class AbstractEventsByTagMigrationSpec
          WHERE persistence_id IS NOT NULL AND partition_nr IS NOT NULL AND sequence_nr IS NOT NULL
            AND tag1 IS NOT NULL AND timestamp IS NOT NULL AND timebucket IS NOT NULL
          PRIMARY KEY ((tag1, timebucket), timestamp, persistence_id, partition_nr, sequence_nr)
-         WITH CLUSTERING ORDER BY (timestamp ASC)
+         WITH CLUSTERING ORDER BY (timestamp ASC, persistence_id ASC, partition_nr ASC, sequence_nr ASC)
       """
 
   val createKeyspace =
