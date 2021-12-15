@@ -92,7 +92,6 @@ lazy val docs = project
     name := "Akka Persistence Cassandra",
     (Compile / paradox) := (Compile / paradox).dependsOn(root / dumpSchema).value,
     publish / skip := true,
-    whitesourceIgnore := true,
     makeSite := makeSite.dependsOn(LocalRootProject / ScalaUnidoc / doc).value,
     previewPath := (Paradox / siteSubdirName).value,
     Preprocess / siteSubdirName := s"api/akka-persistence-cassandra/${projectInfoVersion.value}",
