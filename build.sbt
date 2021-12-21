@@ -1,7 +1,8 @@
 import com.typesafe.sbt.packager.docker._
 
 ThisBuild / resolvers ++= {
-  if (System.getProperty("override.akka.version") != null) Seq("Akka Snapshots".at("https://repo.akka.io/snapshots/"))
+  if (System.getProperty("override.akka.version") != null)
+    Seq("Akka Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots/"))
   else Seq.empty
 }
 
