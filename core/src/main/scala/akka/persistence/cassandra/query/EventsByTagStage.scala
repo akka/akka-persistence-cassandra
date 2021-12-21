@@ -740,7 +740,7 @@ import scala.compat.java8.FutureConverters._
           if (verboseDebug)
             log.debug(
               s"[${stageUuid}] " + " Updating offset to {} from pId {} seqNr {} tagPidSequenceNr {}",
-              formatOffset(stageState.fromOffset),
+              formatOffset(repr.offset),
               pid,
               repr.sequenceNr,
               repr.tagPidSequenceNr)
