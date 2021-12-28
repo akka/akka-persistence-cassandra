@@ -12,7 +12,7 @@ object Dependencies {
   // Should be sync with the version of the driver in Alpakka Cassandra
   val DriverVersionInDocs = "4.6"
 
-  val AlpakkaVersion = "2.0.2"
+  val AlpakkaVersion = "3.0.4"
   val AlpakkaVersionInDocs = AlpakkaVersion.take(3)
   // for example
   val AkkaManagementVersion = "1.0.6"
