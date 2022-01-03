@@ -2,4 +2,4 @@ VERSION=$(curl https://oss.sonatype.org/content/repositories/snapshots/com/types
 
 echo "Running with version Akka $VERSION"
 
-sbt -Doverride.akka.version=$VERSION +2.13.6 test
+sbt -Doverride.akka.version=$VERSION "++2.13.6; test"
