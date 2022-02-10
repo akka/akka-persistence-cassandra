@@ -6,7 +6,7 @@ addSbtPlugin("com.dwijnand" % "sbt-dynver" % "4.1.1")
 addSbtPlugin("org.foundweekends" % "sbt-bintray" % "0.5.6")
 
 // Documentation
-addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.41")
+addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.42")
 addSbtPlugin("com.lightbend.paradox" % "sbt-paradox-dependencies" % "0.2.1")
 addSbtPlugin("com.lightbend.sbt" % "sbt-publish-rsync" % "0.1")
 addSbtPlugin("com.eed3si9n" % "sbt-unidoc" % "0.4.3")
