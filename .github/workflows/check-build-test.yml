@@ -94,14 +94,14 @@ jobs:
           git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
           git checkout scratch
 
-      - name: Set up JDK ${{ jdk }}
+      - name: Set up JDK ${{ matrix.jdk }}
         uses: coursier/setup-action@v1.1.2
         with:
-          jvm: ${{ jdk }}
+          jvm: ${{ matrix.jdk }}
 
       - name: Cache Coursier cache
         uses: coursier/cache-action@v6.3
 
-      - name: Test against ${{ container }}
+      - name: Test against ${{ matrix.container }}
         run: |-
-          docker-compose up -d ${{ container }} && sbt +test
+          docker-compose up -d ${{ matrix.container }} && sbt +test

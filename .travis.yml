@@ -4,7 +4,6 @@ os: linux
 dist: xenial
 
 language: scala
-sudo: true
 
 services:
   - docker
