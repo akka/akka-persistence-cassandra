@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - main
+    tags-ignore:
+      - v*
+
+jobs:
+  style-compile:
+    name: Compile, Code Style
+    runs-on: ubuntu-20.04
+    env:
+      JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with: # https://github.com/olafurpg/setup-scala#faster-checkout-of-big-repos
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --depth=100 origin +refs/tags/*:refs/tags/*
+
+      - name: Set up JDK 11
+        uses: coursier/setup-action@v1.1.2
+        with:
+          jvm: adopt:11
+
+      - name: Cache Coursier cache
+        uses: coursier/cache-action@v6.3
+
+      - name: "Code style, compile tests"
+        run: sbt "verifyCodeStyle; ++2.13.8 Test/compile"
+
+
+  documentation:
+    name: ScalaDoc, Documentation with Paradox
+    runs-on: ubuntu-20.04
+    env:
+      JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with: # https://github.com/olafurpg/setup-scala#faster-checkout-of-big-repos
+          fetch-depth: 100
+
+      - name: Fetch tags
+        run: git fetch --depth=100 origin +refs/tags/*:refs/tags/*
+
+      - name: Set up JDK 11
+        uses: coursier/setup-action@v1.1.2
+        with:
+          jvm: adopt:11
+
+      - name: Cache Coursier cache
+        uses: coursier/cache-action@v6.3
+
+      - name: "Create all API docs and create site with Paradox"
+        run: sbt "unidoc; docs/makeSite"
+
+      - name: Run Link Validator
+        run: cs launch net.runne::site-link-validator:0.2.2 -- project/link-validator.conf
+
+  test:
+    name: Test
+    runs-on: ubuntu-20.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { jdk: 'adopt:8', container: cassandra }
+          - { jdk: 'adopt:11', container: cassandra }
+          - { jdk: 'adopt:11', container: cassandra2 }
+          - { jdk: 'adopt:11', container: cassandra3 }
+
+    env:
+      JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Set up JDK ${{ jdk }}
+        uses: coursier/setup-action@v1.1.2
+        with:
+          jvm: ${{ jdk }}
+
+      - name: Cache Coursier cache
+        uses: coursier/cache-action@v6.3
+
+      - name: Test against ${{ container }}
+        run: |-
+          docker-compose up -d ${{ container }} && sbt +test

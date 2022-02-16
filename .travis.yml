@@ -40,30 +40,11 @@ before_script:
 
 jobs:
   include:
-    - stage: check
-      script: sbt -jvm-opts .jvmopts-travis verifyCodeStyle
-      name: "Code style check. Run locally with: sbt verifyCodeStyle"
-    - script: sbt -jvm-opts .jvmopts-travis ++2.13.6 Test/compile
-      name: Compile all tests (with Scala 2.13)
-    - script: sbt -jvm-opts .jvmopts-travis unidoc
-      name: Create all API docs
-    - script: sbt -jvm-opts .jvmopts-travis docs/paradox
-      name: Create site with Paradox
-
     - stage: test
-      script: |-
-        export JAVA_HOME=/usr/lib/jvm/adoptopenjdk-8-hotspot-amd64
-        export PATH=/usr/lib/jvm/adoptopenjdk-8-hotspot-amd64/bin:$PATH
-        java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis +test
-      name: Test / JDK 8 / Cassandra Latest
-    - script: java -version && docker-compose up -d cassandra && sbt -jvm-opts .jvmopts-travis +test
-      name: Test / JDK 11 / Cassandra Latest
-    - script: java -version && docker-compose up -d cassandra3 && sbt -jvm-opts .jvmopts-travis +test
-      name: Test / JDK 11 / Cassandra 3
-      if: type = cron
-    - script: java -version && docker-compose up -d cassandra && ./testLatestAkkaSnapshot.sh
+      script: java -version && docker-compose up -d cassandra && ./testLatestAkkaSnapshot.sh
       name: Test / JDK 11 / Cassandra Latest / Akka Snapshot
       if: type = cron
+
     - script: java -version && docker-compose up -d cassandra2 && sbt -jvm-opts .jvmopts-travis "testOnly -- -l RequiresCassandraThree"
       name: Test / JDK 11 / Cassandra 2
       if: type = cron
@@ -76,10 +57,6 @@ jobs:
       name: Publish documentation
 
 stages:
-  # runs on master commits and PRs
-  - name: check
-    if: NOT tag =~ ^v
-
   # runs on master commits and PRs
   - name: test
     if: NOT tag =~ ^v

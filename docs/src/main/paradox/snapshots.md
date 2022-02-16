@@ -66,7 +66,7 @@ properties defined in @ref:[reference.conf](configuration.md#default-configurati
 ## Limitations
 
 The snapshot is stored in a single row so the maximum size of a serialized snapshot is the Cassandra configured
-[`max_mutation_size_in_kb`](http://cassandra.apache.org/doc/latest/faq/index.html#can-large-blob) which is 16MB by default.
+[`max_mutation_size_in_kb`](https://cassandra.apache.org/doc/latest/faq/index.html#can-large-blob) which is 16MB by default.
 
 ## Delete all snapshots
 
