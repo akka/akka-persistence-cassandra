@@ -36,7 +36,7 @@ object Common extends AutoPlugin {
     projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
     crossVersion := CrossVersion.binary,
     crossScalaVersions := Dependencies.ScalaVersions,
-    scalaVersion := Dependencies.Scala212,
+    scalaVersion := Dependencies.Scala213,
     scalacOptions ++= Seq("-encoding", "UTF-8", "-feature", "-unchecked", "-Xlint", "-Ywarn-dead-code", "-deprecation"),
     Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
     Compile / doc / scalacOptions := scalacOptions.value ++ Seq(
