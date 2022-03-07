@@ -9,16 +9,18 @@ ThisBuild / resolvers ++= {
 // make version compatible with docker for publishing example project
 ThisBuild / dynverSeparator := "-"
 
-lazy val root = (project in file("."))
+lazy val root = project
+  .in(file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
   .aggregate(core, cassandraLauncher)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
 lazy val dumpSchema = taskKey[Unit]("Dumps cassandra schema for docs")
-dumpSchema := (core / runMain in (Test)).toTask(" akka.persistence.cassandra.PrintCreateStatements").value
+dumpSchema := (core / Test / runMain).toTask(" akka.persistence.cassandra.PrintCreateStatements").value
 
-lazy val core = (project in file("core"))
+lazy val core = project
+  .in(file("core"))
   .enablePlugins(Common, AutomateHeaderPlugin, MultiJvmPlugin)
   .dependsOn(cassandraLauncher % Test)
   .settings(
@@ -28,16 +30,18 @@ lazy val core = (project in file("core"))
         "Automatic-Module-Name" -> "akka.persistence.cassandra"))
   .configs(MultiJvm)
 
-lazy val cassandraLauncher = (project in file("cassandra-launcher"))
+lazy val cassandraLauncher = project
+  .in(file("cassandra-launcher"))
   .enablePlugins(Common)
   .settings(
     name := "akka-persistence-cassandra-launcher",
-    managedResourceDirectories in Compile += (target in cassandraBundle).value / "bundle",
-    managedResources in Compile += (assembly in cassandraBundle).value)
+    Compile / managedResourceDirectories += (cassandraBundle / target).value / "bundle",
+    Compile / managedResources += (cassandraBundle / assembly).value)
 
 // This project doesn't get published directly, rather the assembled artifact is included as part of cassandraLaunchers
 // resources
-lazy val cassandraBundle = (project in file("cassandra-bundle"))
+lazy val cassandraBundle = project
+  .in(file("cassandra-bundle"))
   .enablePlugins(Common, AutomateHeaderPlugin)
   .settings(
     name := "akka-persistence-cassandra-bundle",
@@ -46,11 +50,12 @@ lazy val cassandraBundle = (project in file("cassandra-bundle"))
     libraryDependencies += ("org.apache.cassandra" % "cassandra-all" % "3.11.3")
         .exclude("commons-logging", "commons-logging"),
     dependencyOverrides += "com.github.jbellis" % "jamm" % "0.3.3", // See jamm comment in https://issues.apache.org/jira/browse/CASSANDRA-9608
-    target in assembly := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
-    assemblyJarName in assembly := "cassandra-bundle.jar")
+    assembly / target := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
+    assembly / assemblyJarName := "cassandra-bundle.jar")
 
 // Used for testing events by tag in various environments
-lazy val endToEndExample = (project in file("example"))
+lazy val endToEndExample = project
+  .in(file("example"))
   .dependsOn(core)
   .settings(libraryDependencies ++= Dependencies.exampleDependencies, publish / skip := true)
   .settings(
@@ -78,13 +83,13 @@ lazy val endToEndExample = (project in file("example"))
           "http://dl-cdn.alpinelinux.org/alpine/edge/community/"),
         Cmd("RUN", "chgrp -R 0 . && chmod -R g=u .")),
     // Docker image is only for running in k8s
-    javaOptions in Universal ++= Seq("-J-Dconfig.resource=kubernetes.conf"))
+    Universal / javaOptions ++= Seq("-J-Dconfig.resource=kubernetes.conf"))
   .enablePlugins(DockerPlugin, JavaAppPackaging)
 
-lazy val dseTest =
-  (project in file("dse-test"))
-    .dependsOn(core % "test->test")
-    .settings(libraryDependencies ++= Dependencies.dseTestDependencies)
+lazy val dseTest = project
+  .in(file("dse-test"))
+  .dependsOn(core % "test->test")
+  .settings(libraryDependencies ++= Dependencies.dseTestDependencies)
 
 lazy val docs = project
   .enablePlugins(Common, AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)

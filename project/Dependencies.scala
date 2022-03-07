@@ -3,6 +3,7 @@ import Keys._
 
 object Dependencies {
   val Scala212 = "2.12.14"
+  // update even in check-build-test.yml
   val Scala213 = "2.13.8"
   val ScalaVersions = Seq(Scala212, Scala213)
 

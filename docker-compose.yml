@@ -39,7 +39,7 @@ services:
   # The healthcheck above is not enough because it does not provide a condition to wait for the service
   # to be up. And this is simpler than installing cqlsh and using it to check the service status on the
   # CI server. This uses alpine since it is a pretty small image.
-  cassandra:
+  cassandra-latest:
     image: alpine:latest
     depends_on:
       cassandra-service:
