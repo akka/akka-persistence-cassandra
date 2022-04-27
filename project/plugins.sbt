@@ -7,7 +7,7 @@ addSbtPlugin("com.geirsson" % "sbt-ci-release" % "1.5.7")
 
 // Documentation
 addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.42")
-addSbtPlugin("com.lightbend.paradox" % "sbt-paradox-dependencies" % "0.2.1")
+addSbtPlugin("com.lightbend.paradox" % "sbt-paradox-dependencies" % "0.2.2")
 addSbtPlugin("com.lightbend.sbt" % "sbt-publish-rsync" % "0.1")
 addSbtPlugin("com.eed3si9n" % "sbt-unidoc" % "0.4.3")
 addSbtPlugin("com.typesafe.sbt" % "sbt-site" % "1.4.1")
