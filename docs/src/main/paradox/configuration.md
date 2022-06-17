@@ -30,6 +30,13 @@ One important setting is to configure the database driver to retry the initial c
 
 It is not enabled automatically as it is in the driver's reference.conf and is not overridable in a profile.
 
+If the ip addresses of your cassandra nodes might change (e.g. if you use k8s) then 
+
+`datastax-java-driver.advanced.resolve-contact-points = false`
+
+should also be set (resolves a dns address again when new connections are created). This also implies disabling java's dns cache with `-Dnetworkaddress.cache.ttl=0`. 
+
+
 ### Cassandra driver overrides
 
 @@snip [reference.conf](/core/src/main/resources/reference.conf) { #profile }
