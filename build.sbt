@@ -131,7 +131,7 @@ lazy val docs = project
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,
-    publishRsyncArtifact := makeSite.value -> "www/",
+    publishRsyncArtifacts += makeSite.value -> "www/",
     publishRsyncHost := "akkarepo@gustav.akka.io",
     apidocRootPackage := "akka")
 
