@@ -1,4 +1,5 @@
 .idea*
+.bloop
 *.env
 *.log
 *.iml

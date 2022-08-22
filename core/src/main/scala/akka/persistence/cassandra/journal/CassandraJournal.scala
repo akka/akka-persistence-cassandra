@@ -107,27 +107,27 @@ import akka.stream.scaladsl.Source
   private val tagRecovery: Option[CassandraTagRecovery] =
     tagWrites.map(ref => new CassandraTagRecovery(context.system, session, settings, taggedPreparedStatements, ref))
 
-  private def preparedWriteMessage =
+  private lazy val preparedWriteMessage =
     session.prepare(statements.journalStatements.writeMessage(withMeta = false))
-  private def preparedSelectDeletedTo: Option[Future[PreparedStatement]] = {
+  private lazy val preparedSelectDeletedTo: Option[Future[PreparedStatement]] = {
     if (settings.journalSettings.supportDeletes)
       Some(session.prepare(statements.journalStatements.selectDeletedTo))
     else
       None
   }
-  private def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
+  private lazy val preparedSelectHighestSequenceNr: Future[PreparedStatement] =
     session.prepare(statements.journalStatements.selectHighestSequenceNr)
 
   private def deletesNotSupportedException: Future[PreparedStatement] =
     Future.failed(new IllegalArgumentException(s"Deletes not supported because config support-deletes=off"))
 
-  private def preparedInsertDeletedTo: Future[PreparedStatement] = {
+  private lazy val preparedInsertDeletedTo: Future[PreparedStatement] = {
     if (settings.journalSettings.supportDeletes)
       session.prepare(statements.journalStatements.insertDeletedTo)
     else
       deletesNotSupportedException
   }
-  private def preparedDeleteMessages: Future[PreparedStatement] = {
+  private lazy val preparedDeleteMessages: Future[PreparedStatement] = {
     if (settings.journalSettings.supportDeletes) {
       session.serverMetaData.flatMap { meta =>
         session.prepare(statements.journalStatements.deleteMessages(meta.isVersion2 || settings.cosmosDb))
@@ -135,13 +135,13 @@ import akka.stream.scaladsl.Source
     } else
       deletesNotSupportedException
   }
-  private def preparedInsertIntoAllPersistenceIds: Future[PreparedStatement] = {
+  private lazy val preparedInsertIntoAllPersistenceIds: Future[PreparedStatement] = {
     session.prepare(statements.journalStatements.insertIntoAllPersistenceIds)
   }
 
-  private def preparedWriteMessageWithMeta =
+  private lazy val preparedWriteMessageWithMeta =
     session.prepare(statements.journalStatements.writeMessage(withMeta = true))
-  private def preparedSelectMessages =
+  private lazy val preparedSelectMessages =
     session.prepare(statements.journalStatements.selectMessages)
 
   private lazy val queries: CassandraReadJournal =

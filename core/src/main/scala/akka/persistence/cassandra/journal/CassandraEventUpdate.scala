@@ -27,10 +27,11 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
   private def journalSettings = settings.journalSettings
   private lazy val journalStatements = new CassandraJournalStatements(settings)
-  def psUpdateMessage: Future[PreparedStatement] = session.prepare(journalStatements.updateMessagePayloadAndTags)
-  def psSelectTagPidSequenceNr: Future[PreparedStatement] = session.prepare(journalStatements.selectTagPidSequenceNr)
-  def psUpdateTagView: Future[PreparedStatement] = session.prepare(journalStatements.updateMessagePayloadInTagView)
-  def psSelectMessages: Future[PreparedStatement] = session.prepare(journalStatements.selectMessages)
+  lazy val psUpdateMessage: Future[PreparedStatement] = session.prepare(journalStatements.updateMessagePayloadAndTags)
+  lazy val psSelectTagPidSequenceNr: Future[PreparedStatement] =
+    session.prepare(journalStatements.selectTagPidSequenceNr)
+  lazy val psUpdateTagView: Future[PreparedStatement] = session.prepare(journalStatements.updateMessagePayloadInTagView)
+  lazy val psSelectMessages: Future[PreparedStatement] = session.prepare(journalStatements.selectMessages)
 
   /**
    * Update the given event in the messages table and the tag_views table.
