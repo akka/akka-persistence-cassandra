@@ -173,25 +173,25 @@ class CassandraReadJournal protected (
           preparedSelectTagSequenceNrs))
       .map(_ => Done)
 
-  private def preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
+  private lazy val preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
     session.prepare(statements.journalStatements.selectMessages)
 
-  private def preparedSelectDeletedTo: Future[PreparedStatement] =
+  private lazy val preparedSelectDeletedTo: Future[PreparedStatement] =
     session.prepare(statements.journalStatements.selectDeletedTo)
 
-  private def preparedSelectAllPersistenceIds: Future[PreparedStatement] =
+  private lazy val preparedSelectAllPersistenceIds: Future[PreparedStatement] =
     session.prepare(queryStatements.selectAllPersistenceIds)
 
-  private def preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
+  private lazy val preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
     session.prepare(queryStatements.selectDistinctPersistenceIds)
 
-  private def preparedSelectFromTagViewWithUpperBound: Future[PreparedStatement] =
+  private lazy val preparedSelectFromTagViewWithUpperBound: Future[PreparedStatement] =
     session.prepare(queryStatements.selectEventsFromTagViewWithUpperBound)
 
-  private def preparedSelectTagSequenceNrs: Future[PreparedStatement] =
+  private lazy val preparedSelectTagSequenceNrs: Future[PreparedStatement] =
     session.prepare(queryStatements.selectTagSequenceNrs)
 
-  private def preparedSelectHighestSequenceNr: Future[PreparedStatement] =
+  private lazy val preparedSelectHighestSequenceNr: Future[PreparedStatement] =
     session.prepare(statements.journalStatements.selectHighestSequenceNr)
 
   /**

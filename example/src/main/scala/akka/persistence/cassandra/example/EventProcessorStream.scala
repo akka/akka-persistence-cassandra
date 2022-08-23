@@ -100,14 +100,14 @@ class EventProcessorStream[Event: ClassTag](
     query.timeBasedUUIDFrom(System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000))
   }
 
-  private def prepareWriteOffset(): Future[PreparedStatement] = {
+  private lazy val prepareWriteOffset: Future[PreparedStatement] = {
     session.prepare("INSERT INTO akka.offsetStore (eventProcessorId, tag, timeUuidOffset) VALUES (?, ?, ?)")
   }
 
   private def writeOffset(offset: Offset)(implicit ec: ExecutionContext): Future[Done] = {
     offset match {
       case t: TimeBasedUUID =>
-        prepareWriteOffset().map(stmt => stmt.bind(eventProcessorId, tag, t.value)).flatMap { boundStmt =>
+        prepareWriteOffset.map(stmt => stmt.bind(eventProcessorId, tag, t.value)).flatMap { boundStmt =>
           session.executeWrite(boundStmt)
         }
 
