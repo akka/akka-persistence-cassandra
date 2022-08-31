@@ -31,8 +31,7 @@ object Common extends AutoPlugin {
           "https://gitter.im/akka/dev",
           url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
       licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
-      description := "A Cassandra plugin for Akka Persistence.",
-      sonatypeProfileName := "com.lightbend")
+      description := "A Cassandra plugin for Akka Persistence.")
 
   override lazy val projectSettings = Seq(
     projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
@@ -63,6 +62,7 @@ object Common extends AutoPlugin {
     apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${projectInfoVersion.value}")),
     headerLicense := Some(
         HeaderLicense.Custom("""Copyright (C) 2016-2020 Lightbend Inc. <https://www.lightbend.com>""")),
+    sonatypeProfileName := "com.typesafe",
     Test / logBuffered := System.getProperty("akka.logBufferedTests", "false").toBoolean,
     // show full stack traces and test case durations
     Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
