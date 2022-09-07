@@ -12,7 +12,7 @@ You may also check out these [other resources](https://akka.io/get-involved/).
 
 ## Infrastructure
 
-* [Lightbend Contributor License Agreement](https://www.lightbend.com/contribute/cla)
+* [Lightbend Contributor License Agreement](https://www.lightbend.com/contribute/cla/akka)
 * [Issue Tracker](https://github.com/akka/akka-persistence-cassandra/issues)
 * [CI](https://travis-ci.org/akka/akka-persistence-cassandra)
 
