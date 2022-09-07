@@ -35,4 +35,5 @@ There are three branches of development:
 
 ## License
 
-Akka Persistence Cassandra is Open Source and available under the Apache 2 License.
+Akka Persistence Cassandra is licensed under the Business Source License 1.1, see LICENSE.
+
