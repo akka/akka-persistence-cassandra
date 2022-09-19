@@ -15,8 +15,10 @@ datastax-java-driver {
   advanced {
     auth-provider {
       class = PlainTextAuthProvider
-      username = <user name> 
-      password = <password>
+      # CLIENT ID and SECRET from Application Token that can be generated
+      # from Token Management in Astra console.
+      username = <CLIENT ID> 
+      password = <CLIENT SECRET>
     }
   }
 }
