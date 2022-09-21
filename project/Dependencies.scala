@@ -5,20 +5,21 @@ object Dependencies {
   val Scala212 = "2.12.16"
   // update even in check-build-test.yml
   val Scala213 = "2.13.8"
-  val ScalaVersions = Seq(Scala212, Scala213)
+  val ScalaVersions = Seq(Scala213, Scala212)
 
-  val AkkaVersion = System.getProperty("override.akka.version", "2.6.9")
+  val AkkaVersion = System.getProperty("override.akka.version", "2.7.0-M1")
   val AkkaVersionInDocs = AkkaVersion.take(3)
   val CassandraVersionInDocs = "4.0"
   // Should be sync with the version of the driver in Alpakka Cassandra
-  val DriverVersionInDocs = "4.6"
+  val CassandraDriverVersion = "4.14.1"
+  val DriverVersionInDocs = "4.14"
 
-  val AlpakkaVersion = "2.0.2"
+  val AlpakkaVersion = "5.0.0-M1"
   val AlpakkaVersionInDocs = AlpakkaVersion.take(3)
   // for example
-  val AkkaManagementVersion = "1.0.6"
+  val AkkaManagementVersion = "1.1.4"
 
-  val Logback = "ch.qos.logback" % "logback-classic" % "1.2.10"
+  val Logback = "ch.qos.logback" % "logback-classic" % "1.2.11"
 
   val reconcilerDependencies = Seq(
     "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
@@ -40,6 +41,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
+      "com.datastax.oss" % "java-driver-core" % CassandraDriverVersion,
       "org.scala-lang.modules" %% "scala-collection-compat" % "2.4.4",
       Logback % Test,
       "org.scalatest" %% "scalatest" % "3.2.11" % Test,
