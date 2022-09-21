@@ -5,16 +5,16 @@ object Dependencies {
   val Scala212 = "2.12.16"
   // update even in check-build-test.yml
   val Scala213 = "2.13.8"
-  val ScalaVersions = Seq(Scala212, Scala213)
+  val ScalaVersions = Seq(Scala213, Scala212)
 
-  val AkkaVersion = System.getProperty("override.akka.version", "2.6.20")
+  val AkkaVersion = System.getProperty("override.akka.version", "2.7.0-M1")
   val AkkaVersionInDocs = AkkaVersion.take(3)
   val CassandraVersionInDocs = "4.0"
   // Should be sync with the version of the driver in Alpakka Cassandra
   val CassandraDriverVersion = "4.14.1"
   val DriverVersionInDocs = "4.14"
 
-  val AlpakkaVersion = "4.0.0"
+  val AlpakkaVersion = "5.0.0-M1"
   val AlpakkaVersionInDocs = AlpakkaVersion.take(3)
   // for example
   val AkkaManagementVersion = "1.1.4"
