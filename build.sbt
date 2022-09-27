@@ -50,6 +50,7 @@ lazy val cassandraBundle = project
     libraryDependencies += ("org.apache.cassandra" % "cassandra-all" % "3.11.3")
         .exclude("commons-logging", "commons-logging"),
     dependencyOverrides += "com.github.jbellis" % "jamm" % "0.3.3", // See jamm comment in https://issues.apache.org/jira/browse/CASSANDRA-9608
+    dependencyOverrides += "net.java.dev.jna" % "jna" % "5.12.1",
     assembly / target := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
     assembly / assemblyJarName := "cassandra-bundle.jar")
 
