@@ -44,7 +44,7 @@ object Dependencies {
       "com.datastax.oss" % "java-driver-core" % CassandraDriverVersion,
       "org.scala-lang.modules" %% "scala-collection-compat" % "2.7.0",
       Logback % Test,
-      "org.scalatest" %% "scalatest" % "3.2.11" % Test,
+      "org.scalatest" %% "scalatest" % "3.2.14" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,
       "org.osgi" % "org.osgi.core" % "5.0.0" % Provided) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
 
