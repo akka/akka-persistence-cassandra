@@ -4,7 +4,7 @@ import Keys._
 object Dependencies {
   val Scala212 = "2.12.16"
   // update even in check-build-test.yml
-  val Scala213 = "2.13.8"
+  val Scala213 = "2.13.10"
   val ScalaVersions = Seq(Scala213, Scala212)
 
   val AkkaVersion = System.getProperty("override.akka.version", "2.7.0-M1")
