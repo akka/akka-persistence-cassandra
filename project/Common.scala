@@ -31,7 +31,7 @@ object Common extends AutoPlugin {
           "https://gitter.im/akka/dev",
           url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
       licenses := Seq(
-          ("BUSL-1.1", url("https://raw.githubusercontent.com/akka/akka-persistence-cassandra/master/LICENSE"))), // FIXME change s/master/v1.1.0/ when released
+          ("BUSL-1.1", url("https://raw.githubusercontent.com/akka/akka-persistence-cassandra/master/LICENSE"))), // FIXME change s/master/v1.1.1/ when released
       description := "A Cassandra plugin for Akka Persistence.")
 
   override lazy val projectSettings = Seq(
