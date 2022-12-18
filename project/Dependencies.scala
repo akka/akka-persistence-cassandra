@@ -18,7 +18,7 @@ object Dependencies {
   // for example
   val AkkaManagementVersion = "1.2.0"
 
-  val Logback = "ch.qos.logback" % "logback-classic" % "1.2.11"
+  val Logback = "ch.qos.logback" % "logback-classic" % "1.4.5"
 
   val reconcilerDependencies = Seq(
     "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
