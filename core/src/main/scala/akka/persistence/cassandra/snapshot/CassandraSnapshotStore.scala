@@ -9,13 +9,13 @@ import java.nio.ByteBuffer
 import java.util.NoSuchElementException
 
 import akka.NotUsed
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
+
 import akka.actor._
 import akka.pattern.pipe
 import akka.persistence._
@@ -36,7 +36,9 @@ import akka.Done
 import akka.annotation.InternalApi
 import akka.dispatch.ExecutionContexts
 import akka.event.Logging
+import akka.stream.ActorAttributes
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
+import akka.stream.scaladsl.Keep
 
 /**
  * INTERNAL API
@@ -189,7 +191,9 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
 
       stmt.flatMap { ps =>
         val bound = CassandraSnapshotStore.prepareSnapshotWrite(ps, metadata, ser)
-        session.executeWrite(bound.setExecutionProfileName(snapshotSettings.writeProfile)).map(_ => ())
+        session
+          .executeWrite(bound.setExecutionProfileName(snapshotSettings.writeProfile))
+          .map(_ => ())(ExecutionContexts.parasitic)
       }
     }
 
@@ -224,7 +228,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
                       Future
                         .sequence(boundStatements)
                         .flatMap(stmts => executeBatch(batch => stmts.foreach(batch.addStatement)))))
-                  .map(_ => ())
+                  .map(_ => ())(ExecutionContexts.parasitic)
               } else {
                 FutureUnit
               }
@@ -234,7 +238,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         val boundDeleteSnapshot = preparedDeleteAllSnapshotsForPidAndSequenceNrBetween.map(
           _.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong)
             .setExecutionProfileName(snapshotSettings.writeProfile))
-        boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
+        boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())(ExecutionContexts.parasitic)
       }
     }
   }
@@ -244,7 +248,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
     val batch =
       new BatchStatementBuilder(BatchType.UNLOGGED).setExecutionProfileName(snapshotSettings.writeProfile)
     body(batch)
-    session.underlying().flatMap(_.executeAsync(batch.build()).toScala).map(_ => ())
+    session.underlying().flatMap(_.executeAsync(batch.build()).toScala).map(_ => ())(ExecutionContexts.parasitic)
   }
 
   private def metadata(
@@ -262,10 +266,14 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         SnapshotMetadata(row.getString("persistence_id"), row.getLong("sequence_nr"), row.getLong("timestamp")))
       .dropWhile(_.timestamp > criteria.maxTimestamp)
 
-    limit match {
-      case Some(n) => source.take(n.toLong).runWith(Sink.seq)
-      case None    => source.runWith(Sink.seq)
+    val limitedSource = limit match {
+      case Some(n) => source.take(n.toLong)
+      case None    => source
     }
+    limitedSource
+      .toMat(Sink.seq)(Keep.right)
+      .withAttributes(ActorAttributes.dispatcher(settings.snapshotSettings.pluginDispatcher))
+      .run()
   }
 
   def preparedDeleteSnapshot: Future[PreparedStatement] =
@@ -277,7 +285,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
     val boundDeleteSnapshot = preparedDeleteSnapshot.map(
       _.bind(metadata.persistenceId, metadata.sequenceNr: JLong).setExecutionProfileName(snapshotSettings.writeProfile))
-    boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
+    boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())(ExecutionContexts.parasitic)
   }
 
 }

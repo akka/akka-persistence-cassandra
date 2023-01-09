@@ -71,6 +71,12 @@ import akka.persistence.cassandra.PluginSettings
     }
 
     def selectSingleRow(persistenceId: String, pnr: Long)(implicit ec: ExecutionContext): Future[Option[Row]] = {
+      println(s"# EventsByPersistenceIdStage Thread: ${Thread.currentThread().getName}") // FIXME
+      if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+        println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+        new RuntimeException("Wrong thread").printStackTrace()
+      }
+
       val boundStatement = selectSingleRowQuery.bind(persistenceId, pnr: JLong).setExecutionProfileName(profile)
       session.executeAsync(boundStatement).toScala.map(rs => Option(rs.one()))
     }
@@ -79,8 +85,15 @@ import akka.persistence.cassandra.PluginSettings
       executeStatement(selectDeletedToQuery.bind(persistenceId).setExecutionProfileName(profile)).map(r =>
         Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
 
-    private def executeStatement(statement: Statement[_]): Future[AsyncResultSet] =
+    private def executeStatement(statement: Statement[_]): Future[AsyncResultSet] = {
+      println(s"# EventsByPersistenceIdStage Thread: ${Thread.currentThread().getName}") // FIXME
+      if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+        println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+        new RuntimeException("Wrong thread").printStackTrace()
+      }
+
       session.executeAsync(statement).toScala
+    }
 
   }
 
@@ -110,6 +123,7 @@ import akka.persistence.cassandra.PluginSettings
     refreshInterval: Option[FiniteDuration],
     session: EventsByPersistenceIdStage.EventsByPersistenceIdSession,
     settings: PluginSettings,
+    executionContext: ExecutionContext,
     fastForwardEnabled: Boolean = false)
     extends GraphStageWithMaterializedValue[SourceShape[Row], EventsByPersistenceIdStage.Control] {
 
@@ -123,10 +137,10 @@ import akka.persistence.cassandra.PluginSettings
   override def createLogicAndMaterializedValue(inheritedAttributes: Attributes): (GraphStageLogic, Control) = {
     val logic = new TimerGraphStageLogic(shape) with OutHandler with StageLogging with Control {
 
+      implicit def ec: ExecutionContext = executionContext
+
       override protected def logSource: Class[_] =
         classOf[EventsByPersistenceIdStage]
-
-      implicit def ec = materializer.executionContext
 
       val donePromise = Promise[Done]()
 
@@ -247,6 +261,12 @@ import akka.persistence.cassandra.PluginSettings
       override def preStart(): Unit = {
         queryState = QueryInProgress(switchPartition = false, fetchMore = false, System.nanoTime())
         session.highestDeletedSequenceNumber(persistenceId).onComplete(highestDeletedSequenceNrCb.invoke)
+
+        println(s"# EventsByPersistenceIdStage Thread: ${Thread.currentThread().getName}") // FIXME
+        if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+          println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+          new RuntimeException("Wrong thread").printStackTrace()
+        }
 
         refreshInterval match {
           case Some(interval) =>

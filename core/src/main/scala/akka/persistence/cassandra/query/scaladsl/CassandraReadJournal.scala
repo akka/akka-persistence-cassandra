@@ -27,12 +27,13 @@ import akka.stream.ActorAttributes
 import akka.util.ByteString
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
-
 import scala.collection.immutable
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
+
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.CassandraStatements
 import akka.persistence.cassandra.journal.CassandraJournal
@@ -332,7 +333,8 @@ class CassandraReadJournal protected (
                 eventsByTagSettings.bucketSize,
                 usingOffset,
                 initialTagPidSequenceNrs,
-                scanner))
+                scanner,
+                ec))
         }.via(deserializeEventsByTagRow)
           .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
@@ -515,7 +517,8 @@ class CassandraReadJournal protected (
                 eventsByTagSettings.bucketSize,
                 usingOffset,
                 initialTagPidSequenceNrs,
-                scanner))
+                scanner,
+                ec))
         }.via(deserializeEventsByTagRow)
           .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
           .mapMaterializedValue(_ => NotUsed)
@@ -563,10 +566,12 @@ class CassandraReadJournal protected (
       Some(querySettings.refreshInterval),
       querySettings.readProfile,
       s"eventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization))
+      extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization),
+      ec)
       .mapConcat {
         case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
       }
+      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
       .mapMaterializedValue(_ => NotUsed)
 
   /**
@@ -586,10 +591,12 @@ class CassandraReadJournal protected (
       None,
       querySettings.readProfile,
       s"currentEventsByPersistenceId-$persistenceId",
-      extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization))
+      extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization),
+      ec)
       .mapConcat {
         case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
       }
+      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
       .mapMaterializedValue(_ => NotUsed)
 
   /**
@@ -600,7 +607,7 @@ class CassandraReadJournal protected (
       fromSequenceNr: Long,
       toSequenceNr: Long,
       refreshInterval: Option[FiniteDuration] = None)
-      : Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] =
+      : Source[EventEnvelope, Future[EventsByPersistenceIdStage.Control]] = {
     eventsByPersistenceId(
       persistenceId,
       fromSequenceNr,
@@ -610,9 +617,13 @@ class CassandraReadJournal protected (
       settings.journalSettings.readProfile, // write journal read-profile
       s"eventsByPersistenceId-$persistenceId",
       extractor = Extractors.persistentReprAndOffset(eventsByPersistenceIdDeserializer, serialization),
-      fastForwardEnabled = true).mapConcat {
-      case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
-    }
+      ec,
+      fastForwardEnabled = true)
+      .mapConcat {
+        case (persistentRepr, offset) => toEventEnvelope(mapEvent(persistentRepr), offset)
+      }
+      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+  }
 
   /**
    * INTERNAL API: This is a low-level method that return journal events as they are persisted.
@@ -630,6 +641,7 @@ class CassandraReadJournal protected (
       readProfile: String,
       name: String,
       extractor: Extractor[T],
+      executionContext: ExecutionContext,
       fastForwardEnabled: Boolean = false): Source[T, Future[EventsByPersistenceIdStage.Control]] = {
 
     val deserializeEventAsync = querySettings.deserializationParallelism > 1
@@ -649,14 +661,14 @@ class CassandraReadJournal protected (
               c.prepareSelectHighestNr,
               c.preparedSelectDeletedTo,
               s,
-              querySettings.readProfile),
+              readProfile),
             settings,
+            executionContext,
             fastForwardEnabled))
         .named(name)
     }.mapAsync(querySettings.deserializationParallelism) { row =>
-        extractor.extract(row, deserializeEventAsync)
-      }
-      .withAttributes(ActorAttributes.dispatcher(querySettings.pluginDispatcher))
+      extractor.extract(row, deserializeEventAsync)
+    }
   }
 
   /**

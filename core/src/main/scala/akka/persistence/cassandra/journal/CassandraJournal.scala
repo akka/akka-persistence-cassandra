@@ -31,7 +31,6 @@ import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
-
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
 import scala.collection.immutable
@@ -40,8 +39,12 @@ import scala.concurrent._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
 import scala.compat.java8.FutureConverters._
+
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
+import akka.dispatch.ExecutionContexts
+import akka.stream.ActorAttributes
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 
 /**
@@ -703,7 +706,9 @@ import akka.stream.scaladsl.Source
     partitionNr * journalSettings.targetPartitionSize + 1
 
   private def execute[T <: Statement[T]](stmt: Statement[T]): Future[Unit] = {
-    session.executeWrite(stmt.setExecutionProfileName(journalSettings.writeProfile)).map(_ => ())
+    session
+      .executeWrite(stmt.setExecutionProfileName(journalSettings.writeProfile))
+      .map(_ => ())(ExecutionContexts.parasitic)
   }
 
   // TODO this serialises and re-serialises the messages for fixing tag_views
@@ -733,6 +738,7 @@ import akka.stream.scaladsl.Source
               fromSequenceNr,
               toSequenceNr)
 
+            println(s"# asyncReplayMessages-1 Thread: ${Thread.currentThread().getName}") // FIXME
             queries
               .eventsByPersistenceId(
                 persistenceId,
@@ -742,12 +748,27 @@ import akka.stream.scaladsl.Source
                 None,
                 settings.journalSettings.readProfile,
                 "asyncReplayMessages",
-                extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization))
-              .mapAsync(1)(tr.sendMissingTagWrite(tp))
+                extractor = Extractors.taggedPersistentRepr(eventDeserializer, serialization),
+                ec)
+              .mapAsync(1) { x =>
+                println(s"# asyncReplayMessages-2 Thread: ${Thread.currentThread().getName}") // FIXME
+                tr.sendMissingTagWrite(tp)(x)
+              }
           }))
-          .map(te => queries.mapEvent(te.pr))
-          .runForeach(replayCallback)
-          .map(_ => ())
+          .map { te =>
+            println(s"# asyncReplayMessages-3 Thread: ${Thread.currentThread().getName}") // FIXME
+            if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+              println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+              new RuntimeException("Wrong thread").printStackTrace()
+            }
+
+            queries.mapEvent(te.pr)
+          }
+          .map(replayCallback)
+          .toMat(Sink.ignore)(Keep.right)
+          .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
+          .run()
+          .map(_ => ())(ExecutionContexts.parasitic)
 
       case None =>
         queries
@@ -759,10 +780,22 @@ import akka.stream.scaladsl.Source
             None,
             settings.journalSettings.readProfile,
             "asyncReplayMessages",
-            extractor = Extractors.persistentRepr(eventDeserializer, serialization))
+            extractor = Extractors.persistentRepr(eventDeserializer, serialization),
+            ec)
           .map(queries.mapEvent)
-          .runForeach(replayCallback)
-          .map(_ => ())
+          .map { x =>
+            if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+              println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+              new RuntimeException("Wrong thread").printStackTrace()
+            }
+
+            x
+          }
+          .map(replayCallback)
+          .toMat(Sink.ignore)(Keep.right)
+          .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
+          .run()
+          .map(_ => ())(ExecutionContexts.parasitic)
     }
   }
 
@@ -789,15 +822,38 @@ import akka.stream.scaladsl.Source
           None,
           settings.journalSettings.readProfile,
           "asyncReplayMessagesPreSnapshot",
-          Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization))
+          Extractors.optionalTaggedPersistentRepr(eventDeserializer, serialization),
+          ec)
+        .map { x =>
+          if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+            println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+            new RuntimeException("Wrong thread").printStackTrace()
+          }
+
+          x
+        }
         .mapAsync(1) { t =>
+          if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+            println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+            new RuntimeException("Wrong thread").printStackTrace()
+          }
           t.tagged match {
             case OptionVal.Some(tpr) =>
               tr.sendMissingTagWrite(tp)(tpr)
             case OptionVal.None => FutureDone // no tags, skip
           }
         }
-        .runWith(Sink.ignore)
+        .map { x =>
+          if (Thread.currentThread().getName.contains("-akka.actor.default-dispatcher-")) {
+            println(s"# Thread: ${Thread.currentThread().getName}") // FIXME
+            new RuntimeException("Wrong thread").printStackTrace()
+          }
+
+          x
+        }
+        .toMat(Sink.ignore)(Keep.right)
+        .withAttributes(ActorAttributes.dispatcher(settings.journalSettings.pluginDispatcher))
+        .run()
     } else {
       log.debug(
         "[{}] Recovery is starting before the latest tag writes tag progress. Min progress [{}]. From sequence nr of recovery: [{}]",
