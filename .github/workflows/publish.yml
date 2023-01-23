@@ -8,29 +8,38 @@ on:
       - release-*
     tags: ["v*"]
 
+permissions:
+  contents: read
+
 jobs:
   release:
     # runs on main repo only
-    if: github.repository == 'akka/akka-persistence-cassandra'
+    if: github.event.repository.fork == false
     name: Release
     environment: release
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        # https://github.com/actions/checkout/releases
+        # v3.3.0
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
         with:
           # we don't know what commit the last tag was it's safer to get entire repo so previousStableVersion resolves
           fetch-depth: 0
 
-      - name: Setup Scala with JDK 8
-        uses: olafurpg/setup-scala@v10
+      - name: Setup JDK 8
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.0
+        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
         with:
-          java-version: adopt@1.8.0-275
+          java-version: adopt:1.8.0-275
 
       - name: Cache Coursier cache
-        uses: coursier/cache-action@v5
+        # https://github.com/coursier/cache-action/releases/
+        # v6.4.3
+        uses: coursier/cache-action@d1039466d0812d6370649b9afb02bbf5f646bacf
 
       - name: Publish artifacts for all Scala versions
         env:
@@ -42,26 +51,32 @@ jobs:
 
   documentation:
     # runs on main repo only
-    if: github.repository == 'akka/akka-persistence-cassandra'
+    if: github.event.repository.fork == false
     name: Documentation
     environment: release
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        # https://github.com/actions/checkout/releases
+        # v3.3.0
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
         with:
           # we don't know what commit the last tag was it's safer to get entire repo so previousStableVersion resolves
           fetch-depth: 0
 
-      - name: Setup Scala with JDK 11
-        uses: olafurpg/setup-scala@v10
+      - name: Setup JDK 11
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.0
+        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
         with:
-          java-version: adopt@1.11.0-9
+          jvm: temurin:1.11
 
       - name: Cache Coursier cache
-        uses: coursier/cache-action@v5
+        # https://github.com/coursier/cache-action/releases/
+        # v6.4.3
+        uses: coursier/cache-action@d1039466d0812d6370649b9afb02bbf5f646bacf
 
       - name: Publish API and reference documentation
         env:

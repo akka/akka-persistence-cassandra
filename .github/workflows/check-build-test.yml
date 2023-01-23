@@ -9,17 +9,22 @@ on:
     tags-ignore:
       - v*
 
+permissions:
+  contents: read
+
 jobs:
   style-compile:
     name: Compile, Code Style
-    if: github.repository == 'akka/akka-persistence-cassandra'
-    runs-on: ubuntu-20.04
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-22.04
     env:
       JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        # https://github.com/actions/checkout/releases
+        # v3.3.0
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
         with: # https://github.com/olafurpg/setup-scala#faster-checkout-of-big-repos
           fetch-depth: 0
 
@@ -27,9 +32,11 @@ jobs:
         run: git fetch --depth=100 origin +refs/tags/*:refs/tags/*
 
       - name: Set up JDK 11
-        uses: coursier/setup-action@v1.1.2
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.0
+        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
         with:
-          jvm: adopt:11
+          jvm: temurin:1.11
 
       - name: Cache Coursier cache
         uses: coursier/cache-action@v6.3
@@ -40,14 +47,16 @@ jobs:
 
   documentation:
     name: ScalaDoc, Documentation with Paradox
-    if: github.repository == 'akka/akka-persistence-cassandra'
-    runs-on: ubuntu-20.04
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-22.04
     env:
       JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        # https://github.com/actions/checkout/releases
+        # v3.3.0
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
         with: # https://github.com/olafurpg/setup-scala#faster-checkout-of-big-repos
           fetch-depth: 100
 
@@ -55,39 +64,45 @@ jobs:
         run: git fetch --depth=100 origin +refs/tags/*:refs/tags/*
 
       - name: Set up JDK 11
-        uses: coursier/setup-action@v1.1.2
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.0
+        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
         with:
-          jvm: adopt:11
+          jvm: temurin:1.11
 
       - name: Cache Coursier cache
-        uses: coursier/cache-action@v6.3
+        # https://github.com/coursier/cache-action/releases/
+        # v6.4.3
+        uses: coursier/cache-action@d1039466d0812d6370649b9afb02bbf5f646bacf
 
       - name: "Create all API docs and create site with Paradox"
         run: sbt "unidoc; docs/makeSite"
 
       - name: Run Link Validator
-        run: cs launch net.runne::site-link-validator:0.2.2 -- project/link-validator.conf
+        run: cs launch net.runne::site-link-validator:0.2.3 -- project/link-validator.conf
 
   test:
     name: Test
-    if: github.repository == 'akka/akka-persistence-cassandra'
-    runs-on: ubuntu-20.04
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-22.04
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { jdk: 'adopt:8',  container: "cassandra-latest", test: "test" }
-          - { jdk: 'adopt:11', container: "cassandra-latest", test: "test" }
-          - { jdk: 'adopt:11', container: "cassandra2",       test: "'testOnly -- -l RequiresCassandraThree'"}
-          - { jdk: 'adopt:11', container: "cassandra3",       test: "test" }
+          - { jdk: 'adopt:8',           container: "cassandra-latest", test: "test" }
+          - { jdk: 'temurin:1.11.0.17', container: "cassandra-latest", test: "test" }
+          - { jdk: 'temurin:1.11.0.17', container: "cassandra2",       test: "'testOnly -- -l RequiresCassandraThree'"}
+          - { jdk: 'temurin:1.11.0.17', container: "cassandra3",       test: "test" }
 
     env:
       JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        # https://github.com/actions/checkout/releases
+        # v3.3.0
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c
         with:
           fetch-depth: 0
 
@@ -98,12 +113,16 @@ jobs:
           git checkout scratch
 
       - name: Set up JDK ${{ matrix.jdk }}
-        uses: coursier/setup-action@v1.1.2
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.0
+        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
         with:
           jvm: ${{ matrix.jdk }}
 
       - name: Cache Coursier cache
-        uses: coursier/cache-action@v6.3
+        # https://github.com/coursier/cache-action/releases/
+        # v6.4.3
+        uses: coursier/cache-action@d1039466d0812d6370649b9afb02bbf5f646bacf
 
       - name: Test against ${{ matrix.container }}
         run: |-
