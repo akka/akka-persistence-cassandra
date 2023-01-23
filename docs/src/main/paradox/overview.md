@@ -35,46 +35,6 @@ The table below shows Akka Persistence Cassandra’s direct dependencies and the
 
 To use the plugin with **Akka 2.5.x** you must use @extref:[version 0.103](apc-0.x:) or later in the 0.x series. 
 
-## Snapshots
-
-[bintray-badge]:  https://api.bintray.com/packages/akka/snapshots/akka-persistence-cassandra/images/download.svg
-[bintray]:        https://bintray.com/akka/snapshots/akka-persistence-cassandra/_latestVersion
-
-Snapshots are published to a snapshot repository in Sonatype after every successful build on master. Add the following to your project build definition to resolve snapshots:
-
-sbt
-:   ```scala
-    resolvers += Resolver.bintrayRepo("akka", "snapshots")
-    ```
-
-Maven
-:   ```xml
-    <project>
-    ...
-      <repositories>
-        <repository>
-          <id>akka-snapshots</id>
-          <name>Akka Snapshots</name>
-          <url>https://dl.bintray.com/akka/snapshots</url>
-        </repository>
-      </repositories>
-    ...
-    </project>
-    ```
-
-Gradle
-:   ```gradle
-    repositories {
-      maven {
-        url  "https://dl.bintray.com/akka/snapshots"
-      }
-    }
-    ```
-
-Latest published snapshot version is [![bintray-badge][]][bintray]
-
-The [snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) is updated with every snapshot build.
-
 ## History
 
 This [Apache Cassandra](https://cassandra.apache.org/) plugin to Akka Persistence was initiated [originally](https://github.com/krasserm/akka-persistence-cassandra) by Martin Krasser, [@krasserm](https://github.com/krasserm) in 2014.
