@@ -2,17 +2,22 @@ name: Release Drafter
 
 on:
   push:
-    # branches to consider in the event; optional, defaults to all
     branches:
       - master
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   update_release_draft:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
-      # Drafts your next Release notes as Pull Requests are merged into "master"
-      - uses: release-drafter/release-drafter@v5
-        with:
-          config-name: release-drafter.yml # located in .github/ in default branch
+      # Drafts your next Release notes as Pull Requests are merged
+      # https://github.com/release-drafter/release-drafter/releases
+      # v5.22.0
+      - uses: release-drafter/release-drafter@cfc5540ebc9d65a8731f02032e3d44db5e449fb6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

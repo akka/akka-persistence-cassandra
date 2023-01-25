@@ -30,8 +30,15 @@ object Common extends AutoPlugin {
           "Contributors",
           "https://gitter.im/akka/dev",
           url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
-      licenses := Seq(
-          ("BUSL-1.1", url("https://raw.githubusercontent.com/akka/akka-persistence-cassandra/master/LICENSE"))), // FIXME change s/master/v1.1.1/ when released
+      licenses := {
+        val tagOrBranch =
+          if (version.value.endsWith("SNAPSHOT")) "master"
+          else "v" + version.value
+        Seq(
+          (
+            "BUSL-1.1",
+            url(s"https://raw.githubusercontent.com/akka/akka-persistence-cassandra/${tagOrBranch}/LICENSE")))
+      },
       description := "A Cassandra plugin for Akka Persistence.")
 
   override lazy val projectSettings = Seq(
