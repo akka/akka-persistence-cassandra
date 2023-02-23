@@ -6,21 +6,20 @@ package akka.persistence.cassandra.query
 
 import java.lang.{ Long => JLong }
 import java.util.concurrent.ThreadLocalRandom
-
 import akka.Done
 import akka.annotation.InternalApi
 import akka.stream.{ Attributes, Outlet, SourceShape }
 import akka.stream.stage._
 import com.datastax.oss.driver.api.core.cql._
+
 import scala.annotation.tailrec
-import scala.concurrent.{ ExecutionContext, Future, Promise }
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future, Promise }
 import scala.concurrent.duration.{ FiniteDuration, _ }
 import scala.util.{ Failure, Success, Try }
-
 import com.datastax.oss.driver.api.core.CqlSession
+
 import scala.annotation.nowarn
 import scala.compat.java8.FutureConverters._
-
 import akka.persistence.cassandra.PluginSettings
 
 /**
@@ -126,7 +125,7 @@ import akka.persistence.cassandra.PluginSettings
       override protected def logSource: Class[_] =
         classOf[EventsByPersistenceIdStage]
 
-      implicit def ec = materializer.executionContext
+      implicit def ec: ExecutionContextExecutor = materializer.executionContext
 
       val donePromise = Promise[Done]()
 

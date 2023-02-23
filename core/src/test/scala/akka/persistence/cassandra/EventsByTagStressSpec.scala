@@ -11,7 +11,7 @@ import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.scaladsl.TestSink
 
 import scala.collection.immutable
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContextExecutor, Future }
 
 class EventsByTagStressSpec extends CassandraSpec(s"""
     akka.persistence.cassandra {
@@ -21,7 +21,7 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
     }
   """) {
 
-  implicit val ec = system.dispatcher
+  implicit val ec: ExecutionContextExecutor = system.dispatcher
 
   val writers = 10
   val readers = 20

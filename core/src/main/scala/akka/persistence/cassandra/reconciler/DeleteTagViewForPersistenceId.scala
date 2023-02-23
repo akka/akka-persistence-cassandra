@@ -12,7 +12,9 @@ import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
 import akka.persistence.cassandra.journal.TimeBucket
+import akka.stream.Materializer
 import akka.stream.scaladsl.Sink
+
 import scala.concurrent.Future
 
 /**
@@ -32,7 +34,7 @@ private[akka] final class DeleteTagViewForPersistenceId(
     settings: PluginSettings,
     queries: CassandraReadJournal) {
   private val log = Logging(system, s"DeleteTagView($tag)")
-  private implicit val sys = system
+  private implicit val sys: ActorSystem = system
   import system.dispatcher
 
   def execute(): Future[Done] = {

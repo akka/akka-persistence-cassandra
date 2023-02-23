@@ -44,7 +44,7 @@ object Common extends AutoPlugin {
   override lazy val projectSettings = Seq(
     projectInfoVersion := (if (isSnapshot.value) "snapshot" else version.value),
     crossVersion := CrossVersion.binary,
-    crossScalaVersions := Dependencies.ScalaVersions,
+    crossScalaVersions := Dependencies.Scala2Versions,
     scalaVersion := Dependencies.Scala213,
     scalacOptions ++= Seq("-encoding", "UTF-8", "-feature", "-unchecked", "-Xlint", "-Ywarn-dead-code", "-deprecation"),
     Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
@@ -60,10 +60,14 @@ object Common extends AutoPlugin {
           s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
         },
         "-doc-canonical-base-url",
-        "https://doc.akka.io/api/akka-persistence-cassandra/current/",
-        "-skip-packages",
-        "akka.pattern" // for some reason Scaladoc creates this
-      ),
+        "https://doc.akka.io/api/akka-persistence-cassandra/current/")
+      ++ {
+        if (scalaBinaryVersion.value.startsWith("3")) {
+          Seq("-skip-packages:akka.pattern") // different usage in scala3
+        } else {
+          Seq("-skip-packages", "akka.pattern") // for some reason Scaladoc creates this
+        }
+      },
     Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     scalafmtOnCompile := true,
     autoAPIMappings := true,

@@ -6,10 +6,10 @@ package akka.persistence.cassandra.query.scaladsl
 
 import java.net.URLEncoder
 import java.util.UUID
-
 import akka.{ Done, NotUsed }
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import akka.annotation.InternalApi
+import akka.dispatch.MessageDispatcher
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
 import akka.persistence.cassandra.journal._
@@ -138,7 +138,7 @@ class CassandraReadJournal protected (
     new CassandraJournal.EventDeserializer(system)
 
   private val serialization = SerializationExtension(system)
-  implicit private val ec =
+  implicit private val ec: MessageDispatcher =
     system.dispatchers.lookup(querySettings.pluginDispatcher)
   implicit private val sys: ActorSystem = system
 

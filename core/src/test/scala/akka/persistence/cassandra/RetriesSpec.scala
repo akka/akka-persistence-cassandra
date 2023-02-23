@@ -4,10 +4,9 @@
 
 package akka.persistence.cassandra
 
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContextExecutor, Future }
 import scala.concurrent.duration._
-
-import akka.actor.ActorSystem
+import akka.actor.{ ActorSystem, Scheduler }
 import akka.testkit.TestKit
 import akka.testkit.TestProbe
 import org.scalatest.BeforeAndAfterAll
@@ -21,8 +20,8 @@ class RetriesSpec
     with ScalaFutures
     with BeforeAndAfterAll
     with Matchers {
-  implicit val scheduler = system.scheduler
-  implicit val ec = system.dispatcher
+  implicit val scheduler: Scheduler = system.scheduler
+  implicit val ec: ExecutionContextExecutor = system.dispatcher
   "Retries" should {
     "retry N number of times" in {
       val failProbe = TestProbe()

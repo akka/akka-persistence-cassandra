@@ -68,7 +68,7 @@ import akka.stream.scaladsl.Source
   private val statements: CassandraStatements = new CassandraStatements(settings)
   private val healthCheckCql = settings.healthCheckSettings.healthCheckCql
   private val serialization = SerializationExtension(context.system)
-  private val log: LoggingAdapter = Logging(context.system, getClass)
+  private val log: LoggingAdapter = Logging(context.system, getClass.asInstanceOf[Class[Any]])
 
   private implicit val ec: ExecutionContext = context.dispatcher
 
@@ -259,7 +259,7 @@ import akka.stream.scaladsl.Source
     writeInProgress.put(pid, writeInProgressForPersistentId.future)
 
     val toReturn: Future[Nil.type] = Future.sequence(writesWithUuids.map(w => serialize(w))).flatMap {
-      serialized: Seq[SerializedAtomicWrite] =>
+      (serialized: Seq[SerializedAtomicWrite]) =>
         val result: Future[Any] =
           if (messages.map(_.payload.size).sum <= journalSettings.maxMessageBatchSize) {
             // optimize for the common case
@@ -390,7 +390,7 @@ import akka.stream.scaladsl.Source
       maxPnr - minPnr <= 1,
       "Do not support AtomicWrites that span 3 partitions. Keep AtomicWrites <= max partition size.")
 
-    val writes: Seq[Future[BoundStatement]] = all.map { m: Serialized =>
+    val writes: Seq[Future[BoundStatement]] = all.map { (m: Serialized) =>
       // using two separate statements with or without the meta data columns because
       // then users doesn't have to alter table and add the new columns if they don't use
       // the meta data feature
@@ -862,7 +862,7 @@ import akka.stream.scaladsl.Source
 
   class EventDeserializer(system: ActorSystem) {
 
-    private val log = Logging(system, this.getClass)
+    private val log = Logging(system, this.getClass.asInstanceOf[Class[Any]])
 
     private val serialization = SerializationExtension(system)
     val columnDefinitionCache = new ColumnDefinitionCache

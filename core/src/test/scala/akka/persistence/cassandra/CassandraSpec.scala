@@ -230,7 +230,7 @@ abstract class CassandraSpec(
 
   final override def systemName = system.name
 
-  implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
+  implicit val patience: PatienceConfig = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
 
   val pidCounter = new AtomicInteger()
   def nextPid = s"pid=${pidCounter.incrementAndGet()}"

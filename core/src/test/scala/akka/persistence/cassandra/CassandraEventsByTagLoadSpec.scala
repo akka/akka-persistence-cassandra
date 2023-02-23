@@ -77,7 +77,7 @@ class CassandraEventsByTagLoadSpec extends CassandraSpec(CassandraEventsByTagLoa
     var allReceived: Map[String, List[Long]] = Map.empty.withDefaultValue(List.empty)
     probe.request(messagesPerPersistenceId * nrPersistenceIds)
 
-    (1L to (messagesPerPersistenceId * nrPersistenceIds)).foreach { i: Long =>
+    (1L to (messagesPerPersistenceId * nrPersistenceIds)).foreach { (i: Long) =>
       val event = try {
         probe.expectNext(veryLongWait)
       } catch {

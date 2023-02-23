@@ -8,7 +8,6 @@ import scala.collection.immutable
 import java.lang.{ Integer => JInt, Long => JLong }
 import java.net.URLEncoder
 import java.util.UUID
-
 import scala.concurrent.Promise
 import akka.Done
 import akka.actor.SupervisorStrategy.Escalate
@@ -27,7 +26,7 @@ import akka.dispatch.ExecutionContexts
 import akka.event.LoggingAdapter
 import akka.persistence.cassandra.journal.CassandraJournal._
 import akka.persistence.cassandra.journal.TagWriter._
-import akka.persistence.cassandra.journal.TagWriters._
+import akka.persistence.cassandra.journal.TagWriters.TagWritersSession
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 import akka.util.ByteString
 import akka.util.Timeout
@@ -176,6 +175,7 @@ import scala.util.Try
     with Timers
     with ActorLogging {
 
+  import akka.persistence.cassandra.journal.TagWriters._
   import context.dispatcher
 
   // eager init and val because used from Future callbacks
