@@ -11,7 +11,6 @@ import akka.annotation.InternalApi
 import akka.stream.{ Attributes, Outlet, SourceShape }
 import akka.stream.stage._
 import com.datastax.oss.driver.api.core.cql._
-
 import scala.annotation.tailrec
 import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future, Promise }
 import scala.concurrent.duration.{ FiniteDuration, _ }

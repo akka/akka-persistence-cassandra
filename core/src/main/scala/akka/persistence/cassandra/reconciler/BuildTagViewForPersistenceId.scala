@@ -8,7 +8,6 @@ import akka.actor.ActorSystem
 import akka.persistence.cassandra.PluginSettings
 import akka.Done
 import akka.persistence.cassandra.journal.TagWriter._
-
 import scala.concurrent.duration._
 import scala.concurrent.Future
 import akka.stream.scaladsl.Source

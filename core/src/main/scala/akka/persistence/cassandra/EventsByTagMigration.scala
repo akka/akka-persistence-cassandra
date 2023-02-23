@@ -21,7 +21,6 @@ import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
 import akka.{ Done, NotUsed }
 import com.datastax.oss.driver.api.core.cql.Row
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
