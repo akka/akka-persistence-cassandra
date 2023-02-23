@@ -124,7 +124,7 @@ import akka.persistence.cassandra.PluginSettings
       override protected def logSource: Class[_] =
         classOf[EventsByPersistenceIdStage]
 
-      implicit def ec: ExecutionContextExecutor = materializer.executionContext
+      implicit def ec: ExecutionContext = materializer.executionContext
 
       val donePromise = Promise[Done]()
 

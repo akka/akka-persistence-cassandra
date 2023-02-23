@@ -6,12 +6,12 @@ package akka.persistence.cassandra.query.scaladsl
 
 import java.net.URLEncoder
 import java.util.UUID
-import akka.{ Done, NotUsed }
-import akka.actor.{ ActorSystem, ExtendedActorSystem }
+import akka.{Done, NotUsed}
+import akka.actor.{ActorSystem, ExtendedActorSystem}
 import akka.annotation.InternalApi
 import akka.dispatch.MessageDispatcher
 import akka.event.Logging
-import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
+import akka.persistence.cassandra.journal.CassandraJournal.{PersistenceId, Tag, TagPidSequenceNr}
 import akka.persistence.cassandra.journal._
 import akka.persistence.cassandra.Extractors
 import akka.persistence.cassandra.Extractors.Extractor
@@ -20,7 +20,7 @@ import akka.persistence.cassandra.query._
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
 import akka.persistence.query._
 import akka.persistence.query.scaladsl._
-import akka.persistence.{ Persistence, PersistentRepr }
+import akka.persistence.{Persistence, PersistentRepr}
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
 import akka.stream.ActorAttributes
@@ -29,9 +29,9 @@ import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 
 import scala.collection.immutable
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
-import scala.util.{ Failure, Success }
+import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.CassandraStatements
@@ -39,7 +39,7 @@ import akka.persistence.cassandra.journal.CassandraJournal
 import akka.persistence.cassandra.journal.CassandraJournal.DeserializedEvent
 import akka.serialization.SerializationExtension
 import akka.stream.alpakka.cassandra.CassandraSessionSettings
-import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
+import akka.stream.alpakka.cassandra.scaladsl.{CassandraSession, CassandraSessionRegistry}
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.uuid.Uuids
@@ -138,7 +138,7 @@ class CassandraReadJournal protected (
     new CassandraJournal.EventDeserializer(system)
 
   private val serialization = SerializationExtension(system)
-  implicit private val ec: MessageDispatcher =
+  implicit private val ec: ExecutionContext =
     system.dispatchers.lookup(querySettings.pluginDispatcher)
   implicit private val sys: ActorSystem = system
 

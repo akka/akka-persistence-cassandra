@@ -266,7 +266,7 @@ import scala.compat.java8.FutureConverters._
       private def updateQueryState(state: QueryState): Unit =
         updateStageState(_.copy(state = state))
 
-      implicit def ec: ExecutionContextExecutor = materializer.executionContext
+      implicit def ec: ExecutionContext = materializer.executionContext
 
       setHandler(out, this)
 
