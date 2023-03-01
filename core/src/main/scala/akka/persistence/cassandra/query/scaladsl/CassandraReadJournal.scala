@@ -9,7 +9,6 @@ import java.util.UUID
 import akka.{ Done, NotUsed }
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import akka.annotation.InternalApi
-import akka.dispatch.MessageDispatcher
 import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraJournal.{ PersistenceId, Tag, TagPidSequenceNr }
 import akka.persistence.cassandra.journal._
