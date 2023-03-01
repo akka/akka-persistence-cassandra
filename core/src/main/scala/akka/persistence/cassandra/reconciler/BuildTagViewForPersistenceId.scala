@@ -18,7 +18,7 @@ import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraTagRecovery
 import akka.persistence.cassandra.Extractors
 import akka.util.Timeout
-import akka.stream.{ Materializer, OverflowStrategy }
+import akka.stream.{ OverflowStrategy }
 import akka.stream.scaladsl.Sink
 import akka.annotation.InternalApi
 import akka.serialization.SerializationExtension
