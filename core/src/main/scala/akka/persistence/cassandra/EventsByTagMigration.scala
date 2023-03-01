@@ -25,7 +25,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import akka.actor.ClassicActorSystemProvider
-import akka.dispatch.MessageDispatcher
 
 object EventsByTagMigration {
   def apply(systemProvider: ClassicActorSystemProvider): EventsByTagMigration =
@@ -79,7 +78,7 @@ class EventsByTagMigration(
   private lazy val queries = PersistenceQuery(system).readJournalFor[CassandraReadJournal](pluginConfigPath + ".query")
   private implicit val sys: ActorSystem = system
 
-  implicit val ec: MessageDispatcher =
+  implicit val ec: ExecutionContext =
     system.dispatchers.lookup(system.settings.config.getString(s"$pluginConfigPath.journal.plugin-dispatcher"))
   private val settings: PluginSettings =
     new PluginSettings(system, system.settings.config.getConfig(pluginConfigPath))
