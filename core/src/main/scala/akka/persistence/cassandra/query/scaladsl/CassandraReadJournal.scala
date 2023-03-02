@@ -6,7 +6,6 @@ package akka.persistence.cassandra.query.scaladsl
 
 import java.net.URLEncoder
 import java.util.UUID
-
 import akka.{ Done, NotUsed }
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import akka.annotation.InternalApi
@@ -29,7 +28,7 @@ import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
 
 import scala.collection.immutable
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
@@ -138,7 +137,7 @@ class CassandraReadJournal protected (
     new CassandraJournal.EventDeserializer(system)
 
   private val serialization = SerializationExtension(system)
-  implicit private val ec =
+  implicit private val ec: ExecutionContext =
     system.dispatchers.lookup(querySettings.pluginDispatcher)
   implicit private val sys: ActorSystem = system
 

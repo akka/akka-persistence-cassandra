@@ -19,7 +19,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 class BufferSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
-  implicit val system = ActorSystem()
+  implicit val system: ActorSystem = ActorSystem()
 
   "Buffer" should {
     "not write when empty" in {

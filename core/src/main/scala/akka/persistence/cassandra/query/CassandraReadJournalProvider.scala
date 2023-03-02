@@ -11,10 +11,12 @@ import com.typesafe.config.Config
 class CassandraReadJournalProvider(system: ExtendedActorSystem, config: Config, configPath: String)
     extends ReadJournalProvider {
 
-  override val scaladslReadJournal: scaladsl.CassandraReadJournal =
-    new scaladsl.CassandraReadJournal(system, config, configPath)
+  private val scaladslReadJournalInstance = new scaladsl.CassandraReadJournal(system, config, configPath)
 
-  override val javadslReadJournal: javadsl.CassandraReadJournal =
-    new javadsl.CassandraReadJournal(scaladslReadJournal)
+  override def scaladslReadJournal(): scaladsl.CassandraReadJournal = scaladslReadJournalInstance
+
+  private val javadslReadJournalInstance = new javadsl.CassandraReadJournal(scaladslReadJournalInstance)
+
+  override def javadslReadJournal(): javadsl.CassandraReadJournal = javadslReadJournalInstance
 
 }

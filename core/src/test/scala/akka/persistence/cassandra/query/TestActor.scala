@@ -42,7 +42,7 @@ class TestActor(override val persistenceId: String, override val journalPluginId
       val size = events.size
       val handler = {
         var count = 0
-        evt: String => {
+        (evt: String) => {
           count += 1
           if (count == size)
             sender() ! "PersistAll-done"

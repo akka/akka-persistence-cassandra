@@ -5,13 +5,12 @@
 package akka.persistence.cassandra.cleanup
 
 import java.lang.{ Integer => JInt, Long => JLong }
-
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import akka.{ Done, NotUsed }
-import akka.actor.{ ActorRef, ClassicActorSystemProvider }
+import akka.actor.{ ActorRef, ActorSystem, ClassicActorSystemProvider }
 import akka.annotation.ApiMayChange
 import akka.event.Logging
 import akka.pattern.ask
@@ -22,6 +21,7 @@ import akka.persistence.cassandra.journal.CassandraJournal
 import akka.persistence.cassandra.reconciler.Reconciliation
 import akka.persistence.cassandra.reconciler.ReconciliationSettings
 import akka.persistence.cassandra.snapshot.{ CassandraSnapshotStatements, CassandraSnapshotStore }
+import akka.stream.Materializer
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout
@@ -48,11 +48,11 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
       systemProvider,
       new CleanupSettings(systemProvider.classicSystem.settings.config.getConfig("akka.persistence.cassandra.cleanup")))
 
-  private implicit val system = systemProvider.classicSystem
+  private implicit val system: ActorSystem = systemProvider.classicSystem
   import settings._
   import system.dispatcher
 
-  private val log = Logging(system, getClass)
+  private val log = Logging(system, getClass.asInstanceOf[Class[Any]])
 
   // operations on journal, snapshotStore and tagViews should be only be done when dry-run = false
   private val journal: ActorRef = Persistence(system).journalFor(pluginLocation + ".journal")

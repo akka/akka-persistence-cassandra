@@ -29,6 +29,7 @@ lazy val core = project
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
         "Automatic-Module-Name" -> "akka.persistence.cassandra"))
   .configs(MultiJvm)
+  .settings(Scala3.settings)
 
 lazy val cassandraLauncher = project
   .in(file("cassandra-launcher"))
@@ -37,6 +38,7 @@ lazy val cassandraLauncher = project
     name := "akka-persistence-cassandra-launcher",
     Compile / managedResourceDirectories += (cassandraBundle / target).value / "bundle",
     Compile / managedResources += (cassandraBundle / assembly).value)
+  .settings(Scala3.settings)
 
 // This project doesn't get published directly, rather the assembled artifact is included as part of cassandraLaunchers
 // resources

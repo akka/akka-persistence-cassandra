@@ -6,11 +6,9 @@ package akka.persistence.cassandra.query
 
 import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
-
 import akka.annotation.InternalApi
 import akka.persistence.cassandra._
 import akka.persistence.cassandra.journal.TimeBucket
-import akka.persistence.cassandra.query.EventsByTagStage._
 import akka.stream.stage.{ GraphStage, _ }
 import akka.stream.{ Attributes, Outlet, SourceShape }
 import akka.util.PrettyDuration._
@@ -21,11 +19,11 @@ import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
 import scala.util.{ Failure, Success, Try }
 import java.lang.{ Long => JLong }
-
 import akka.actor.Scheduler
 import akka.cluster.pubsub.{ DistributedPubSub, DistributedPubSubMediator }
 import akka.persistence.cassandra.EventsByTagSettings.RetrySettings
 import akka.persistence.cassandra.journal.CassandraJournal._
+import akka.persistence.cassandra.query.EventsByTagStage.{ TagStageSession, UUIDRow }
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal.EventByTagStatements
 import akka.util.UUIDComparator
 import com.datastax.oss.driver.api.core.CqlSession
@@ -218,6 +216,7 @@ import scala.compat.java8.FutureConverters._
     scanner: TagViewSequenceNumberScanner)
     extends GraphStage[SourceShape[UUIDRow]] {
 
+  import akka.persistence.cassandra.query.EventsByTagStage._
   import settings.querySettings
   import settings.eventsByTagSettings
 
@@ -240,7 +239,7 @@ import scala.compat.java8.FutureConverters._
         toOffset.map(Uuids.unixTimestamp).getOrElse(Long.MaxValue)
 
       lazy val system = materializer.system
-      lazy implicit val scheduler = system.scheduler
+      lazy implicit val scheduler: Scheduler = system.scheduler
 
       private def calculateToOffset(): UUID = {
         val to: Long = Uuids.unixTimestamp(Uuids.timeBased()) - eventsByTagSettings.eventualConsistency.toMillis
@@ -267,7 +266,7 @@ import scala.compat.java8.FutureConverters._
       private def updateQueryState(state: QueryState): Unit =
         updateStageState(_.copy(state = state))
 
-      implicit def ec: ExecutionContextExecutor = materializer.executionContext
+      implicit def ec: ExecutionContext = materializer.executionContext
 
       setHandler(out, this)
 

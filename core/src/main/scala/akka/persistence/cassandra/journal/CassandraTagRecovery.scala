@@ -47,7 +47,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   private val serialization = SerializationExtension(system)
 
   // used for local asks
-  private implicit val timeout = Timeout(10.second)
+  private implicit val timeout: Timeout = Timeout(10.second)
 
   import statements._
 

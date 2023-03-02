@@ -28,7 +28,8 @@ class EventsByPersistenceIdFastForwardSpec
     extends CassandraSpec(EventsByPersistenceIdFastForwardSpec.config)
     with DirectWriting {
 
-  override implicit val patience = PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
+  override implicit val patience: PatienceConfig =
+    PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Milliseconds))
 
   "be able to fast forward when currently looking for missing sequence number" in {
     val w1 = UUID.randomUUID().toString

@@ -18,7 +18,7 @@ import akka.event.Logging
 import akka.persistence.cassandra.journal.CassandraTagRecovery
 import akka.persistence.cassandra.Extractors
 import akka.util.Timeout
-import akka.stream.OverflowStrategy
+import akka.stream.{ OverflowStrategy }
 import akka.stream.scaladsl.Sink
 import akka.annotation.InternalApi
 import akka.serialization.SerializationExtension
@@ -35,7 +35,7 @@ private[akka] final class BuildTagViewForPersisetceId(
 
   import system.dispatcher
 
-  private implicit val sys = system
+  private implicit val sys: ActorSystem = system
   private val log = Logging(system, classOf[BuildTagViewForPersisetceId])
   private val serialization = SerializationExtension(system)
 
@@ -43,7 +43,7 @@ private[akka] final class BuildTagViewForPersisetceId(
     PersistenceQuery(system.asInstanceOf[ExtendedActorSystem])
       .readJournalFor[CassandraReadJournal]("akka.persistence.cassandra.query")
 
-  private implicit val flushTimeout = Timeout(30.seconds)
+  private implicit val flushTimeout: Timeout = Timeout(30.seconds)
 
   def reconcile(flushEvery: Int = 1000): Future[Done] = {
 
