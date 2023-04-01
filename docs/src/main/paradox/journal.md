@@ -125,7 +125,31 @@ datastax-java-driver.profiles {
 }
 ```
 
-## Delete all events
+## Event deletion and retention
+
+In applications with an Event Sourcing model of persistence, an idealized journal is _append-only_: events are never deleted.
+However, it is possible in Akka Persistence to use [snapshot-based retention](https://doc.akka.io/docs/akka/current/typed/persistence-snapshot.html#event-deletion),
+and it is also possible to @ref[perform bulk deletions of events](./cleanup.md) in Akka Persistence Cassandra.  If using these
+features, it's important to be aware of [how deletion is performed in Cassandra](https://docs.datastax.com/en/cassandra-oss/3.0/cassandra/dml/dmlAboutDeletes.html).
+Specifically, deletion of events is actually inserting a tombstone telling Cassandra "this event is deleted".  In the presence
+of that tombstone, the deleted event will not be read by Cassandra, but until Cassandra's [compaction process](https://docs.datastax.com/en/cassandra-oss/3.0/cassandra/dml/dmlHowDataMaintain.html#Compaction)
+has combined the tombstone with the deleted event, both will still be on disk in the Cassandra cluster.
+
+The journal schema provided above uses the `SizeTieredCompactionStrategy`, which is a good fit for insert-heavy workloads which don't
+perform upserts or deletions (the combination of Event Sourcing as a persistence model with Cluster Sharding is an especially good
+example of such a workload).  If events are being deleted after many events (across all persistence IDs, not just the persistence ID
+for which events are being deleted) have been written, there can be a substantial delay before the compaction process will actually
+delete the deleted event (the duration of the delay depends on the rate at which new events are written in the system: assuming that
+the rate is uniform and constant, the delay will tend to be approximately the duration which elapsed between when the deleted event was
+originally written and when the deletion in Akka Persistence Cassandra was performed), and the compaction process can only guarantee to
+work in the presence of free disk space of at least the total size of events which are not deleted.
+
+Accordingly, if planning to delete events, and especially if an intention of such a deletion/retention policy is to minimize disk storage
+requirements, it is strongly recommended to keep disk utilization on all nodes in your Cassandra cluster below 50% (e.g. by treating crossing that
+utilization threshold as a signal that the cluster needs to be scaled out by adding nodes).  There can be substantial operational complexity
+if attempting to delete events after disk utilization has gone above 50%.
+
+### Delete all events
 
 The @apidoc[akka.persistence.cassandra.cleanup.Cleanup] tool can be used for deleting all events and/or snapshots
 given list of `persistenceIds` without using persistent actors. It's important that the actors with corresponding
