@@ -28,7 +28,7 @@ object CassandraEventUpdateSpec {
 
 class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.config) { s =>
 
-  private[akka] val log = Logging(system, getClass.asInstanceOf[Class[Any]])
+  private[akka] val log = Logging(system, classOf[CassandraEventUpdateSpec])
   private val serialization = SerializationExtension(system)
 
   val updater = new CassandraEventUpdate {

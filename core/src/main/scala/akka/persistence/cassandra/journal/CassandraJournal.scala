@@ -68,7 +68,7 @@ import akka.stream.scaladsl.Source
   private val statements: CassandraStatements = new CassandraStatements(settings)
   private val healthCheckCql = settings.healthCheckSettings.healthCheckCql
   private val serialization = SerializationExtension(context.system)
-  private val log: LoggingAdapter = Logging(context.system, getClass.asInstanceOf[Class[Any]])
+  private val log: LoggingAdapter = Logging(context.system, classOf[CassandraJournal])
 
   private implicit val ec: ExecutionContext = context.dispatcher
 
@@ -862,7 +862,7 @@ import akka.stream.scaladsl.Source
 
   class EventDeserializer(system: ActorSystem) {
 
-    private val log = Logging(system, this.getClass.asInstanceOf[Class[Any]])
+    private val log = Logging(system, classOf[CassandraJournal])
 
     private val serialization = SerializationExtension(system)
     val columnDefinitionCache = new ColumnDefinitionCache
