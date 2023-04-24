@@ -32,7 +32,7 @@ object Common extends AutoPlugin {
           url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
       licenses := {
         val tagOrBranch =
-          if (version.value.endsWith("SNAPSHOT")) "master"
+          if (version.value.endsWith("SNAPSHOT")) "main"
           else "v" + version.value
         Seq(
           (
@@ -56,7 +56,7 @@ object Common extends AutoPlugin {
         "-sourcepath",
         (ThisBuild / baseDirectory).value.toString,
         "-doc-source-url", {
-          val branch = if (isSnapshot.value) "master" else s"v${version.value}"
+          val branch = if (isSnapshot.value) "main" else s"v${version.value}"
           s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
         },
         "-doc-canonical-base-url",

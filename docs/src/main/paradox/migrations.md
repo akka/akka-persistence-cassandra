@@ -37,7 +37,7 @@ It is now structured in four main sections within the top level `akka.persistenc
       }
     }
 
-See [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf)
+See [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/main/core/src/main/resources/reference.conf)
 for details and update your `application.conf` accordingly.
 
 This also means that the properties for enabling the plugin have changed to:
@@ -250,7 +250,7 @@ The Persistence Query API changed slightly, see [migration guide for Akka 2.5](h
 
 ## Migrations from 0.11 to 0.12
 
-Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/master/core/src/main/resources/reference.conf):
+Dispatcher configuration was changed, see [reference.conf](https://github.com/akka/akka-persistence-cassandra/blob/main/core/src/main/resources/reference.conf):
 
 ## Migrations from 0.9 to 0.10
 
