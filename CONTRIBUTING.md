@@ -26,13 +26,13 @@ These guidelines mainly apply to Lightbend's "mature" projects - not necessarily
 
 Depending on which version (or sometimes module) you want to work on, you should target a specific branch as explained below:
 
-* 1.0 -> `master` - current active development and stable 1.0.x patch releases
+* 1.0 -> `main` - current active development and stable 1.0.x patch releases
 * 0.80+ (see [Github releases](https://github.com/akka/akka-persistence-cassandra/releases) for latest) -> `release-0.x`  - removed use of Cassandra Materialized Views after they were marked as not to be used in production. 
 * 0.50+ (currently 0.62) -> `release-0.50`- first release under this organisation, previously under krasserm. No planned releases for this version. 
 
 ## General Workflow
 
-This is the process for committing code into master. There are of course exceptions to these rules, for example minor changes to comments and documentation, fixing a broken build etc.
+This is the process for committing code into main. There are of course exceptions to these rules, for example minor changes to comments and documentation, fixing a broken build etc.
 
 1. To avoid duplicated effort, it might be good to check the [issue tracker](https://github.com/akka/akka-persistence-cassandra/issues) and [existing pull requests](https://github.com/akka/akka-persistence-cassandra/pulls) for existing work.
    - If there is no ticket yet, feel free to [create one](https://github.com/akka/akka-persistence-cassandra/issues/new) to discuss the problem and the approach you want to take to solve it.
@@ -47,7 +47,7 @@ This is the process for committing code into master. There are of course excepti
 
     When the branch conflicts with its merge target (either by way of git merge conflict or failing CI tests), do **not** merge the target branch into your feature branch. Instead rebase your branch onto the target branch. Merges complicate the git history, especially for the squashing which is necessary later (see below).
 
-7. Once the code has passed review the Pull Request can be merged into the master branch. For this purpose the commits which were added on the feature branch should be squashed into a single commit. This can be done using the command `git rebase -i master` (or the appropriate target branch), `pick`ing the first commit and `squash`ing all following ones.
+7. Once the code has passed review the Pull Request can be merged into the main branch. For this purpose the commits which were added on the feature branch should be squashed into a single commit. This can be done using the command `git rebase -i master` (or the appropriate target branch), `pick`ing the first commit and `squash`ing all following ones.
 
     Also make sure that the commit message conforms to the syntax specified below.
 
@@ -85,13 +85,13 @@ For a Pull Request to be considered at all it has to meet these requirements:
     - Never delete or change existing copyright notices, just add additional info.
     - Do not use ``@author`` tags since it does not encourage [Collective Code Ownership](http://www.extremeprogramming.org/rules/collective.html). However, each project should make sure that the contributors gets the credit they deserve—in a text file or page on the project website and in the release notes etc.
 
-If these requirements are not met then the code should **not** be merged into master, or even reviewed - regardless of how good or important it is. No exceptions.
+If these requirements are not met then the code should **not** be merged into main, or even reviewed - regardless of how good or important it is. No exceptions.
 
 Whether or not a pull request (or parts of it) shall be back- or forward-ported will be discussed on the pull request discussion page, it shall therefore not be part of the commit messages. If desired the intent can be expressed in the pull request description.
 
 ## Continuous Integration
 
-Each project should be configured to use a continuous integration (CI) tool (i.e. a build server à la Jenkins). Lightbend has a [Jenkins server farm](https://jenkins.akka.io/) that can be used. The CI tool should, on each push to master, build the **full** distribution and run **all** tests, and if something fails it should email out a notification with the failure report to the committer and the core team. The CI tool should also be used in conjunction with a Pull Request validator (discussed below).
+Each project should be configured to use a continuous integration (CI) tool (i.e. a build server à la Jenkins). Lightbend has a [Jenkins server farm](https://jenkins.akka.io/) that can be used. The CI tool should, on each push to main, build the **full** distribution and run **all** tests, and if something fails it should email out a notification with the failure report to the committer and the core team. The CI tool should also be used in conjunction with a Pull Request validator (discussed below).
 
 ## Documentation
 
@@ -118,7 +118,7 @@ Each project must also create and maintain a list of all dependencies and their 
 
 ## Work In Progress
 
-It is ok to work on a public feature branch in the GitHub repository. Something that can sometimes be useful for early feedback etc. If so then it is preferable to name the branch accordingly. This can be done by either prefix the name with ``wip-`` as in ‘Work In Progress’, or use hierarchical names like ``wip/..``, ``feature/..`` or ``topic/..``. Either way is fine as long as it is clear that it is work in progress and not ready for merge. This work can temporarily have a lower standard. However, to be merged into master it will have to go through the regular process outlined above, with Pull Request, review etc..
+It is ok to work on a public feature branch in the GitHub repository. Something that can sometimes be useful for early feedback etc. If so then it is preferable to name the branch accordingly. This can be done by either prefix the name with ``wip-`` as in ‘Work In Progress’, or use hierarchical names like ``wip/..``, ``feature/..`` or ``topic/..``. Either way is fine as long as it is clear that it is work in progress and not ready for merge. This work can temporarily have a lower standard. However, to be merged into main it will have to go through the regular process outlined above, with Pull Request, review etc..
 
 Also, to facilitate both well-formed commits and working together, the ``wip`` and ``feature``/``topic`` identifiers also have special meaning.   Any branch labelled with ``wip`` is considered “git-unstable” and may be rebased and have its history rewritten.   Any branch with ``feature``/``topic`` in the name is considered “stable” enough for others to depend on when a group is working on a feature.
 
