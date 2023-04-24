@@ -16,7 +16,7 @@ object Dependencies {
   val DriverVersionInDocs = "4.14"
 
   val AlpakkaVersion = "6.0.0"
-  val AlpakkaVersionInDocs = AlpakkaVersion.take(3)
+  val AlpakkaVersionInDocs = AlpakkaVersion
   // for example
   val AkkaManagementVersion = "1.2.0"
 
