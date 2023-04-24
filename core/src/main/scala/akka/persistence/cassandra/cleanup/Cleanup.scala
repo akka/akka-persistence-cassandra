@@ -52,7 +52,7 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
   import settings._
   import system.dispatcher
 
-  private val log = Logging(system, getClass.asInstanceOf[Class[Any]])
+  private val log = Logging(system, classOf[Cleanup])
 
   // operations on journal, snapshotStore and tagViews should be only be done when dry-run = false
   private val journal: ActorRef = Persistence(system).journalFor(pluginLocation + ".journal")

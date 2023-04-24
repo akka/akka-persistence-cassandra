@@ -303,7 +303,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   @InternalApi
   private[akka] class SnapshotSerialization(system: ActorSystem)(implicit val ec: ExecutionContext) {
 
-    private val log = Logging(system, this.getClass.asInstanceOf[Class[Any]])
+    private val log = Logging(system, classOf[SnapshotSerialization])
 
     private val serialization = SerializationExtension(system)
 
