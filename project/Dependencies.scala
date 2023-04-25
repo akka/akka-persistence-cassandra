@@ -4,7 +4,7 @@ import Keys._
 object Dependencies {
   val Scala212 = "2.12.17"
   val Scala213 = "2.13.10"
-  val Scala3 = "3.1.3"
+  val Scala3 = "3.2.2"
   val Scala2Versions = Seq(Scala213, Scala212)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
@@ -15,8 +15,8 @@ object Dependencies {
   val CassandraDriverVersion = "4.14.1"
   val DriverVersionInDocs = "4.14"
 
-  val AlpakkaVersion = "5.1.0-M1"
-  val AlpakkaVersionInDocs = AlpakkaVersion.take(3)
+  val AlpakkaVersion = "6.0.0"
+  val AlpakkaVersionInDocs = AlpakkaVersion
   // for example
   val AkkaManagementVersion = "1.2.0"
 
