@@ -19,9 +19,9 @@ earlier.
 Configure the authentication plugin in application.conf:
 
 ```
-datastax-java-driver.profiles.akka-persistence-cassandra-profile.basic.request.consistency = LOCAL_QUORUM
-
 datastax-java-driver { 
+  profiles.akka-persistence-cassandra-profile.basic.request.consistency = LOCAL_QUORUM
+
   basic.contact-points = [ "cassandra.eu-central-1.amazonaws.com:9142"]
   basic.request.consistency = LOCAL_QUORUM
   basic.load-balancing-policy {
