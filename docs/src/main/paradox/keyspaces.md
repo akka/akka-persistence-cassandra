@@ -26,6 +26,11 @@ datastax-java-driver {
     class = DefaultLoadBalancingPolicy
     local-datacenter = eu-central-1
   }
+  profiles {
+     akka-persistence-cassandra-profile {
+        basic.request.consistency = LOCAL_QUORUM
+     }
+  }   
   advanced {
     auth-provider = {
       class = software.aws.mcs.auth.SigV4AuthProvider
@@ -33,6 +38,9 @@ datastax-java-driver {
     }
     ssl-engine-factory {
       class = DefaultSslEngineFactory
+      truststore-path = "cassandra_truststore.jks"
+      truststore-password = "my_password"
+      hostname-validation = false      
     }
   }
 }
