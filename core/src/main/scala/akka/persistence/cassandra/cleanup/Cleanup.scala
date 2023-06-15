@@ -21,7 +21,6 @@ import akka.persistence.cassandra.journal.CassandraJournal
 import akka.persistence.cassandra.reconciler.Reconciliation
 import akka.persistence.cassandra.reconciler.ReconciliationSettings
 import akka.persistence.cassandra.snapshot.{ CassandraSnapshotStatements, CassandraSnapshotStore }
-import akka.stream.Materializer
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.{ Sink, Source }
 import akka.util.Timeout

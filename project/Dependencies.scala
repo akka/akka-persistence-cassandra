@@ -43,7 +43,6 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       "com.datastax.oss" % "java-driver-core" % CassandraDriverVersion,
-      "org.scala-lang.modules" %% "scala-collection-compat" % "2.7.0",
       Logback % Test,
       "org.scalatest" %% "scalatest" % "3.2.16" % Test,
       "org.pegdown" % "pegdown" % "1.6.0" % Test,

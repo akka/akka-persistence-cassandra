@@ -23,7 +23,6 @@ import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatest.{ BeforeAndAfterAll, BeforeAndAfterEach }
 import org.scalatest.wordspec.AnyWordSpecLike
 
-import scala.collection.compat.immutable.LazyList
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.util.control.NoStackTrace
@@ -115,7 +114,7 @@ class TagWriterSpec
       val sender3 = TestProbe()
       val (probe, ref) =
         setup(
-          writeResponse = LazyList(promiseForWrite.future) ++ LazyList.continually(Future.successful(Done)),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)),
           settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -148,7 +147,7 @@ class TagWriterSpec
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
-          writeResponse = LazyList(promiseForWrite.future) ++ LazyList.continually(Future.successful(Done)),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)),
           settings = defaultSettings.copy(maxBatchSize = 1))
       val bucket = nowBucket()
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -174,7 +173,7 @@ class TagWriterSpec
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
-          writeResponse = LazyList(promiseForWrite.future) ++ LazyList.continually(Future.successful(Done)),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)),
           settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -326,7 +325,7 @@ class TagWriterSpec
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
-          writeResponse = LazyList(promiseForWrite.future) ++ LazyList.continually(Future.successful(Done)),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)),
           settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
 
@@ -348,7 +347,7 @@ class TagWriterSpec
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
-          writeResponse = LazyList(promiseForWrite.future) ++ LazyList.continually(Future.successful(Done)),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)),
           settings = defaultSettings.copy(maxBatchSize = 2))
       val now = Uuids.timeBased()
       val bucketOne = TimeBucket(now, bucketSize)
@@ -393,7 +392,7 @@ class TagWriterSpec
       val promiseForWrite = Promise[Done]()
       val (probe, ref) =
         setup(
-          writeResponse = LazyList(promiseForWrite.future) ++ LazyList.continually(Future.successful(Done)),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)),
           settings = defaultSettings.copy(maxBatchSize = 2))
       val bucket = nowBucket()
 
@@ -415,7 +414,7 @@ class TagWriterSpec
     "do not internal flush if write in progress with no interval" in new Setup {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
-        writeResponse = LazyList(promiseForWrite.future) ++ LazyList.continually(Future.successful(Done)),
+        writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)),
         settings = defaultSettings.copy(maxBatchSize = 3, flushInterval = 0.millis))
       val bucket = nowBucket()
 
@@ -437,7 +436,7 @@ class TagWriterSpec
     "not flush if internal flush is in progress" in new Setup {
       val promiseForWrite = Promise[Done]()
       val (probe, ref) = setup(
-        writeResponse = LazyList(promiseForWrite.future) ++ LazyList.continually(Future.successful(Done)),
+        writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)),
         settings = defaultSettings.copy(maxBatchSize = 2, flushInterval = 500.millis))
       val bucket = nowBucket()
 
@@ -541,7 +540,7 @@ class TagWriterSpec
       val (probe, ref) =
         setup(
           settings = defaultSettings.copy(maxBatchSize = 1),
-          writeResponse = LazyList(writeInProgressPromise.future) ++ LazyList.continually(Future.successful(Done)))
+          writeResponse = Iterator(writeInProgressPromise.future) ++ Iterator.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       ref ! ResetPersistenceId(tagName, initialProgress)
@@ -611,7 +610,7 @@ class TagWriterSpec
       val (probe, underTest) =
         setup(
           settings = defaultSettings.copy(maxBatchSize = 1),
-          writeResponse = LazyList(writeInProgressPromise.future) ++ LazyList.continually(Future.successful(Done)))
+          writeResponse = Iterator(writeInProgressPromise.future) ++ Iterator.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       val e1 = event(pid, 1L, "e-1", bucket)
@@ -648,7 +647,7 @@ class TagWriterSpec
       val idleTimeout = 1.second
       val (probe, ref) =
         setupWithParent(
-          writeResponse = LazyList(promiseForWrite.future) ++ LazyList.continually(Future.successful(Done)),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)),
           settings = defaultSettings.copy(maxBatchSize = 2, stopTagWriterWhenIdle = idleTimeout),
           parent = parent.ref)
       val bucket = nowBucket()
@@ -671,7 +670,7 @@ class TagWriterSpec
       val t = TestEx("Tag write failed")
       val (probe, ref) = setup(
         settings = defaultSettings.copy(maxBatchSize = 2),
-        writeResponse = LazyList(Future.failed(t)) ++ LazyList.continually(Future.successful(Done)))
+        writeResponse = Iterator(Future.failed(t)) ++ Iterator.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -703,7 +702,7 @@ class TagWriterSpec
       val (probe, ref) =
         setup(
           settings = defaultSettings.copy(maxBatchSize = 2),
-          progressWriteResponse = LazyList(Future.failed(t)) ++ LazyList.continually(Future.successful(Done)))
+          progressWriteResponse = Iterator(Future.failed(t)) ++ Iterator.continually(Future.successful(Done)))
       val bucket = nowBucket()
 
       val e1 = event("p1", 1L, "e-1", bucket)
@@ -734,8 +733,8 @@ class TagWriterSpec
   private def setup(
       tag: String = "tag-1",
       settings: TagWriterSettings,
-      writeResponse: LazyList[Future[Done]] = LazyList.continually(Future.successful(Done)),
-      progressWriteResponse: LazyList[Future[Done]] = LazyList.continually(Future.successful(Done)))
+      writeResponse: Iterator[Future[Done]] = Iterator.continually(Future.successful(Done)),
+      progressWriteResponse: Iterator[Future[Done]] = Iterator.continually(Future.successful(Done)))
       : (TestProbe, ActorRef) = {
     setupWithParent(tag, settings, writeResponse, progressWriteResponse, TestProbe().ref)
   }
@@ -743,11 +742,11 @@ class TagWriterSpec
   private def setupWithParent(
       tag: String = "tag-1",
       settings: TagWriterSettings,
-      writeResponse: LazyList[Future[Done]] = LazyList.continually(Future.successful(Done)),
-      progressWriteResponse: LazyList[Future[Done]] = LazyList.continually(Future.successful(Done)),
+      writeResponse: Iterator[Future[Done]] = Iterator.continually(Future.successful(Done)),
+      progressWriteResponse: Iterator[Future[Done]] = Iterator.continually(Future.successful(Done)),
       parent: ActorRef): (TestProbe, ActorRef) = {
-    var writeResponseStream = writeResponse
-    var progressWriteResponseStream = progressWriteResponse
+    val writeResponseStream = writeResponse
+    val progressWriteResponseStream = progressWriteResponse
     val probe = TestProbe()
     val session =
       new TagWritersSession(null, "unused", "unused", null) {
@@ -756,9 +755,7 @@ class TagWriterSpec
           probe.ref ! write.nextBatch.flatten(_.events).map {
             case (event, tagPidSequenceNr) => toEw(event, tagPidSequenceNr)
           }
-          val (result, tail) = (writeResponseStream.head, writeResponseStream.tail)
-          writeResponseStream = tail
-          result
+          writeResponseStream.next()
         }
 
         override def writeProgress(
@@ -767,10 +764,8 @@ class TagWriterSpec
             seqNr: SequenceNr,
             tagPidSequenceNr: TagPidSequenceNr,
             offset: UUID)(implicit ec: ExecutionContext): Future[Done] = {
-          val (head, tail) = (progressWriteResponseStream.head, progressWriteResponseStream.tail)
           probe.ref ! ProgressWrite(pid, seqNr, tagPidSequenceNr, offset)
-          progressWriteResponseStream = tail
-          head
+          progressWriteResponseStream.next()
         }
       }
 
