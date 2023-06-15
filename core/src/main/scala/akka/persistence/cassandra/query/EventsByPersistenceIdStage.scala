@@ -277,6 +277,8 @@ import akka.persistence.cassandra.PluginSettings
       override protected def onTimer(timerKey: Any): Unit = timerKey match {
         case Continue            => continue()
         case LookForMissingSeqNr => lookForMissingSeqNr()
+        case key =>
+          throw new IllegalArgumentException(s"Unexpected timer key $key") // compiler completeness check pleaser
       }
 
       def continue(): Unit =

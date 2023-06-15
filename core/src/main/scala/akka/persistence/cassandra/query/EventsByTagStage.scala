@@ -444,6 +444,8 @@ import scala.compat.java8.FutureConverters._
           cleanup()
         case ScanForDelayedEvents =>
           scanForDelayedEvents()
+        case key =>
+          throw new IllegalArgumentException(s"Unexpected timer key $key") // compiler completeness check pleaser
       }
 
       override def onPull(): Unit = {

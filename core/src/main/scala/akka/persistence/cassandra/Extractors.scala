@@ -185,8 +185,8 @@ import akka.persistence.query.TimeBasedUUID
             sender = null,
             writerUuid = row.getString("writer_uuid"))
           metadata match {
-            case OptionVal.None    => repr
             case OptionVal.Some(m) => repr.withMetadata(m)
+            case _                 => repr
           }
       }
     }

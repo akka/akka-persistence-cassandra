@@ -794,7 +794,7 @@ import akka.stream.scaladsl.Source
           t.tagged match {
             case OptionVal.Some(tpr) =>
               tr.sendMissingTagWrite(tp)(tpr)
-            case OptionVal.None => FutureDone // no tags, skip
+            case _ => FutureDone // no tags, skip
           }
         }
         .runWith(Sink.ignore)

@@ -218,8 +218,8 @@ import scala.util.{ Failure, Success, Try }
       val nextBuffer = buffer.writeComplete()
       buffer.nextBatch.foreach { write =>
         write.ack match {
-          case OptionVal.None      =>
           case OptionVal.Some(ref) => ref ! Done
+          case _                   =>
         }
       }
       summary.foreach {

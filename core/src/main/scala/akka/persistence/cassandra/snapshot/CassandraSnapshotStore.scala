@@ -120,13 +120,12 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   }
 
   private def loadNAsync(metadata: immutable.Seq[SnapshotMetadata]): Future[Option[SelectedSnapshot]] = metadata match {
-    case Seq() => Future.successful(None) // no snapshots stored
     case md +: mds =>
       load1Async(md)
         .map {
           case DeserializedSnapshot(payload, OptionVal.Some(snapshotMeta)) =>
             Some(SelectedSnapshot(md.withMetadata(snapshotMeta), payload))
-          case DeserializedSnapshot(payload, OptionVal.None) =>
+          case DeserializedSnapshot(payload, _ /* OptionVal.None */ ) =>
             Some(SelectedSnapshot(md, payload))
         }
         .recoverWith {
@@ -154,6 +153,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
               loadNAsync(mds) // try older snapshot
             }
         }
+    case _ => Future.successful(None) // no snapshots stored
   }
 
   private def load1Async(metadata: SnapshotMetadata): Future[DeserializedSnapshot] = {
