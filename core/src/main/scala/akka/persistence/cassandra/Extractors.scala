@@ -16,7 +16,7 @@ import java.{ util => ju }
 
 import akka.util.OptionVal
 import akka.serialization.Serialization
-import scala.jdk.CollectionConverters._
+import akka.util.ccompat.JavaConverters._
 import java.nio.ByteBuffer
 
 import com.datastax.oss.protocol.internal.util.Bytes

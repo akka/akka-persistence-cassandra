@@ -16,7 +16,7 @@ import akka.util.PrettyDuration._
 import scala.annotation.tailrec
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration._
-import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor, Future }
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.{ Failure, Success, Try }
 import java.lang.{ Long => JLong }
 import akka.actor.Scheduler
