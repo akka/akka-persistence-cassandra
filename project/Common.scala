@@ -31,8 +31,8 @@ object Common extends AutoPlugin {
           "https://gitter.im/akka/dev",
           url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
       releaseNotesURL := (
-        if ((ThisBuild / isSnapshot).value) None
-        else Some(url(s"https://github.com/akka/akka-persistence-cassandra/releases/tag/v${version.value}"))
+          if ((ThisBuild / isSnapshot).value) None
+          else Some(url(s"https://github.com/akka/akka-persistence-cassandra/releases/tag/v${version.value}"))
         ),
       licenses := {
         val tagOrBranch =
