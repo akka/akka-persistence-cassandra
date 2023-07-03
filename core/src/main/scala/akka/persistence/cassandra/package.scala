@@ -16,7 +16,7 @@ import akka.serialization.Serialization
 
 import scala.concurrent._
 import scala.util.control.NonFatal
-import scala.jdk.CollectionConverters._
+import akka.util.ccompat.JavaConverters._
 import com.typesafe.config.{ Config, ConfigValueType }
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem

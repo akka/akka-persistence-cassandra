@@ -360,8 +360,8 @@ class CassandraReadJournal protected (
               sender = null,
               writerUuid = row.getString("writer_uuid")))
           val reprWithMeta = metadata match {
-            case OptionVal.None           => repr
             case OptionVal.Some(metadata) => repr.withMetadata(metadata)
+            case _                        => repr
           }
           UUIDPersistentRepr(uuidRow.offset, uuidRow.tagPidSequenceNr, reprWithMeta)
       }

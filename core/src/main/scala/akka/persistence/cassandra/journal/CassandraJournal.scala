@@ -33,7 +33,7 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
 
 import scala.annotation.tailrec
-import scala.jdk.CollectionConverters._
+import akka.util.ccompat.JavaConverters._
 import scala.collection.immutable
 import scala.collection.immutable.Seq
 import scala.concurrent._
@@ -794,7 +794,7 @@ import akka.stream.scaladsl.Source
           t.tagged match {
             case OptionVal.Some(tpr) =>
               tr.sendMissingTagWrite(tp)(tpr)
-            case OptionVal.None => FutureDone // no tags, skip
+            case _ => FutureDone // no tags, skip
           }
         }
         .runWith(Sink.ignore)

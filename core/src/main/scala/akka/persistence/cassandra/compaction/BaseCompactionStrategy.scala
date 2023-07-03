@@ -6,7 +6,7 @@ package akka.persistence.cassandra.compaction
 
 import com.typesafe.config.{ Config, ConfigFactory }
 
-import scala.jdk.CollectionConverters._
+import akka.util.ccompat.JavaConverters._
 
 /*
  * Based upon https://github.com/apache/cassandra/blob/cassandra-2.2/src/java/org/apache/cassandra/db/compaction/AbstractCompactionStrategy.java

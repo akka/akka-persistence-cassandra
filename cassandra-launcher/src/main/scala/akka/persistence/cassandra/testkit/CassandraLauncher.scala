@@ -166,6 +166,9 @@ object CassandraLauncher {
             new File(URI.create(fileUrl.toString.stripSuffix(resource))).getCanonicalPath
           case jarUrl if jarUrl.getProtocol == "jar" =>
             new File(URI.create(jarUrl.getPath.takeWhile(_ != '!'))).getCanonicalPath
+          case unexpected =>
+            // compiler completeness check pleaser
+            throw new IllegalArgumentException(s"Unexpected resource returned loading $resource, $unexpected")
         }
       }
       .distinct
