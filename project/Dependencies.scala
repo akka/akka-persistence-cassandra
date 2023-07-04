@@ -3,7 +3,7 @@ import Keys._
 
 object Dependencies {
   val Scala212 = "2.12.17"
-  val Scala213 = "2.13.10"
+  val Scala213 = "2.13.11"
   val Scala3 = "3.2.2"
   val Scala2Versions = Seq(Scala213, Scala212)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
