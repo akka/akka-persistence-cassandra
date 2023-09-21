@@ -21,13 +21,12 @@ dumpSchema := (core / Test / runMain).toTask(" akka.persistence.cassandra.PrintC
 
 lazy val core = project
   .in(file("core"))
-  .enablePlugins(Common, AutomateHeaderPlugin, MultiJvmPlugin)
+  .enablePlugins(Common, AutomateHeaderPlugin)
   .settings(
     name := "akka-persistence-cassandra",
     libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
         "Automatic-Module-Name" -> "akka.persistence.cassandra"))
-  .configs(MultiJvm)
   .settings(Scala3.settings)
 
 // Used for testing events by tag in various environments
