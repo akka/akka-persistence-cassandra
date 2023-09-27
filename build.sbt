@@ -13,7 +13,7 @@ lazy val root = project
   .in(file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
   .disablePlugins(SitePlugin)
-  .aggregate(core, cassandraLauncher)
+  .aggregate(core)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
 lazy val dumpSchema = taskKey[Unit]("Dumps cassandra schema for docs")
@@ -21,39 +21,13 @@ dumpSchema := (core / Test / runMain).toTask(" akka.persistence.cassandra.PrintC
 
 lazy val core = project
   .in(file("core"))
-  .enablePlugins(Common, AutomateHeaderPlugin, MultiJvmPlugin)
-  .dependsOn(cassandraLauncher % Test)
+  .enablePlugins(Common, AutomateHeaderPlugin)
   .settings(
     name := "akka-persistence-cassandra",
     libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
         "Automatic-Module-Name" -> "akka.persistence.cassandra"))
-  .configs(MultiJvm)
   .settings(Scala3.settings)
-
-lazy val cassandraLauncher = project
-  .in(file("cassandra-launcher"))
-  .enablePlugins(Common)
-  .settings(
-    name := "akka-persistence-cassandra-launcher",
-    Compile / managedResourceDirectories += (cassandraBundle / target).value / "bundle",
-    Compile / managedResources += (cassandraBundle / assembly).value)
-  .settings(Scala3.settings)
-
-// This project doesn't get published directly, rather the assembled artifact is included as part of cassandraLaunchers
-// resources
-lazy val cassandraBundle = project
-  .in(file("cassandra-bundle"))
-  .enablePlugins(Common, AutomateHeaderPlugin)
-  .settings(
-    name := "akka-persistence-cassandra-bundle",
-    crossPaths := false,
-    autoScalaLibrary := false,
-    libraryDependencies += ("org.apache.cassandra" % "cassandra-all" % "3.11.3")
-        .exclude("commons-logging", "commons-logging"),
-    dependencyOverrides += "com.github.jbellis" % "jamm" % "0.3.3", // See jamm comment in https://issues.apache.org/jira/browse/CASSANDRA-9608
-    assembly / target := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
-    assembly / assemblyJarName := "cassandra-bundle.jar")
 
 // Used for testing events by tag in various environments
 lazy val endToEndExample = project
