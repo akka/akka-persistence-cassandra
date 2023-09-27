@@ -27,13 +27,13 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
   private def journalSettings = settings.journalSettings
   private lazy val journalStatements = new CassandraJournalStatements(settings)
-  val psUpdateMessage: CachedPreparedStatement =
+  lazy val psUpdateMessage: CachedPreparedStatement =
     new CachedPreparedStatement(() => session.prepare(journalStatements.updateMessagePayloadAndTags))
-  val psSelectTagPidSequenceNr: CachedPreparedStatement =
+  lazy val psSelectTagPidSequenceNr: CachedPreparedStatement =
     new CachedPreparedStatement(() => session.prepare(journalStatements.selectTagPidSequenceNr))
-  val psUpdateTagView: CachedPreparedStatement =
+  lazy val psUpdateTagView: CachedPreparedStatement =
     new CachedPreparedStatement(() => session.prepare(journalStatements.updateMessagePayloadInTagView))
-  val psSelectMessages: CachedPreparedStatement =
+  lazy val psSelectMessages: CachedPreparedStatement =
     new CachedPreparedStatement(() => session.prepare(journalStatements.selectMessages))
 
   /**
