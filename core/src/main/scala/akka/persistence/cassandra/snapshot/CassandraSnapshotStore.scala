@@ -6,7 +6,6 @@ package akka.persistence.cassandra.snapshot
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
-import java.util.NoSuchElementException
 
 import akka.NotUsed
 
@@ -63,16 +62,21 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   private val session: CassandraSession = CassandraSessionRegistry(context.system)
     .sessionFor(sharedConfigPath, ses => statements.executeAllCreateKeyspaceAndTables(ses, log))
 
-  private def preparedWriteSnapshot =
-    session.prepare(writeSnapshot(withMeta = false))
-  private def preparedWriteSnapshotWithMeta =
-    session.prepare(writeSnapshot(withMeta = true))
-  private def preparedSelectSnapshot =
-    session.prepare(selectSnapshot)
-  private def preparedSelectSnapshotMetadata: Future[PreparedStatement] =
-    session.prepare(selectSnapshotMetadata(limit = None))
-  private def preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit: Future[PreparedStatement] =
-    session.prepare(selectSnapshotMetadata(limit = Some(snapshotSettings.maxLoadAttempts)))
+  private val preparedWriteSnapshot =
+    new CachedPreparedStatement(() => session.prepare(writeSnapshot(withMeta = false)))
+  private val preparedWriteSnapshotWithMeta =
+    new CachedPreparedStatement(() => session.prepare(writeSnapshot(withMeta = true)))
+  private val preparedSelectSnapshot =
+    new CachedPreparedStatement(() => session.prepare(selectSnapshot))
+  private val preparedSelectSnapshotMetadata =
+    new CachedPreparedStatement(() => session.prepare(selectSnapshotMetadata(limit = None)))
+  private val preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit =
+    new CachedPreparedStatement(() =>
+      session.prepare(selectSnapshotMetadata(limit = Some(snapshotSettings.maxLoadAttempts))))
+  private val preparedDeleteSnapshot =
+    new CachedPreparedStatement(() => session.prepare(deleteSnapshot))
+  private val preparedDeleteAllSnapshotsForPidAndSequenceNrBetween =
+    new CachedPreparedStatement(() => session.prepare(deleteAllSnapshotForPersistenceIdAndSequenceNrBetween))
 
   override def preStart(): Unit =
     // eager initialization, but not from constructor
@@ -82,16 +86,16 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
     case CassandraSnapshotStore.Init =>
       log.debug("Initializing")
       // try initialize early, to be prepared for first real request
-      preparedWriteSnapshot
-      preparedWriteSnapshotWithMeta
-      preparedDeleteSnapshot
+      preparedWriteSnapshot.get()
+      preparedWriteSnapshotWithMeta.get()
+      preparedDeleteSnapshot.get()
       session.serverMetaData.foreach { meta =>
         if (!meta.isVersion2)
-          preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
+          preparedDeleteAllSnapshotsForPidAndSequenceNrBetween.get()
       }
-      preparedSelectSnapshot
-      preparedSelectSnapshotMetadata
-      preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit
+      preparedSelectSnapshot.get()
+      preparedSelectSnapshotMetadata.get()
+      preparedSelectSnapshotMetadataWithMaxLoadAttemptsLimit.get()
       log.debug("Initialized")
 
     case DeleteAllSnapshots(persistenceId) =>
@@ -113,7 +117,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
       else preparedSelectSnapshotMetadata
 
     for {
-      p <- snapshotMetaPs
+      p <- snapshotMetaPs.get()
       mds <- metadata(p, persistenceId, criteria, someMaxLoadAttempts)
       res <- loadNAsync(mds)
     } yield res
@@ -157,8 +161,11 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   }
 
   private def load1Async(metadata: SnapshotMetadata): Future[DeserializedSnapshot] = {
-    val boundSelectSnapshot = preparedSelectSnapshot.map(
-      _.bind(metadata.persistenceId, metadata.sequenceNr: JLong).setExecutionProfileName(snapshotSettings.readProfile))
+    val boundSelectSnapshot = preparedSelectSnapshot
+      .get()
+      .map(
+        _.bind(metadata.persistenceId, metadata.sequenceNr: JLong)
+          .setExecutionProfileName(snapshotSettings.readProfile))
     boundSelectSnapshot.flatMap(session.selectOne).flatMap {
       case None =>
         // Can happen since metadata and the actual snapshot might not be replicated at exactly same time.
@@ -187,7 +194,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
         if (ser.meta.isDefined) preparedWriteSnapshotWithMeta
         else preparedWriteSnapshot
 
-      stmt.flatMap { ps =>
+      stmt.get().flatMap { ps =>
         val bound = CassandraSnapshotStore.prepareSnapshotWrite(ps, metadata, ser)
         session.executeWrite(bound.setExecutionProfileName(snapshotSettings.writeProfile)).map(_ => ())
       }
@@ -207,15 +214,18 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
           || settings.cosmosDb
           || 0L < criteria.minTimestamp
           || criteria.maxTimestamp < SnapshotSelectionCriteria.latest().maxTimestamp) {
-        preparedSelectSnapshotMetadata.flatMap { snapshotMetaPs =>
+        preparedSelectSnapshotMetadata.get().flatMap { snapshotMetaPs =>
           // this meta query gets slower than slower if snapshots are deleted without a criteria.minSequenceNr as
           // all previous tombstones are scanned in the meta data query
           metadata(snapshotMetaPs, persistenceId, criteria, limit = None).flatMap {
             (mds: immutable.Seq[SnapshotMetadata]) =>
               val boundStatementBatches = mds
-                .map(md =>
-                  preparedDeleteSnapshot.map(_.bind(md.persistenceId, md.sequenceNr: JLong)
-                    .setExecutionProfileName(snapshotSettings.writeProfile)))
+                .map(
+                  md =>
+                    preparedDeleteSnapshot
+                      .get()
+                      .map(_.bind(md.persistenceId, md.sequenceNr: JLong)
+                        .setExecutionProfileName(snapshotSettings.writeProfile)))
                 .grouped(0xFFFF - 1)
               if (boundStatementBatches.nonEmpty) {
                 Future
@@ -231,8 +241,9 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
           }
         }
       } else {
-        val boundDeleteSnapshot = preparedDeleteAllSnapshotsForPidAndSequenceNrBetween.map(
-          _.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong)
+        val boundDeleteSnapshot = preparedDeleteAllSnapshotsForPidAndSequenceNrBetween
+          .get()
+          .map(_.bind(persistenceId, criteria.minSequenceNr: JLong, criteria.maxSequenceNr: JLong)
             .setExecutionProfileName(snapshotSettings.writeProfile))
         boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
       }
@@ -268,15 +279,12 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
     }
   }
 
-  def preparedDeleteSnapshot: Future[PreparedStatement] =
-    session.prepare(deleteSnapshot)
-
-  def preparedDeleteAllSnapshotsForPidAndSequenceNrBetween: Future[PreparedStatement] =
-    session.prepare(deleteAllSnapshotForPersistenceIdAndSequenceNrBetween)
-
   def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
-    val boundDeleteSnapshot = preparedDeleteSnapshot.map(
-      _.bind(metadata.persistenceId, metadata.sequenceNr: JLong).setExecutionProfileName(snapshotSettings.writeProfile))
+    val boundDeleteSnapshot = preparedDeleteSnapshot
+      .get()
+      .map(
+        _.bind(metadata.persistenceId, metadata.sequenceNr: JLong)
+          .setExecutionProfileName(snapshotSettings.writeProfile))
     boundDeleteSnapshot.flatMap(session.executeWrite(_)).map(_ => ())
   }
 

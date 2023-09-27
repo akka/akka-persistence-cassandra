@@ -5,16 +5,19 @@
 package akka.persistence.cassandra.cleanup
 
 import java.lang.{ Integer => JInt, Long => JLong }
+
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
+
 import akka.{ Done, NotUsed }
 import akka.actor.{ ActorRef, ActorSystem, ClassicActorSystemProvider }
 import akka.annotation.ApiMayChange
 import akka.event.Logging
 import akka.pattern.ask
 import akka.persistence.JournalProtocol.DeleteMessagesTo
+import akka.persistence.cassandra.CachedPreparedStatement
 import akka.persistence.{ Persistence, SnapshotMetadata }
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.journal.CassandraJournal
@@ -67,8 +70,10 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
 
   private lazy val pluginSettings = PluginSettings(system, system.settings.config.getConfig(pluginLocation))
   private lazy val statements = new CassandraSnapshotStatements(pluginSettings.snapshotSettings)
-  private lazy val selectLatestSnapshotsPs = session.prepare(statements.selectLatestSnapshotMeta)
-  private lazy val selectAllSnapshotMetaPs = session.prepare(statements.selectAllSnapshotMeta)
+  private val selectLatestSnapshotsPs =
+    new CachedPreparedStatement(() => session.prepare(statements.selectLatestSnapshotMeta))
+  private val selectAllSnapshotMetaPs =
+    new CachedPreparedStatement(() => session.prepare(statements.selectAllSnapshotMeta))
 
   if (dryRun) {
     log.info("Cleanup running in dry run mode. No operations will be executed against the database, only logged")
@@ -139,6 +144,7 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
     require(snapshotsToKeep >= 1, "must keep at least one snapshot")
     require(keepAfterUnixTimestamp >= 0, "keepAfter must be greater than 0")
     selectAllSnapshotMetaPs
+      .get()
       .flatMap { ps =>
         val allRows: Source[Row, NotUsed] = session.select(ps.bind(persistenceId))
         allRows.zipWithIndex
@@ -169,7 +175,7 @@ final class Cleanup(systemProvider: ClassicActorSystemProvider, settings: Cleanu
    */
   def deleteBeforeSnapshot(persistenceId: String, maxSnapshotsToKeep: Int): Future[Option[SnapshotMetadata]] = {
     require(maxSnapshotsToKeep >= 1, "Must keep at least one snapshot")
-    val snapshots: Future[immutable.Seq[Row]] = selectLatestSnapshotsPs.flatMap { ps =>
+    val snapshots: Future[immutable.Seq[Row]] = selectLatestSnapshotsPs.get().flatMap { ps =>
       session.select(ps.bind(persistenceId, maxSnapshotsToKeep: JInt)).runWith(Sink.seq)
     }
     snapshots.flatMap(rows => issueSnapshotDelete(persistenceId, maxSnapshotsToKeep, rows))

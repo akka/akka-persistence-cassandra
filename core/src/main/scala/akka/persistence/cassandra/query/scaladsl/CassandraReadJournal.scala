@@ -6,6 +6,7 @@ package akka.persistence.cassandra.query.scaladsl
 
 import java.net.URLEncoder
 import java.util.UUID
+
 import akka.{ Done, NotUsed }
 import akka.actor.{ ActorSystem, ExtendedActorSystem }
 import akka.annotation.InternalApi
@@ -26,12 +27,13 @@ import akka.stream.ActorAttributes
 import akka.util.ByteString
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
-
 import scala.collection.immutable
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
 import scala.util.control.NonFatal
+
+import akka.persistence.cassandra.CachedPreparedStatement
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.CassandraStatements
 import akka.persistence.cassandra.journal.CassandraJournal
@@ -165,48 +167,48 @@ class CassandraReadJournal protected (
     Future
       .sequence(
         List(
-          preparedSelectDeletedTo,
-          preparedSelectAllPersistenceIds,
-          preparedSelectEventsByPersistenceId,
-          preparedSelectFromTagViewWithUpperBound,
-          preparedSelectTagSequenceNrs))
+          preparedSelectDeletedTo.get(),
+          preparedSelectAllPersistenceIds.get(),
+          preparedSelectEventsByPersistenceId.get(),
+          preparedSelectFromTagViewWithUpperBound.get(),
+          preparedSelectTagSequenceNrs.get()))
       .map(_ => Done)
 
-  private lazy val preparedSelectEventsByPersistenceId: Future[PreparedStatement] =
-    session.prepare(statements.journalStatements.selectMessages)
+  private val preparedSelectEventsByPersistenceId: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(statements.journalStatements.selectMessages))
 
-  private lazy val preparedSelectDeletedTo: Future[PreparedStatement] =
-    session.prepare(statements.journalStatements.selectDeletedTo)
+  private val preparedSelectDeletedTo: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(statements.journalStatements.selectDeletedTo))
 
-  private lazy val preparedSelectAllPersistenceIds: Future[PreparedStatement] =
-    session.prepare(queryStatements.selectAllPersistenceIds)
+  private val preparedSelectAllPersistenceIds: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(queryStatements.selectAllPersistenceIds))
 
-  private lazy val preparedSelectDistinctPersistenceIds: Future[PreparedStatement] =
-    session.prepare(queryStatements.selectDistinctPersistenceIds)
+  private val preparedSelectDistinctPersistenceIds: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(queryStatements.selectDistinctPersistenceIds))
 
-  private lazy val preparedSelectFromTagViewWithUpperBound: Future[PreparedStatement] =
-    session.prepare(queryStatements.selectEventsFromTagViewWithUpperBound)
+  private val preparedSelectFromTagViewWithUpperBound: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(queryStatements.selectEventsFromTagViewWithUpperBound))
 
-  private lazy val preparedSelectTagSequenceNrs: Future[PreparedStatement] =
-    session.prepare(queryStatements.selectTagSequenceNrs)
+  private val preparedSelectTagSequenceNrs: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(queryStatements.selectTagSequenceNrs))
 
-  private lazy val preparedSelectHighestSequenceNr: Future[PreparedStatement] =
-    session.prepare(statements.journalStatements.selectHighestSequenceNr)
+  private val preparedSelectHighestSequenceNr: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(statements.journalStatements.selectHighestSequenceNr))
 
   /**
    * INTERNAL API
    */
   @InternalApi private[akka] def combinedEventsByPersistenceIdStmts: Future[CombinedEventsByPersistenceIdStmts] =
     for {
-      ps1 <- preparedSelectEventsByPersistenceId
-      ps2 <- preparedSelectHighestSequenceNr
-      ps3 <- preparedSelectDeletedTo
+      ps1 <- preparedSelectEventsByPersistenceId.get()
+      ps2 <- preparedSelectHighestSequenceNr.get()
+      ps3 <- preparedSelectDeletedTo.get()
     } yield CombinedEventsByPersistenceIdStmts(ps1, ps2, ps3)
 
   /** INTERNAL API */
   @InternalApi private[akka] def combinedEventsByTagStmts: Future[EventByTagStatements] =
     for {
-      byTagWithUpper <- preparedSelectFromTagViewWithUpperBound
+      byTagWithUpper <- preparedSelectFromTagViewWithUpperBound.get()
     } yield EventByTagStatements(byTagWithUpper)
 
   /**
@@ -389,10 +391,11 @@ class CassandraReadJournal protected (
    * INTERNAL API
    */
   @InternalApi
-  private[akka] val tagViewScanner: Future[TagViewSequenceNumberScanner] = preparedSelectTagSequenceNrs.map { ps =>
-    new TagViewSequenceNumberScanner(
-      TagViewSequenceNumberScanner.Session(session, ps, querySettings.readProfile),
-      querySettings.pluginDispatcher)
+  private[akka] val tagViewScanner: Future[TagViewSequenceNumberScanner] = preparedSelectTagSequenceNrs.get().map {
+    ps =>
+      new TagViewSequenceNumberScanner(
+        TagViewSequenceNumberScanner.Session(session, ps, querySettings.readProfile),
+        querySettings.pluginDispatcher)
   }
 
   /**
@@ -723,7 +726,7 @@ class CassandraReadJournal protected (
           "support-all-persistence-ids=off"))
     else {
       createSource[String, PreparedStatement](
-        preparedSelectAllPersistenceIds,
+        preparedSelectAllPersistenceIds.get(),
         (s, ps) =>
           Source
             .fromGraph(new AllPersistenceIdsStage(refreshInterval, ps, s, querySettings.readProfile))
@@ -736,7 +739,7 @@ class CassandraReadJournal protected (
    */
   @InternalApi private[akka] def currentPersistenceIdsFromMessages(): Source[String, NotUsed] =
     createSource[String, PreparedStatement](
-      preparedSelectDistinctPersistenceIds,
+      preparedSelectDistinctPersistenceIds.get(),
       (s, ps) =>
         Source
           .fromGraph(new AllPersistenceIdsStage(None, ps, s, querySettings.readProfile))
