@@ -55,7 +55,8 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   // The result set size will be the number of distinct tags that this pid has used, expecting
   // that to be small (<10) so call to all should be safe
   def lookupTagProgress(persistenceId: String)(implicit ec: ExecutionContext): Future[Map[Tag, TagProgress]] =
-    SelectTagProgressForPersistenceId
+    selectTagProgressForPersistenceId
+      .get()
       .map(_.bind(persistenceId).setExecutionProfileName(settings.journalSettings.readProfile))
       .flatMap(stmt => {
         session.select(stmt).runWith(Sink.seq)
@@ -72,7 +73,8 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   // or min tag scanning sequence number, and fix any tags. This recovers any tag writes that
   // happened before the latest snapshot
   def tagScanningStartingSequenceNr(persistenceId: String): Future[SequenceNr] =
-    SelectTagScanningForPersistenceId
+    selectTagScanningForPersistenceId
+      .get()
       .map(_.bind(persistenceId).setExecutionProfileName(settings.journalSettings.readProfile))
       .flatMap(session.selectOne)
       .map {
