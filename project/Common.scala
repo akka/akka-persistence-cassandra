@@ -50,7 +50,17 @@ object Common extends AutoPlugin {
     crossVersion := CrossVersion.binary,
     crossScalaVersions := Dependencies.Scala2Versions,
     scalaVersion := Dependencies.Scala213,
-    scalacOptions ++= Seq("-encoding", "UTF-8", "-feature", "-unchecked", "-Xlint", "-Ywarn-dead-code", "-deprecation"),
+    javacOptions ++= Seq("--release", "11"),
+    scalacOptions ++= Seq(
+        "-encoding",
+        "UTF-8",
+        "-feature",
+        "-unchecked",
+        "-Xlint",
+        "-Ywarn-dead-code",
+        "-deprecation",
+        "-release",
+        "11"),
     Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
     Compile / doc / scalacOptions := scalacOptions.value ++ Seq(
         "-doc-title",

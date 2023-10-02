@@ -28,12 +28,10 @@ jobs:
           # we don't know what commit the last tag was it's safer to get entire repo so previousStableVersion resolves
           fetch-depth: 0
 
-      - name: Setup JDK 8
-        # https://github.com/coursier/setup-action/releases
-        # v1.3.0
-        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
+      - name: Set up JDK 11
+        uses: coursier/setup-action@v1.3.0
         with:
-          java-version: adopt:1.8.0-275
+          jvm: temurin:1.11.0.17
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases/
