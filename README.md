@@ -12,7 +12,7 @@ Implementation in the `main` branch is currently `1.0.x` release.
 
 The current version's documentation is available at https://doc.akka.io/docs/akka-persistence-cassandra/current/.
 
-[Snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) and [snapshot artifacts](https://oss.sonatype.org/content/repositories/snapshots/com/typesafe/akka/akka-persistence-cassandra_2.12/) are published for every successful `main` branch build.
+[Snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) and [snapshot artifacts](https://oss.sonatype.org/content/repositories/snapshots/com/typesafe/akka/akka-persistence-cassandra_2.13/) are published for every successful `main` branch build.
 
 For versions earlier than 1.0.0, check this README.md file for the corresponding release tag.
 
