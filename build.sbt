@@ -35,7 +35,7 @@ lazy val endToEndExample = project
   .dependsOn(core)
   .settings(libraryDependencies ++= Dependencies.exampleDependencies, publish / skip := true)
   .settings(
-    dockerBaseImage := "openjdk:8-jre-alpine",
+    dockerBaseImage := "docker.io/library/eclipse-temurin:17.0.8.1_1-jre",
     dockerCommands :=
       dockerCommands.value.flatMap {
         case ExecCmd("ENTRYPOINT", args @ _*) => Seq(Cmd("ENTRYPOINT", args.mkString(" ")))
@@ -46,18 +46,7 @@ lazy val endToEndExample = project
     dockerUpdateLatest := true,
     // update if deploying to some where that can't see docker hu
     //dockerRepository := Some("some-registry"),
-    dockerCommands ++= Seq(
-        Cmd("USER", "root"),
-        Cmd("RUN", "/sbin/apk", "add", "--no-cache", "bash", "bind-tools", "busybox-extras", "curl", "iptables"),
-        Cmd(
-          "RUN",
-          "/sbin/apk",
-          "add",
-          "--no-cache",
-          "jattach",
-          "--repository",
-          "http://dl-cdn.alpinelinux.org/alpine/edge/community/"),
-        Cmd("RUN", "chgrp -R 0 . && chmod -R g=u .")),
+    dockerCommands ++= Seq(Cmd("USER", "root"), Cmd("RUN", "chgrp -R 0 . && chmod -R g=u .")),
     // Docker image is only for running in k8s
     Universal / javaOptions ++= Seq("-J-Dconfig.resource=kubernetes.conf"))
   .enablePlugins(DockerPlugin, JavaAppPackaging)
@@ -123,3 +112,10 @@ TaskKey[Unit]("verifyCodeFmt") := {
 }
 
 addCommandAlias("verifyCodeStyle", "headerCheckAll; verifyCodeFmt")
+
+val isJdk11orHigher: Boolean = {
+  val result = VersionNumber(sys.props("java.specification.version")).matchesSemVer(SemanticSelector(">=11"))
+  if (!result)
+    throw new IllegalArgumentException("JDK 11 or higher is required")
+  result
+}
