@@ -1,5 +1,7 @@
 import com.typesafe.sbt.packager.docker._
+import com.geirsson.CiReleasePlugin
 
+ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 ThisBuild / resolvers ++= {
   if (System.getProperty("override.akka.version") != null)
     Seq("Akka Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots/"))
@@ -8,11 +10,13 @@ ThisBuild / resolvers ++= {
 
 // make version compatible with docker for publishing example project
 ThisBuild / dynverSeparator := "-"
+// append -SNAPSHOT to version when isSnapshot
+ThisBuild / dynverSonatypeSnapshots := true
 
 lazy val root = project
   .in(file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
-  .disablePlugins(SitePlugin)
+  .disablePlugins(SitePlugin, CiReleasePlugin)
   .aggregate(core)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
@@ -22,6 +26,7 @@ dumpSchema := (core / Test / runMain).toTask(" akka.persistence.cassandra.PrintC
 lazy val core = project
   .in(file("core"))
   .enablePlugins(Common, AutomateHeaderPlugin)
+  .disablePlugins(CiReleasePlugin)
   .settings(
     name := "akka-persistence-cassandra",
     libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,
@@ -50,14 +55,17 @@ lazy val endToEndExample = project
     // Docker image is only for running in k8s
     Universal / javaOptions ++= Seq("-J-Dconfig.resource=kubernetes.conf"))
   .enablePlugins(DockerPlugin, JavaAppPackaging)
+  .disablePlugins(CiReleasePlugin)
 
 lazy val dseTest = project
   .in(file("dse-test"))
   .dependsOn(core % "test->test")
   .settings(libraryDependencies ++= Dependencies.dseTestDependencies)
+  .disablePlugins(CiReleasePlugin)
 
 lazy val docs = project
   .enablePlugins(Common, AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
+  .disablePlugins(CiReleasePlugin)
   .dependsOn(core)
   .settings(
     name := "Akka Persistence Cassandra",
