@@ -10,7 +10,7 @@ For questions please use the [discuss.akka.io](https://discuss.lightbend.com/c/a
 
 The current version's documentation is available at https://doc.akka.io/docs/akka-persistence-cassandra/current/.
 
-[Snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) and [snapshot artifacts](https://oss.sonatype.org/content/repositories/snapshots/com/typesafe/akka/akka-persistence-cassandra_2.13/) are published for every successful `main` branch build.
+[Snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) and snapshot artifacts at https://repo.akka.io/snapshots are published for every successful `main` branch build.
 
 For versions earlier than 1.0.0, check this README.md file for the corresponding release tag.
 

@@ -4,7 +4,7 @@ import com.geirsson.CiReleasePlugin
 ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 ThisBuild / resolvers ++= {
   if (System.getProperty("override.akka.version") != null)
-    Seq("Akka Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots/"))
+    Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots"))
   else Seq.empty
 }
 
