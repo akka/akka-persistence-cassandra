@@ -89,7 +89,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { jdk: 'adopt:8',           container: "cassandra-latest", test: "test" }
           - { jdk: 'temurin:1.11.0.17', container: "cassandra-latest", test: "test" }
           - { jdk: 'temurin:1.11.0.17', container: "cassandra2",       test: "'testOnly -- -l RequiresCassandraThree'"}
           - { jdk: 'temurin:1.11.0.17', container: "cassandra3",       test: "test" }

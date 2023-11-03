@@ -9,12 +9,12 @@ import akka.event.LoggingAdapter
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row, Statement }
-
 import akka.util.ccompat.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import java.lang.{ Long => JLong }
 
 import akka.annotation.InternalApi
+import akka.persistence.cassandra.CachedPreparedStatement
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 /** INTERNAL API */
@@ -27,11 +27,14 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
   private def journalSettings = settings.journalSettings
   private lazy val journalStatements = new CassandraJournalStatements(settings)
-  lazy val psUpdateMessage: Future[PreparedStatement] = session.prepare(journalStatements.updateMessagePayloadAndTags)
-  lazy val psSelectTagPidSequenceNr: Future[PreparedStatement] =
-    session.prepare(journalStatements.selectTagPidSequenceNr)
-  lazy val psUpdateTagView: Future[PreparedStatement] = session.prepare(journalStatements.updateMessagePayloadInTagView)
-  lazy val psSelectMessages: Future[PreparedStatement] = session.prepare(journalStatements.selectMessages)
+  val psUpdateMessage: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(journalStatements.updateMessagePayloadAndTags))
+  val psSelectTagPidSequenceNr: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(journalStatements.selectTagPidSequenceNr))
+  val psUpdateTagView: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(journalStatements.updateMessagePayloadInTagView))
+  val psSelectMessages: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(journalStatements.selectMessages))
 
   /**
    * Update the given event in the messages table and the tag_views table.
@@ -41,7 +44,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   def updateEvent(event: Serialized): Future[Done] =
     for {
       (partitionNr, existingTags) <- findEvent(event)
-      psUM <- psUpdateMessage
+      psUM <- psUpdateMessage.get()
       e = event.copy(tags = existingTags) // do not allow updating of tags
       _ <- session.executeWrite(prepareUpdate(psUM, e, partitionNr))
       _ <- Future.traverse(existingTags) { tag =>
@@ -52,7 +55,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
   private def findEvent(s: Serialized): Future[(Long, Set[String])] = {
     val firstPartition = partitionNr(s.sequenceNr, journalSettings.targetPartitionSize)
     for {
-      ps <- psSelectMessages
+      ps <- psSelectMessages.get()
       row <- findEvent(ps, s.persistenceId, s.sequenceNr, firstPartition)
     } yield (row.getLong("partition_nr"), row.getSet[String]("tags", classOf[String]).asScala.toSet)
   }
@@ -78,6 +81,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
   private def updateEventInTagViews(event: Serialized, tag: String): Future[Done] =
     psSelectTagPidSequenceNr
+      .get()
       .flatMap { ps =>
         val bound = ps
           .bind()
@@ -98,7 +102,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
       }
 
   private def updateEventInTagViews(event: Serialized, tag: String, tagPidSequenceNr: TagPidSequenceNr): Future[Done] =
-    psUpdateTagView.flatMap { ps =>
+    psUpdateTagView.get().flatMap { ps =>
       // primary key
       val bound = ps
         .bind()

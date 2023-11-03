@@ -5,7 +5,6 @@ import org.scalafmt.sbt.ScalafmtPlugin.autoImport._
 import sbt.Keys._
 import sbt._
 import sbt.plugins.JvmPlugin
-import xerial.sbt.Sonatype.autoImport.sonatypeProfileName
 
 object Common extends AutoPlugin {
 
@@ -50,7 +49,17 @@ object Common extends AutoPlugin {
     crossVersion := CrossVersion.binary,
     crossScalaVersions := Dependencies.Scala2Versions,
     scalaVersion := Dependencies.Scala213,
-    scalacOptions ++= Seq("-encoding", "UTF-8", "-feature", "-unchecked", "-Xlint", "-Ywarn-dead-code", "-deprecation"),
+    javacOptions ++= Seq("--release", "11"),
+    scalacOptions ++= Seq(
+        "-encoding",
+        "UTF-8",
+        "-feature",
+        "-unchecked",
+        "-Xlint",
+        "-Ywarn-dead-code",
+        "-deprecation",
+        "-release",
+        "11"),
     Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
     Compile / doc / scalacOptions := scalacOptions.value ++ Seq(
         "-doc-title",
@@ -78,7 +87,6 @@ object Common extends AutoPlugin {
     apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${projectInfoVersion.value}")),
     headerLicense := Some(
         HeaderLicense.Custom("""Copyright (C) 2016-2023 Lightbend Inc. <https://www.lightbend.com>""")),
-    sonatypeProfileName := "com.typesafe",
     Test / logBuffered := System.getProperty("akka.logBufferedTests", "false").toBoolean,
     // show full stack traces and test case durations
     Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),

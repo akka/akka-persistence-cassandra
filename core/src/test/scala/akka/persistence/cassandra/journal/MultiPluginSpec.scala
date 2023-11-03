@@ -6,7 +6,6 @@ package akka.persistence.cassandra.journal
 
 import akka.actor.Props
 import akka.persistence.cassandra.journal.MultiPluginSpec._
-import akka.persistence.cassandra.testkit.CassandraLauncher
 import akka.persistence.cassandra.{ CassandraLifecycle, CassandraSpec, PluginSettings }
 import akka.persistence.{ PersistentActor, SaveSnapshotSuccess }
 import com.typesafe.config.ConfigFactory
@@ -15,7 +14,6 @@ object MultiPluginSpec {
   val now = System.currentTimeMillis()
   val journalKeyspace = s"multiplugin_spec_journal_$now"
   val snapshotKeyspace = s"multiplugin_spec_snapshot_$now"
-  val cassandraPort = CassandraLauncher.randomPort
   val config = ConfigFactory.parseString(s"""
        |akka.test.single-expect-default = 20s
        |akka.test.filter-leeway = 20s

@@ -1,19 +1,23 @@
 import com.typesafe.sbt.packager.docker._
+import com.geirsson.CiReleasePlugin
 
+ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 ThisBuild / resolvers ++= {
   if (System.getProperty("override.akka.version") != null)
-    Seq("Akka Snapshots".at("https://oss.sonatype.org/content/repositories/snapshots/"))
+    Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots"))
   else Seq.empty
 }
 
 // make version compatible with docker for publishing example project
 ThisBuild / dynverSeparator := "-"
+// append -SNAPSHOT to version when isSnapshot
+ThisBuild / dynverSonatypeSnapshots := true
 
 lazy val root = project
   .in(file("."))
   .enablePlugins(Common, ScalaUnidocPlugin)
-  .disablePlugins(SitePlugin)
-  .aggregate(core, cassandraLauncher)
+  .disablePlugins(SitePlugin, CiReleasePlugin)
+  .aggregate(core)
   .settings(name := "akka-persistence-cassandra-root", publish / skip := true)
 
 lazy val dumpSchema = taskKey[Unit]("Dumps cassandra schema for docs")
@@ -21,39 +25,14 @@ dumpSchema := (core / Test / runMain).toTask(" akka.persistence.cassandra.PrintC
 
 lazy val core = project
   .in(file("core"))
-  .enablePlugins(Common, AutomateHeaderPlugin, MultiJvmPlugin)
-  .dependsOn(cassandraLauncher % Test)
+  .enablePlugins(Common, AutomateHeaderPlugin)
+  .disablePlugins(CiReleasePlugin)
   .settings(
     name := "akka-persistence-cassandra",
     libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
         "Automatic-Module-Name" -> "akka.persistence.cassandra"))
-  .configs(MultiJvm)
   .settings(Scala3.settings)
-
-lazy val cassandraLauncher = project
-  .in(file("cassandra-launcher"))
-  .enablePlugins(Common)
-  .settings(
-    name := "akka-persistence-cassandra-launcher",
-    Compile / managedResourceDirectories += (cassandraBundle / target).value / "bundle",
-    Compile / managedResources += (cassandraBundle / assembly).value)
-  .settings(Scala3.settings)
-
-// This project doesn't get published directly, rather the assembled artifact is included as part of cassandraLaunchers
-// resources
-lazy val cassandraBundle = project
-  .in(file("cassandra-bundle"))
-  .enablePlugins(Common, AutomateHeaderPlugin)
-  .settings(
-    name := "akka-persistence-cassandra-bundle",
-    crossPaths := false,
-    autoScalaLibrary := false,
-    libraryDependencies += ("org.apache.cassandra" % "cassandra-all" % "3.11.3")
-        .exclude("commons-logging", "commons-logging"),
-    dependencyOverrides += "com.github.jbellis" % "jamm" % "0.3.3", // See jamm comment in https://issues.apache.org/jira/browse/CASSANDRA-9608
-    assembly / target := target.value / "bundle" / "akka" / "persistence" / "cassandra" / "launcher",
-    assembly / assemblyJarName := "cassandra-bundle.jar")
 
 // Used for testing events by tag in various environments
 lazy val endToEndExample = project
@@ -61,7 +40,7 @@ lazy val endToEndExample = project
   .dependsOn(core)
   .settings(libraryDependencies ++= Dependencies.exampleDependencies, publish / skip := true)
   .settings(
-    dockerBaseImage := "openjdk:8-jre-alpine",
+    dockerBaseImage := "docker.io/library/eclipse-temurin:17.0.8.1_1-jre",
     dockerCommands :=
       dockerCommands.value.flatMap {
         case ExecCmd("ENTRYPOINT", args @ _*) => Seq(Cmd("ENTRYPOINT", args.mkString(" ")))
@@ -72,29 +51,21 @@ lazy val endToEndExample = project
     dockerUpdateLatest := true,
     // update if deploying to some where that can't see docker hu
     //dockerRepository := Some("some-registry"),
-    dockerCommands ++= Seq(
-        Cmd("USER", "root"),
-        Cmd("RUN", "/sbin/apk", "add", "--no-cache", "bash", "bind-tools", "busybox-extras", "curl", "iptables"),
-        Cmd(
-          "RUN",
-          "/sbin/apk",
-          "add",
-          "--no-cache",
-          "jattach",
-          "--repository",
-          "http://dl-cdn.alpinelinux.org/alpine/edge/community/"),
-        Cmd("RUN", "chgrp -R 0 . && chmod -R g=u .")),
+    dockerCommands ++= Seq(Cmd("USER", "root"), Cmd("RUN", "chgrp -R 0 . && chmod -R g=u .")),
     // Docker image is only for running in k8s
     Universal / javaOptions ++= Seq("-J-Dconfig.resource=kubernetes.conf"))
   .enablePlugins(DockerPlugin, JavaAppPackaging)
+  .disablePlugins(CiReleasePlugin)
 
 lazy val dseTest = project
   .in(file("dse-test"))
   .dependsOn(core % "test->test")
   .settings(libraryDependencies ++= Dependencies.dseTestDependencies)
+  .disablePlugins(CiReleasePlugin)
 
 lazy val docs = project
   .enablePlugins(Common, AkkaParadoxPlugin, ParadoxSitePlugin, PreprocessPlugin, PublishRsyncPlugin)
+  .disablePlugins(CiReleasePlugin)
   .dependsOn(core)
   .settings(
     name := "Akka Persistence Cassandra",
@@ -149,3 +120,10 @@ TaskKey[Unit]("verifyCodeFmt") := {
 }
 
 addCommandAlias("verifyCodeStyle", "headerCheckAll; verifyCodeFmt")
+
+val isJdk11orHigher: Boolean = {
+  val result = VersionNumber(sys.props("java.specification.version")).matchesSemVer(SemanticSelector(">=11"))
+  if (!result)
+    throw new IllegalArgumentException("JDK 11 or higher is required")
+  result
+}

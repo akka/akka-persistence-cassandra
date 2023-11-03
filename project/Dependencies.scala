@@ -2,23 +2,22 @@ import sbt._
 import Keys._
 
 object Dependencies {
-  val Scala212 = "2.12.17"
-  val Scala213 = "2.13.10"
-  val Scala3 = "3.2.2"
-  val Scala2Versions = Seq(Scala213, Scala212)
+  val Scala213 = "2.13.12"
+  val Scala3 = "3.3.1"
+  val Scala2Versions = Seq(Scala213)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
-  val AkkaVersion = System.getProperty("override.akka.version", "2.7.0")
+  val AkkaVersion = System.getProperty("override.akka.version", "2.9.0")
   val AkkaVersionInDocs = AkkaVersion.take(3)
   val CassandraVersionInDocs = "4.0"
   // Should be sync with the version of the driver in Alpakka Cassandra
-  val CassandraDriverVersion = "4.14.1"
+  val CassandraDriverVersion = "4.17.0"
   val DriverVersionInDocs = "4.14"
 
-  val AlpakkaVersion = "6.0.0"
-  val AlpakkaVersionInDocs = AlpakkaVersion
+  val AlpakkaVersion = "7.0.0"
+  val AlpakkaVersionInDocs = "7.0"
   // for example
-  val AkkaManagementVersion = "1.2.0"
+  val AkkaManagementVersion = "1.5.0"
 
   val Logback = "ch.qos.logback" % "logback-classic" % "1.2.12"
 
@@ -44,9 +43,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       "com.datastax.oss" % "java-driver-core" % CassandraDriverVersion,
       Logback % Test,
-      "org.scalatest" %% "scalatest" % "3.2.16" % Test,
-      "org.pegdown" % "pegdown" % "1.6.0" % Test,
-      "org.osgi" % "org.osgi.core" % "5.0.0" % Provided) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
+      "org.scalatest" %% "scalatest" % "3.2.17" % Test) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
 
   val exampleDependencies = Seq(
     Logback,

@@ -107,42 +107,43 @@ import akka.stream.scaladsl.Source
   private val tagRecovery: Option[CassandraTagRecovery] =
     tagWrites.map(ref => new CassandraTagRecovery(context.system, session, settings, taggedPreparedStatements, ref))
 
-  private lazy val preparedWriteMessage =
-    session.prepare(statements.journalStatements.writeMessage(withMeta = false))
-  private lazy val preparedSelectDeletedTo: Option[Future[PreparedStatement]] = {
+  private val preparedWriteMessage: CachedPreparedStatement =
+    new CachedPreparedStatement(() => session.prepare(statements.journalStatements.writeMessage(withMeta = false)))
+  private val preparedSelectDeletedTo: Option[CachedPreparedStatement] = {
     if (settings.journalSettings.supportDeletes)
-      Some(session.prepare(statements.journalStatements.selectDeletedTo))
+      Some(new CachedPreparedStatement(() => session.prepare(statements.journalStatements.selectDeletedTo)))
     else
       None
   }
-  private lazy val preparedSelectHighestSequenceNr: Future[PreparedStatement] =
-    session.prepare(statements.journalStatements.selectHighestSequenceNr)
+  private val preparedSelectHighestSequenceNr =
+    new CachedPreparedStatement(() => session.prepare(statements.journalStatements.selectHighestSequenceNr))
 
-  private def deletesNotSupportedException: Future[PreparedStatement] =
+  private lazy val deletesNotSupportedException: Future[PreparedStatement] =
     Future.failed(new IllegalArgumentException(s"Deletes not supported because config support-deletes=off"))
 
-  private lazy val preparedInsertDeletedTo: Future[PreparedStatement] = {
+  private val preparedInsertDeletedTo: CachedPreparedStatement = {
     if (settings.journalSettings.supportDeletes)
-      session.prepare(statements.journalStatements.insertDeletedTo)
+      new CachedPreparedStatement(() => session.prepare(statements.journalStatements.insertDeletedTo))
     else
-      deletesNotSupportedException
+      new CachedPreparedStatement(() => deletesNotSupportedException)
   }
-  private lazy val preparedDeleteMessages: Future[PreparedStatement] = {
+  private val preparedDeleteMessages: CachedPreparedStatement = {
     if (settings.journalSettings.supportDeletes) {
-      session.serverMetaData.flatMap { meta =>
-        session.prepare(statements.journalStatements.deleteMessages(meta.isVersion2 || settings.cosmosDb))
-      }
+      new CachedPreparedStatement(() =>
+        session.serverMetaData.flatMap { meta =>
+          session.prepare(statements.journalStatements.deleteMessages(meta.isVersion2 || settings.cosmosDb))
+        })
     } else
-      deletesNotSupportedException
+      new CachedPreparedStatement(() => deletesNotSupportedException)
   }
-  private lazy val preparedInsertIntoAllPersistenceIds: Future[PreparedStatement] = {
-    session.prepare(statements.journalStatements.insertIntoAllPersistenceIds)
+  private val preparedInsertIntoAllPersistenceIds: CachedPreparedStatement = {
+    new CachedPreparedStatement(() => session.prepare(statements.journalStatements.insertIntoAllPersistenceIds))
   }
 
-  private lazy val preparedWriteMessageWithMeta =
-    session.prepare(statements.journalStatements.writeMessage(withMeta = true))
-  private lazy val preparedSelectMessages =
-    session.prepare(statements.journalStatements.selectMessages)
+  private val preparedWriteMessageWithMeta =
+    new CachedPreparedStatement(() => session.prepare(statements.journalStatements.writeMessage(withMeta = true)))
+  private val preparedSelectMessages =
+    new CachedPreparedStatement(() => session.prepare(statements.journalStatements.selectMessages))
 
   private lazy val queries: CassandraReadJournal =
     PersistenceQuery(context.system.asInstanceOf[ExtendedActorSystem])
@@ -192,16 +193,16 @@ import akka.stream.scaladsl.Source
 
     case CassandraJournal.Init =>
       // try initialize early, to be prepared for first real request
-      preparedWriteMessage
-      preparedWriteMessageWithMeta
-      preparedSelectMessages
-      preparedSelectHighestSequenceNr
+      preparedWriteMessage.get()
+      preparedWriteMessageWithMeta.get()
+      preparedSelectMessages.get()
+      preparedSelectHighestSequenceNr.get()
       if (settings.journalSettings.supportAllPersistenceIds)
-        preparedInsertIntoAllPersistenceIds
+        preparedInsertIntoAllPersistenceIds.get()
       if (settings.journalSettings.supportDeletes) {
-        preparedDeleteMessages
-        preparedSelectDeletedTo
-        preparedInsertDeletedTo
+        preparedDeleteMessages.get()
+        preparedSelectDeletedTo.foreach(_.get())
+        preparedInsertDeletedTo.get()
       }
       queries.initialize()
 
@@ -358,7 +359,7 @@ import akka.stream.scaladsl.Source
     require(atomicWrites.head.payload.nonEmpty)
     val allPersistenceId =
       if (settings.journalSettings.supportAllPersistenceIds && atomicWrites.head.payload.head.sequenceNr == 1L)
-        preparedInsertIntoAllPersistenceIds.map(_.bind(atomicWrites.head.persistenceId)).flatMap(execute(_))
+        preparedInsertIntoAllPersistenceIds.get().map(_.bind(atomicWrites.head.persistenceId)).flatMap(execute(_))
       else
         FutureUnit
 
@@ -398,7 +399,7 @@ import akka.stream.scaladsl.Source
         if (m.meta.isDefined) preparedWriteMessageWithMeta
         else preparedWriteMessage
 
-      stmt.map { stmt =>
+      stmt.get().map { stmt =>
         val bs = stmt
           .bind()
           .setString("persistence_id", persistenceId)
@@ -533,7 +534,7 @@ import akka.stream.scaladsl.Source
           val deleteResult =
             Future.sequence((lowestPartition to highestPartition).map { partitionNr =>
               val boundDeleteMessages =
-                preparedDeleteMessages.map(_.bind(persistenceId, partitionNr: JLong, toSeqNr: JLong))
+                preparedDeleteMessages.get().map(_.bind(persistenceId, partitionNr: JLong, toSeqNr: JLong))
               boundDeleteMessages.flatMap(execute(_))
             })
           deleteResult.failed.foreach { e =>
@@ -557,7 +558,7 @@ import akka.stream.scaladsl.Source
         toSeqNr: TagPidSequenceNr): Future[Done] = {
       def asyncDeleteMessages(partitionNr: TagPidSequenceNr, messageIds: Seq[MessageId]): Future[Unit] = {
         val boundStatements = messageIds.map(mid =>
-          preparedDeleteMessages.map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
+          preparedDeleteMessages.get().map(_.bind(mid.persistenceId, partitionNr: JLong, mid.sequenceNr: JLong)))
         Future.sequence(boundStatements).flatMap { stmts =>
           executeBatch(batch => stmts.foldLeft(batch) { case (acc, next) => acc.add(next) })
         }
@@ -601,7 +602,7 @@ import akka.stream.scaladsl.Source
           FutureUnit
         } else {
           val boundInsertDeletedTo =
-            preparedInsertDeletedTo.map(_.bind(persistenceId, toSeqNr: JLong))
+            preparedInsertDeletedTo.get().map(_.bind(persistenceId, toSeqNr: JLong))
           boundInsertDeletedTo.flatMap(execute)
         }
       logicalDelete.flatMap(_ => physicalDelete(lowestPartition, highestPartition, toSeqNr))
@@ -636,7 +637,8 @@ import akka.stream.scaladsl.Source
   }
 
   private def partitionInfo(persistenceId: String, partitionNr: Long, maxSequenceNr: Long): Future[PartitionInfo] = {
-    val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(_.bind(persistenceId, partitionNr: JLong))
+    val boundSelectHighestSequenceNr =
+      preparedSelectHighestSequenceNr.get().map(_.bind(persistenceId, partitionNr: JLong))
     boundSelectHighestSequenceNr
       .flatMap(selectOne)
       .map(
@@ -650,7 +652,7 @@ import akka.stream.scaladsl.Source
   private def asyncHighestDeletedSequenceNumber(persistenceId: String): Future[Long] = {
     preparedSelectDeletedTo match {
       case Some(pstmt) =>
-        val boundSelectDeletedTo = pstmt.map(_.bind(persistenceId))
+        val boundSelectDeletedTo = pstmt.get().map(_.bind(persistenceId))
         boundSelectDeletedTo.flatMap(selectOne).map(rowOption => rowOption.map(_.getLong("deleted_to")).getOrElse(0))
       case None =>
         Future.successful(0L)
@@ -663,11 +665,13 @@ import akka.stream.scaladsl.Source
       partitionSize: Long): Future[Long] = {
     def find(currentPnr: Long, currentSnr: Long, foundEmptyPartition: Boolean): Future[Long] = {
       // if every message has been deleted and thus no sequence_nr the driver gives us back 0 for "null" :(
-      val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr.map(ps => {
-        val bound = ps.bind(persistenceId, currentPnr: JLong)
-        bound
+      val boundSelectHighestSequenceNr = preparedSelectHighestSequenceNr
+        .get()
+        .map(ps => {
+          val bound = ps.bind(persistenceId, currentPnr: JLong)
+          bound
 
-      })
+        })
       boundSelectHighestSequenceNr
         .flatMap(selectOne)
         .map { rowOption =>
