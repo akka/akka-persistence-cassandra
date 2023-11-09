@@ -92,6 +92,7 @@ jobs:
           - { jdk: 'temurin:1.11.0.17', container: "cassandra-latest", test: "test" }
           - { jdk: 'temurin:1.11.0.17', container: "cassandra2",       test: "'testOnly -- -l RequiresCassandraThree'"}
           - { jdk: 'temurin:1.11.0.17', container: "cassandra3",       test: "test" }
+          - { jdk: 'temurin:1.21', container: "cassandra3",       test: "test" }
 
     env:
       JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
@@ -110,12 +111,12 @@ jobs:
           git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
           git checkout scratch
 
-      - name: Set up JDK ${{ matrix.jdk }}
-        # https://github.com/coursier/setup-action/releases
-        # v1.3.0
-        uses: coursier/setup-action@70323223454ac2a9eb2de46f389b4d045cbcdea5
+      - name: Set up JDK ${{ matrix.jdkVersion }}
+        uses: coursier/setup-action@v1.3.4
         with:
-          jvm: ${{ matrix.jdk }}
+          jvm: ${{ matrix.jvmName }}
+          # FIXME default index not giving us access to JDK 21 (yet)
+          jvm-index: https://raw.githubusercontent.com/coursier/jvm-index/32d659500e6c65efb9eee91718a0fb0e797ad4ee/index.json
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases/
