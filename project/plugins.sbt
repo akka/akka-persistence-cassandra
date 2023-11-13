@@ -5,6 +5,9 @@ addSbtPlugin("com.typesafe.sbt" % "sbt-multi-jvm" % "0.4.0")
 addSbtPlugin("com.github.sbt" % "sbt-dynver" % "5.0.1")
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.5.12")
 
+// for dependency analysis
+addDependencyTreePlugin
+
 // Documentation
 addSbtPlugin("com.lightbend.akka" % "sbt-paradox-akka" % "0.53")
 addSbtPlugin("com.lightbend.paradox" % "sbt-paradox-dependencies" % "0.2.4")
