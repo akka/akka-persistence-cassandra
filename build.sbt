@@ -68,7 +68,7 @@ lazy val docs = project
   .disablePlugins(CiReleasePlugin)
   .dependsOn(core)
   .settings(
-    name := "Akka Persistence Cassandra",
+    name := "Akka Persistence plugin for Cassandra",
     (Compile / paradox) := (Compile / paradox).dependsOn(root / dumpSchema).value,
     publish / skip := true,
     makeSite := makeSite.dependsOn(LocalRootProject / ScalaUnidoc / doc).value,
