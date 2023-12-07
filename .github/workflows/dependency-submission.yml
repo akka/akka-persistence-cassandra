@@ -17,4 +17,5 @@ jobs:
         # https://github.com/scalacenter/sbt-dependency-submission/releases
         # v2.2.2
         uses: scalacenter/sbt-dependency-submission@6807cf91e9dc7af7c314b988d56d928d5828605b
-        configs-ignore: test
+        with:
+          configs-ignore: test
