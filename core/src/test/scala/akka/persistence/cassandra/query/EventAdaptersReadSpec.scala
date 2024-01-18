@@ -26,14 +26,13 @@ object EventAdaptersReadSpec {
         }
       } 
       query {
-        max-buffer-size = 50
         refresh-interval = 500ms
-        max-result-size-query = 2
       }
       events-by-tag {
         flush-interval = 0ms
       }
     }
+    datastax-java-driver.profiles.akka-persistence-cassandra-profile.basic.request.page-size = 2
     """).withFallback(CassandraLifecycle.config)
 }
 

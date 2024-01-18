@@ -19,8 +19,8 @@ object EventsByPersistenceIdFastForwardSpec {
   val config = ConfigFactory.parseString(s"""
     akka.persistence.cassandra.journal.keyspace=EventsByPersistenceIdFastForwardSpec
     akka.persistence.cassandra.query.refresh-interval = 250ms
-    akka.persistence.cassandra.query.max-result-size-query = 2
     akka.persistence.cassandra.journal.target-partition-size = 15
+    datastax-java-driver.profiles.akka-persistence-cassandra-profile.basic.request.page-size = 2
     """).withFallback(CassandraLifecycle.config)
 }
 

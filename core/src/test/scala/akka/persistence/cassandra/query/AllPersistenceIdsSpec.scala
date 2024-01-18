@@ -23,11 +23,10 @@ object AllPersistenceIdsSpec {
     akka.persistence.cassandra {
       journal.target-partition-size = 15
       query {
-        max-buffer-size = 10
         refresh-interval = 0.5s
-        max-result-size-query = 10
       }
-    }  
+    }
+    datastax-java-driver.profiles.akka-persistence-cassandra-profile.basic.request.page-size = 10
     """).withFallback(CassandraLifecycle.config)
 }
 
@@ -77,7 +76,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       src.runWith(TestSink.probe[Any]).request(10).expectNext("d").expectComplete()
     }
 
-    "find existing persistence ids in batches if there is more of them than max-result-size-query" in {
+    "find existing persistence ids in batches if there is more of them than page-size" in {
       for (_ <- 1 to 1000) {
         setup(UUID.randomUUID().toString, 1)
       }
