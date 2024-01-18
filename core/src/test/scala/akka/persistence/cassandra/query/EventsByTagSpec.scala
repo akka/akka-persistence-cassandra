@@ -60,7 +60,6 @@ object EventsByTagSpec {
       
       query {
         refresh-interval = 500ms
-        max-buffer-size = 50
       }
 
       events-by-tag {
@@ -73,6 +72,7 @@ object EventsByTagSpec {
 
       # coordinated-shutdown-on-error = on
     }
+    datastax-java-driver.profiles.akka-persistence-cassandra-profile.basic.request.page-size = 50
     """).withFallback(CassandraLifecycle.config)
 
   val strictConfig = ConfigFactory.parseString(s"""
@@ -922,7 +922,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
       val w2 = UUID.randomUUID().toString
       val w3 = UUID.randomUUID().toString
 
-      // max-buffer-size = 50
+      // page-size = 50
       // create 120 events per day in total, 60 from each one of the two persistenceId
       var lastT = t1
       for {
@@ -986,7 +986,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
       val w2 = UUID.randomUUID().toString
       val w3 = UUID.randomUUID().toString
 
-      // max-buffer-size = 50
+      // buffer-size = 50
       (1L to 100L).foreach { n =>
         val eventA = PersistentRepr(s"A$n", n, "a", "", writerUuid = w1)
         val t = t1.plus(3 * n, ChronoUnit.MILLIS)
@@ -1040,7 +1040,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
       val t1 = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(5).minusDays(5)
       val w1 = UUID.randomUUID().toString
 
-      // max-buffer-size = 50
+      // page-size = 50
       // start at seqNr 1 here to trigger the backtracking mode
       (101L to 430L).foreach { n =>
         val eventA = PersistentRepr(s"B$n", n, "b", "", writerUuid = w1)

@@ -19,7 +19,7 @@ object EventsByPersistenceIdWithControlSpec {
     akka.persistence.cassandra.journal.keyspace=EventsByPersistenceIdWithControlSpec
     akka.persistence.cassandra.journal.target-partition-size = 15
     akka.persistence.cassandra.query.refresh-interval = 120s # effectively disabled
-    akka.persistence.cassandra.query.max-result-size-query = 20
+    datastax-java-driver.profiles.akka-persistence-cassandra-profile.basic.request.page-size = 20
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
     """).withFallback(CassandraLifecycle.config)
 }

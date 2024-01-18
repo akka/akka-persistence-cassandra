@@ -39,7 +39,6 @@ object EventsByTagStageSpec {
           log-queries = off
 
           query {
-            max-result-size-query = $fetchSize
             log-queries = on
             refresh-interval = 200ms
           }
@@ -54,6 +53,7 @@ object EventsByTagStageSpec {
             new-persistence-id-scan-timeout = ${newPersistenceIdTimeout.toMillis}ms
           }
         }
+        datastax-java-driver.profiles.akka-persistence-cassandra-profile.basic.request.page-size = $fetchSize
     """).withFallback(CassandraLifecycle.config)
 
 }

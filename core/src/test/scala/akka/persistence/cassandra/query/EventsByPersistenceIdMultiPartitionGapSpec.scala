@@ -16,9 +16,9 @@ object EventsByPersistenceIdMultiPartitionGapSpec {
     akka.loglevel = INFO
     akka.persistence.cassandra.journal.target-partition-size = 15
     akka.persistence.cassandra.query.refresh-interval = 0.5s
-    akka.persistence.cassandra.query.max-result-size-query = 2
     akka.persistence.cassandra.query.events-by-persistence-id-gap-timeout = 4 seconds
     akka.persistence.cassandra.query.gap-free-sequence-numbers = off
+    datastax-java-driver.profiles.akka-persistence-cassandra-profile.basic.request.page-size = 2
     akka.stream.materializer.max-input-buffer-size = 4 # there is an async boundary
     """).withFallback(CassandraLifecycle.config)
 }

@@ -32,8 +32,6 @@ import com.typesafe.config.Config
 
   val gapFreeSequenceNumbers: Boolean = queryConfig.getBoolean("gap-free-sequence-numbers")
 
-  val maxBufferSize: Int = queryConfig.getInt("max-buffer-size")
-
   val deserializationParallelism: Int = queryConfig.getInt("deserialization-parallelism")
 
   val pluginDispatcher: String = queryConfig.getString("plugin-dispatcher")
