@@ -45,6 +45,25 @@ The table below shows Akka Persistence Cassandra’s direct dependencies and the
 
 To use the plugin with **Akka 2.5.x** you must use @extref:[version 0.103](apc-0.x:) or later in the 0.x series. 
 
+## Supported features
+
+Be aware of that many of the new features of [Akka Distributed Cluster](https://doc.akka.io/docs/akka-distributed-cluster/current/)
+and [Akka Edge](https://doc.akka.io/docs/akka-edge/current/) are only implemented by the
+[Akka Persistence R2DBC plugin](https://doc.akka.io/docs/akka-persistence-r2dbc/current/) and are not supported by the
+Cassandra plugin.
+
+Those features were developed for Distributed Cluster and Edge, but they are also useful in other contexts.
+Example of concrete features not supported by the Cassandra plugin: 
+
+* `eventsBySlices` query
+* Projections over gRPC
+* Replicated Event Sourcing over gRPC
+* Dynamic scaling of number of Projection instances
+* Low latency Projections
+* Projections starting from snapshots
+* Scalability of many Projections
+* Durable State entities
+
 ## History
 
 This [Apache Cassandra](https://cassandra.apache.org/) plugin to Akka Persistence was initiated [originally](https://github.com/krasserm/akka-persistence-cassandra) by Martin Krasser, [@krasserm](https://github.com/krasserm) in 2014.
