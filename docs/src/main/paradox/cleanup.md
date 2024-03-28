@@ -1,11 +1,5 @@
 # Database Cleanup
 
-@@@ warning
-
-When running any operation for a persistence id the actor with that persistence id must not be running!
-
-@@@
-
 If possible, it is best to keep all events in an event sourced system. That way new [projections](https://doc.akka.io/docs/akka-projection/current/index.html) 
 and the `tag_view` table can be re-built if it is corrupted (e.g. due to a two persistence ids writing events from two nodes in a split brain).
 
@@ -20,6 +14,15 @@ The @apidoc[akka.persistence.cassandra.cleanup.Cleanup] tool can retrospectively
 * Delete all snapshots and events for a persistence id keeping the latest N snapshots and all the events after them. 
 
 The cleanup tool can be combined with the @ref[query plugin](./read-journal.md) which has a query to get all persistence ids.
+
+@@@ warning
+
+When running an operation with `Cleanup` that deletes all events for a persistence id,
+the actor with that persistence id must not be running! If the actor is restarted it would in that
+case be recovered to the wrong state since the stored events have been deleted. Delete events before
+snapshot can still be used while the actor is running.
+
+@@@
 
 
 Scala
