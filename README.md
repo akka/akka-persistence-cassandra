@@ -26,3 +26,5 @@ It moved to the [Akka](https://github.com/akka/) organisation in 2016 and the fi
 ## License
 
 Akka is licensed under the Business Source License 1.1, please see the [Akka License FAQ](https://www.lightbend.com/akka/license-faq).
+
+Tests and documentation are under a separate license, see the LICENSE file in each documentation and test root directory for details.
