@@ -1,6 +1,8 @@
 Cassandra Plugins for Akka Persistence
 ======================================
 
+The Akka family of projects is managed by teams at [Lightbend](https://lightbend.com/) with help from the community.
+
 Replicated [Akka Persistence](https://doc.akka.io/docs/akka/current/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](https://cassandra.apache.org/).
 
 For questions please use the [discuss.akka.io](https://discuss.lightbend.com/c/akka/).
@@ -23,5 +25,6 @@ It moved to the [Akka](https://github.com/akka/) organisation in 2016 and the fi
 
 ## License
 
-Akka Persistence Cassandra is licensed under the Business Source License 1.1, see LICENSE.
+Akka is licensed under the Business Source License 1.1, please see the [Akka License FAQ](https://www.lightbend.com/akka/license-faq).
 
+Tests and documentation are under a separate license, see the LICENSE file in each documentation and test root directory for details.
