@@ -35,7 +35,7 @@ Variables to be expanded in this template:
          ```
          cd ~/www
          git status
-         git add docs/akka-persistence-cassandra/current docs/akka-persistence-cassandra/$VERSION$
+         git add libraries/akka-persistence-cassandra/current libraries/akka-persistence-cassandra/$VERSION$
          git add api/akka-persistence-cassandra/current api/akka-persistence-cassandra/$VERSION$
          git commit -m "Akka Persistence Cassandra $VERSION$"
          ```
@@ -56,6 +56,5 @@ For minor or major releases:
 ### Afterwards
 
 - [ ] Update [akka-dependencies bom](https://github.com/lightbend/akka-dependencies) and version for [Akka module versions](https://doc.akka.io/libraries/akka-dependencies/current/) in [akka-dependencies repo](https://github.com/akka/akka-dependencies)
-- [ ] Update [akka-dependencies bom](https://github.com/lightbend/akka-dependencies)
-- [ ] Update [Akka Guide samples](https://github.com/akka/akka-platform-guide)
+- [ ] Update [Akka Guide samples](https://github.com/lightbend/akka-guide)
 - Close this issue
