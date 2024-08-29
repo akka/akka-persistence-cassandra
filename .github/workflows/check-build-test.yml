@@ -127,4 +127,4 @@ jobs:
 
       - name: Test against ${{ matrix.container }}
         run: |-
-          docker-compose up -d ${{ matrix.container }} && sbt ${{matrix.test}}
+          docker compose up -d ${{ matrix.container }} && sbt ${{matrix.test}}
