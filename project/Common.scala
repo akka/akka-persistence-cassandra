@@ -75,11 +75,17 @@ object Common extends AutoPlugin {
         "-doc-canonical-base-url",
         "https://doc.akka.io/api/akka-persistence-cassandra/current/")
       ++ {
+        // make use of https://github.com/scala/scala/pull/8663
         if (scalaBinaryVersion.value.startsWith("3")) {
-          Seq("-skip-packages:akka.pattern") // different usage in scala3
-        } else {
-          Seq("-skip-packages", "akka.pattern") // for some reason Scaladoc creates this
-        }
+          Seq(
+            "-skip-packages:akka.pattern",
+            s"-external-mappings:https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api/java.base/")
+        } else
+          Seq(
+            "-jdk-api-doc-base",
+            s"https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api/java.base/",
+            "-skip-packages",
+            "akka.pattern")
       },
     Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     scalafmtOnCompile := true,
