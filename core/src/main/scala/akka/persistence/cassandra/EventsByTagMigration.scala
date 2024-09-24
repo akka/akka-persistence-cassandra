@@ -153,7 +153,7 @@ class EventsByTagMigration(
    * Migrates the entire `messages` table to the the new `tag_views` table.
    *
    * Before running this you must run the migration of the `all_persistence_ids`
-   * table as described in https://doc.akka.io/docs/akka-persistence-cassandra/current/migrations.html#all-persistenceIds-query
+   * table as described in https://doc.akka.io/libraries/akka-persistence-cassandra/current/migrations.html#all-persistenceIds-query
    *
    * Uses [CassandraReadJournal.currentPersistenceIds] to find all persistenceIds.
    * Note that this is a very inefficient cassandra query so might timeout. If so

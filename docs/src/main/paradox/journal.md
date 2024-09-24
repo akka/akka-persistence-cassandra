@@ -108,7 +108,7 @@ If a persistent actor for which this has happened is started in another datacent
 if it wasn't replicated.
 If the Cassandra data in the datacenter with the outage is recovered then the event that was not replicated will 
 eventually be replicated to all datacenters resulting in a duplicate sequence number.
-With the default [`replay-filter`](https://doc.akka.io/docs/akka/current/typed/persistence.html#replay-filter) the
+With the default [`replay-filter`](https://doc.akka.io/libraries/akka-core/current/typed/persistence.html#replay-filter) the
 duplicate event from the original datacenter will is discarded in subsequent replays of the persistent actor.
 
 Using `QUORUM` for multi datacenter setups increases latency and decreased availability as to reach `QUORUM` nodes in
@@ -128,7 +128,7 @@ datastax-java-driver.profiles {
 ## Event deletion and retention
 
 In applications with an Event Sourcing model of persistence, an idealized journal is _append-only_: events are never deleted.
-However, it is possible in Akka Persistence to use [snapshot-based retention](https://doc.akka.io/docs/akka/current/typed/persistence-snapshot.html#event-deletion),
+However, it is possible in Akka Persistence to use [snapshot-based retention](https://doc.akka.io/libraries/akka-core/current/typed/persistence-snapshot.html#event-deletion),
 and it is also possible to @ref[perform bulk deletions of events](./cleanup.md) in Akka Persistence Cassandra.  If using these
 features, it's important to be aware of [how deletion is performed in Cassandra](https://docs.datastax.com/en/cassandra-oss/3.0/cassandra/dml/dmlAboutDeletes.html).
 Specifically, deletion of events is actually inserting a tombstone telling Cassandra "this event is deleted".  In the presence

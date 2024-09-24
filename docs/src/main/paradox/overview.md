@@ -8,7 +8,7 @@ The Akka Persistence Cassandra plugin allows for using [Apache Cassandra](https:
 
 ## Dependencies
 
-This plugin requires **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/docs/akka/current/common/binary-compatibility-rules.html) for details.
+This plugin requires **Akka $akka.version$** or later. See [Akka's Binary Compatibility Rules](https://doc.akka.io/libraries/akka-core/current/common/binary-compatibility-rules.html) for details.
 
 The Akka dependencies are available from Akka's library repository. To access them there, you need to configure the URL for this repository.
 
@@ -47,9 +47,9 @@ To use the plugin with **Akka 2.5.x** you must use @extref:[version 0.103](apc-0
 
 ## Supported features
 
-Be aware of that many of the new features of [Akka Distributed Cluster](https://doc.akka.io/docs/akka-distributed-cluster/current/)
-and [Akka Edge](https://doc.akka.io/docs/akka-edge/current/) are only implemented by the
-[Akka Persistence R2DBC plugin](https://doc.akka.io/docs/akka-persistence-r2dbc/current/) and are not supported by the
+Be aware of that many of the new features of [Akka Distributed Cluster](https://doc.akka.io/libraries/akka-distributed-cluster/current/)
+and [Akka Edge](https://doc.akka.io/libraries/akka-edge/current/) are only implemented by the
+[Akka Persistence R2DBC plugin](https://doc.akka.io/libraries/akka-persistence-r2dbc/current/) and are not supported by the
 Cassandra plugin.
 
 Those features were developed for Distributed Cluster and Edge, but they are also useful in other contexts.

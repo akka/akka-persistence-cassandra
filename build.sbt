@@ -75,13 +75,13 @@ lazy val docs = project
     previewPath := (Paradox / siteSubdirName).value,
     Preprocess / siteSubdirName := s"api/akka-persistence-cassandra/${projectInfoVersion.value}",
     Preprocess / sourceDirectory := (LocalRootProject / ScalaUnidoc / unidoc / target).value,
-    Paradox / siteSubdirName := s"docs/akka-persistence-cassandra/${projectInfoVersion.value}",
+    Paradox / siteSubdirName := s"libraries/akka-persistence-cassandra/${projectInfoVersion.value}",
     Compile / paradoxProperties ++= Map(
-        "project.url" -> "https://doc.akka.io/docs/akka-persistence-cassandra/current/",
-        "canonical.base_url" -> "https://doc.akka.io/docs/akka-persistence-cassandra/current",
+        "project.url" -> "https://doc.akka.io/libraries/akka-persistence-cassandra/current/",
+        "canonical.base_url" -> "https://doc.akka.io/libraries/akka-persistence-cassandra/current",
         "akka.version" -> Dependencies.AkkaVersion,
         // Akka
-        "extref.akka.base_url" -> s"https://doc.akka.io/docs/akka/${Dependencies.AkkaVersionInDocs}/%s",
+        "extref.akka.base_url" -> s"https://doc.akka.io/libraries/akka-core/${Dependencies.AkkaVersionInDocs}/%s",
         "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${Dependencies.AkkaVersionInDocs}/",
         "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${Dependencies.AkkaVersionInDocs}/",
         // Alpakka
@@ -89,7 +89,7 @@ lazy val docs = project
         "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.AlpakkaVersionInDocs}/",
         "javadoc.akka.stream.alpakka.base_url" -> "",
         // APC 0.x
-        "extref.apc-0.x.base_url" -> s"https://doc.akka.io/docs/akka-persistence-cassandra/0.103/%s",
+        "extref.apc-0.x.base_url" -> s"https://doc.akka.io/libraries/akka-persistence-cassandra/0.103/%s",
         // Cassandra
         "extref.cassandra.base_url" -> s"https://cassandra.apache.org/doc/${Dependencies.CassandraVersionInDocs}/%s",
         // Datastax Java driver

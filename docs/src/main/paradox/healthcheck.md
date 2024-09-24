@@ -1,6 +1,6 @@
 # Health check
 
-A [health check for Akka Management](https://doc.akka.io/docs/akka-management/current/healthchecks.html)
+A [health check for Akka Management](https://doc.akka.io/libraries/akka-management/current/healthchecks.html)
 is provided. To enable it you need to add the following configuration
 
 ```

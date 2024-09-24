@@ -3,16 +3,16 @@ Cassandra Plugins for Akka Persistence
 
 The Akka family of projects is managed by teams at [Lightbend](https://lightbend.com/) with help from the community.
 
-Replicated [Akka Persistence](https://doc.akka.io/docs/akka/current/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](https://cassandra.apache.org/).
+Replicated [Akka Persistence](https://doc.akka.io/libraries/akka-core/current/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](https://cassandra.apache.org/).
 
 For questions please use the [discuss.akka.io](https://discuss.lightbend.com/c/akka/).
 
 
 ## Documentation
 
-The current version's documentation is available at https://doc.akka.io/docs/akka-persistence-cassandra/current/.
+The current version's documentation is available at https://doc.akka.io/libraries/akka-persistence-cassandra/current/.
 
-[Snapshot documentation](https://doc.akka.io/docs/akka-persistence-cassandra/snapshot/) and snapshot artifacts at https://repo.akka.io/snapshots are published for every successful `main` branch build.
+[Snapshot documentation](https://doc.akka.io/libraries/akka-persistence-cassandra/snapshot/) and snapshot artifacts at https://repo.akka.io/snapshots are published for every successful `main` branch build.
 
 For versions earlier than 1.0.0, check this README.md file for the corresponding release tag.
 
