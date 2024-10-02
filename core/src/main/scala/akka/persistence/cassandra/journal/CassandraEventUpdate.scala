@@ -9,8 +9,8 @@ import akka.event.LoggingAdapter
 import akka.persistence.cassandra.PluginSettings
 import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, TagPidSequenceNr }
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row, Statement }
-import akka.util.ccompat.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
+import scala.jdk.CollectionConverters._
 import java.lang.{ Long => JLong }
 
 import akka.annotation.InternalApi

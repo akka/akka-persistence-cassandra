@@ -12,19 +12,19 @@ object Dependencies {
   val Scala2Versions = Seq(Scala213)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
-  val AkkaVersion = System.getProperty("override.akka.version", "2.9.3")
+  val AkkaVersion = System.getProperty("override.akka.version", "2.10.0-M1")
   val AkkaVersionInDocs = VersionNumber(AkkaVersion).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
   val CassandraVersionInDocs = "4.0"
   // Should be sync with the version of the driver in Alpakka Cassandra
   val CassandraDriverVersion = "4.17.0"
   val DriverVersionInDocs = "4.14"
 
-  val AlpakkaVersion = "8.0.0"
+  val AlpakkaVersion = "9.0.0-M1"
   val AlpakkaVersionInDocs = "8.0"
   // for example
   val AkkaManagementVersion = "1.5.0"
 
-  val Logback = "ch.qos.logback" % "logback-classic" % "1.2.13"
+  val Logback = "ch.qos.logback" % "logback-classic" % "1.5.7"
 
   val reconcilerDependencies = Seq(
     "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,

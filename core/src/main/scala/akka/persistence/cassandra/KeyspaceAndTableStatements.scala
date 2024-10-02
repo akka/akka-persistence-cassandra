@@ -5,6 +5,7 @@
 package akka.persistence.cassandra
 
 import scala.collection.immutable
+import scala.jdk.CollectionConverters._
 
 import akka.actor.ClassicActorSystemProvider
 
@@ -48,10 +49,7 @@ class KeyspaceAndTableStatements(
    * This can be queried in for example a startup script without accessing the actual
    * Cassandra plugin actor.
    */
-  def getCreateJournalTablesStatements: java.util.List[String] = {
-    import akka.util.ccompat.JavaConverters._
-    createJournalTablesStatements.asJava
-  }
+  def getCreateJournalTablesStatements: java.util.List[String] = createJournalTablesStatements.asJava
 
   /**
    * The Cassandra Statement that can be used to create the configured keyspace.
@@ -77,9 +75,6 @@ class KeyspaceAndTableStatements(
    * This can be queried in for example a startup script without accessing the actual
    * Cassandra plugin actor.
    */
-  def getCreateSnapshotTablesStatements: java.util.List[String] = {
-    import akka.util.ccompat.JavaConverters._
-    createSnapshotTablesStatements.asJava
-  }
+  def getCreateSnapshotTablesStatements: java.util.List[String] = createSnapshotTablesStatements.asJava
 
 }

@@ -8,7 +8,6 @@ import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.stream.{ KillSwitches, SharedKillSwitch }
 import com.typesafe.config.Config
 import org.HdrHistogram.Histogram
-import akka.actor.typed.scaladsl.LoggerOps
 import scala.concurrent.duration._
 
 object ReadSide {

@@ -4,10 +4,10 @@
 
 package akka.persistence.cassandra
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql.PreparedStatement
 
@@ -26,7 +26,7 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement
         ps.foreach { p =>
           // only cache successful futures, ok to overwrite
           preparedStatement = OptionVal.Some(Future.successful(p))
-        }(ExecutionContexts.parasitic)
+        }(ExecutionContext.parasitic)
         ps
     }
 

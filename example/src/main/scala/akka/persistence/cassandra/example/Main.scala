@@ -7,7 +7,6 @@ import akka.cluster.typed.{ Cluster, SelfUp, Subscribe }
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
 import akka.persistence.cassandra.example.LoadGenerator.Start
-import akka.actor.typed.scaladsl.LoggerOps
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 
 import scala.concurrent.Await

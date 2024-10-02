@@ -7,6 +7,7 @@ package akka.persistence.cassandra
 import com.datastax.oss.driver.api.core.cql.Row
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.jdk.CollectionConverters._
 
 import akka.persistence.PersistentRepr
 import akka.persistence.cassandra.journal._
@@ -16,7 +17,6 @@ import java.{ util => ju }
 
 import akka.util.OptionVal
 import akka.serialization.Serialization
-import akka.util.ccompat.JavaConverters._
 import java.nio.ByteBuffer
 
 import com.datastax.oss.protocol.internal.util.Bytes

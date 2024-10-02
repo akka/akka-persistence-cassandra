@@ -4,9 +4,9 @@
 
 package akka.persistence.cassandra.snapshot
 
-import scala.compat.java8.FutureConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.jdk.FutureConverters._
 
 import akka.Done
 import akka.annotation.InternalApi
@@ -112,7 +112,7 @@ import akka.persistence.cassandra.FutureDone
       implicit ec: ExecutionContext): Future[Done] = {
     def keyspace: Future[Done] =
       if (snapshotSettings.keyspaceAutoCreate)
-        session.executeAsync(createKeyspace).toScala.map(_ => Done)
+        session.executeAsync(createKeyspace).asScala.map(_ => Done)
       else FutureDone
 
     if (snapshotSettings.tablesAutoCreate) {
@@ -120,7 +120,7 @@ import akka.persistence.cassandra.FutureDone
       session.setSchemaMetadataEnabled(false)
       val result = for {
         _ <- keyspace
-        _ <- session.executeAsync(createTable).toScala
+        _ <- session.executeAsync(createTable).asScala
       } yield {
         session.setSchemaMetadataEnabled(null)
         Done

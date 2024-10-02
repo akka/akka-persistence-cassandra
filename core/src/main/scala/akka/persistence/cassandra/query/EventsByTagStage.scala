@@ -31,7 +31,7 @@ import com.datastax.oss.driver.api.core.cql.AsyncResultSet
 import com.datastax.oss.driver.api.core.cql.Row
 import com.datastax.oss.driver.api.core.uuid.Uuids
 
-import scala.compat.java8.FutureConverters._
+import scala.jdk.FutureConverters._
 
 /**
  * INTERNAL API
@@ -99,7 +99,7 @@ import scala.compat.java8.FutureConverters._
       Retries.retry({ () =>
         val bound =
           statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setExecutionProfileName(readProfile)
-        session.executeAsync(bound).toScala
+        session.executeAsync(bound).asScala
       }, retries.retries, onFailure, retries.minDuration, retries.maxDuration, retries.randomFactor)
     }
   }
@@ -953,7 +953,7 @@ import scala.compat.java8.FutureConverters._
 
       private def fetchMore(rs: AsyncResultSet): Unit = {
         log.debug("[{}] No more results without paging. Requesting more.", stageUuid)
-        val moreResults = rs.fetchNextPage().toScala
+        val moreResults = rs.fetchNextPage().asScala
         updateQueryState(QueryInProgress(abortForMissingSearch = false))
         moreResults.onComplete(newResultSetCb.invoke)
       }
