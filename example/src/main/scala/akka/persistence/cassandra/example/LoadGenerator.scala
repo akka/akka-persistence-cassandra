@@ -6,14 +6,14 @@ import akka.cluster.sharding.typed.ShardingEnvelope
 import com.typesafe.config.Config
 
 import scala.concurrent.duration.FiniteDuration
+import scala.jdk.DurationConverters._
 import scala.util.Random
-import akka.util.JavaDurationConverters._
 
 object LoadGenerator {
 
   object Settings {
     def apply(config: Config): Settings = {
-      Settings(config.getInt("persistence-ids"), config.getDuration("load-tick-duration").asScala)
+      Settings(config.getInt("persistence-ids"), config.getDuration("load-tick-duration").toScala)
     }
   }
 

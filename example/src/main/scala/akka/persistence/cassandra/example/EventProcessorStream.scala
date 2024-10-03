@@ -35,7 +35,7 @@ class EventProcessorStream[Event: ClassTag](
       .withBackoff(minBackoff = 500.millis, maxBackoff = 20.seconds, randomFactor = 0.1) { () =>
         Source.futureSource {
           readOffset().map { offset =>
-            log.infoN("Starting stream for tag [{}] from offset [{}]", tag, offset)
+            log.info("Starting stream for tag [{}] from offset [{}]", tag, offset)
             processEventsByTag(offset, histogram)
             // groupedWithin can be used here to improve performance by reducing number of offset writes,
             // with the trade-off of possibility of more duplicate events when stream is restarted
@@ -57,7 +57,7 @@ class EventProcessorStream[Event: ClassTag](
           if (latency < histogram.getMaxValue) {
             histogram.recordValue(latency)
           }
-          log.debugN(
+          log.debug(
             "Tag {} Event {} persistenceId {}, sequenceNr {}. Latency {}",
             tag,
             event,
