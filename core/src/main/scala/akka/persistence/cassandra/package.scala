@@ -15,8 +15,8 @@ import akka.persistence.cassandra.journal.CassandraJournal.{ Serialized, Seriali
 import akka.serialization.Serialization
 
 import scala.concurrent._
+import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
-import akka.util.ccompat.JavaConverters._
 import com.typesafe.config.{ Config, ConfigValueType }
 import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem

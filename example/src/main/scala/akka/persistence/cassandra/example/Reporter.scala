@@ -4,7 +4,6 @@ import akka.actor.typed.{ ActorRef, Behavior }
 import akka.actor.typed.pubsub.Topic
 import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.cassandra.example.ReadSideTopic.ReadSideMetrics
-import akka.actor.typed.scaladsl.LoggerOps
 
 object Reporter {
   def apply(topic: ActorRef[Topic.Command[ReadSideTopic.ReadSideMetrics]]): Behavior[ReadSideMetrics] =

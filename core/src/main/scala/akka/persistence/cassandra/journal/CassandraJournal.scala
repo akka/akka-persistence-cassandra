@@ -25,7 +25,6 @@ import akka.persistence.cassandra.journal.TagWriter.TagProgress
 import akka.serialization.{ AsyncSerializer, Serialization, SerializationExtension }
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 import akka.stream.scaladsl.Sink
-import akka.dispatch.ExecutionContexts
 import akka.util.{ OptionVal, Timeout }
 import com.datastax.oss.driver.api.core.cql._
 import com.typesafe.config.Config
@@ -33,13 +32,13 @@ import com.datastax.oss.driver.api.core.uuid.Uuids
 import com.datastax.oss.protocol.internal.util.Bytes
 
 import scala.annotation.tailrec
-import akka.util.ccompat.JavaConverters._
 import scala.collection.immutable
 import scala.collection.immutable.Seq
 import scala.concurrent._
+import scala.jdk.CollectionConverters._
+import scala.jdk.FutureConverters._
 import scala.util.control.NonFatal
 import scala.util.{ Failure, Success, Try }
-import scala.compat.java8.FutureConverters._
 import akka.annotation.DoNotInherit
 import akka.annotation.InternalStableApi
 import akka.stream.scaladsl.Source
@@ -217,11 +216,11 @@ import akka.stream.scaladsl.Source
           result
             .flatMap(_ => deleteDeletedToSeqNr(persistenceId))
             .flatMap(_ => deleteFromAllPersistenceIds(persistenceId))
-        else result.map(_ => Done)(ExecutionContexts.parasitic)
+        else result.map(_ => Done)(ExecutionContext.parasitic)
       result2.pipeTo(sender())
 
     case HealthCheckQuery =>
-      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse)(ExecutionContexts.parasitic).pipeTo(sender())
+      session.selectOne(healthCheckCql).map(_ => HealthCheckResponse)(ExecutionContext.parasitic).pipeTo(sender())
   }
 
   override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
@@ -287,7 +286,7 @@ import akka.stream.scaladsl.Source
           tagWrites match {
             case Some(t) =>
               implicit val timeout: Timeout = Timeout(settings.eventsByTagSettings.tagWriteTimeout)
-              t.ask(extractTagWrites(serialized)).map(_ => Nil)(ExecutionContexts.parasitic)
+              t.ask(extractTagWrites(serialized)).map(_ => Nil)(ExecutionContext.parasitic)
             case None => Future.successful(Nil)
           }
         }
@@ -547,7 +546,7 @@ import akka.stream.scaladsl.Source
               e.getClass.getName,
               e.getMessage)
           }
-          deleteResult.map(_ => Done)(ExecutionContexts.parasitic)
+          deleteResult.map(_ => Done)(ExecutionContext.parasitic)
         }
       }
     }
@@ -587,7 +586,7 @@ import akka.stream.scaladsl.Source
                 }
             })
           })))
-      deleteResult.map(_ => Done)(ExecutionContexts.parasitic)
+      deleteResult.map(_ => Done)(ExecutionContext.parasitic)
     }
 
     // Deletes the events by inserting into the metadata table deleted_to and physically deletes the rows.
@@ -696,7 +695,7 @@ import akka.stream.scaladsl.Source
     var batch =
       new BatchStatementBuilder(BatchType.UNLOGGED).build().setExecutionProfileName(journalSettings.writeProfile)
     batch = body(batch)
-    session.underlying().flatMap(_.executeAsync(batch).toScala).map(_ => ())
+    session.underlying().flatMap(_.executeAsync(batch).asScala).map(_ => ())
   }
 
   private def selectOne[T <: Statement[T]](stmt: Statement[T]): Future[Option[Row]] = {
@@ -920,7 +919,7 @@ import akka.stream.scaladsl.Source
 
             if (async) Future(deserializedEvent)
             else Future.successful(deserializedEvent)
-        }).map(event => DeserializedEvent(event, meta))(ExecutionContexts.parasitic)
+        }).map(event => DeserializedEvent(event, meta))(ExecutionContext.parasitic)
 
       } catch {
         case NonFatal(e) => Future.failed(e)

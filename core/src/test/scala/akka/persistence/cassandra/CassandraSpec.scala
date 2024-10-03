@@ -171,7 +171,7 @@ abstract class CassandraSpec(
     try {
       if (failed && dumpRowsOnFailure) {
         println("RowDump::")
-        import akka.util.ccompat.JavaConverters._
+        import scala.jdk.CollectionConverters._
         if (system.settings.config.getBoolean("akka.persistence.cassandra.events-by-tag.enabled")) {
           println("tag_views")
           cluster

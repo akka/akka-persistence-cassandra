@@ -6,15 +6,16 @@ package akka.persistence.cassandra.snapshot
 
 import java.lang.{ Long => JLong }
 import java.nio.ByteBuffer
-
 import akka.NotUsed
 
+import scala.annotation.unused
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
+
 import akka.actor._
 import akka.pattern.pipe
 import akka.persistence._
@@ -27,13 +28,12 @@ import akka.serialization.SerializationExtension
 import akka.serialization.Serializers
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
-import akka.util.{ unused, OptionVal }
+import akka.util.OptionVal
 import com.datastax.oss.driver.api.core.cql._
 import com.datastax.oss.protocol.internal.util.Bytes
 import com.typesafe.config.Config
 import akka.Done
 import akka.annotation.InternalApi
-import akka.dispatch.ExecutionContexts
 import akka.event.Logging
 import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessionRegistry }
 
@@ -251,11 +251,11 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
   }
 
   def executeBatch(body: BatchStatementBuilder => Unit): Future[Unit] = {
-    import scala.compat.java8.FutureConverters._
+    import scala.jdk.FutureConverters._
     val batch =
       new BatchStatementBuilder(BatchType.UNLOGGED).setExecutionProfileName(snapshotSettings.writeProfile)
     body(batch)
-    session.underlying().flatMap(_.executeAsync(batch.build()).toScala).map(_ => ())
+    session.underlying().flatMap(_.executeAsync(batch.build()).asScala).map(_ => ())
   }
 
   private def metadata(
@@ -405,7 +405,7 @@ import akka.stream.alpakka.cassandra.scaladsl.{ CassandraSession, CassandraSessi
               // Serialization.deserialize adds transport info
               serialization.deserialize(bytes, serId, manifest).get
             }
-        }).map(payload => DeserializedSnapshot(payload, meta))(ExecutionContexts.parasitic)
+        }).map(payload => DeserializedSnapshot(payload, meta))(ExecutionContext.parasitic)
 
       } catch {
         case NonFatal(e) => Future.failed(e)

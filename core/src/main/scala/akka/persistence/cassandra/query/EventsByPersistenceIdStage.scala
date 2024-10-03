@@ -18,7 +18,8 @@ import scala.util.{ Failure, Success, Try }
 import com.datastax.oss.driver.api.core.CqlSession
 
 import scala.annotation.nowarn
-import scala.compat.java8.FutureConverters._
+import scala.jdk.FutureConverters._
+
 import akka.persistence.cassandra.PluginSettings
 
 /**
@@ -70,7 +71,7 @@ import akka.persistence.cassandra.PluginSettings
 
     def selectSingleRow(persistenceId: String, pnr: Long)(implicit ec: ExecutionContext): Future[Option[Row]] = {
       val boundStatement = selectSingleRowQuery.bind(persistenceId, pnr: JLong).setExecutionProfileName(profile)
-      session.executeAsync(boundStatement).toScala.map(rs => Option(rs.one()))
+      session.executeAsync(boundStatement).asScala.map(rs => Option(rs.one()))
     }
 
     def highestDeletedSequenceNumber(persistenceId: String)(implicit ec: ExecutionContext): Future[Long] =
@@ -78,7 +79,7 @@ import akka.persistence.cassandra.PluginSettings
         Option(r.one()).map(_.getLong("deleted_to")).getOrElse(0))
 
     private def executeStatement(statement: Statement[_]): Future[AsyncResultSet] =
-      session.executeAsync(statement).toScala
+      session.executeAsync(statement).asScala
 
   }
 
@@ -401,7 +402,7 @@ import akka.persistence.cassandra.PluginSettings
             } else if (rs.remaining() == 0) {
               log.debug("EventsByPersistenceId [{}] Fetch more from seqNr [{}]", persistenceId, expectedNextSeqNr)
               queryState = QueryInProgress(switchPartition, fetchMore = true, System.nanoTime())
-              val rsFut = rs.fetchNextPage().toScala
+              val rsFut = rs.fetchNextPage().asScala
               rsFut.onComplete(newResultSetCb.invoke)
             } else {
               val row = rs.one()

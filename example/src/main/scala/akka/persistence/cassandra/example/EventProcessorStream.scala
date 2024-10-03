@@ -10,7 +10,6 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.{ RestartSource, Sink, Source }
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row }
 import org.slf4j.{ Logger, LoggerFactory }
-import akka.actor.typed.scaladsl.LoggerOps
 import org.HdrHistogram.Histogram
 
 import scala.concurrent.{ ExecutionContext, Future }
