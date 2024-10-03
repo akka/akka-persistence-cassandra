@@ -46,7 +46,7 @@ object Main {
 
         Behaviors.receiveMessage {
           case SelfUp(state) =>
-            ctx.log.infoN(
+            ctx.log.info(
               "Cluster member joined. Initializing persistent actors. Roles {}. Members {}",
               cluster.selfMember.roles,
               state.members)
