@@ -92,7 +92,7 @@ object Common extends AutoPlugin {
     autoAPIMappings := true,
     apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${projectInfoVersion.value}")),
     headerLicense := Some(
-        HeaderLicense.Custom("""Copyright (C) 2016-2023 Lightbend Inc. <https://www.lightbend.com>""")),
+        HeaderLicense.Custom("""Copyright (C) 2016-2024 Lightbend Inc. <https://www.lightbend.com>""")),
     Test / logBuffered := System.getProperty("akka.logBufferedTests", "false").toBoolean,
     // show full stack traces and test case durations
     Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
