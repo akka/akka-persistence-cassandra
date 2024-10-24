@@ -320,7 +320,7 @@ import akka.stream.scaladsl.Source
 
   /**
    * UUID generation is deliberately externalized to allow subclasses to customize the time based uuid for special cases.
-   * see https://discuss.lightbend.com/t/akka-persistence-cassandra-events-by-tags-bucket-size-based-on-time-vs-burst-load/1411 and make sure you understand the risk of doing this wrong.
+   * see https://discuss.akka.io/t/akka-persistence-cassandra-events-by-tags-bucket-size-based-on-time-vs-burst-load/1411 and make sure you understand the risk of doing this wrong.
    */
   protected def generateUUID(pr: PersistentRepr): UUID = Uuids.timeBased()
 

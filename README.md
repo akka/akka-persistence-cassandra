@@ -5,7 +5,7 @@ The Akka family of projects is managed by teams at [Lightbend](https://lightbend
 
 Replicated [Akka Persistence](https://doc.akka.io/libraries/akka-core/current/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](https://cassandra.apache.org/).
 
-For questions please use the [discuss.akka.io](https://discuss.lightbend.com/c/akka/).
+For questions please use the [discuss.akka.io](https://discuss.akka.io/c/akka/).
 
 
 ## Documentation
