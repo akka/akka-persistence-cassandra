@@ -6,7 +6,7 @@ object Dependencies {
   // sync with Java version in .github/workflows/publish.yml#documentation
   val JavaDocLinkVersion = 17
 
-  val Scala213 = "2.13.15"
+  val Scala213 = "2.13.16"
   val Scala3 = "3.3.4"
 
   val Scala2Versions = Seq(Scala213)
