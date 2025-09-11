@@ -11,7 +11,7 @@ addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.9.3")
 addDependencyTreePlugin
 
 // Documentation
-addSbtPlugin("io.akka" % "sbt-paradox-akka" % "25.10.0")
+addSbtPlugin("io.akka" % "sbt-paradox-akka" % "25.10.1")
 addSbtPlugin("com.lightbend.paradox" % "sbt-paradox-dependencies" % "0.2.4")
 addSbtPlugin("com.lightbend.sbt" % "sbt-publish-rsync" % "0.3")
 addSbtPlugin("com.github.sbt" % "sbt-unidoc" % "0.5.0")
