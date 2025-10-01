@@ -15,7 +15,7 @@ jobs:
   style-compile:
     name: Compile, Code Style
     if: github.event.repository.fork == false
-    runs-on: ubuntu-22.04
+    runs-on: Akka-Default
     env:
       JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
 
@@ -48,7 +48,7 @@ jobs:
   test:
     name: Test
     if: github.event.repository.fork == false
-    runs-on: ubuntu-22.04
+    runs-on: Akka-Default
 
     strategy:
       fail-fast: false
@@ -57,7 +57,7 @@ jobs:
           - { jdk: 'temurin:1.11.0.17', container: "cassandra-latest", test: "test" }
           - { jdk: 'temurin:1.11.0.17', container: "cassandra2",       test: "'testOnly -- -l RequiresCassandraThree'"}
           - { jdk: 'temurin:1.11.0.17', container: "cassandra3",       test: "test" }
-          - { jdk: 'temurin:1.21', container: "cassandra3",       test: "test" }
+          - { jdk: 'temurin:1.25', container: "cassandra3",       test: "test" }
 
     env:
       JAVA_OPTS: -Xms2G -Xmx2G -Xss2M -XX:ReservedCodeCacheSize=256M -Dfile.encoding=UTF-8
@@ -76,18 +76,18 @@ jobs:
           git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
           git checkout scratch
 
-      - name: Set up JDK ${{ matrix.jdkVersion }}
+      - name: Set up JDK ${{ matrix.jdk }}
         # https://github.com/coursier/setup-action/releases
         # v1.3.5
         uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
         with:
-          jvm: ${{ matrix.jvmName }}
+          jvm: ${{ matrix.jdk }}
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
         # v6.4.5
         uses: coursier/cache-action@1ff273bff02a8787bc9f1877d347948af647956d
 
-      - name: Test against ${{ matrix.container }}
+      - name: Test against ${{ matrix.container }} / ${{ matrix.jdk }}
         run: |-
           docker compose up -d ${{ matrix.container }} && sbt ${{matrix.test}}
