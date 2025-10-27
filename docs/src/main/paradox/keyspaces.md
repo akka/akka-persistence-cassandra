@@ -30,6 +30,9 @@ datastax-java-driver {
      akka-persistence-cassandra-profile {
         basic.request.consistency = LOCAL_QUORUM
      }
+     akka-persistence-cassandra-snapshot-profile {
+        basic.request.consistency = LOCAL_QUORUM
+      }
   }   
   advanced {
     auth-provider = {
