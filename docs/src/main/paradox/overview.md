@@ -43,7 +43,7 @@ The table below shows Akka Persistence Cassandra’s direct dependencies and the
 
 @@dependencies{ projectId="core" }
 
-To use the plugin with **Akka 2.5.x** you must use @extref:[version 0.103](apc-0.x:) or later in the 0.x series. 
+To use the plugin with **Akka 2.5.x** you must use version 0.103 or later in the 0.x series. 
 
 ## Supported features
 
