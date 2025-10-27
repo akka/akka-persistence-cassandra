@@ -28,12 +28,12 @@ jobs:
       - name: Fetch tags
         run: git fetch --depth=100 origin +refs/tags/*:refs/tags/*
 
-      - name: Set up JDK 17
+      - name: Set up JDK 25
         # https://github.com/coursier/setup-action/releases
         # v1.3.5
         uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
         with:
-          jvm: temurin:1.17
+          jvm: temurin:1.25
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
