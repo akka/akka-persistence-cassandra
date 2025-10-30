@@ -45,7 +45,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
-      "com.datastax.oss" % "java-driver-core" % CassandraDriverVersion,
+      "org.apache.cassandra" % "java-driver-core" % CassandraDriverVersion,
       Logback % Test,
       "org.scalatest" %% "scalatest" % "3.2.19" % Test) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
 
