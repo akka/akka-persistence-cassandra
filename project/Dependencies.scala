@@ -15,7 +15,7 @@ object Dependencies {
   val AkkaVersionInDocs = VersionNumber(AkkaVersion).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
   val CassandraVersionInDocs = "4.0"
   // Should be sync with the version of the driver in Alpakka Cassandra
-  val CassandraDriverVersion = "4.17.0"
+  val CassandraDriverVersion = "4.19.1"
   val DriverVersionInDocs = "4.14"
 
   val AlpakkaVersion = "10.0.0"
@@ -45,7 +45,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
-      "com.datastax.oss" % "java-driver-core" % CassandraDriverVersion,
+      "org.apache.cassandra" % "java-driver-core" % CassandraDriverVersion,
       Logback % Test,
       "org.scalatest" %% "scalatest" % "3.2.19" % Test) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
 
