@@ -16,7 +16,7 @@ object Common extends AutoPlugin {
     Seq(
       organization := "com.typesafe.akka",
       organizationName := "Lightbend Inc.",
-      organizationHomepage := Some(url("https://www.lightbend.com/")),
+      organizationHomepage := Some(url("https://akka.io")),
       startYear := Some(2016),
       homepage := Some(url("https://akka.io")),
       // apiURL defined in projectSettings because version.value is not correct here
@@ -91,8 +91,7 @@ object Common extends AutoPlugin {
     scalafmtOnCompile := true,
     autoAPIMappings := true,
     apiURL := Some(url(s"https://doc.akka.io/api/akka-persistence-cassandra/${projectInfoVersion.value}")),
-    headerLicense := Some(
-        HeaderLicense.Custom("""Copyright (C) 2016-2024 Lightbend Inc. <https://www.lightbend.com>""")),
+    headerLicense := Some(HeaderLicense.Custom("""Copyright (C) 2016-2025 Lightbend Inc. <https://akka.io>""")),
     Test / logBuffered := System.getProperty("akka.logBufferedTests", "false").toBoolean,
     // show full stack traces and test case durations
     Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
