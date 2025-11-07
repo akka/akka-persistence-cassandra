@@ -1,20 +1,30 @@
+Akka
+====
+*Akka is a powerful platform that simplifies building and operating highly responsive, resilient, and scalable services.*
+
+
+The platform consists of
+* the [**Akka SDK**](https://doc.akka.io/) for straightforward, rapid development with AI assist and automatic clustering. Services built with the Akka SDK are automatically clustered and can be deployed on any infrastructure.
+* and [**Akka Automated Operations**](https://doc.akka.io/operations/akka-platform.html), a managed solution that handles everything for Akka SDK services from auto-elasticity to multi-region high availability running safely within your VPC.
+
+The **Akka SDK** and **Akka Automated Operations** are built upon the foundational [**Akka libraries**](https://doc.akka.io/libraries/akka-dependencies/current/), providing the building blocks for distributed systems.
+
+
 Cassandra Plugins for Akka Persistence
 ======================================
-
-The Akka family of projects is managed by teams at [Lightbend](https://lightbend.com/) with help from the community.
 
 Replicated [Akka Persistence](https://doc.akka.io/libraries/akka-core/current/scala/persistence.html) journal and snapshot store backed by [Apache Cassandra](https://cassandra.apache.org/).
 
 For questions please use the [discuss.akka.io](https://discuss.akka.io/c/akka/).
 
+Reference Documentation
+-----------------------
 
-## Documentation
+The reference documentation for all Akka libraries is available via [doc.akka.io/libraries/](https://doc.akka.io/libraries/), details for the Akka Cassandra Plugin
+for [Scala](https://doc.akka.io/libraries/akka-persistence-cassandra/current/?language=scala) and [Java](https://doc.akka.io/libraries/akka-persistence-cassandra/current/?language=java).
 
-The current version's documentation is available at https://doc.akka.io/libraries/akka-persistence-cassandra/current/.
+The current versions of all Akka libraries are listed on the [Akka Dependencies](https://doc.akka.io/libraries/akka-dependencies/current/) page. Releases of the Akka Cassandra Plugin in this repository are listed on the [GitHub releases](https://github.com/akka/akka-persistence-cassandra/releases) page.
 
-[Snapshot documentation](https://doc.akka.io/libraries/akka-persistence-cassandra/snapshot/) and snapshot artifacts at https://repo.akka.io/snapshots are published for every successful `main` branch build.
-
-For versions earlier than 1.0.0, check this README.md file for the corresponding release tag.
 
 
 ## History
