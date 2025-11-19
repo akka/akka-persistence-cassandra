@@ -26,7 +26,7 @@ Variables to be expanded in this template:
 
 - [ ] Check [API](https://doc.akka.io/api/akka-persistence-cassandra/$VERSION$/) documentation
 - [ ] Check [reference](https://doc.akka.io/libraries/akka-persistence-cassandra/$VERSION$/) documentation. Check that the reference docs were deployed and show a version warning (see section below on how to fix the version warning).
-- [ ] Check the release on https://repo.akka.io/maven/com/typesafe/akka/akka-persistence-cassandra_2.13/$VERSION$/akka-persistence-cassandra_2.13-$VERSION$.pom
+- [ ] Check the release `mvn dependency:get -Dartifact=com.typesafe.akka:akka-persistence-cassandra_2.13:$VERSION$`
 
 ### When everything is on https://repo.akka.io/maven
   - [ ] Log into `gustav.akka.io` as `akkarepo` 
