@@ -251,7 +251,7 @@ imposed with new implementation but it is advised to keep it small i.e. less tha
 for each persistenceId.
 
 ```
-CREATE TABLE akka.tag_views_progress (                              
+CREATE TABLE akka.tag_write_progress (                              
     peristence_id text,           
     tag text,                     
     sequence_nr bigint,           
