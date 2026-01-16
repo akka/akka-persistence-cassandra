@@ -98,7 +98,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
                 system))
           .map {
             case (tag, serializedFut) =>
-              serializedFut.map { serialized =>
+              serializedFut.flatMap { serialized =>
                 tagProgress.get(tag) match {
                   case None =>
                     log.debug(
@@ -106,8 +106,7 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
                       tpr.pr.persistenceId,
                       tag,
                       tpr.sequenceNr)
-                    tagWriters ! TagWrite(tag, serialized :: Nil)
-                    Done
+                    (tagWriters ? TagWrite(tag, serialized :: Nil)).mapTo[Done]
                   case Some(progress) =>
                     if (tpr.sequenceNr > progress.sequenceNr) {
                       log.debug(
@@ -115,9 +114,10 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
                         tpr.pr.persistenceId,
                         tag,
                         tpr.sequenceNr)
-                      tagWriters ! TagWrite(tag, serialized :: Nil)
+                      (tagWriters ? TagWrite(tag, serialized :: Nil)).mapTo[Done]
+                    } else {
+                      FutureDone
                     }
-                    Done
                 }
               }
           }

@@ -449,7 +449,7 @@ import akka.stream.scaladsl.Source
         val persistentActor = sender()
         for {
           seqNr <- highestSequenceNr
-          _ <- tagRecovery.get.sendPersistentActorStarting(persistenceId, persistentActor)
+          _ <- tr.sendPersistentActorStarting(persistenceId, persistentActor)
           _ <- if (seqNr == fromSequenceNr && seqNr != 0) {
             log.debug(
               "[{}] snapshot is current so replay won't be required. Calculating tag progress now",
