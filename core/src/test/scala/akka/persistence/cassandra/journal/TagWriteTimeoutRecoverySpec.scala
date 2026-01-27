@@ -8,8 +8,10 @@ import scala.concurrent.duration._
 
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
-import akka.actor.PoisonPill
 import akka.actor.Props
+import akka.actor.Terminated
+import akka.persistence.PersistentActor
+import akka.persistence.RecoveryCompleted
 import akka.persistence.cassandra.CassandraLifecycle
 import akka.persistence.cassandra.CassandraSpec
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
@@ -17,8 +19,6 @@ import akka.persistence.journal.Tagged
 import akka.persistence.query.EventEnvelope
 import akka.persistence.query.NoOffset
 import akka.persistence.query.PersistenceQuery
-import akka.persistence.PersistentActor
-import akka.persistence.RecoveryCompleted
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
@@ -52,6 +52,7 @@ object TagWriteTimeoutRecoverySpec {
   case object AckFailure
   case class GetState(replyTo: ActorRef)
   case class State(events: List[String])
+  case object Stop
 
   def taggingActorProps(pId: String, tags: Set[String], probe: Option[ActorRef] = None): Props =
     Props(new TagWriteTimeoutTestActor(pId, tags, probe))
@@ -82,6 +83,8 @@ object TagWriteTimeoutRecoverySpec {
         }
       case GetState(replyTo) =>
         replyTo ! State(state.reverse)
+      case Stop =>
+        context.stop(self)
     }
 
     override def onPersistFailure(cause: Throwable, event: Any, seqNr: Long): Unit = {
@@ -95,8 +98,6 @@ object TagWriteTimeoutRecoverySpec {
 class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoverySpec.config) {
   import TagWriteTimeoutRecoverySpec._
 
-  val waitTime = 500.milliseconds
-
   "Tag write with termination and recovery" must {
 
     "complete tag writes after actor termination when writes are still buffered" in {
@@ -109,22 +110,19 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
       val p1 = system.actorOf(taggingActorProps(pid, Set("green"), Some(recoveryProbe.ref)))
 
       val events = (1 to 5).map(i => s"event-$i")
+      val ignoreAcks = TestProbe()
       events.foreach { event =>
-        p1 ! event
-        expectMsg(Ack)
+        p1.tell(event, ignoreAcks.ref)
       }
 
       // Terminate the actor BEFORE the flush interval
       // The tag writes are still buffered, NOT written to Cassandra yet
-      // With PidTerminated (instead of DropState), the writes should complete
+      // With PidTerminated, the writes should still complete
       watch(p1)
-      p1 ! PoisonPill
+      p1 ! Stop
       expectTerminated(p1)
 
       // The tag writes should NOT be dropped - they should eventually complete
-      // Wait for the TagWriter flush interval to trigger the write
-      Thread.sleep(1000)
-
       // Force a flush by restarting the actor (recovery will send ResetPersistenceId
       // which should not interfere with the pending writes)
       val recoveryProbe2 = TestProbe()
@@ -139,16 +137,13 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
       state2.events shouldBe events.toList
 
       watch(p2)
-      p2 ! PoisonPill
+      p2 ! Stop
       expectTerminated(p2)
-
-      // Wait for tag writes to complete (either from original buffered writes or recovery)
-      Thread.sleep(2000)
 
       // Query by tag should return all events with correct sequence numbers
       val greenTags = queryJournal.eventsByTag(tag = "green", offset = NoOffset)
-      val probe = greenTags.runWith(TestSink.probe[Any](system))
-      probe.request(6)
+      val probe = greenTags.runWith(TestSink[Any]()(system))
+      probe.request(100)
 
       events.zipWithIndex.foreach {
         case (event, idx) =>
@@ -156,7 +151,7 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
           system.log.debug("Expecting event {} with seqNr {}", event, seqNr)
           probe.expectNextPF { case EventEnvelope(_, `pid`, `seqNr`, `event`) => }
       }
-      probe.expectNoMessage(waitTime)
+      probe.expectNoMessage()
       probe.cancel()
     }
 
@@ -172,14 +167,14 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
 
         // Persist events - with high flush interval, they stay buffered
         val events = (1 to 4).map(i => s"event-$i")
+        val ignoreAcks = TestProbe()
         events.foreach { event =>
-          p1 ! event
-          expectMsg(Ack)
+          p1.tell(event, ignoreAcks.ref)
         }
 
         // Terminate the actor while tag writes are still buffered
         watch(p1)
-        p1 ! PoisonPill
+        p1 ! Stop
         expectTerminated(p1)
 
         // Immediately start actor on second system - simulates failover
@@ -188,30 +183,27 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
         system.log.info("Starting {} on second actor system while original writes may be in flight", pid)
         val recoveryProbe2 = TestProbe()(systemTwo)
         val p2 = systemTwo.actorOf(taggingActorProps(pid, Set("purple"), Some(recoveryProbe2.ref)))
-        recoveryProbe2.expectMsg(20.seconds, RecoveryCompleted)
+        recoveryProbe2.expectMsg(10.seconds, RecoveryCompleted)
 
         // Persist more events on the second system
         val moreEvents = (5 to 8).map(i => s"event-$i")
+        val twoProbe = TestProbe()(systemTwo)
         moreEvents.foreach { event =>
-          p2 ! event
-          expectMsg(Ack)
+          p2.tell(event, twoProbe.ref)
+          twoProbe.expectMsg(Ack)
         }
 
-        // Wait for all tag writes to complete
-        Thread.sleep(3000)
-
-        val tProbe = TestProbe()(systemTwo)
-        p2.tell(PoisonPill, tProbe.ref)
-        tProbe.watch(p2)
-        tProbe.expectTerminated(p2)
+        twoProbe.watch(p2)
+        p2.tell(Stop, twoProbe.ref)
+        twoProbe.expectTerminated(p2)
 
         // Query by tag should return all events in order with correct sequence numbers
         // Both the original writes (from system1) and recovery writes (from system2)
         // should complete idempotently without duplicates
         val allEvents = events ++ moreEvents
         val purpleTags = queryJournal.eventsByTag(tag = "purple", offset = NoOffset)
-        val probe = purpleTags.runWith(TestSink.probe[Any](system))
-        probe.request(allEvents.size + 1)
+        val probe = purpleTags.runWith(TestSink[Any]()(system))
+        probe.request(100)
 
         allEvents.zipWithIndex.foreach {
           case (event, idx) =>
@@ -219,7 +211,7 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
             system.log.info("Expecting event {} with seqNr {}", event, seqNr)
             probe.expectNextPF { case EventEnvelope(_, `pid`, `seqNr`, `event`) => }
         }
-        probe.expectNoMessage(waitTime)
+        probe.expectNoMessage()
         probe.cancel()
       } finally {
         systemTwo.terminate().futureValue
@@ -239,29 +231,25 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
       val p1 = system.actorOf(taggingActorProps(pid, Set("yellow"), Some(recoveryProbe.ref)))
 
       val events = (1 to 5).map(i => s"event-$i")
+      val ignoreAcks = TestProbe()
       events.foreach { event =>
-        p1 ! event
-        expectMsg(Ack)
+        p1.tell(event, ignoreAcks.ref)
       }
 
       // Terminate the actor BEFORE the flush interval
       // The tag writes are still buffered, NOT written to Cassandra yet
       watch(p1)
-      p1 ! PoisonPill
+      p1 ! Stop
       expectTerminated(p1)
 
       // Do NOT restart the actor - the tag writes should still complete
       // because PidTerminated allows pending writes to finish
 
-      // Wait for the TagWriter flush interval to trigger the write
-      // The flush interval is 2s, so we wait a bit longer
-      Thread.sleep(3000)
-
       // Query by tag should return all events with correct sequence numbers
       // even though the actor was never restarted
       val yellowTags = queryJournal.eventsByTag(tag = "yellow", offset = NoOffset)
-      val probe = yellowTags.runWith(TestSink.probe[Any](system))
-      probe.request(6)
+      val probe = yellowTags.runWith(TestSink[Any]()(system))
+      probe.request(100)
 
       events.zipWithIndex.foreach {
         case (event, idx) =>
@@ -269,7 +257,7 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
           system.log.debug("Expecting event {} with seqNr {}", event, seqNr)
           probe.expectNextPF { case EventEnvelope(_, `pid`, `seqNr`, `event`) => }
       }
-      probe.expectNoMessage(waitTime)
+      probe.expectNoMessage()
       probe.cancel()
     }
 
@@ -286,31 +274,28 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
       val events1 = (1 to 3).map(i => s"p1-event-$i")
       val events2 = (1 to 3).map(i => s"p2-event-$i")
 
+      val ignoreAcks = TestProbe()
       events1.foreach { event =>
-        p1 ! event
-        expectMsg(Ack)
+        p1.tell(event, ignoreAcks.ref)
       }
       events2.foreach { event =>
-        p2 ! event
-        expectMsg(Ack)
+        p2.tell(event, ignoreAcks.ref)
       }
 
       // Terminate both actors before flush interval
       watch(p1)
       watch(p2)
-      p1 ! PoisonPill
-      p2 ! PoisonPill
-      expectTerminated(p1)
-      expectTerminated(p2)
+      p1 ! Stop
+      p2 ! Stop
+      // Actors may terminate in any order
+      val terminated = receiveN(2).collect { case t: Terminated => t.actor }
+      terminated.toSet shouldBe Set(p1, p2)
 
       // Do NOT restart either actor
-      // Wait for tag writes to complete
-      Thread.sleep(3000)
-
       // Query by tag should return all events from both pids
       val orangeTags = queryJournal.eventsByTag(tag = "orange", offset = NoOffset)
-      val probe = orangeTags.runWith(TestSink.probe[Any](system))
-      probe.request(7)
+      val probe = orangeTags.runWith(TestSink[Any]()(system))
+      probe.request(100)
 
       // Events may come in any order between pids, but should be ordered within each pid
       val receivedEvents = (1 to 6).map(_ =>
@@ -329,7 +314,7 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
       pid2Events.map(_._2) shouldBe Seq(1L, 2L, 3L)
       pid2Events.map(_._3) shouldBe events2
 
-      probe.expectNoMessage(waitTime)
+      probe.expectNoMessage()
       probe.cancel()
     }
   }

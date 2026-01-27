@@ -186,7 +186,7 @@ import scala.util.{ Failure, Success, Try }
       pendingCleanup: Set[PersistenceId],
       retryCount: Int): Receive = {
     case PidTerminated(pid) =>
-      if (bufferIsEmptyForPid(pid)) {
+      if (buffer.isEmptyForPid(pid)) {
         // No pending writes, clean up immediately
         log.debug("Pid [{}] terminated with no pending writes, cleaning up state", pid)
         context.become(idle(tagPidSequenceNrs - pid, pendingCleanup - pid, retryCount))
@@ -241,7 +241,7 @@ import scala.util.{ Failure, Success, Try }
       retryCount: Int,
       awaitingFlush: Option[ActorRef]): Receive = {
     case PidTerminated(pid) =>
-      if (bufferIsEmptyForPid(pid)) {
+      if (buffer.isEmptyForPid(pid)) {
         // No pending writes, clean up immediately
         log.debug("Pid [{}] terminated with no pending writes, cleaning up state", pid)
         become(writeInProgress(tagPidSequenceNrs - pid, pendingCleanup - pid, retryCount, awaitingFlush))
@@ -303,19 +303,19 @@ import scala.util.{ Failure, Success, Try }
           }
       }
       // Check for pending cleanup - clean up pids that have terminated and have no more buffered events
-      val updatedPendingCleanup = checkPendingCleanup(tagPidSequenceNrs, pendingCleanup)
+      val (updatedTagPidSequenceNrs, updatedPendingCleanup) = checkPendingCleanup(tagPidSequenceNrs, pendingCleanup)
       // Reset retry count on success
       awaitingFlush match {
         case Some(replyTo) =>
           log.debug("External flush request")
           if (buffer.nonEmpty) {
-            write(updatedPendingCleanup._1, updatedPendingCleanup._2, retryCount = 0, awaitingFlush)
+            write(updatedTagPidSequenceNrs, updatedPendingCleanup, retryCount = 0, awaitingFlush)
           } else {
             replyTo ! FlushComplete
-            context.become(idle(updatedPendingCleanup._1, updatedPendingCleanup._2, retryCount = 0))
+            context.become(idle(updatedTagPidSequenceNrs, updatedPendingCleanup, retryCount = 0))
           }
         case None =>
-          flushIfRequired(updatedPendingCleanup._1, updatedPendingCleanup._2, retryCount = 0)
+          flushIfRequired(updatedTagPidSequenceNrs, updatedPendingCleanup, retryCount = 0)
       }
       sendPubsubNotification()
       doneNotify.foreach(_ ! FlushComplete)
@@ -455,14 +455,6 @@ import scala.util.{ Failure, Success, Try }
     }
 
   /**
-   * Check if a persistence id has no buffered events (neither in nextBatch nor in pending).
-   */
-  private def bufferIsEmptyForPid(pid: PersistenceId): Boolean = {
-    !buffer.nextBatch.exists(_.events.exists(_._1.persistenceId == pid)) &&
-    !buffer.pending.exists(_.events.exists(_._1.persistenceId == pid))
-  }
-
-  /**
    * Check for pending cleanup and clean up pids that have terminated and have no more buffered events.
    * Returns the updated (tagPidSequenceNrs, pendingCleanup).
    */
@@ -471,7 +463,7 @@ import scala.util.{ Failure, Success, Try }
       pendingCleanup: Set[PersistenceId]): (Map[PersistenceId, TagPidSequenceNr], Set[PersistenceId]) = {
     pendingCleanup.foldLeft((tagPidSequenceNrs, pendingCleanup)) {
       case ((accSeqNrs, accPending), pid) =>
-        if (bufferIsEmptyForPid(pid)) {
+        if (buffer.isEmptyForPid(pid)) {
           log.debug("Cleaned up state for terminated pid [{}]", pid)
           (accSeqNrs - pid, accPending - pid)
         } else {

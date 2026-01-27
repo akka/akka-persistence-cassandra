@@ -164,7 +164,6 @@ class TagWritersSpec
       redProbe.expectMsg(redTagWrite)
 
       persistentActor ! PoisonPill
-      // Changed from DropState to PidTerminated - allows pending writes to complete
       blueProbe.expectMsg(PidTerminated("pid1"))
       redProbe.expectMsg(PidTerminated("pid1"))
     }
