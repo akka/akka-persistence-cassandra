@@ -584,50 +584,6 @@ class TagWriterSpec
       probe.expectMsg(Vector(toEw(e2, 2), toEw(e3, 3)))
     }
 
-    "forget about a persistence id when idle" in new Setup {
-      val (probe, underTest) = setup(settings = defaultSettings.copy(maxBatchSize = 1, flushInterval = 60.seconds))
-      val pid = "p1"
-      val bucket = nowBucket()
-
-      val e1 = event(pid, 1L, "e-1", bucket)
-      underTest ! TagWrite(tagName, Vector(e1))
-      probe.expectMsg(Vector(toEw(e1, 1)))
-      probe.expectMsgType[ProgressWrite]
-
-      underTest ! DropState("p1")
-
-      val e2 = event(pid, 2L, "e-2", bucket)
-      underTest ! TagWrite(tagName, Vector(e2))
-      // tag pid sequence nr 1 again as previous was forgotten.
-      // this isn't a real scenario tag pid sequence numbers are never re-used however
-      // allows testing that the drop state actually did something
-      probe.expectMsg(Vector(toEw(e2, 1)))
-    }
-
-    "forget about a persistence id when write in progress)" in new Setup {
-      val pid = "p-1"
-      val writeInProgressPromise = Promise[Done]()
-      val (probe, underTest) =
-        setup(
-          settings = defaultSettings.copy(maxBatchSize = 1),
-          writeResponse = Iterator(writeInProgressPromise.future) ++ Iterator.continually(Future.successful(Done)))
-      val bucket = nowBucket()
-
-      val e1 = event(pid, 1L, "e-1", bucket)
-      underTest ! TagWrite(tagName, Vector(e1))
-      underTest ! DropState(pid)
-
-      writeInProgressPromise.success(Done)
-      probe.expectMsg(Vector(toEw(e1, 1)))
-      probe.expectMsgType[ProgressWrite]
-
-      val e2 = event(pid, 2L, "e-2", bucket)
-      underTest ! TagWrite(tagName, Vector(e2))
-      // tag pid sequence nr 1 rather than 2
-      probe.expectMsg(Vector(toEw(e2, 1)))
-
-    }
-
     "passivate when idle" in new Setup {
       val parent = TestProbe()
       val idleTimeout = 100.millis
@@ -660,6 +616,170 @@ class TagWriterSpec
       parent.expectNoMessage(idleTimeout + 100.millis)
 
       promiseForWrite.success(Done)
+    }
+
+    "cleanup immediately on PidTerminated when buffer is empty" in new Setup {
+      val (probe, underTest) = setup(settings = defaultSettings.copy(maxBatchSize = 1, flushInterval = 60.seconds))
+      val pid = "p1"
+      val bucket = nowBucket()
+
+      val e1 = event(pid, 1L, "e-1", bucket)
+      underTest ! TagWrite(tagName, Vector(e1))
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      probe.expectMsgType[ProgressWrite]
+
+      // Buffer is now empty, PidTerminated should cleanup state immediately
+      underTest ! PidTerminated(pid)
+
+      val e2 = event(pid, 2L, "e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(e2))
+      // tag pid sequence nr 1 again as state was cleaned up
+      probe.expectMsg(Vector(toEw(e2, 1)))
+    }
+
+    "continue writes and cleanup after on PidTerminated when buffer has pending writes" in new Setup {
+      val promiseForWrite = Promise[Done]()
+      val pid = "p-1"
+      val (probe, underTest) =
+        setup(
+          settings = defaultSettings.copy(maxBatchSize = 1),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)))
+      val bucket = nowBucket()
+
+      val e1 = event(pid, 1L, "e-1", bucket)
+      val e2 = event(pid, 2L, "e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(e1))
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      // e2 goes to pending buffer
+      underTest ! TagWrite(tagName, Vector(e2))
+
+      // Pid terminates with pending writes
+      underTest ! PidTerminated(pid)
+
+      // Complete the first write
+      promiseForWrite.success(Done)
+      probe.expectMsgType[ProgressWrite]
+
+      // e2 should still be written (events not lost)
+      probe.expectMsg(Vector(toEw(e2, 2)))
+      probe.expectMsgType[ProgressWrite]
+
+      // Now buffer is empty and cleanup should have happened
+      val e3 = event(pid, 3L, "e-3", bucket)
+      underTest ! TagWrite(tagName, Vector(e3))
+      // tag pid sequence nr 1 again as state was cleaned up after pending writes completed
+      probe.expectMsg(Vector(toEw(e3, 1)))
+    }
+
+    "continue retries and cleanup after on PidTerminated when write fails" in new Setup {
+      val t = TestEx("Tag write failed")
+      val pid = "p-1"
+      val (probe, underTest) = setup(
+        settings = defaultSettings.copy(maxBatchSize = 1, flushInterval = 200.millis),
+        writeResponse = Iterator(Future.failed(t)) ++ Iterator.continually(Future.successful(Done)))
+      val bucket = nowBucket()
+
+      val e1 = event(pid, 1L, "e-1", bucket)
+      underTest ! TagWrite(tagName, Vector(e1))
+
+      // Pid terminates while write is in progress (but will fail)
+      underTest ! PidTerminated(pid)
+
+      logProbe.expectMsgPF(waitDuration) {
+        case Warning(_, _, msg) if msg.toString.contains("Writing tags has failed") =>
+      }
+
+      // First write fails, should retry
+      probe.expectMsg(Vector(toEw(e1, 1)))
+
+      // Retry should succeed (events not lost despite actor termination)
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      probe.expectMsgType[ProgressWrite]
+
+      // Now buffer is empty and cleanup should have happened
+      val e2 = event(pid, 2L, "e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(e2))
+      // tag pid sequence nr 1 again as state was cleaned up
+      probe.expectMsg(Vector(toEw(e2, 1)))
+    }
+
+    "remove from pending cleanup on ResetPersistenceId (actor restart)" in new Setup {
+      val promiseForWrite = Promise[Done]()
+      val pid = "p-1"
+      val (probe, underTest) =
+        setup(
+          settings = defaultSettings.copy(maxBatchSize = 1),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)))
+      val bucket = nowBucket()
+
+      val e1 = event(pid, 1L, "e-1", bucket)
+      val e2 = event(pid, 2L, "e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(e1))
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      // e2 goes to pending buffer
+      underTest ! TagWrite(tagName, Vector(e2))
+
+      // Pid terminates with pending writes
+      underTest ! PidTerminated(pid)
+
+      // Actor restarts before writes complete - sends ResetPersistenceId
+      underTest ! ResetPersistenceId(tagName, TagProgress(pid, 0, 0))
+      sender.expectMsg(ResetPersistenceIdComplete)
+
+      // Complete the first write
+      promiseForWrite.success(Done)
+      probe.expectMsgType[ProgressWrite]
+
+      // Buffer was cleared by ResetPersistenceId, so e2 won't be written
+      probe.expectNoMessage(waitDuration)
+
+      // New event from restarted actor
+      val e3 = event(pid, 1L, "e-3", bucket)
+      underTest ! TagWrite(tagName, Vector(e3))
+      // tag pid sequence nr 1 because of the reset
+      probe.expectMsg(Vector(toEw(e3, 1)))
+    }
+
+    "handle PidTerminated for multiple pids independently" in new Setup {
+      val promiseForWrite = Promise[Done]()
+      val pid1 = "p-1"
+      val pid2 = "p-2"
+      val (probe, underTest) =
+        setup(
+          settings = defaultSettings.copy(maxBatchSize = 2),
+          writeResponse = Iterator(promiseForWrite.future) ++ Iterator.continually(Future.successful(Done)))
+      val bucket = nowBucket()
+
+      val p1e1 = event(pid1, 1L, "p1-e-1", bucket)
+      val p2e1 = event(pid2, 1L, "p2-e-1", bucket)
+      underTest ! TagWrite(tagName, Vector(p1e1, p2e1))
+      probe.expectMsg(Vector(toEw(p1e1, 1), toEw(p2e1, 1)))
+
+      // More events go to pending buffer
+      val p1e2 = event(pid1, 2L, "p1-e-2", bucket)
+      val p2e2 = event(pid2, 2L, "p2-e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(p1e2, p2e2))
+
+      // Both pids terminate
+      underTest ! PidTerminated(pid1)
+      underTest ! PidTerminated(pid2)
+
+      // Complete the first write
+      promiseForWrite.success(Done)
+      probe.expectMsgType[ProgressWrite]
+      probe.expectMsgType[ProgressWrite]
+
+      // Pending events should still be written
+      probe.expectMsg(Vector(toEw(p1e2, 2), toEw(p2e2, 2)))
+      probe.expectMsgType[ProgressWrite]
+      probe.expectMsgType[ProgressWrite]
+
+      // Both pids should be cleaned up
+      val p1e3 = event(pid1, 3L, "p1-e-3", bucket)
+      val p2e3 = event(pid2, 3L, "p2-e-3", bucket)
+      underTest ! TagWrite(tagName, Vector(p1e3, p2e3))
+      // Both start from sequence nr 1 again
+      probe.expectMsg(Vector(toEw(p1e3, 1), toEw(p2e3, 1)))
     }
 
   }
@@ -720,6 +840,170 @@ class TagWriterSpec
       ref ! TagWrite(tagName, Vector(e3, e4))
       probe.expectMsg(Vector(toEw(e3, 3), toEw(e4, 4)))
       probe.expectMsg(ProgressWrite("p1", 4, 4, e4.timeUuid))
+    }
+
+    "retry multiple times after PidTerminated until write succeeds" in new Setup {
+      val t = TestEx("Tag write failed")
+      val pid = "p-1"
+      // First 3 writes fail, then succeed
+      val (probe, underTest) = setup(
+        settings = defaultSettings.copy(maxBatchSize = 1, flushInterval = 100.millis),
+        writeResponse = Iterator(Future.failed(t), Future.failed(t), Future.failed(t), Future.successful(Done)) ++ Iterator
+            .continually(Future.successful(Done)))
+      val bucket = nowBucket()
+
+      val e1 = event(pid, 1L, "e-1", bucket)
+      underTest ! TagWrite(tagName, Vector(e1))
+
+      // First write attempt
+      probe.expectMsg(Vector(toEw(e1, 1)))
+
+      // Pid terminates while write is failing
+      underTest ! PidTerminated(pid)
+
+      // First failure
+      logProbe.expectMsgPF(waitDuration) {
+        case Warning(_, _, msg) if msg.toString.contains("Writing tags has failed") =>
+      }
+
+      // Second retry attempt (fails)
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      logProbe.expectMsgPF(waitDuration) {
+        case Warning(_, _, msg) if msg.toString.contains("Writing tags has failed") =>
+      }
+
+      // Third retry attempt (fails)
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      logProbe.expectMsgPF(waitDuration) {
+        case Warning(_, _, msg) if msg.toString.contains("Writing tags has failed") =>
+      }
+
+      // Fourth retry attempt (succeeds)
+      probe.expectMsg(Vector(toEw(e1, 1)))
+      probe.expectMsgType[ProgressWrite]
+
+      // Now buffer is empty and cleanup should have happened
+      val e2 = event(pid, 2L, "e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(e2))
+      // tag pid sequence nr 1 again as state was cleaned up after eventual success
+      probe.expectMsg(Vector(toEw(e2, 1)))
+    }
+
+    "cleanup after PidTerminated even when progress write fails" in new Setup {
+      val t = TestEx("Tag progress write has failed")
+      val pid = "p-1"
+      val (probe, underTest) =
+        setup(
+          settings = defaultSettings.copy(maxBatchSize = 1),
+          progressWriteResponse = Iterator(Future.failed(t)) ++ Iterator.continually(Future.successful(Done)))
+      val bucket = nowBucket()
+
+      val e1 = event(pid, 1L, "e-1", bucket)
+      underTest ! TagWrite(tagName, Vector(e1))
+      probe.expectMsg(Vector(toEw(e1, 1)))
+
+      // Pid terminates while write is in progress
+      underTest ! PidTerminated(pid)
+
+      // Tag views write succeeds, progress write fails
+      probe.expectMsgType[ProgressWrite]
+      logProbe.expectMsgPF(waitDuration) {
+        case Warning(_, _, msg) if msg.toString.contains("Tag progress write has failed") =>
+      }
+
+      // Cleanup should still happen because tag_views write succeeded
+      // (progress write failure is non-fatal, just logged)
+      val e2 = event(pid, 2L, "e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(e2))
+      // tag pid sequence nr 1 again as state was cleaned up
+      probe.expectMsg(Vector(toEw(e2, 1)))
+    }
+
+    "handle PidTerminated independently when one pid write fails and another succeeds" in new Setup {
+      val t = TestEx("Tag write failed")
+      val pid1 = "p-1"
+      val pid2 = "p-2"
+      // First write (containing both pids) fails, second (retry) succeeds
+      val (probe, underTest) = setup(
+        settings = defaultSettings.copy(maxBatchSize = 2, flushInterval = 100.millis),
+        writeResponse = Iterator(Future.failed(t)) ++ Iterator.continually(Future.successful(Done)))
+      val bucket = nowBucket()
+
+      val p1e1 = event(pid1, 1L, "p1-e-1", bucket)
+      val p2e1 = event(pid2, 1L, "p2-e-1", bucket)
+      underTest ! TagWrite(tagName, Vector(p1e1, p2e1))
+
+      // First write attempt (both pids in same batch)
+      probe.expectMsg(Vector(toEw(p1e1, 1), toEw(p2e1, 1)))
+
+      // Both pids terminate
+      underTest ! PidTerminated(pid1)
+      underTest ! PidTerminated(pid2)
+
+      // First write fails
+      logProbe.expectMsgPF(waitDuration) {
+        case Warning(_, _, msg) if msg.toString.contains("Writing tags has failed") =>
+      }
+
+      // Retry succeeds
+      probe.expectMsg(Vector(toEw(p1e1, 1), toEw(p2e1, 1)))
+      probe.expectMsgType[ProgressWrite]
+      probe.expectMsgType[ProgressWrite]
+
+      // Both pids should be cleaned up independently
+      val p1e2 = event(pid1, 2L, "p1-e-2", bucket)
+      val p2e2 = event(pid2, 2L, "p2-e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(p1e2, p2e2))
+      // Both start from sequence nr 1 again as both were cleaned up
+      probe.expectMsg(Vector(toEw(p1e2, 1), toEw(p2e2, 1)))
+    }
+
+    "cleanup one pid while retrying another after PidTerminated" in new Setup {
+      val t = TestEx("Tag write failed")
+      val pid1 = "p-1"
+      val pid2 = "p-2"
+      val promiseForFirstWrite = Promise[Done]()
+      // First write succeeds (pid1 batch), second fails then succeeds (pid2 batch)
+      val (probe, underTest) = setup(
+        settings = defaultSettings.copy(maxBatchSize = 1, flushInterval = 100.millis),
+        writeResponse = Iterator(promiseForFirstWrite.future, Future.failed(t), Future.successful(Done)) ++ Iterator
+            .continually(Future.successful(Done)))
+      val bucket = nowBucket()
+
+      // Send events for both pids - they will be in separate batches due to maxBatchSize=1
+      val p1e1 = event(pid1, 1L, "p1-e-1", bucket)
+      val p2e1 = event(pid2, 1L, "p2-e-1", bucket)
+      underTest ! TagWrite(tagName, Vector(p1e1))
+      underTest ! TagWrite(tagName, Vector(p2e1))
+
+      // First batch (pid1) starts writing
+      probe.expectMsg(Vector(toEw(p1e1, 1)))
+
+      // Both pids terminate while pid1 write is in progress
+      underTest ! PidTerminated(pid1)
+      underTest ! PidTerminated(pid2)
+
+      // Complete pid1 write successfully
+      promiseForFirstWrite.success(Done)
+      probe.expectMsgType[ProgressWrite]
+
+      // pid2 write starts and fails
+      probe.expectMsg(Vector(toEw(p2e1, 1)))
+      logProbe.expectMsgPF(waitDuration) {
+        case Warning(_, _, msg) if msg.toString.contains("Writing tags has failed") =>
+      }
+
+      // pid2 retry succeeds
+      probe.expectMsg(Vector(toEw(p2e1, 1)))
+      probe.expectMsgType[ProgressWrite]
+
+      // Both pids should now be cleaned up
+      val p1e2 = event(pid1, 2L, "p1-e-2", bucket)
+      val p2e2 = event(pid2, 2L, "p2-e-2", bucket)
+      underTest ! TagWrite(tagName, Vector(p1e2))
+      probe.expectMsg(Vector(toEw(p1e2, 1))) // pid1 cleaned up
+      underTest ! TagWrite(tagName, Vector(p2e2))
+      probe.expectMsg(Vector(toEw(p2e2, 1))) // pid2 cleaned up
     }
   }
 

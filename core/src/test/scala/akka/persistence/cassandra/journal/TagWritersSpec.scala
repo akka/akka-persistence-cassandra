@@ -141,7 +141,7 @@ class TagWritersSpec
       expectMsg(TagProcessAck)
     }
 
-    "informs tag writers when persistent actor terminates" in {
+    "informs tag writers when persistent actor terminates with PidTerminated" in {
       val redProbe = TestProbe()
       val blueProbe = TestProbe()
       val probes = Map("red" -> redProbe, "blue" -> blueProbe)
@@ -162,8 +162,9 @@ class TagWritersSpec
       redProbe.expectMsg(redTagWrite)
 
       persistentActor ! PoisonPill
-      blueProbe.expectMsg(DropState("pid1"))
-      redProbe.expectMsg(DropState("pid1"))
+      // Changed from DropState to PidTerminated - allows pending writes to complete
+      blueProbe.expectMsg(PidTerminated("pid1"))
+      redProbe.expectMsg(PidTerminated("pid1"))
     }
 
     "buffer requests when passivating" in {

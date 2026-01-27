@@ -295,12 +295,9 @@ import scala.util.Try
     case PersistentActorTerminated(pid, ref) =>
       currentPersistentActors.get(pid) match {
         case Some(currentRef) if currentRef == ref =>
-          log.debug(
-            "Persistent actor terminated [{}]. Informing TagWriter actors to drop state for pid: [{}]",
-            ref,
-            pid)
+          log.debug("Persistent actor terminated [{}]. Notifying TagWriter actors for pending cleanup: [{}]", ref, pid)
           tagActors.foreach {
-            case (_, tagWriterRef) => tagWriterRef ! DropState(pid)
+            case (_, tagWriterRef) => tagWriterRef ! PidTerminated(pid)
           }
           currentPersistentActors -= pid
         case Some(currentRef) =>

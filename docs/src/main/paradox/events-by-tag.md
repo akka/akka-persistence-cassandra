@@ -279,7 +279,35 @@ No events buffered in the tag writer. Tag write progress is lost.
 * Tag write progress will be out of date
 * Events will be recovered and sent to the tag writer, should receive the same tag pid sequence nr and be upserted.
 
-Events buffered in the tag writer. 
+Events buffered in the tag writer.
 
 * Buffered events for the persistenceId should be dropped as if they are buffered the tag write progress
 won't have been saved as it happens after the write of the events to tag_views.
+
+#### Actor termination handling
+
+When a persistent actor terminates (due to failure, passivation, or normal stop), any buffered tag writes
+are **not** immediately discarded. Instead, the TagWriter continues retrying until the writes succeed,
+then cleans up resources for that persistence id.
+
+This ensures that:
+
+* Tagged events are not lost if the actor terminates before tag writes complete
+* Transient failures (e.g., Cassandra timeout) that could succeed on retry are not abandoned
+* The `tag_views` table remains complete even if the actor never restarts
+
+**Idempotency guarantees**: Tag writes are idempotent because the primary key components are deterministic:
+
+* `timeUuid`: Immutable, generated during the original persist
+* `tag_pid_sequence_nr`: Pre-assigned when buffered, retained for retries
+
+This means concurrent writes from multiple nodes (e.g., during failover) will result in the same
+primary key and Cassandra's upsert behavior ensures no duplicates.
+
+If the actor restarts on the same or a different node while writes are still pending, recovery will:
+
+1. Send a `ResetPersistenceId` to clear old buffered events
+2. Read current progress from `tag_write_progress` to determine which events need re-sending
+3. Any in-flight writes from the old instance will still complete and update progress
+
+This design ensures correctness in all scenarios while minimizing event loss.
