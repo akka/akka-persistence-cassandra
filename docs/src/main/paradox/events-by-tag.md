@@ -140,22 +140,52 @@ This adds a delay each time a new persistence id is found by an offset query whe
 
 ## Events by tag reconciliation
 
-In the event that the `tag_views` table gets corrupted there is a @apidoc[akka.persistence.cassandra.reconciler.Reconciliation]
-tool that can help fix it. It can only be run while the application is offline but per persistence id operations can
-be used if it is known that the persistence id is not running.
+The @apidoc[akka.persistence.cassandra.reconciler.Reconciliation] tool can be used to fix tag view data issues
+or to continue pending tag writes after a node crash.
 
-It supports:
+@@@ warning
 
-* Deleting all events in the tag view for a given persistence id
-* Re-building the tag view for a persistence id for a tag
-* Query for all tags (inefficient query)
-* Truncate the tag view and all metadata so it can be re-built
+Most reconciliation operations (delete, truncate, rebuild) should only be run when the affected persistence ids
+are **not running**. Running these while actors are actively persisting can cause data corruption or gaps in
+tag sequences. The exception is `continueTagWritesForPersistenceId` which is safe to run while the application
+is running.
+
+@@@
+
+### Available operations
+
+* **`continueTagWritesForPersistenceId`** - Continues tag writes from where they left off. Use this when a node
+  crashed with pending tag writes. It only writes events newer than the current progress and starts reading
+  from the minimum progress sequence number for efficiency. This operation is **idempotent** and can be run
+  multiple times safely, **even while the actor is running**.
+
+* **`rebuildTagViewForPersistenceIds`** - Rebuilds the tag view by writing ALL events. **Important**: This
+  should only be used after `deleteTagViewForPersistenceIds` or `truncateTagView` has been called. Running
+  rebuild on existing data will create duplicate entries with different `tag_pid_sequence_nr` values.
+  **Stop the actor before running this.**
+
+* **`deleteTagViewForPersistenceIds`** - Deletes all events in the tag view for given persistence ids.
+  Also deletes the tag progress, so subsequent rebuild or continue will start fresh.
+  **Stop the actor before running this.**
+
+* **`allTags`** - Query for all tags (inefficient query).
+
+* **`truncateTagView`** - Truncate the tag view and all metadata so it can be re-built.
+  **Stop all actors before running this.**
 
 After deleting the tag views they will be automatically re-built next time the persistence id starts or with an explicit rebuild.
 
-For example, to rebuild the data for a persistence id:
+### Examples
 
-@@snip [reconciler](/core/src/test/scala/doc/reconciler/ReconciliationCompileOnly.scala) { #imports #reconcile}                                                                                                                                
+To continue pending tag writes after a crash:
+
+Scala
+:  @@snip [reconciler](/core/src/test/scala/doc/reconciler/ReconciliationCompileOnly.scala) { #imports #continue }
+
+To rebuild all tag data for a persistence id:
+
+Scala
+:  @@snip [reconciler](/core/src/test/scala/doc/reconciler/ReconciliationCompileOnly.scala) { #imports #reconcile }                                                                                                                                
 
 ## Other tuning
 
