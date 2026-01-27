@@ -46,7 +46,9 @@ import scala.util.{ Failure, Success, Try }
       flushInterval: FiniteDuration,
       scanningFlushInterval: FiniteDuration,
       stopTagWriterWhenIdle: FiniteDuration,
-      pubsubNotification: Duration)
+      pubsubNotification: Duration,
+      retryMinBackoff: FiniteDuration,
+      retryMaxBackoff: FiniteDuration)
 
   private[akka] case class TagProgress(
       persistenceId: PersistenceId,
@@ -144,31 +146,32 @@ import scala.util.{ Failure, Success, Try }
   }
 
   override def receive: Receive =
-    idle(Buffer.empty(settings.maxBatchSize), Map.empty[String, Long], Set.empty[PersistenceId])
+    idle(Buffer.empty(settings.maxBatchSize), Map.empty[String, Long], Set.empty[PersistenceId], retryCount = 0)
 
   private def idle(
       buffer: Buffer,
       tagPidSequenceNrs: Map[PersistenceId, TagPidSequenceNr],
-      pendingCleanup: Set[PersistenceId]): Receive = {
+      pendingCleanup: Set[PersistenceId],
+      retryCount: Int): Receive = {
     case PidTerminated(pid) =>
       if (bufferIsEmptyForPid(buffer, pid)) {
         // No pending writes, clean up immediately
         log.debug("Pid [{}] terminated with no pending writes, cleaning up state", pid)
-        context.become(idle(buffer, tagPidSequenceNrs - pid, pendingCleanup - pid))
+        context.become(idle(buffer, tagPidSequenceNrs - pid, pendingCleanup - pid, retryCount))
       } else {
         // Mark for cleanup after writes complete
         log.debug("Pid [{}] terminated with pending writes, will cleanup after completion", pid)
-        context.become(idle(buffer, tagPidSequenceNrs, pendingCleanup + pid))
+        context.become(idle(buffer, tagPidSequenceNrs, pendingCleanup + pid, retryCount))
       }
     case InternalFlush =>
       log.debug("Flushing")
       if (buffer.nonEmpty) {
-        write(buffer, tagPidSequenceNrs, pendingCleanup, None)
+        write(buffer, tagPidSequenceNrs, pendingCleanup, retryCount, None)
       }
     case Flush =>
       if (buffer.nonEmpty) {
         log.debug("External flush request from [{}]. Flushing.", sender())
-        write(buffer, tagPidSequenceNrs, pendingCleanup, Some(sender()))
+        write(buffer, tagPidSequenceNrs, pendingCleanup, retryCount, Some(sender()))
       } else {
         log.debug("External flush request from [{}], buffer empty.", sender())
         sender() ! FlushComplete
@@ -179,13 +182,13 @@ import scala.util.{ Failure, Success, Try }
       }
       val newWrite = AwaitingWrite(events, OptionVal(sender()))
       val newBuffer = buffer.add(newWrite)
-      flushIfRequired(newBuffer, newTagPidSequenceNrs, pendingCleanup)
+      flushIfRequired(newBuffer, newTagPidSequenceNrs, pendingCleanup, retryCount)
     case twd: TagWriteDone =>
       log.error("Received Done when in idle state. This is a bug. Please report with DEBUG logs: {}", twd)
     case ResetPersistenceId(_, tp @ TagProgress(pid, _, tagPidSequenceNr)) =>
       log.debug("Resetting pid {}. TagProgress {}", pid, tp)
       // Remove from pending cleanup - actor is alive again
-      become(idle(buffer.remove(pid), tagPidSequenceNrs + (pid -> tagPidSequenceNr), pendingCleanup - pid))
+      become(idle(buffer.remove(pid), tagPidSequenceNrs + (pid -> tagPidSequenceNr), pendingCleanup - pid, retryCount))
       sender() ! ResetPersistenceIdComplete
 
     case ReceiveTimeout =>
@@ -203,22 +206,23 @@ import scala.util.{ Failure, Success, Try }
       buffer: Buffer,
       tagPidSequenceNrs: Map[PersistenceId, TagPidSequenceNr],
       pendingCleanup: Set[PersistenceId],
+      retryCount: Int,
       awaitingFlush: Option[ActorRef]): Receive = {
     case PidTerminated(pid) =>
       if (bufferIsEmptyForPid(buffer, pid)) {
         // No pending writes, clean up immediately
         log.debug("Pid [{}] terminated with no pending writes, cleaning up state", pid)
-        become(writeInProgress(buffer, tagPidSequenceNrs - pid, pendingCleanup - pid, awaitingFlush))
+        become(writeInProgress(buffer, tagPidSequenceNrs - pid, pendingCleanup - pid, retryCount, awaitingFlush))
       } else {
         // Mark for cleanup after writes complete
         log.debug("Pid [{}] terminated with pending writes, will cleanup after completion", pid)
-        become(writeInProgress(buffer, tagPidSequenceNrs, pendingCleanup + pid, awaitingFlush))
+        become(writeInProgress(buffer, tagPidSequenceNrs, pendingCleanup + pid, retryCount, awaitingFlush))
       }
     case InternalFlush =>
     // Ignore, we will check when the write is done
     case Flush =>
       log.debug("External flush while write in progress. Will flush after write complete")
-      become(writeInProgress(buffer, tagPidSequenceNrs, pendingCleanup, Some(sender())))
+      become(writeInProgress(buffer, tagPidSequenceNrs, pendingCleanup, retryCount, Some(sender())))
     case TagWrite(_, payload, _) =>
       val (updatedTagPidSequenceNrs, events) =
         assignTagPidSequenceNumbers(payload.toVector, tagPidSequenceNrs)
@@ -235,7 +239,7 @@ import scala.util.{ Failure, Success, Try }
       // buffer until current query is finished
       // Don't sort until the write has finished
       val newBuffer = buffer.addPending(awaitingWrite)
-      become(writeInProgress(newBuffer, updatedTagPidSequenceNrs, pendingCleanup, awaitingFlush))
+      become(writeInProgress(newBuffer, updatedTagPidSequenceNrs, pendingCleanup, retryCount, awaitingFlush))
     case TagWriteDone(summary, doneNotify) =>
       log.debug("Tag write done: {}", summary)
       val nextBuffer = buffer.writeComplete()
@@ -266,29 +270,34 @@ import scala.util.{ Failure, Success, Try }
       }
       // Check for pending cleanup - clean up pids that have terminated and have no more buffered events
       val updatedPendingCleanup = checkPendingCleanup(nextBuffer, tagPidSequenceNrs, pendingCleanup)
+      // Reset retry count on success
       awaitingFlush match {
         case Some(replyTo) =>
           log.debug("External flush request")
           if (buffer.pending.nonEmpty) {
-            write(nextBuffer, updatedPendingCleanup._1, updatedPendingCleanup._2, awaitingFlush)
+            write(nextBuffer, updatedPendingCleanup._1, updatedPendingCleanup._2, retryCount = 0, awaitingFlush)
           } else {
             replyTo ! FlushComplete
-            context.become(idle(nextBuffer, updatedPendingCleanup._1, updatedPendingCleanup._2))
+            context.become(idle(nextBuffer, updatedPendingCleanup._1, updatedPendingCleanup._2, retryCount = 0))
           }
         case None =>
-          flushIfRequired(nextBuffer, updatedPendingCleanup._1, updatedPendingCleanup._2)
+          flushIfRequired(nextBuffer, updatedPendingCleanup._1, updatedPendingCleanup._2, retryCount = 0)
       }
       sendPubsubNotification()
       doneNotify.foreach(_ ! FlushComplete)
 
-    case TagWriteFailed(t, events) =>
+    case TagWriteFailed(t, _) =>
+      val newRetryCount = retryCount + 1
+      val backoffDelay = calculateBackoff(newRetryCount)
       log.warning(
-        "Writing tags has failed. This means that any eventsByTag query will be out of date. " +
-        "The write will be retried. Reason {}",
+        "Writing tags has failed (attempt {}). This means that any eventsByTag query will be out of date. " +
+        "The write will be retried in {}. Reason: {}",
+        newRetryCount,
+        backoffDelay,
         t)
-      timers.startSingleTimer(FlushKey, InternalFlush, settings.flushInterval)
+      timers.startSingleTimer(FlushKey, InternalFlush, backoffDelay)
       parent ! TagWriters.TagWriteFailed(t)
-      context.become(idle(buffer, tagPidSequenceNrs, pendingCleanup))
+      context.become(idle(buffer, tagPidSequenceNrs, pendingCleanup, newRetryCount))
 
     case ResetPersistenceId(_, tp @ TagProgress(pid, _, _)) =>
       log.debug("Resetting persistence id {}. TagProgress {}", pid, tp)
@@ -298,6 +307,7 @@ import scala.util.{ Failure, Success, Try }
           buffer.remove(pid),
           tagPidSequenceNrs + (pid -> tp.pidTagSequenceNr),
           pendingCleanup - pid,
+          retryCount,
           awaitingFlush))
       sender() ! ResetPersistenceIdComplete
 
@@ -318,15 +328,16 @@ import scala.util.{ Failure, Success, Try }
   private def flushIfRequired(
       buffer: Buffer,
       tagSequenceNrs: Map[String, Long],
-      pendingCleanup: Set[PersistenceId]): Unit = {
+      pendingCleanup: Set[PersistenceId],
+      retryCount: Int): Unit = {
     if (buffer.isEmpty) {
-      context.become(idle(buffer, tagSequenceNrs, pendingCleanup))
+      context.become(idle(buffer, tagSequenceNrs, pendingCleanup, retryCount))
     } else if (buffer.shouldWrite() || settings.flushInterval == Duration.Zero) {
-      write(buffer, tagSequenceNrs, pendingCleanup, None)
+      write(buffer, tagSequenceNrs, pendingCleanup, retryCount, None)
     } else {
       if (!timers.isTimerActive(FlushKey))
         timers.startSingleTimer(FlushKey, InternalFlush, settings.flushInterval)
-      context.become(idle(buffer, tagSequenceNrs, pendingCleanup))
+      context.become(idle(buffer, tagSequenceNrs, pendingCleanup, retryCount))
     }
   }
 
@@ -353,6 +364,7 @@ import scala.util.{ Failure, Success, Try }
       buffer: Buffer,
       tagPidSequenceNrs: Map[String, TagPidSequenceNr],
       pendingCleanup: Set[PersistenceId],
+      retryCount: Int,
       notifyWhenDone: Option[ActorRef]): Unit = {
     val writeSummary = createTagWriteSummary(buffer)
     log.debug("Starting tag write of {} events. Summary: {}", buffer.nextBatch.size, writeSummary)
@@ -365,7 +377,18 @@ import scala.util.{ Failure, Success, Try }
     withFailure.pipeTo(self)
 
     // notifyWhenDone is cleared out as it is now in the TagWriteDone
-    context.become(writeInProgress(buffer, tagPidSequenceNrs, pendingCleanup, None))
+    context.become(writeInProgress(buffer, tagPidSequenceNrs, pendingCleanup, retryCount, None))
+  }
+
+  /**
+   * Calculate exponential backoff delay for retries.
+   * delay = min(maxBackoff, minBackoff * 2^retryCount)
+   */
+  private def calculateBackoff(retryCount: Int): FiniteDuration = {
+    val minMs = settings.retryMinBackoff.toMillis
+    val maxMs = settings.retryMaxBackoff.toMillis
+    val delayMs = math.min(maxMs, minMs * math.pow(2, retryCount - 1).toLong)
+    delayMs.millis
   }
 
   private def createTagWriteSummary(writes: Buffer): Map[PersistenceId, PidProgress] = {

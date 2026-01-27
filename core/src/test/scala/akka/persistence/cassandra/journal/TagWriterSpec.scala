@@ -71,7 +71,9 @@ class TagWriterSpec
     flushInterval = 10.seconds,
     scanningFlushInterval = 20.seconds,
     stopTagWriterWhenIdle = 5.seconds,
-    pubsubNotification = Duration.Undefined)
+    pubsubNotification = Duration.Undefined,
+    retryMinBackoff = 100.millis,
+    retryMaxBackoff = 5.seconds)
   val waitDuration = 100.millis
   val shortDuration = 50.millis
   val tagName = "tag-1"
@@ -964,8 +966,9 @@ class TagWriterSpec
       val pid2 = "p-2"
       val promiseForFirstWrite = Promise[Done]()
       // First write succeeds (pid1 batch), second fails then succeeds (pid2 batch)
+      // Use very short retry backoff for this test to avoid timing issues
       val (probe, underTest) = setup(
-        settings = defaultSettings.copy(maxBatchSize = 1, flushInterval = 100.millis),
+        settings = defaultSettings.copy(maxBatchSize = 1, flushInterval = 100.millis, retryMinBackoff = 10.millis),
         writeResponse = Iterator(promiseForFirstWrite.future, Future.failed(t), Future.successful(Done)) ++ Iterator
             .continually(Future.successful(Done)))
       val bucket = nowBucket()
@@ -993,7 +996,7 @@ class TagWriterSpec
         case Warning(_, _, msg) if msg.toString.contains("Writing tags has failed") =>
       }
 
-      // pid2 retry succeeds
+      // pid2 retry succeeds (after backoff delay)
       probe.expectMsg(Vector(toEw(p2e1, 1)))
       probe.expectMsgType[ProgressWrite]
 
@@ -1002,6 +1005,7 @@ class TagWriterSpec
       val p2e2 = event(pid2, 2L, "p2-e-2", bucket)
       underTest ! TagWrite(tagName, Vector(p1e2))
       probe.expectMsg(Vector(toEw(p1e2, 1))) // pid1 cleaned up
+      probe.expectMsgType[ProgressWrite]
       underTest ! TagWrite(tagName, Vector(p2e2))
       probe.expectMsg(Vector(toEw(p2e2, 1))) // pid2 cleaned up
     }

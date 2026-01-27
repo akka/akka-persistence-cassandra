@@ -47,7 +47,9 @@ class TagWritersSpec
     flushInterval = 10.seconds,
     scanningFlushInterval = 20.seconds,
     stopTagWriterWhenIdle = 5.seconds,
-    pubsubNotification = Duration.Undefined)
+    pubsubNotification = Duration.Undefined,
+    retryMinBackoff = 100.millis,
+    retryMaxBackoff = 5.seconds)
 
   private def testProps(settings: TagWriterSettings, tagWriterCreator: String => ActorRef): Props =
     Props(new TagWriters(settings, tagWriterSession = null) {

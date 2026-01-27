@@ -148,7 +148,9 @@ import com.typesafe.config.Config
     eventsByTagConfig.getDuration("flush-interval", TimeUnit.MILLISECONDS).millis,
     eventsByTagConfig.getDuration("scanning-flush-interval", TimeUnit.MILLISECONDS).millis,
     eventsByTagConfig.getDuration("stop-tag-writer-when-idle", TimeUnit.MILLISECONDS).millis,
-    pubsubNotification)
+    pubsubNotification,
+    eventsByTagConfig.getDuration("tag-write-retry-min-backoff", TimeUnit.MILLISECONDS).millis,
+    eventsByTagConfig.getDuration("tag-write-retry-max-backoff", TimeUnit.MILLISECONDS).millis)
 
   val firstTimeBucket: TimeBucket = {
     val firstBucket = eventsByTagConfig.getString("first-time-bucket")
