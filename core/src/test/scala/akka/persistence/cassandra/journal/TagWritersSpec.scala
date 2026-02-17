@@ -47,7 +47,9 @@ class TagWritersSpec
     flushInterval = 10.seconds,
     scanningFlushInterval = 20.seconds,
     stopTagWriterWhenIdle = 5.seconds,
-    pubsubNotification = Duration.Undefined)
+    pubsubNotification = Duration.Undefined,
+    retryMinBackoff = 100.millis,
+    retryMaxBackoff = 5.seconds)
 
   private def testProps(settings: TagWriterSettings, tagWriterCreator: String => ActorRef): Props =
     Props(new TagWriters(settings, tagWriterSession = null) {
@@ -141,7 +143,7 @@ class TagWritersSpec
       expectMsg(TagProcessAck)
     }
 
-    "informs tag writers when persistent actor terminates" in {
+    "informs tag writers when persistent actor terminates with PidTerminated" in {
       val redProbe = TestProbe()
       val blueProbe = TestProbe()
       val probes = Map("red" -> redProbe, "blue" -> blueProbe)
@@ -162,8 +164,8 @@ class TagWritersSpec
       redProbe.expectMsg(redTagWrite)
 
       persistentActor ! PoisonPill
-      blueProbe.expectMsg(DropState("pid1"))
-      redProbe.expectMsg(DropState("pid1"))
+      blueProbe.expectMsg(PidTerminated("pid1"))
+      redProbe.expectMsg(PidTerminated("pid1"))
     }
 
     "buffer requests when passivating" in {

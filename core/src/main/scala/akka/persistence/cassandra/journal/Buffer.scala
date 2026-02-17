@@ -32,6 +32,11 @@ private[akka] case class Buffer(
 
   def nonEmpty: Boolean = nextBatch.nonEmpty
 
+  def isEmptyForPid(pid: String): Boolean = {
+    !nextBatch.exists(_.events.exists(_._1.persistenceId == pid)) &&
+    !pending.exists(_.events.exists(_._1.persistenceId == pid))
+  }
+
   def remove(pid: String): Buffer = {
     val (toFilter, without) = nextBatch.partition(_.events.head._1.persistenceId == pid)
     val filteredPending = pending.filterNot(_.events.head._1.persistenceId == pid)

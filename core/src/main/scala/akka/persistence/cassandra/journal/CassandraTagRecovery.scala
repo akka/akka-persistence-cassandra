@@ -125,6 +125,10 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
       Future.sequence(completed).map(_ => tpr)
     }
 
+  /**
+   * Sends tag writes only for events that are missing (seqNr > progress).
+   * Used for continuing tag writes from where they left off.
+   */
   def sendMissingTagWriteRaw(tp: Map[Tag, TagProgress], actorRunning: Boolean = true)(rawEvent: RawEvent): RawEvent = {
     rawEvent.serialized.tags.foreach(tag => {
       tp.get(tag) match {
@@ -145,6 +149,23 @@ import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
             tagWriters ! TagWrite(tag, rawEvent.serialized :: Nil, actorRunning)
           }
       }
+    })
+    rawEvent
+  }
+
+  /**
+   * Sends tag writes for ALL events, regardless of progress.
+   * Used for rebuilding the entire tag view for a persistence id.
+   * Progress is still used as the baseline for tag_pid_sequence_nr calculation to ensure idempotency.
+   */
+  def sendTagWriteRaw(actorRunning: Boolean = true)(rawEvent: RawEvent): RawEvent = {
+    rawEvent.serialized.tags.foreach(tag => {
+      log.debug(
+        "[{}] Rebuilding tag view. Sending to TagWriter. Tag [{}] seqNr [{}]",
+        rawEvent.serialized.persistenceId,
+        tag,
+        rawEvent.sequenceNr)
+      tagWriters ! TagWrite(tag, rawEvent.serialized :: Nil, actorRunning)
     })
     rawEvent
   }

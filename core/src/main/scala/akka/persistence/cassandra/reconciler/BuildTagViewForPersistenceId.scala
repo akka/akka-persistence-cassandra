@@ -4,30 +4,31 @@
 
 package akka.persistence.cassandra.reconciler
 
-import akka.actor.ActorSystem
-import akka.persistence.cassandra.PluginSettings
-import akka.Done
-import akka.persistence.cassandra.journal.TagWriter._
-import scala.concurrent.duration._
 import scala.concurrent.Future
-import akka.stream.scaladsl.Source
+import scala.concurrent.duration._
+
+import akka.Done
+import akka.actor.ActorSystem
 import akka.actor.ExtendedActorSystem
-import akka.persistence.query.PersistenceQuery
-import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
-import akka.event.Logging
-import akka.persistence.cassandra.journal.CassandraTagRecovery
-import akka.persistence.cassandra.Extractors
-import akka.util.Timeout
-import akka.stream.{ OverflowStrategy }
-import akka.stream.scaladsl.Sink
 import akka.annotation.InternalApi
+import akka.event.Logging
+import akka.persistence.cassandra.Extractors
+import akka.persistence.cassandra.PluginSettings
+import akka.persistence.cassandra.journal.CassandraTagRecovery
+import akka.persistence.cassandra.journal.TagWriter._
+import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
+import akka.persistence.query.PersistenceQuery
 import akka.serialization.SerializationExtension
+import akka.stream.OverflowStrategy
+import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.Source
+import akka.util.Timeout
 
 /**
  * INTERNAL API
  */
 @InternalApi
-private[akka] final class BuildTagViewForPersisetceId(
+private[akka] final class BuildTagViewForPersistenceId(
     persistenceId: String,
     system: ActorSystem,
     recovery: CassandraTagRecovery,
@@ -36,7 +37,7 @@ private[akka] final class BuildTagViewForPersisetceId(
   import system.dispatcher
 
   private implicit val sys: ActorSystem = system
-  private val log = Logging(system, classOf[BuildTagViewForPersisetceId])
+  private val log = Logging(system, classOf[BuildTagViewForPersistenceId])
   private val serialization = SerializationExtension(system)
 
   private val queries: CassandraReadJournal =
@@ -45,8 +46,12 @@ private[akka] final class BuildTagViewForPersisetceId(
 
   private implicit val flushTimeout: Timeout = Timeout(30.seconds)
 
-  def reconcile(flushEvery: Int = 1000): Future[Done] = {
-
+  /**
+   * Rebuilds the tag view for a persistence id by writing ALL events.
+   * The current tag progress is used as the baseline for tag_pid_sequence_nr calculation,
+   * ensuring idempotency with any concurrent writes from running actors.
+   */
+  def rebuild(flushEvery: Int = 1000): Future[Done] = {
     val recoveryPrep = for {
       tp <- recovery.lookupTagProgress(persistenceId)
       _ <- recovery.setTagProgress(persistenceId, tp)
@@ -54,7 +59,7 @@ private[akka] final class BuildTagViewForPersisetceId(
 
     Source
       .futureSource(recoveryPrep.map((tp: Map[String, TagProgress]) => {
-        log.debug("[{}] Rebuilding tag view table from: [{}]", persistenceId, tp)
+        log.info("[{}] Rebuilding tag view table. Current progress: [{}]", persistenceId, tp)
         queries
           .eventsByPersistenceId(
             persistenceId,
@@ -64,6 +69,38 @@ private[akka] final class BuildTagViewForPersisetceId(
             None,
             settings.journalSettings.readProfile,
             "BuildTagViewForPersistenceId",
+            extractor = Extractors.rawEvent(settings.eventsByTagSettings.bucketSize, serialization, system))
+          .map(recovery.sendTagWriteRaw(actorRunning = false))
+          .buffer(flushEvery, OverflowStrategy.backpressure)
+          .mapAsync(1)(_ => recovery.flush(flushTimeout))
+      }))
+      .runWith(Sink.ignore)
+  }
+
+  /**
+   * Continues tag writes from where they left off by only writing events
+   * that are newer than the current progress (seqNr > progress.sequenceNr).
+   * Starts reading from the minimum progress sequence number for efficiency.
+   */
+  def continue(flushEvery: Int = 1000): Future[Done] = {
+    val recoveryPrep = for {
+      tp <- recovery.lookupTagProgress(persistenceId)
+      _ <- recovery.setTagProgress(persistenceId, tp)
+    } yield tp
+
+    Source
+      .futureSource(recoveryPrep.map((tp: Map[String, TagProgress]) => {
+        val fromSeqNr = if (tp.isEmpty) 0L else tp.values.map(_.sequenceNr).min
+        log.info("[{}] Continuing tag writes from seqNr [{}]. Current progress: [{}]", persistenceId, fromSeqNr, tp)
+        queries
+          .eventsByPersistenceId(
+            persistenceId,
+            fromSeqNr,
+            Long.MaxValue,
+            Long.MaxValue,
+            None,
+            settings.journalSettings.readProfile,
+            "ContinueTagWritesForPersistenceId",
             extractor = Extractors.rawEvent(settings.eventsByTagSettings.bucketSize, serialization, system))
           .map(recovery.sendMissingTagWriteRaw(tp, actorRunning = false))
           .buffer(flushEvery, OverflowStrategy.backpressure)

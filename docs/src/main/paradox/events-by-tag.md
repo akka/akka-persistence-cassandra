@@ -140,22 +140,52 @@ This adds a delay each time a new persistence id is found by an offset query whe
 
 ## Events by tag reconciliation
 
-In the event that the `tag_views` table gets corrupted there is a @apidoc[akka.persistence.cassandra.reconciler.Reconciliation]
-tool that can help fix it. It can only be run while the application is offline but per persistence id operations can
-be used if it is known that the persistence id is not running.
+The @apidoc[akka.persistence.cassandra.reconciler.Reconciliation] tool can be used to fix tag view data issues
+or to continue pending tag writes after a node crash.
 
-It supports:
+@@@ warning
 
-* Deleting all events in the tag view for a given persistence id
-* Re-building the tag view for a persistence id for a tag
-* Query for all tags (inefficient query)
-* Truncate the tag view and all metadata so it can be re-built
+Most reconciliation operations (delete, truncate, rebuild) should only be run when the affected persistence ids
+are **not running**. Running these while actors are actively persisting can cause data corruption or gaps in
+tag sequences. The exception is `continueTagWritesForPersistenceId` which is safe to run while the application
+is running.
+
+@@@
+
+### Available operations
+
+* **`continueTagWritesForPersistenceId`** - Continues tag writes from where they left off. Use this when a node
+  crashed with pending tag writes. It only writes events newer than the current progress and starts reading
+  from the minimum progress sequence number for efficiency. This operation is **idempotent** and can be run
+  multiple times safely, **even while the actor is running**.
+
+* **`rebuildTagViewForPersistenceIds`** - Rebuilds the tag view by writing ALL events. **Important**: This
+  should only be used after `deleteTagViewForPersistenceIds` or `truncateTagView` has been called. Running
+  rebuild on existing data will create duplicate entries with different `tag_pid_sequence_nr` values.
+  **Stop the actor before running this.**
+
+* **`deleteTagViewForPersistenceIds`** - Deletes all events in the tag view for given persistence ids.
+  Also deletes the tag progress, so subsequent rebuild or continue will start fresh.
+  **Stop the actor before running this.**
+
+* **`allTags`** - Query for all tags (inefficient query).
+
+* **`truncateTagView`** - Truncate the tag view and all metadata so it can be re-built.
+  **Stop all actors before running this.**
 
 After deleting the tag views they will be automatically re-built next time the persistence id starts or with an explicit rebuild.
 
-For example, to rebuild the data for a persistence id:
+### Examples
 
-@@snip [reconciler](/core/src/test/scala/doc/reconciler/ReconciliationCompileOnly.scala) { #imports #reconcile}                                                                                                                                
+To continue pending tag writes after a crash:
+
+Scala
+:  @@snip [reconciler](/core/src/test/scala/doc/reconciler/ReconciliationCompileOnly.scala) { #imports #continue }
+
+To rebuild all tag data for a persistence id:
+
+Scala
+:  @@snip [reconciler](/core/src/test/scala/doc/reconciler/ReconciliationCompileOnly.scala) { #imports #reconcile }                                                                                                                                
 
 ## Other tuning
 
@@ -279,7 +309,35 @@ No events buffered in the tag writer. Tag write progress is lost.
 * Tag write progress will be out of date
 * Events will be recovered and sent to the tag writer, should receive the same tag pid sequence nr and be upserted.
 
-Events buffered in the tag writer. 
+Events buffered in the tag writer.
 
 * Buffered events for the persistenceId should be dropped as if they are buffered the tag write progress
 won't have been saved as it happens after the write of the events to tag_views.
+
+#### Actor termination handling
+
+When a persistent actor terminates (due to failure, passivation, or normal stop), any buffered tag writes
+are **not** immediately discarded. Instead, the TagWriter continues retrying until the writes succeed,
+then cleans up resources for that persistence id.
+
+This ensures that:
+
+* Tagged events are not lost if the actor terminates before tag writes complete
+* Transient failures (e.g., Cassandra timeout) that could succeed on retry are not abandoned
+* The `tag_views` table remains complete even if the actor never restarts
+
+**Idempotency guarantees**: Tag writes are idempotent because the primary key components are deterministic:
+
+* `timeUuid`: Immutable, generated during the original persist
+* `tag_pid_sequence_nr`: Pre-assigned when buffered, retained for retries
+
+This means concurrent writes from multiple nodes (e.g., during failover) will result in the same
+primary key and Cassandra's upsert behavior ensures no duplicates.
+
+If the actor restarts on the same or a different node while writes are still pending, recovery will:
+
+1. Send a `ResetPersistenceId` to clear old buffered events
+2. Read current progress from `tag_write_progress` to determine which events need re-sending
+3. Any in-flight writes from the old instance will still complete and update progress
+
+This design ensures correctness in all scenarios while minimizing event loss.

@@ -124,13 +124,16 @@ final private[akka] class ReconciliationSession(session: CassandraSession, state
 }
 
 /**
- * For reconciling with tag_views table with the messages table. Can be used to fix data issues causes
- * by split brains or persistence ids running in multiple locations.
+ * For reconciling the `tag_views` table with the messages table. Can be used to:
  *
- * Should not be run at the same time as an application.
+ * - Fix data issues caused by split brains or persistence ids running in multiple locations
+ * - Continue tag writes after a node crash (using [[continueTagWritesForPersistenceId]])
+ * - Rebuild tag views from scratch (using [[rebuildTagViewForPersistenceIds]])
  *
- * To support running in the same system as a journal the tag writers actor would need to be shared
- * and all the interleavings of the actor running at the same be considered.
+ * '''Important''': Most operations (delete, truncate, rebuild) should only be run when the
+ * affected persistence ids are NOT running. Running these while actors are actively persisting
+ * can cause data corruption or gaps in tag sequences. The exception is [[continueTagWritesForPersistenceId]]
+ * which is safe to run while the application is running.
  *
  * API likely to change when a java/scaladsl is added.
  */
@@ -166,20 +169,59 @@ final class Reconciliation(systemProvider: ClassicActorSystemProvider, settings:
   /**
    * Scans the given tag and deletes all events for the provided persistence ids.
    * All events for a persistence id have to be deleted as not to leave gaps in the
-   * tag pid sequence numbers.
+   * tag pid sequence numbers. Also deletes the tag progress for the persistence ids.
    *
-   * As this has to scan the tag views table for the given tag it is more efficient to
+   * '''Warning''': Do not run this while the affected persistence ids are actively running.
+   * Concurrent writes from running actors will cause data inconsistencies.
    */
   def deleteTagViewForPersistenceIds(persistenceId: Set[String], tag: String): Future[Done] =
     new DeleteTagViewForPersistenceId(persistenceId, tag, system, recSession, pluginSettings, queries).execute()
 
   /**
-   * Assumes that the tag views table contains no elements for the given persistence ids
-   *  Either because tag_views and tag_progress have truncated for this given persistence id
-   * or tag writing has never been enabled
+   * Rebuilds the tag view for a persistence id by writing ALL events to the `tag_views` table.
+   *
+   * '''Important''': This method should only be used after [[deleteTagViewForPersistenceIds]]
+   * or [[truncateTagView]] has been called. Running rebuild on existing data will create
+   * duplicate entries with different `tag_pid_sequence_nr` values, causing gaps that will
+   * be detected by eventsByTag queries.
+   *
+   * '''Warning''': Do not run this while the persistence id is actively running.
+   * Stop the actor first, then rebuild.
+   *
+   * Use this for:
+   *
+   * - Rebuilding after [[deleteTagViewForPersistenceIds]] or [[truncateTagView]]
+   * - Initial population when tag writing was previously disabled
+   *
+   * For continuing incomplete tag writes (e.g., after a crash), use
+   * [[continueTagWritesForPersistenceId]] instead.
    */
   def rebuildTagViewForPersistenceIds(persistenceId: String): Future[Done] =
-    new BuildTagViewForPersisetceId(persistenceId, system, recovery, pluginSettings).reconcile()
+    new BuildTagViewForPersistenceId(persistenceId, system, recovery, pluginSettings).rebuild()
+
+  /**
+   * Continues tag writes from where they left off by only writing events that are newer
+   * than the current progress (`seqNr > progress.sequenceNr`).
+   *
+   * Use this when a node crashed or was stopped while tag writes were pending, and you want
+   * to complete those writes without the actor having to restart. This is more efficient than
+   * [[rebuildTagViewForPersistenceIds]] as it:
+   *
+   * - Starts reading from the minimum progress sequence number (not from 0)
+   * - Only writes events that are actually missing
+   *
+   * '''Concurrency safety''': This method can be run while the corresponding actor is running.
+   * Tag writes are idempotent because:
+   *
+   * - The `timeUuid` is from the original event in the main journal (immutable)
+   * - The `tag_pid_sequence_nr` is derived deterministically from the progress baseline
+   *
+   * If both the running actor and this tool process the same events, they will calculate
+   * the same `tag_pid_sequence_nr` values, resulting in the same primary key. Cassandra's
+   * upsert behavior ensures no duplicates.
+   */
+  def continueTagWritesForPersistenceId(persistenceId: String): Future[Done] =
+    new BuildTagViewForPersistenceId(persistenceId, system, recovery, pluginSettings).continue()
 
   /**
    * Returns all the tags in the journal. This is not an efficient query for Cassandra so it is better
@@ -197,7 +239,10 @@ final class Reconciliation(systemProvider: ClassicActorSystemProvider, settings:
     recSession.selectTagProgress(persistenceId).runWith(Sink.seq).map(_.toSet)
 
   /**
-   * Truncate all tables and all metadata so that it can be rebuilt
+   * Truncate all tag related tables and all metadata so that it can be rebuilt.
+   *
+   * '''Warning''': Do not run this while the application is running. Stop all
+   * persistent actors first, then truncate, then rebuild or restart the application.
    */
   def truncateTagView(): Future[Done] = recSession.truncateAll()
 
