@@ -1,7 +1,6 @@
 import com.typesafe.sbt.packager.docker._
 import com.geirsson.CiReleasePlugin
 
-ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/maven/github_actions")
 ThisBuild / resolvers ++= {
   if (System.getProperty("override.akka.version") != null)
     Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots"))
