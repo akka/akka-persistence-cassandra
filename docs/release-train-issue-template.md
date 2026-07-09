@@ -20,15 +20,15 @@ Variables to be expanded in this template:
 - [ ] Make sure all important PRs have been merged
 - [ ] Wait until [main build finished](https://github.com/akka/akka-persistence-cassandra/actions) after merging the latest PR
 - [ ] Update the [draft release](https://github.com/akka/akka-persistence-cassandra/releases) with the next tag version `v$VERSION$`, title and release description. Use the `Publish release` button, which will create the tag.
-- [ ] Check that GitHub Actions release build has executed successfully (GitHub Actions will start a [CI build](https://github.com/akka/akka-persistence-cassandra/actions) for the new tag and publish artifacts to https://repo.akka.io/maven)
+- [ ] Check that GitHub Actions release build has executed successfully (GitHub Actions will start a [CI build](https://github.com/akka/akka-persistence-cassandra/actions) for the new tag and publish artifacts to the Akka repository)
 
 ### Check availability
 
 - [ ] Check [API](https://doc.akka.io/api/akka-persistence-cassandra/$VERSION$/) documentation
 - [ ] Check [reference](https://doc.akka.io/libraries/akka-persistence-cassandra/$VERSION$/) documentation. Check that the reference docs were deployed and show a version warning (see section below on how to fix the version warning).
-- [ ] Check the release `mvn dependency:get -Dartifact=com.typesafe.akka:akka-persistence-cassandra_2.13:$VERSION$`
+- [ ] Check the release using your token resolver URL from https://account.akka.io/token: `mvn dependency:get -Dartifact=com.typesafe.akka:akka-persistence-cassandra_2.13:$VERSION$ -Dmaven.repo.remote=<token url>`
 
-### When everything is on https://repo.akka.io/maven
+### When everything is available in the Akka repository
   - [ ] Log into `gustav.akka.io` as `akkarepo` 
     - [ ] If this updates the `current` version, run `./update-akka-persistence-cassandra-current-version.sh $VERSION$`
     - [ ] otherwise check changes and commit the new version to the local git repository
