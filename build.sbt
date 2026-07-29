@@ -11,6 +11,7 @@ ThisBuild / resolvers ++= {
 ThisBuild / dynverSeparator := "-"
 // append -SNAPSHOT to version when isSnapshot
 ThisBuild / dynverSonatypeSnapshots := true
+ThisBuild / makeBomIncludeDependencies := true
 
 lazy val root = project
   .in(file("."))
@@ -24,7 +25,7 @@ dumpSchema := (core / Test / runMain).toTask(" akka.persistence.cassandra.PrintC
 
 lazy val core = project
   .in(file("core"))
-  .enablePlugins(Common, AutomateHeaderPlugin)
+  .enablePlugins(Common, AutomateHeaderPlugin, ArtifactBomPlugin)
   .disablePlugins(CiReleasePlugin)
   .settings(
     name := "akka-persistence-cassandra",

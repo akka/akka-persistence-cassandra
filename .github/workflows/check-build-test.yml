@@ -45,6 +45,9 @@ jobs:
       - name: "Code style, compile tests"
         run: sbt "verifyCodeStyle; +Test/compile"
 
+      - name: Artifact BOM validation
+        uses: akka/github-actions-scripts/artifact_bom_validation@main
+
   test:
     name: Test
     if: github.event.repository.fork == false
