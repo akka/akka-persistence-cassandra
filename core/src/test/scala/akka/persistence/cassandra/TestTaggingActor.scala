@@ -50,13 +50,11 @@ class TestTaggingActor(val persistenceId: String, tags: Set[String], probe: Opti
 
   }
 
-  def waitingForSnapshot(who: ActorRef): Receive = {
-    case SaveSnapshotSuccess(_) =>
-      who ! SnapShotAck
-      context.become(normal)
+  def waitingForSnapshot(who: ActorRef): Receive = { case SaveSnapshotSuccess(_) =>
+    who ! SnapShotAck
+    context.become(normal)
   }
 
-  def processEvent: Receive = {
-    case _ =>
+  def processEvent: Receive = { case _ =>
   }
 }
