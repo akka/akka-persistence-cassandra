@@ -1,4 +1,4 @@
-addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.10.0")
+addSbtPlugin("com.github.sbt" % "sbt-header" % "5.11.0")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.5")
 addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "2.4.1")
 addSbtPlugin("com.github.sbt" % "sbt-multi-jvm" % "0.7.0")
