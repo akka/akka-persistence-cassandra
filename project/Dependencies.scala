@@ -6,7 +6,7 @@ object Dependencies {
   lazy val JavaDocLinkVersion = scala.util.Properties.javaSpecVersion
 
   val Scala213 = "2.13.17"
-  val Scala3 = "3.3.7"
+  val Scala3 = "3.3.8"
 
   val Scala2Versions = Seq(Scala213)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
