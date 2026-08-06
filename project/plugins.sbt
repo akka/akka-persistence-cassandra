@@ -16,6 +16,6 @@ addSbtPlugin("com.github.sbt" % "sbt-unidoc" % "0.6.0")
 addSbtPlugin("com.github.sbt" % "sbt-site-paradox" % "1.7.0")
 
 // For example
-addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.11.3")
+addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.11.7")
 // create pom.xml for scanning tools
 addSbtPlugin("io.akka.sbt" % "sbt-artifact-bom" % "0.2.0")
