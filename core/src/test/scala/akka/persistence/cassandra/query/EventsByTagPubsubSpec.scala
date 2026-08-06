@@ -18,7 +18,8 @@ import scala.concurrent.duration._
 object EventsByTagPubsubSpec {
   val today = LocalDate.now(ZoneOffset.UTC)
 
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
     akka.actor.provider = "akka.cluster.ClusterActorRefProvider"
     akka.actor.serialize-messages = off
     akka.actor.serialize-creators = off
@@ -35,7 +36,8 @@ object EventsByTagPubsubSpec {
         eventual-consistency-delay = 0s
       }
     }
-    """).withFallback(EventsByTagSpec.config)
+    """)
+    .withFallback(EventsByTagSpec.config)
 }
 
 class EventsByTagPubsubSpec extends CassandraSpec(EventsByTagPubsubSpec.config) {

@@ -114,9 +114,8 @@ import scala.util.{ Failure, Success, Try }
       tag: String,
       writeSummary: TagWriteSummary,
       notifyWhenDone: Option[ActorRef])(implicit ec: ExecutionContext): Future[TagWriteFinished] = {
-    session.writeBatch(tag, buffer).map(_ => TagWriteDone(writeSummary, notifyWhenDone)).recover {
-      case NonFatal(t) =>
-        TagWriteFailed(t, buffer.nextBatch)
+    session.writeBatch(tag, buffer).map(_ => TagWriteDone(writeSummary, notifyWhenDone)).recover { case NonFatal(t) =>
+      TagWriteFailed(t, buffer.nextBatch)
     }
   }
 }
@@ -282,25 +281,24 @@ import scala.util.{ Failure, Success, Try }
           case _                   =>
         }
       }
-      summary.foreach {
-        case (id, PidProgress(_, seqNrTo, tagPidSequenceNr, offset)) =>
-          // These writes do not block future writes. We don't read the tag progress again from C*
-          // until a restart has happened. This is best effort and expect recovery to replay any
-          // events that aren't in the tag progress table
-          import context.dispatcher
-          session.writeProgress(tag, id, seqNrTo, tagPidSequenceNr, offset).onComplete {
-            case Success(_) =>
-            case Failure(t) =>
-              log.warning(
-                "Tag progress write has failed for pid: {} seqNrTo: {} tagPidSequenceNr: {} offset: {}. " +
-                "If this is the only Cassandra error things will continue to work but if this keeps happening it will " +
-                s" mean slower recovery as tag_views will need to be repaired. Reason: $t",
-                id,
-                seqNrTo,
-                tagPidSequenceNr,
-                formatOffset(offset))
-              parent ! TagWriters.TagWriteFailed(t)
-          }
+      summary.foreach { case (id, PidProgress(_, seqNrTo, tagPidSequenceNr, offset)) =>
+        // These writes do not block future writes. We don't read the tag progress again from C*
+        // until a restart has happened. This is best effort and expect recovery to replay any
+        // events that aren't in the tag progress table
+        import context.dispatcher
+        session.writeProgress(tag, id, seqNrTo, tagPidSequenceNr, offset).onComplete {
+          case Success(_) =>
+          case Failure(t) =>
+            log.warning(
+              "Tag progress write has failed for pid: {} seqNrTo: {} tagPidSequenceNr: {} offset: {}. " +
+              "If this is the only Cassandra error things will continue to work but if this keeps happening it will " +
+              s" mean slower recovery as tag_views will need to be repaired. Reason: $t",
+              id,
+              seqNrTo,
+              tagPidSequenceNr,
+              formatOffset(offset))
+            parent ! TagWriters.TagWriteFailed(t)
+        }
       }
       // Check for pending cleanup - clean up pids that have terminated and have no more buffered events
       val (updatedTagPidSequenceNrs, updatedPendingCleanup) = checkPendingCleanup(tagPidSequenceNrs, pendingCleanup)
@@ -461,14 +459,13 @@ import scala.util.{ Failure, Success, Try }
   private def checkPendingCleanup(
       tagPidSequenceNrs: Map[PersistenceId, TagPidSequenceNr],
       pendingCleanup: Set[PersistenceId]): (Map[PersistenceId, TagPidSequenceNr], Set[PersistenceId]) = {
-    pendingCleanup.foldLeft((tagPidSequenceNrs, pendingCleanup)) {
-      case ((accSeqNrs, accPending), pid) =>
-        if (buffer.isEmptyForPid(pid)) {
-          log.debug("Cleaned up state for terminated pid [{}]", pid)
-          (accSeqNrs - pid, accPending - pid)
-        } else {
-          (accSeqNrs, accPending)
-        }
+    pendingCleanup.foldLeft((tagPidSequenceNrs, pendingCleanup)) { case ((accSeqNrs, accPending), pid) =>
+      if (buffer.isEmptyForPid(pid)) {
+        log.debug("Cleaned up state for terminated pid [{}]", pid)
+        (accSeqNrs - pid, accPending - pid)
+      } else {
+        (accSeqNrs, accPending)
+      }
     }
   }
 }

@@ -62,12 +62,11 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
       var latestValues: Map[(Int, String), Int] = Map.empty.withDefault(_ => -1)
       (0 until messages).foreach { _ =>
         (0 until writers).foreach { _ =>
-          eventsByTagQueries.foreach {
-            case (probeNr, probe) =>
-              // should be in order per persistence id per probe
-              val (pid, msg) = probe.requestNext()
-              latestValues((probeNr, pid)) shouldEqual (msg - 1)
-              latestValues += (probeNr, pid) -> msg
+          eventsByTagQueries.foreach { case (probeNr, probe) =>
+            // should be in order per persistence id per probe
+            val (pid, msg) = probe.requestNext()
+            latestValues((probeNr, pid)) shouldEqual (msg - 1)
+            latestValues += (probeNr, pid) -> msg
           }
         }
       }

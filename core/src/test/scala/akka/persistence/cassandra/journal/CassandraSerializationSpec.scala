@@ -12,7 +12,8 @@ import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 
 object CassandraSerializationSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
        |akka.actor.serialize-messages=false
        |akka.actor.serializers.crap="akka.persistence.cassandra.journal.BrokenDeSerialization"
        |akka.actor.serialization-identifiers."akka.persistence.cassandra.journal.BrokenDeSerialization" = 666
@@ -27,7 +28,8 @@ object CassandraSerializationSpec {
        |akka.persistence.cassandra.journal.keyspace=CassandraIntegrationSpec
        |akka.persistence.cassandra.snapshot.keyspace=CassandraIntegrationSpecSnapshot
        |
-    """.stripMargin).withFallback(CassandraLifecycle.config)
+    """.stripMargin)
+    .withFallback(CassandraLifecycle.config)
 
 }
 

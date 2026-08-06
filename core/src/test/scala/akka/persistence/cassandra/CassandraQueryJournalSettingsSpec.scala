@@ -28,19 +28,23 @@ class CassandraQueryJournalSettingsSpec
 
     "default persistence id cleanup to 2x bucket" in {
       import scala.concurrent.duration._
-      val config = ConfigFactory.parseString("""
+      val config = ConfigFactory
+        .parseString("""
          akka.persistence.cassandra.events-by-tag.bucket-size = Hour
-        """).withFallback(system.settings.config)
+        """)
+        .withFallback(system.settings.config)
       val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       settings.eventsByTagSettings.cleanUpPersistenceIds.get shouldEqual 2.hours
     }
 
     "support Day with just day format" in {
-      val config = ConfigFactory.parseString("""
+      val config = ConfigFactory
+        .parseString("""
           |akka.persistence.cassandra.events-by-tag.bucket-size = Day
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "20151120"
-        """.stripMargin).withFallback(system.settings.config)
+        """.stripMargin)
+        .withFallback(system.settings.config)
       val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Day)
@@ -48,10 +52,12 @@ class CassandraQueryJournalSettingsSpec
 
     "support Day with full time format" in {
       val config =
-        ConfigFactory.parseString("""
+        ConfigFactory
+          .parseString("""
           |akka.persistence.cassandra.events-by-tag.bucket-size = Day
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "20151120T12:20"
-        """.stripMargin).withFallback(system.settings.config)
+        """.stripMargin)
+          .withFallback(system.settings.config)
       val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       // Rounded down
@@ -59,10 +65,12 @@ class CassandraQueryJournalSettingsSpec
     }
 
     "support Hour with just hour format" in {
-      val config = ConfigFactory.parseString("""
+      val config = ConfigFactory
+        .parseString("""
           |akka.persistence.cassandra.events-by-tag.bucket-size = Hour
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "20151120T00"
-        """.stripMargin).withFallback(system.settings.config)
+        """.stripMargin)
+        .withFallback(system.settings.config)
       val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
@@ -70,20 +78,24 @@ class CassandraQueryJournalSettingsSpec
 
     "support Hour with full time format" in {
       val config =
-        ConfigFactory.parseString("""
+        ConfigFactory
+          .parseString("""
           |akka.persistence.cassandra.events-by-tag.bucket-size = Hour
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "20151120T00:20"
-        """.stripMargin).withFallback(system.settings.config)
+        """.stripMargin)
+          .withFallback(system.settings.config)
       val settings = PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
 
       settings.eventsByTagSettings.firstTimeBucket shouldEqual TimeBucket(1447977600000L, Hour)
     }
 
     "validate format" in {
-      val config = ConfigFactory.parseString("""
+      val config = ConfigFactory
+        .parseString("""
           |akka.persistence.cassandra.events-by-tag.bucket-size = Hour
           |akka.persistence.cassandra.events-by-tag.first-time-bucket = "cats"
-        """.stripMargin).withFallback(system.settings.config)
+        """.stripMargin)
+        .withFallback(system.settings.config)
       val e = intercept[IllegalArgumentException] {
         PluginSettings(system, config.getConfig(PluginSettings.DefaultConfigPath))
       }

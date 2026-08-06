@@ -93,14 +93,20 @@ import scala.jdk.FutureConverters._
         bucket: TimeBucket,
         from: UUID,
         to: UUID,
-        onFailure: (Int, Throwable, FiniteDuration) => Unit)(
-        implicit ec: ExecutionContext,
+        onFailure: (Int, Throwable, FiniteDuration) => Unit)(implicit
+        ec: ExecutionContext,
         scheduler: Scheduler): Future[AsyncResultSet] = {
-      Retries.retry({ () =>
-        val bound =
-          statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setExecutionProfileName(readProfile)
-        session.executeAsync(bound).asScala
-      }, retries.retries, onFailure, retries.minDuration, retries.maxDuration, retries.randomFactor)
+      Retries.retry(
+        { () =>
+          val bound =
+            statements.byTagWithUpperLimit.bind(tag, bucket.key: JLong, from, to).setExecutionProfileName(readProfile)
+          session.executeAsync(bound).asScala
+        },
+        retries.retries,
+        onFailure,
+        retries.minDuration,
+        retries.maxDuration,
+        retries.randomFactor)
     }
   }
 
@@ -119,7 +125,6 @@ import scala.jdk.FutureConverters._
   final case class MissingData(maxOffset: UUID, maxSequenceNr: TagPidSequenceNr)
 
   /**
-   *
    * @param queryPrevious Should the previous bucket be queries right away. Searches go back one bucket, first the current bucket then
    *                      the previous bucket. This is repeated every refresh interval.
    * @param gapDetected Whether an explicit gap has been detected e.g. events 1-4 have been seen then the next event is not 5.
@@ -188,7 +193,8 @@ import scala.jdk.FutureConverters._
 
     // override to give nice offset formatting
     override def toString: String =
-      s"""StageState(state: $state, fromOffset: ${formatOffset(fromOffset)}, toOffset: ${formatOffset(toOffset)}, tagPidSequenceNrs: $tagPidSequenceNrs, missingLookup: $missingLookup, bucketSize: $bucketSize)"""
+      s"""StageState(state: $state, fromOffset: ${formatOffset(fromOffset)}, toOffset: ${formatOffset(
+        toOffset)}, tagPidSequenceNrs: $tagPidSequenceNrs, missingLookup: $missingLookup, bucketSize: $bucketSize)"""
   }
 
   private val uuidRowOrdering = new Ordering[UUIDRow] {
@@ -326,28 +332,25 @@ import scala.jdk.FutureConverters._
               case _                      => Nil
             }
 
-            val missingData = withDelayedEvents.transform {
-              case (_, (delayedMaxTagPidSequenceNr, delayedMaxOffset)) =>
-                MissingData(delayedMaxOffset, delayedMaxTagPidSequenceNr)
+            val missingData = withDelayedEvents.transform { case (_, (delayedMaxTagPidSequenceNr, delayedMaxOffset)) =>
+              MissingData(delayedMaxOffset, delayedMaxTagPidSequenceNr)
             }
 
-            val missingSequenceNrs = withDelayedEvents.transform {
-              case (delayedPid, (delayedMaxTagPidSequenceNr, _)) =>
-                val fromSeqNr: Long = stageState.tagPidSequenceNrs.get(delayedPid).map(_._1).getOrElse(0L) + 1L
-                (fromSeqNr to delayedMaxTagPidSequenceNr).toSet
+            val missingSequenceNrs = withDelayedEvents.transform { case (delayedPid, (delayedMaxTagPidSequenceNr, _)) =>
+              val fromSeqNr: Long = stageState.tagPidSequenceNrs.get(delayedPid).map(_._1).getOrElse(0L) + 1L
+              (fromSeqNr to delayedMaxTagPidSequenceNr).toSet
             }
 
             val minOffset =
-              Uuids.startOf(missingData.keys.foldLeft(Uuids.unixTimestamp(stageState.toOffset)) {
-                case (acc, pid) =>
-                  math.min(
-                    stageState.tagPidSequenceNrs
-                      .get(pid)
-                      .map(t => Uuids.unixTimestamp(t._2))
-                      .getOrElse(
-                        // for new persistence ids look all the way back to the start of the previous bucket
-                        stageState.currentTimeBucket.previous(1).key),
-                    acc)
+              Uuids.startOf(missingData.keys.foldLeft(Uuids.unixTimestamp(stageState.toOffset)) { case (acc, pid) =>
+                math.min(
+                  stageState.tagPidSequenceNrs
+                    .get(pid)
+                    .map(t => Uuids.unixTimestamp(t._2))
+                    .getOrElse(
+                      // for new persistence ids look all the way back to the start of the previous bucket
+                      stageState.currentTimeBucket.previous(1).key),
+                  acc)
               })
 
             log.debug("Starting search for: {}", missingSequenceNrs)
@@ -376,9 +379,17 @@ import scala.jdk.FutureConverters._
       }
 
       override def preStart(): Unit = {
-        stageState = StageState(QueryIdle, initialQueryOffset, calculateToOffset(), initialTagPidSequenceNrs.transform {
-          case (_, (tagPidSequenceNr, offset)) => (tagPidSequenceNr, offset, System.currentTimeMillis())
-        }, delayedScanInProgress = false, System.currentTimeMillis(), None, bucketSize)
+        stageState = StageState(
+          QueryIdle,
+          initialQueryOffset,
+          calculateToOffset(),
+          initialTagPidSequenceNrs.transform { case (_, (tagPidSequenceNr, offset)) =>
+            (tagPidSequenceNr, offset, System.currentTimeMillis())
+          },
+          delayedScanInProgress = false,
+          System.currentTimeMillis(),
+          None,
+          bucketSize)
         if (log.isInfoEnabled) {
           log.info(
             s"[{}]: EventsByTag query [${session.tag}] starting with EC delay {}ms: fromOffset [{}] toOffset [{}]",
@@ -391,21 +402,20 @@ import scala.jdk.FutureConverters._
 
         if (eventsByTagSettings.pubsubNotification.isFinite) {
           Try {
-            getStageActor {
-              case (_, publishedTag) =>
-                if (publishedTag.equals(session.tag)) {
-                  log.debug("[{}] Received pub sub tag update for our tag, initiating query", stageUuid)
-                  if (eventsByTagSettings.eventualConsistency == Duration.Zero) {
-                    continue()
-                  } else if (eventsByTagSettings.eventualConsistency < querySettings.refreshInterval) {
-                    // No point scheduling for EC if the QueryPoll will come in beforehand
-                    // No point in scheduling more frequently than once every 10 ms
-                    scheduleOnce(
-                      TagNotification(System.currentTimeMillis() / 10),
-                      eventsByTagSettings.eventualConsistency)
-                  }
-
+            getStageActor { case (_, publishedTag) =>
+              if (publishedTag.equals(session.tag)) {
+                log.debug("[{}] Received pub sub tag update for our tag, initiating query", stageUuid)
+                if (eventsByTagSettings.eventualConsistency == Duration.Zero) {
+                  continue()
+                } else if (eventsByTagSettings.eventualConsistency < querySettings.refreshInterval) {
+                  // No point scheduling for EC if the QueryPoll will come in beforehand
+                  // No point in scheduling more frequently than once every 10 ms
+                  scheduleOnce(
+                    TagNotification(System.currentTimeMillis() / 10),
+                    eventsByTagSettings.eventualConsistency)
                 }
+
+              }
             }
             DistributedPubSub(system).mediator !
             DistributedPubSubMediator.Subscribe(s"apc.tags.${session.tag}", this.stageActor.ref)
@@ -490,9 +500,8 @@ import scala.jdk.FutureConverters._
         eventsByTagSettings.cleanUpPersistenceIds.map(_.toMillis).getOrElse(Long.MaxValue)
       private def cleanup(): Unit = {
         val now = System.currentTimeMillis()
-        val remaining = stageState.tagPidSequenceNrs.filterNot {
-          case (_, (_, _, lastUpdated)) =>
-            (now - lastUpdated) > cleanupPersistenceIdsMills
+        val remaining = stageState.tagPidSequenceNrs.filterNot { case (_, (_, _, lastUpdated)) =>
+          (now - lastUpdated) > cleanupPersistenceIdsMills
         }
         updateStageState(_.copy(tagPidSequenceNrs = remaining))
       }
@@ -526,7 +535,8 @@ import scala.jdk.FutureConverters._
           .selectEventsForBucket(
             stageState.currentTimeBucket,
             stageState.fromOffset,
-            stageState.toOffset, { (attempt, t, nextRetry) =>
+            stageState.toOffset,
+            { (attempt, t, nextRetry) =>
               if (log.isWarningEnabled) {
                 log.warning(
                   s"[{}] Query failed. timeBucket: {} from offset: {} to offset: {}. Attempt ${attempt}. Next retry in: ${nextRetry.pretty}. Reason: ${t.getMessage}",
@@ -567,7 +577,8 @@ import scala.jdk.FutureConverters._
             .selectEventsForBucket(
               missing.bucket,
               missing.minOffset,
-              missing.maxOffset, { (attempt, t, nextRetry) =>
+              missing.maxOffset,
+              { (attempt, t, nextRetry) =>
                 if (log.isWarningEnabled) {
                   log.warning(
                     s"[{}] Looking for missing query failed. timeBucket: {} from offset: {} to offset: {}. Attempt ${attempt}. Next retry in: ${nextRetry.pretty}. Reason: ${t.getMessage}",
@@ -769,18 +780,17 @@ import scala.jdk.FutureConverters._
         // Could the event be in the previous bucket?
         val lookInPrevious = shouldSearchInPreviousBucket(bucket, fromOffset)
         updateStageState(
-          _.copy(
-            missingLookup = Some(
-              LookingForMissing(
-                events,
-                fromOffset,
-                toOffset,
-                bucket,
-                lookInPrevious,
-                missingOffsets,
-                missingSequenceNrs,
-                Deadline.now + timeout,
-                explicitGapDetected))))
+          _.copy(missingLookup = Some(
+            LookingForMissing(
+              events,
+              fromOffset,
+              toOffset,
+              bucket,
+              lookInPrevious,
+              missingOffsets,
+              missingSequenceNrs,
+              Deadline.now + timeout,
+              explicitGapDetected))))
       }
 
       private def totalMissing(): Long = {

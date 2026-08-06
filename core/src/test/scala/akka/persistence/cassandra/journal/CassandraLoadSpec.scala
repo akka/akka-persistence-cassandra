@@ -16,11 +16,13 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object CassandraLoadSpec {
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
       akka.persistence.cassandra.journal.replication-strategy = NetworkTopologyStrategy
       akka.persistence.cassandra.journal.data-center-replication-factors = ["datacenter1:1"]
       akka.actor.serialize-messages=off
-     """).withFallback(CassandraLifecycle.config)
+     """)
+    .withFallback(CassandraLifecycle.config)
 
   trait Measure { this: Actor =>
     val NanoToSecond = 1000.0 * 1000 * 1000
@@ -71,12 +73,11 @@ object CassandraLoadSpec {
     def onCommand(payload: String): Unit =
       persist(payload)(onEvent)
 
-    def onEvent: Receive = {
-      case payload: String =>
-        receiver match {
-          case None    =>
-          case Some(r) => r ! s"$payload-$lastSequenceNr"
-        }
+    def onEvent: Receive = { case payload: String =>
+      receiver match {
+        case None    =>
+        case Some(r) => r ! s"$payload-$lastSequenceNr"
+      }
     }
   }
 
@@ -127,8 +128,8 @@ class CassandraLoadSpec
       processor ! "a"
     }
     processor ! "stop"
-    expectMsgPF(100.seconds) {
-      case throughput: Double => println(f"throughput = $throughput%.2f persistent events per second")
+    expectMsgPF(100.seconds) { case throughput: Double =>
+      println(f"throughput = $throughput%.2f persistent events per second")
     }
   }
 
