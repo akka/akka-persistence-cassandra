@@ -15,10 +15,10 @@ object Dependencies {
   val AkkaVersionInDocs = VersionNumber(AkkaVersion).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
   val CassandraVersionInDocs = "4.0"
   // Should be sync with the version of the driver in Alpakka Cassandra
-  val CassandraDriverVersion = "4.19.2"
+  val CassandraDriverVersion = "4.19.3"
   val DriverVersionInDocs = "4.14"
 
-  val AlpakkaVersion = "10.0.3"
+  val AlpakkaVersion = "10.0.5"
   val AlpakkaVersionInDocs = "10.0"
   // for example
   val AkkaManagementVersion = "1.6.4"
