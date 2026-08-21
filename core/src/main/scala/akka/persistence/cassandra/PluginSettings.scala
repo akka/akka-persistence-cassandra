@@ -11,6 +11,7 @@ import akka.persistence.cassandra.healthcheck.HealthCheckSettings
 import akka.persistence.cassandra.journal.JournalSettings
 import akka.persistence.cassandra.query.QuerySettings
 import akka.persistence.cassandra.snapshot.SnapshotSettings
+import akka.util.Helpers.toRootLowerCase
 import com.typesafe.config.Config
 
 /**
@@ -75,7 +76,7 @@ import com.typesafe.config.Config
       result.mkString(",")
     }
 
-    strategy.toLowerCase() match {
+    toRootLowerCase(strategy) match {
       case "simplestrategy" =>
         s"'SimpleStrategy','replication_factor':$replicationFactor"
       case "networktopologystrategy" =>
