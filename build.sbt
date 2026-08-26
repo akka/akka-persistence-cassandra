@@ -3,7 +3,7 @@ import com.geirsson.CiReleasePlugin
 
 ThisBuild / resolvers ++= {
   if (System.getProperty("override.akka.version") != null)
-    Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots"))
+    Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots/github_actions"))
   else Seq.empty
 }
 
