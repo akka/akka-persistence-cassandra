@@ -21,18 +21,18 @@ object Common extends AutoPlugin {
       homepage := Some(url("https://akka.io")),
       // apiURL defined in projectSettings because version.value is not correct here
       scmInfo := Some(
-          ScmInfo(
-            url("https://github.com/akka/akka-persistence-cassandra"),
-            "git@github.com:akka/akka-persistence-cassandra.git")),
+        ScmInfo(
+          url("https://github.com/akka/akka-persistence-cassandra"),
+          "git@github.com:akka/akka-persistence-cassandra.git")),
       developers += Developer(
-          "contributors",
-          "Contributors",
-          "https://gitter.im/akka/dev",
-          url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
+        "contributors",
+        "Contributors",
+        "https://gitter.im/akka/dev",
+        url("https://github.com/akka/akka-persistence-cassandra/graphs/contributors")),
       releaseNotesURL := (
-          if ((ThisBuild / isSnapshot).value) None
-          else Some(url(s"https://github.com/akka/akka-persistence-cassandra/releases/tag/v${version.value}"))
-        ),
+        if ((ThisBuild / isSnapshot).value) None
+        else Some(url(s"https://github.com/akka/akka-persistence-cassandra/releases/tag/v${version.value}"))
+      ),
       licenses := {
         val tagOrBranch =
           if (version.value.endsWith("SNAPSHOT")) "main"
@@ -51,42 +51,42 @@ object Common extends AutoPlugin {
     scalaVersion := Dependencies.Scala213,
     javacOptions ++= Seq("--release", "11"),
     scalacOptions ++= Seq(
-        "-encoding",
-        "UTF-8",
-        "-feature",
-        "-unchecked",
-        "-Xlint",
-        "-Ywarn-dead-code",
-        "-deprecation",
-        "-release",
-        "11"),
+      "-encoding",
+      "UTF-8",
+      "-feature",
+      "-unchecked",
+      "-Xlint",
+      "-Ywarn-dead-code",
+      "-deprecation",
+      "-release",
+      "11"),
     Compile / console / scalacOptions --= Seq("-deprecation", "-Xfatal-warnings", "-Xlint", "-Ywarn-unused:imports"),
     Compile / doc / scalacOptions := scalacOptions.value ++ Seq(
-        "-doc-title",
-        "Akka Persistence Cassandra",
-        "-doc-version",
-        version.value,
-        "-sourcepath",
-        (ThisBuild / baseDirectory).value.toString,
-        "-doc-source-url", {
-          val branch = if (isSnapshot.value) "main" else s"v${version.value}"
-          s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
-        },
-        "-doc-canonical-base-url",
-        "https://doc.akka.io/api/akka-persistence-cassandra/current/")
-      ++ {
-        // make use of https://github.com/scala/scala/pull/8663
-        if (scalaBinaryVersion.value.startsWith("3")) {
-          Seq(
-            "-skip-packages:akka.pattern",
-            s"-external-mappings:https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api")
-        } else
-          Seq(
-            "-jdk-api-doc-base",
-            s"https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api",
-            "-skip-packages",
-            "akka.pattern")
+      "-doc-title",
+      "Akka Persistence Cassandra",
+      "-doc-version",
+      version.value,
+      "-sourcepath",
+      (ThisBuild / baseDirectory).value.toString,
+      "-doc-source-url", {
+        val branch = if (isSnapshot.value) "main" else s"v${version.value}"
+        s"https://github.com/akka/akka-persistence-cassandra/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
       },
+      "-doc-canonical-base-url",
+      "https://doc.akka.io/api/akka-persistence-cassandra/current/")
+    ++ {
+      // make use of https://github.com/scala/scala/pull/8663
+      if (scalaBinaryVersion.value.startsWith("3")) {
+        Seq(
+          "-skip-packages:akka.pattern",
+          s"-external-mappings:https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api")
+      } else
+        Seq(
+          "-jdk-api-doc-base",
+          s"https://docs.oracle.com/en/java/javase/${Dependencies.JavaDocLinkVersion}/docs/api",
+          "-skip-packages",
+          "akka.pattern")
+    },
     Compile / doc / scalacOptions --= Seq("-Xfatal-warnings"),
     scalafmtOnCompile := true,
     autoAPIMappings := true,

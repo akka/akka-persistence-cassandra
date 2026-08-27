@@ -22,8 +22,10 @@ import akka.stream.alpakka.cassandra.CqlSessionProvider
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSession
 
 object CassandraEventUpdateSpec {
-  val config = ConfigFactory.parseString("""
-    """).withFallback(CassandraLifecycle.config)
+  val config = ConfigFactory
+    .parseString("""
+    """)
+    .withFallback(CassandraLifecycle.config)
 }
 
 class CassandraEventUpdateSpec extends CassandraSpec(CassandraEventUpdateSpec.config) { s =>

@@ -28,7 +28,8 @@ object TagWriteTimeoutRecoverySpec {
 
   // High flush-interval so writes stay buffered when actor terminates
   // This tests that PidTerminated allows pending writes to complete
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory
+    .parseString(s"""
        akka {
          actor.debug.unhandled = on
          loglevel = DEBUG
@@ -46,7 +47,8 @@ object TagWriteTimeoutRecoverySpec {
        }
 
        akka.actor.serialize-messages = off
-    """).withFallback(CassandraLifecycle.config)
+    """)
+    .withFallback(CassandraLifecycle.config)
 
   case object Ack
   case object AckFailure
@@ -145,11 +147,10 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
       val probe = greenTags.runWith(TestSink[Any]()(system))
       probe.request(100)
 
-      events.zipWithIndex.foreach {
-        case (event, idx) =>
-          val seqNr = idx + 1
-          system.log.debug("Expecting event {} with seqNr {}", event, seqNr)
-          probe.expectNextPF { case EventEnvelope(_, `pid`, `seqNr`, `event`) => }
+      events.zipWithIndex.foreach { case (event, idx) =>
+        val seqNr = idx + 1
+        system.log.debug("Expecting event {} with seqNr {}", event, seqNr)
+        probe.expectNextPF { case EventEnvelope(_, `pid`, `seqNr`, `event`) => }
       }
       probe.expectNoMessage()
       probe.cancel()
@@ -205,11 +206,10 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
         val probe = purpleTags.runWith(TestSink[Any]()(system))
         probe.request(100)
 
-        allEvents.zipWithIndex.foreach {
-          case (event, idx) =>
-            val seqNr = idx + 1
-            system.log.info("Expecting event {} with seqNr {}", event, seqNr)
-            probe.expectNextPF { case EventEnvelope(_, `pid`, `seqNr`, `event`) => }
+        allEvents.zipWithIndex.foreach { case (event, idx) =>
+          val seqNr = idx + 1
+          system.log.info("Expecting event {} with seqNr {}", event, seqNr)
+          probe.expectNextPF { case EventEnvelope(_, `pid`, `seqNr`, `event`) => }
         }
         probe.expectNoMessage()
         probe.cancel()
@@ -251,11 +251,10 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
       val probe = yellowTags.runWith(TestSink[Any]()(system))
       probe.request(100)
 
-      events.zipWithIndex.foreach {
-        case (event, idx) =>
-          val seqNr = idx + 1
-          system.log.debug("Expecting event {} with seqNr {}", event, seqNr)
-          probe.expectNextPF { case EventEnvelope(_, `pid`, `seqNr`, `event`) => }
+      events.zipWithIndex.foreach { case (event, idx) =>
+        val seqNr = idx + 1
+        system.log.debug("Expecting event {} with seqNr {}", event, seqNr)
+        probe.expectNextPF { case EventEnvelope(_, `pid`, `seqNr`, `event`) => }
       }
       probe.expectNoMessage()
       probe.cancel()
@@ -299,9 +298,8 @@ class TagWriteTimeoutRecoverySpec extends CassandraSpec(TagWriteTimeoutRecoveryS
 
       // Events may come in any order between pids, but should be ordered within each pid
       val receivedEvents = (1 to 6).map(_ =>
-        probe.expectNextPF {
-          case EventEnvelope(_, pid, seqNr, event) =>
-            (pid, seqNr, event)
+        probe.expectNextPF { case EventEnvelope(_, pid, seqNr, event) =>
+          (pid, seqNr, event)
         })
 
       // Verify we got all events from pid1

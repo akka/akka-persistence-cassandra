@@ -73,7 +73,8 @@ object CassandraSpec {
       } 
      """)
 
-  val fallbackConfig = ConfigFactory.parseString(s"""
+  val fallbackConfig = ConfigFactory
+    .parseString(s"""
       akka.loggers = ["akka.persistence.cassandra.SilenceAllTestEventListener"]
       akka.loglevel = DEBUG
       akka.use-slf4j = off
@@ -83,7 +84,8 @@ object CassandraSpec {
           timeout = 10s # drop keyspaces 
         }
       }
-    """).withFallback(enableAutocreate)
+    """)
+    .withFallback(enableAutocreate)
 
 }
 
@@ -179,8 +181,8 @@ abstract class CassandraSpec(
             .asScala
             .foreach(row => {
               println(s"""Row:${row.getString("tag_name")},${row.getLong("timebucket")},${formatOffset(
-                row.getUuid("timestamp"))},${row.getString("persistence_id")},${row
-                .getLong("tag_pid_sequence_nr")},${row.getLong("sequence_nr")}""")
+                row.getUuid("timestamp"))},${row.getString("persistence_id")},${row.getLong(
+                "tag_pid_sequence_nr")},${row.getLong("sequence_nr")}""")
 
             })
         }

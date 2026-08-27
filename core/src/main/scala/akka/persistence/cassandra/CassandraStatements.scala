@@ -32,8 +32,8 @@ private[akka] class CassandraStatements(val settings: PluginSettings) {
    *
    * Exceptions will be logged but will not fail the returned Future.
    */
-  def executeAllCreateKeyspaceAndTables(session: CqlSession, log: LoggingAdapter)(
-      implicit ec: ExecutionContext): Future[Done] = {
+  def executeAllCreateKeyspaceAndTables(session: CqlSession, log: LoggingAdapter)(implicit
+      ec: ExecutionContext): Future[Done] = {
     for {
       _ <- journalStatements.executeCreateKeyspaceAndTables(session, log)
       _ <- snapshotStatements.executeCreateKeyspaceAndTables(session, log)

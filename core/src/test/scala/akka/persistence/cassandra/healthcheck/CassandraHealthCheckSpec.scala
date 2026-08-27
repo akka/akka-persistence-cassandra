@@ -16,9 +16,11 @@ class CassandraHealthCheckDefaultQuerySpec extends CassandraSpec with CassandraL
   }
 }
 
-class CassandraHealthCheckCustomQueryNonEmptyResultSpec extends CassandraSpec(s"""
+class CassandraHealthCheckCustomQueryNonEmptyResultSpec
+    extends CassandraSpec(s"""
        akka.persistence.cassandra.healthcheck.health-check-cql="SELECT * FROM system.peers"
-    """) with CassandraLifecycle {
+    """)
+    with CassandraLifecycle {
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -40,9 +42,11 @@ class CassandraHealthCheckCustomQueryNonEmptyResultSpec extends CassandraSpec(s"
   }
 }
 
-class CassandraHealthCheckCustomQueryEmptyResultSpec extends CassandraSpec(s"""
+class CassandraHealthCheckCustomQueryEmptyResultSpec
+    extends CassandraSpec(s"""
        akka.persistence.cassandra.healthcheck.health-check-cql="SELECT * FROM system.peers"
-    """) with CassandraLifecycle {
+    """)
+    with CassandraLifecycle {
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -57,9 +61,11 @@ class CassandraHealthCheckCustomQueryEmptyResultSpec extends CassandraSpec(s"""
   }
 }
 
-class CassandraHealthCheckCustomFailingQuerySpec extends CassandraSpec(s"""
+class CassandraHealthCheckCustomFailingQuerySpec
+    extends CassandraSpec(s"""
        akka.persistence.cassandra.healthcheck.health-check-cql="SELECT * FROM non_existing_keyspace.non_existing_table"
-    """) with CassandraLifecycle {
+    """)
+    with CassandraLifecycle {
 
   "CassandraHealthCheck" must {
     "reply with failed health check result when plugin executes custom query and it fails" in {

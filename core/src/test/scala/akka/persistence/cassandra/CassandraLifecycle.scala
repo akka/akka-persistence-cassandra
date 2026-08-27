@@ -32,7 +32,8 @@ object CassandraLifecycle {
   }
 
   val config =
-    ConfigFactory.parseString(s"""
+    ConfigFactory
+      .parseString(s"""
     akka.test.timefactor = $${?AKKA_TEST_TIMEFACTOR}
     akka.persistence.journal.plugin = "akka.persistence.cassandra.journal"
     akka.persistence.snapshot-store.plugin = "akka.persistence.cassandra.snapshot"
@@ -45,7 +46,9 @@ object CassandraLifecycle {
     akka.actor.allow-java-serialization = on
     akka.actor.warn-about-java-serializer-usage = off
     akka.use-slf4j = off
-    """).withFallback(CassandraSpec.enableAutocreate).resolve()
+    """)
+      .withFallback(CassandraSpec.enableAutocreate)
+      .resolve()
 
   def awaitPersistenceInit(system: ActorSystem, journalPluginId: String = "", snapshotPluginId: String = ""): Unit = {
     val probe = TestProbe()(system)
@@ -85,16 +88,14 @@ object CassandraLifecycle {
       override val snapshotPluginId: String)
       extends PersistentActor {
 
-    def receiveRecover: Receive = {
-      case _ =>
+    def receiveRecover: Receive = { case _ =>
     }
 
-    def receiveCommand: Receive = {
-      case msg =>
-        persist(msg) { _ =>
-          sender() ! msg
-          context.stop(self)
-        }
+    def receiveCommand: Receive = { case msg =>
+      persist(msg) { _ =>
+        sender() ! msg
+        context.stop(self)
+      }
     }
   }
 }

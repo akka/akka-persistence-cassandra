@@ -41,13 +41,13 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-cluster-sharding")
 
   val akkaPersistenceCassandraDependencies = Seq(
-      "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % AlpakkaVersion,
-      "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
-      "org.apache.cassandra" % "java-driver-core" % CassandraDriverVersion,
-      Logback % Test,
-      "org.scalatest" %% "scalatest" % "3.2.19" % Test) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
+    "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % AlpakkaVersion,
+    "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
+    "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
+    "org.apache.cassandra" % "java-driver-core" % CassandraDriverVersion,
+    Logback % Test,
+    "org.scalatest" %% "scalatest" % "3.2.19" % Test) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
 
   val exampleDependencies = Seq(
     Logback,

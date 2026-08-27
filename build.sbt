@@ -31,7 +31,7 @@ lazy val core = project
     name := "akka-persistence-cassandra",
     libraryDependencies ++= Dependencies.akkaPersistenceCassandraDependencies,
     Compile / packageBin / packageOptions += Package.ManifestAttributes(
-        "Automatic-Module-Name" -> "akka.persistence.cassandra"))
+      "Automatic-Module-Name" -> "akka.persistence.cassandra"))
   .settings(Scala3.settings)
 
 // Used for testing events by tag in various environments
@@ -77,28 +77,29 @@ lazy val docs = project
     Preprocess / sourceDirectory := (LocalRootProject / ScalaUnidoc / unidoc / target).value,
     Paradox / siteSubdirName := s"libraries/akka-persistence-cassandra/${projectInfoVersion.value}",
     Compile / paradoxProperties ++= Map(
-        "project.url" -> "https://doc.akka.io/libraries/akka-persistence-cassandra/current/",
-        "canonical.base_url" -> "https://doc.akka.io/libraries/akka-persistence-cassandra/current",
-        "akka.version" -> Dependencies.AkkaVersion,
-        // Akka
-        "extref.akka.base_url" -> s"https://doc.akka.io/libraries/akka-core/${Dependencies.AkkaVersionInDocs}/%s",
-        "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${Dependencies.AkkaVersionInDocs}/",
-        "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${Dependencies.AkkaVersionInDocs}/",
-        // Alpakka
-        "extref.alpakka.base_url" -> s"https://doc.akka.io/docs/alpakka/${Dependencies.AlpakkaVersionInDocs}/%s",
-        "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.AlpakkaVersionInDocs}/",
-        "javadoc.akka.stream.alpakka.base_url" -> "",
-        // Cassandra
-        "extref.cassandra.base_url" -> s"https://cassandra.apache.org/doc/${Dependencies.CassandraVersionInDocs}/%s",
-        // Datastax Java driver
-        "extref.java-driver.base_url" -> s"https://docs.datastax.com/en/developer/java-driver/${Dependencies.DriverVersionInDocs}/%s",
-        "javadoc.com.datastax.oss.base_url" -> s"https://docs.datastax.com/en/drivers/java/${Dependencies.DriverVersionInDocs}/",
-        // Java
-        "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
-        // Scala
-        "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
-        "scaladoc.akka.persistence.cassandra.base_url" -> s"/${(Preprocess / siteSubdirName).value}/",
-        "javadoc.akka.persistence.cassandra.base_url" -> ""), // no Javadoc is published
+      "project.url" -> "https://doc.akka.io/libraries/akka-persistence-cassandra/current/",
+      "canonical.base_url" -> "https://doc.akka.io/libraries/akka-persistence-cassandra/current",
+      "akka.version" -> Dependencies.AkkaVersion,
+      // Akka
+      "extref.akka.base_url" -> s"https://doc.akka.io/libraries/akka-core/${Dependencies.AkkaVersionInDocs}/%s",
+      "scaladoc.akka.base_url" -> s"https://doc.akka.io/api/akka/${Dependencies.AkkaVersionInDocs}/",
+      "javadoc.akka.base_url" -> s"https://doc.akka.io/japi/akka/${Dependencies.AkkaVersionInDocs}/",
+      // Alpakka
+      "extref.alpakka.base_url" -> s"https://doc.akka.io/docs/alpakka/${Dependencies.AlpakkaVersionInDocs}/%s",
+      "scaladoc.akka.stream.alpakka.base_url" -> s"https://doc.akka.io/api/alpakka/${Dependencies.AlpakkaVersionInDocs}/",
+      "javadoc.akka.stream.alpakka.base_url" -> "",
+      // Cassandra
+      "extref.cassandra.base_url" -> s"https://cassandra.apache.org/doc/${Dependencies.CassandraVersionInDocs}/%s",
+      // Datastax Java driver
+      "extref.java-driver.base_url" -> s"https://docs.datastax.com/en/developer/java-driver/${Dependencies.DriverVersionInDocs}/%s",
+      "javadoc.com.datastax.oss.base_url" -> s"https://docs.datastax.com/en/drivers/java/${Dependencies.DriverVersionInDocs}/",
+      // Java
+      "javadoc.base_url" -> "https://docs.oracle.com/javase/8/docs/api/",
+      // Scala
+      "scaladoc.scala.base_url" -> s"https://www.scala-lang.org/api/${scalaBinaryVersion.value}.x/",
+      "scaladoc.akka.persistence.cassandra.base_url" -> s"/${(Preprocess / siteSubdirName).value}/",
+      "javadoc.akka.persistence.cassandra.base_url" -> ""
+    ), // no Javadoc is published
     paradoxGroups := Map("Language" -> Seq("Java", "Scala")),
     ApidocPlugin.autoImport.apidocRootPackage := "akka",
     resolvers += Resolver.jcenterRepo,

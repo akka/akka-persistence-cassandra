@@ -107,7 +107,8 @@ class BufferSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
       val e4 = event("p1", 4L, "e-2", bucket)
       val sender = TestProbe().ref
 
-      val buffer = Buffer.empty(2).add(aw(sender, (e1, 1), (e2, 2), (e3, 3), (e4, 4))) // same aw, greater than batch size
+      val buffer =
+        Buffer.empty(2).add(aw(sender, (e1, 1), (e2, 2), (e3, 3), (e4, 4))) // same aw, greater than batch size
 
       buffer.writeRequired shouldEqual true
       buffer.nextBatch shouldEqual Vector(awNoSender((e1, 1), (e2, 2)))
