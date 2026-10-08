@@ -47,7 +47,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       "org.apache.cassandra" % "java-driver-core" % CassandraDriverVersion,
       Logback % Test,
-      "org.scalatest" %% "scalatest" % "3.2.19" % Test) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
+      "org.scalatest" %% "scalatest" % "3.2.20" % Test) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
 
   val exampleDependencies = Seq(
     Logback,
