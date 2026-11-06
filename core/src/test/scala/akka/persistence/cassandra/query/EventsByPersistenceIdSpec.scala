@@ -285,7 +285,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       val pr1 = PersistentRepr("e1", 1L, "with-meta", "").withMetadata(meta)
       writeTestEvent(pr1)
       val src = queries.currentEventsByPersistenceId("with-meta", 0L, Long.MaxValue)
-      src.map(_.eventMetadata).runWith(TestSink[Any]()).request(2).expectNext(Some(meta)).expectComplete()
+      src.map(_.metadata[String]).runWith(TestSink[Any]()).request(2).expectNext(Some(meta)).expectComplete()
     }
   }
 

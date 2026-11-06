@@ -17,7 +17,6 @@ import scala.concurrent.duration.{ FiniteDuration, _ }
 import scala.util.{ Failure, Success, Try }
 import com.datastax.oss.driver.api.core.CqlSession
 
-import scala.annotation.nowarn
 import scala.jdk.FutureConverters._
 
 import akka.persistence.cassandra.PluginSettings
@@ -254,14 +253,9 @@ import akka.persistence.cassandra.PluginSettings
                 (interval / 2) + ThreadLocalRandom.current().nextLong(interval.toMillis / 2).millis
               else interval
 
-            scheduleContinue(initial, interval)
+            scheduleWithFixedDelay(Continue, initial, interval)
           case None =>
         }
-      }
-
-      @nowarn("msg=deprecated")
-      private def scheduleContinue(initial: FiniteDuration, interval: FiniteDuration): Unit = {
-        schedulePeriodicallyWithInitialDelay(Continue, initial, interval)
       }
 
       override def postStop(): Unit = {
