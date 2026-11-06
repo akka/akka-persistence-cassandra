@@ -60,7 +60,7 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
         p1take2 ! PoisonPill
 
         val greenTags = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
-        val probe = greenTags.runWith(TestSink.probe[Any](system))
+        val probe = greenTags.runWith(TestSink[Any]()(system))
         probe.request(9)
         (1 to 8).foreach { i =>
           val event = s"e-$i"
@@ -78,7 +78,7 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
         }
 
         val greenTagsTake2 = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
-        val probeTake2 = greenTagsTake2.runWith(TestSink.probe[Any](system))
+        val probeTake2 = greenTagsTake2.runWith(TestSink[Any]()(system))
         probeTake2.request(13)
         (1 to 12).foreach { i =>
           val event = s"e-$i"
@@ -116,7 +116,7 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
         val queryJournal =
           PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
         val greenTags = queryJournal.eventsByTag(tag = "red", offset = NoOffset)
-        val probe = greenTags.runWith(TestSink.probe[Any](system))
+        val probe = greenTags.runWith(TestSink[Any]()(system))
         probe.request(9)
         (1 to 8).foreach { i =>
           val event = s"e-$i"
@@ -162,7 +162,7 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
         val queryJournal =
           PersistenceQuery(system).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
         val greenTags = queryJournal.eventsByTag(tag = "red", offset = NoOffset)
-        val probe = greenTags.runWith(TestSink.probe[Any](system))
+        val probe = greenTags.runWith(TestSink[Any]()(system))
         probe.request(13)
         (1 to 12).foreach { i =>
           val event = s"e-$i"
@@ -200,7 +200,7 @@ class EventsByTagRecoverySpec extends CassandraSpec(EventsByTagRecoverySpec.conf
         val queryJournal =
           PersistenceQuery(systemTwo).readJournalFor[CassandraReadJournal](CassandraReadJournal.Identifier)
         val blueTags = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
-        val probe = blueTags.runWith(TestSink.probe[Any](systemTwo))
+        val probe = blueTags.runWith(TestSink[Any]()(systemTwo))
         probe.request(6)
         (1 to 5).foreach { i =>
           val event = s"e-$i"

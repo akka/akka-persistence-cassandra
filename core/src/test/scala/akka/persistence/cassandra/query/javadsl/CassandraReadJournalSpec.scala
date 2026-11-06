@@ -47,7 +47,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("a-1-done")
 
       val src = javaQueries.eventsByPersistenceId("a", 0L, Long.MaxValue)
-      src.asScala.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("a").cancel()
+      src.asScala.map(_.persistenceId).runWith(TestSink[Any]()).request(10).expectNext("a").cancel()
     }
 
     "start current eventsByPersistenceId query" in {
@@ -56,14 +56,14 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("b-1-done")
 
       val src = javaQueries.currentEventsByPersistenceId("b", 0L, Long.MaxValue)
-      src.asScala.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("b").expectComplete()
+      src.asScala.map(_.persistenceId).runWith(TestSink[Any]()).request(10).expectNext("b").expectComplete()
     }
 
     "start eventsByTag query" in {
       val src = javaQueries.eventsByTag("a", Offset.noOffset)
       src.asScala
         .map(_.persistenceId)
-        .runWith(TestSink.probe[Any])
+        .runWith(TestSink[Any]())
         .request(10)
         .expectNext("a")
         .expectNoMessage(100.millis)
@@ -72,7 +72,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
 
     "start current eventsByTag query" in {
       val src = javaQueries.currentEventsByTag("a", Offset.noOffset)
-      src.asScala.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("a").expectComplete()
+      src.asScala.map(_.persistenceId).runWith(TestSink[Any]()).request(10).expectNext("a").expectComplete()
     }
   }
 }

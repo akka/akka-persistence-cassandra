@@ -33,7 +33,7 @@ class EventsByTagCrashSpec extends CassandraSpec(EventsByTagRestartSpec.config) 
         expectMsg(Ack)
       }
       val blueTags: Source[EventEnvelope, NotUsed] = queryJournal.eventsByTag(tag = "blue", offset = NoOffset)
-      val tagProbe = blueTags.runWith(TestSink.probe[EventEnvelope](system))
+      val tagProbe = blueTags.runWith(TestSink[EventEnvelope]()(system))
       (1L to msgs).foreach { m =>
         val expected = s"msg $m"
         tagProbe.request(1)

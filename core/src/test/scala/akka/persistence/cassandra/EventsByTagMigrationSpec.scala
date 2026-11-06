@@ -81,7 +81,7 @@ class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigra
       migrator.migratePidsToTagViews(List(pidOne)).futureValue shouldEqual Done
 
       val blueSrc = queries.eventsByTag("blue", NoOffset)
-      val blueProbe = blueSrc.runWith(TestSink.probe[Any])
+      val blueProbe = blueSrc.runWith(TestSink[Any]())
       blueProbe.request(5)
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 2, "e-2") => }
@@ -91,7 +91,7 @@ class EventsByTagMigrationProvidePersistenceIds extends AbstractEventsByTagMigra
       migrator.migratePidsToTagViews(List(pidTwo)).futureValue shouldEqual Done
 
       val blueSrcTakeTwo = queries.eventsByTag("blue", NoOffset)
-      val blueProbeTakeTwo = blueSrcTakeTwo.runWith(TestSink.probe[Any])
+      val blueProbeTakeTwo = blueSrcTakeTwo.runWith(TestSink[Any]())
       blueProbeTakeTwo.request(5)
       blueProbeTakeTwo.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1") => }
       blueProbeTakeTwo.expectNextPF { case EventEnvelope(_, `pidOne`, 2, "e-2") => }
@@ -178,7 +178,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
 
     "work with the current implementation" taggedAs (RequiresCassandraThree) in {
       val blueSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("blue", NoOffset)
-      val blueProbe = blueSrc.runWith(TestSink.probe[Any])
+      val blueProbe = blueSrc.runWith(TestSink[Any]())
       blueProbe.request(5)
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 2, "e-2") => }
@@ -191,7 +191,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       blueProbe.cancel()
 
       val greenSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("green", NoOffset)
-      val greenProbe = greenSrc.runWith(TestSink.probe[Any])
+      val greenProbe = greenSrc.runWith(TestSink[Any]())
       greenProbe.request(4)
       greenProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1") => }
       greenProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 4, "e-4") => }
@@ -200,27 +200,27 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       greenProbe.cancel()
 
       val orangeSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("orange", NoOffset)
-      val orangeProbe = orangeSrc.runWith(TestSink.probe[Any])
+      val orangeProbe = orangeSrc.runWith(TestSink[Any]())
       orangeProbe.request(3)
       orangeProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1") => }
       orangeProbe.expectNoMessage(waitTime)
       orangeProbe.cancel()
 
       val bananaSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("banana", NoOffset)
-      val bananaProbe = bananaSrc.runWith(TestSink.probe[Any])
+      val bananaProbe = bananaSrc.runWith(TestSink[Any]())
       bananaProbe.request(3)
       bananaProbe.expectNoMessage(waitTime)
       bananaProbe.cancel()
 
       val redSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("red", NoOffset)
-      val redProbe = redSrc.runWith(TestSink.probe[Any])
+      val redProbe = redSrc.runWith(TestSink[Any]())
       redProbe.request(3)
       redProbe.expectNextPF { case EventEnvelope(_, `pidWithSnapshot`, 10, "h-1") => }
       redProbe.expectNextPF { case EventEnvelope(_, `pidWithSnapshot`, 11, "h-2") => }
       redProbe.cancel()
 
       val excludedSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("bad-tag", NoOffset)
-      val excludedProbe = excludedSrc.runWith(TestSink.probe[Any])
+      val excludedProbe = excludedSrc.runWith(TestSink[Any]())
       excludedProbe.request(1)
       excludedProbe.expectNoMessage(waitTime)
       excludedProbe.cancel()
@@ -232,7 +232,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       probe.expectMsg(RecoveryCompleted)
 
       val blueSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("blue", NoOffset)
-      val blueProbe = blueSrc.runWith(TestSink.probe[Any])
+      val blueProbe = blueSrc.runWith(TestSink[Any]())
       blueProbe.request(6)
       blueProbe.expectNextN(5) // ignore the ones we've already validated
       // This event wasn't migrated, should have been fixed on actor start up
@@ -241,7 +241,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       blueProbe.cancel()
 
       val greenSrc: Source[EventEnvelope, NotUsed] = queries.eventsByTag("green", NoOffset)
-      val greenProbe = greenSrc.runWith(TestSink.probe[Any])
+      val greenProbe = greenSrc.runWith(TestSink[Any]())
       greenProbe.request(6)
       greenProbe.expectNextN(3) // ignore the ones we've already validated
       // This event wasn't migrated, should have been fixed on actor start up
@@ -274,7 +274,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       expectMsg(Ack)
 
       val blueSrc: Source[EventEnvelope, NotUsed] = queriesTwo.eventsByTag("blue", NoOffset)
-      val blueProbe = blueSrc.runWith(TestSink.probe[Any])(SystemMaterializer(systemTwo).materializer)
+      val blueProbe = blueSrc.runWith(TestSink[Any]())(SystemMaterializer(systemTwo).materializer)
       blueProbe.request(10)
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1") => }
       blueProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 2, "e-2") => }
@@ -307,7 +307,7 @@ class EventsByTagMigrationSpec extends AbstractEventsByTagMigrationSpec {
       expectMsg(Ack)
 
       val orangeSrc: Source[EventEnvelope, NotUsed] = queriesThree.eventsByTag("orange", NoOffset)
-      val orangeProbe = orangeSrc.runWith(TestSink.probe[Any])(SystemMaterializer(systemThree).materializer)
+      val orangeProbe = orangeSrc.runWith(TestSink[Any]())(SystemMaterializer(systemThree).materializer)
       orangeProbe.request(3)
       orangeProbe.expectNextPF { case EventEnvelope(_, `pidOne`, 1, "e-1")         => }
       orangeProbe.expectNextPF { case EventEnvelope(_, `pidTwo`, 5, "new-event-1") => }

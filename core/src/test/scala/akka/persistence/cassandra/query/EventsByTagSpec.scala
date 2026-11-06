@@ -198,7 +198,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       expectMsg(s"a green leaf-done")
 
       val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
-      val probe = greenSrc.runWith(TestSink.probe[Any])
+      val probe = greenSrc.runWith(TestSink[Any]())
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 2L, "a green apple")  => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 4L, "a green banana") => e }
@@ -208,13 +208,13 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       probe.expectComplete()
 
       val blackSrc = queries.currentEventsByTag(tag = "black", offset = NoOffset)
-      val probe2 = blackSrc.runWith(TestSink.probe[Any])
+      val probe2 = blackSrc.runWith(TestSink[Any]())
       probe2.request(5)
       probe2.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "a black car") => e }
       probe2.expectComplete()
 
       val appleSrc = queries.currentEventsByTag(tag = "apple", offset = NoOffset)
-      val probe3 = appleSrc.runWith(TestSink.probe[Any])
+      val probe3 = appleSrc.runWith(TestSink[Any]())
       probe3.request(5)
       probe3.expectNextPF { case e @ EventEnvelope(_, "a", 2L, "a green apple") => e }
       probe3.expectComplete()
@@ -222,7 +222,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
     "complete when no events" in {
       val src = queries.currentEventsByTag(tag = "pink", offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(2)
       probe.expectComplete()
     }
@@ -231,7 +231,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       val c = system.actorOf(TestActor.props("c"))
 
       val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
-      val probe = greenSrc.runWith(TestSink.probe[Any])
+      val probe = greenSrc.runWith(TestSink[Any]())
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 2L, "a green apple")  => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 4L, "a green banana") => e }
@@ -248,7 +248,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
     "find events from timestamp offset" in {
       val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
-      val probe1 = greenSrc1.runWith(TestSink.probe[Any])
+      val probe1 = greenSrc1.runWith(TestSink[Any]())
       probe1.request(2)
       val appleOffs = probe1
         .expectNextPF {
@@ -269,7 +269,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       appleTimestamp should be <= bananaTimestamp
 
       val greenSrc2 = queries.currentEventsByTag(tag = "green", queries.timeBasedUUIDFrom(bananaTimestamp))
-      val probe2 = greenSrc2.runWith(TestSink.probe[Any])
+      val probe2 = greenSrc2.runWith(TestSink[Any]())
       probe2.request(10)
       if (appleTimestamp == bananaTimestamp)
         probe2.expectNextPF { case e @ EventEnvelope(_, "a", 2L, "a green apple") => e }
@@ -280,14 +280,14 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
     "find events from UUID offset" in {
       val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
-      val probe1 = greenSrc1.runWith(TestSink.probe[Any])
+      val probe1 = greenSrc1.runWith(TestSink[Any]())
       probe1.request(2)
       probe1.expectNextPF { case e @ EventEnvelope(_, "a", 2L, "a green apple") => e }
       val offs = probe1.expectNextPF { case e @ EventEnvelope(_, "a", 4L, "a green banana") => e }.offset
       probe1.cancel()
 
       val greenSrc2 = queries.currentEventsByTag(tag = "green", offs)
-      val probe2 = greenSrc2.runWith(TestSink.probe[Any])
+      val probe2 = greenSrc2.runWith(TestSink[Any]())
       probe2.request(10)
       probe2.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "a green leaf") => e }
       probe2.cancel()
@@ -296,7 +296,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
     "include timestamp in EventEnvelope" in {
       val currentTime = System.currentTimeMillis()
       val greenSrc1 = queries.currentEventsByTag(tag = "green", offset = NoOffset)
-      val probe1 = greenSrc1.runWith(TestSink.probe[EventEnvelope])
+      val probe1 = greenSrc1.runWith(TestSink[EventEnvelope]())
       probe1.request(2)
 
       val env1 = probe1.expectNext()
@@ -330,7 +330,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       writeTaggedEvent(t4, pr4, Set("T1-current"), 4, bucketSize)
 
       val src = queries.currentEventsByTag(tag = "T1-current", offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(2)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
@@ -349,7 +349,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
     "find new events" in {
       val d = system.actorOf(TestActor.props("d"))
-      withProbe(queries.eventsByTag(tag = "black", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "black", offset = NoOffset).runWith(TestSink[Any]()), probe => {
         probe.request(2)
         probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "a black car") => e }
         probe.expectNoMessage(waitTime)
@@ -369,7 +369,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
 
     "find events from timestamp offset" in {
       withProbe(
-        queries.eventsByTag(tag = "green", offset = NoOffset).runWith(TestSink.probe[Any]),
+        queries.eventsByTag(tag = "green", offset = NoOffset).runWith(TestSink[Any]()),
         probe1 => {
           probe1.request(2)
           val appleOffs = probe1
@@ -389,7 +389,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
           bananaTimestamp should be <= bananaTimestamp
 
           withProbe(
-            queries.eventsByTag(tag = "green", queries.timeBasedUUIDFrom(bananaTimestamp)).runWith(TestSink.probe[Any]),
+            queries.eventsByTag(tag = "green", queries.timeBasedUUIDFrom(bananaTimestamp)).runWith(TestSink[Any]()),
             probe2 => {
               probe2.request(10)
               if (appleTimestamp == bananaTimestamp)
@@ -404,14 +404,14 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
     }
 
     "find events from UUID offset " in {
-      withProbe(queries.eventsByTag(tag = "green", offset = NoOffset).runWith(TestSink.probe[Any]), probe1 => {
+      withProbe(queries.eventsByTag(tag = "green", offset = NoOffset).runWith(TestSink[Any]()), probe1 => {
         probe1.request(2)
         probe1.expectNextPF { case e @ EventEnvelope(_, "a", 2L, "a green apple") => e }
         val offs = probe1.expectNextPF { case e @ EventEnvelope(_, "a", 4L, "a green banana") => e }.offset
         probe1.cancel()
 
         val greenSrc2 = queries.eventsByTag(tag = "green", offs)
-        val probe2 = greenSrc2.runWith(TestSink.probe[Any])
+        val probe2 = greenSrc2.runWith(TestSink[Any]())
         probe2.request(10)
         probe2.expectNextPF { case e @ EventEnvelope(_, "b", 2L, "a green leaf")     => e }
         probe2.expectNextPF { case e @ EventEnvelope(_, "c", 1L, "a green cucumber") => e }
@@ -422,7 +422,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
     "include timestamp in EventEnvelope" in {
       val currentTime = System.currentTimeMillis()
       val greenSrc1 = queries.eventsByTag(tag = "green", offset = NoOffset)
-      val probe1 = greenSrc1.runWith(TestSink.probe[EventEnvelope])
+      val probe1 = greenSrc1.runWith(TestSink[EventEnvelope]())
       probe1.request(2)
 
       val env1 = probe1.expectNext()
@@ -449,7 +449,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       val pr2 = PersistentRepr("e2", 2L, "p1", "", writerUuid = w1)
       writeTaggedEvent(t2, pr2, Set("T1-live"), 2, bucketSize)
 
-      withProbe(queries.eventsByTag(tag = "T1-live", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "T1-live", offset = NoOffset).runWith(TestSink[Any]()), probe => {
         probe.request(10)
         probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
         probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
@@ -476,7 +476,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
       val pr3 = PersistentRepr("p1-e2", 2L, "p1", "", writerUuid = w1)
       writeTaggedEvent(t3, pr3, Set("T2"), 2, bucketSize)
 
-      withProbe(queries.eventsByTag(tag = "T2", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "T2", offset = NoOffset).runWith(TestSink[Any]()), probe => {
         probe.request(10)
 
         // simulate async eventually consistent Materialized View update
@@ -496,7 +496,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
     "stream many events" in {
       val e = system.actorOf(TestActor.props("e"))
       withProbe(
-        queries.eventsByTag(tag = "yellow", offset = NoOffset).runWith(TestSink.probe[Any]),
+        queries.eventsByTag(tag = "yellow", offset = NoOffset).runWith(TestSink[Any]()),
         probe => {
 
           for (n <- 1 to 100)
@@ -526,7 +526,7 @@ class EventsByTagSpec extends AbstractEventsByTagSpec(EventsByTagSpec.config) {
     }
 
     "not complete for empty query" in {
-      val probe = queries.eventsByTag(tag = "empty", offset = NoOffset).runWith(TestSink.probe[Any])
+      val probe = queries.eventsByTag(tag = "empty", offset = NoOffset).runWith(TestSink[Any]())
       probe.request(2)
       probe.expectNoMessage(waitTime)
       probe.cancel()
@@ -557,7 +557,7 @@ class EventsByTagZeroEventualConsistencyDelaySpec
       expectMsg(s"a green leaf-done")
 
       val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
-      val probe = greenSrc.runWith(TestSink.probe[Any])
+      val probe = greenSrc.runWith(TestSink[Any]())
       probe.request(NumberOfBananas + 10L)
       probe.expectNextPF { case e @ EventEnvelope(_, "a", 1L, "a green apple") => e }
       (1 to NumberOfBananas).foreach { n =>
@@ -604,7 +604,7 @@ akka.persistence.cassandra.events-by-tag.refresh-internal = 100ms
       val p2e1 = PersistentRepr("p2-e1", 1L, "p2", "", writerUuid = w2)
       writeTaggedEvent(t2, p2e1, Set("T6"), 1, bucketSize)
 
-      withProbe(queries.eventsByTag(tag = "T6", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "T6", offset = NoOffset).runWith(TestSink[Any]()), probe => {
         probe.request(10)
         probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "p1-e1") => e }
         probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "p2-e1") => e }
@@ -630,7 +630,7 @@ akka.persistence.cassandra.events-by-tag.refresh-internal = 100ms
       val eventA1 = PersistentRepr("A1", 1L, "a", "", writerUuid = w1)
       writeTaggedEvent(t2, eventA1, Set("T7"), 1, bucketSize)
 
-      withProbe(queries.eventsByTag(tag = "T7", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "T7", offset = NoOffset).runWith(TestSink[Any]()), probe => {
         probe.request(10)
         probe.expectNextPF { case e @ EventEnvelope(_, "a", 1L, "A1") => e }
 
@@ -659,7 +659,7 @@ akka.persistence.cassandra.events-by-tag.refresh-internal = 100ms
       val eventA1 = PersistentRepr("A1", 1L, "a", "", writerUuid = w1)
       writeTaggedEvent(t2, eventA1, Set("T8"), 1, bucketSize)
 
-      withProbe(queries.eventsByTag(tag = "T8", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "T8", offset = NoOffset).runWith(TestSink[Any]()), probe => {
         probe.request(10)
         probe.expectNextPF { case e @ EventEnvelope(_, "b", 1L, "B0") => e }
         probe.expectNextPF { case e @ EventEnvelope(_, "a", 1L, "A1") => e }
@@ -684,12 +684,12 @@ akka.persistence.cassandra.events-by-tag.refresh-internal = 100ms
       val eventA1 = PersistentRepr("A1", 1L, "a", "", writerUuid = w1)
       writeTaggedEvent(t1.plusSeconds(2), eventA1, Set("T9"), 1, bucketSize)
 
-      withProbe(queries.eventsByTag(tag = "T9", offset = NoOffset).runWith(TestSink.probe[Any]), probe1 => {
+      withProbe(queries.eventsByTag(tag = "T9", offset = NoOffset).runWith(TestSink[Any]()), probe1 => {
         probe1.request(10)
         val offs =
           probe1.expectNextPF { case e @ EventEnvelope(_, "a", 1L, "A1") => e }.offset.asInstanceOf[TimeBasedUUID]
 
-        withProbe(queries.eventsByTag(tag = "T9", offset = offs).runWith(TestSink.probe[Any]), probe2 => {
+        withProbe(queries.eventsByTag(tag = "T9", offset = offs).runWith(TestSink[Any]()), probe2 => {
           probe2.request(10)
 
           // delayed, timestamp is before A1, i.e. before the offset so should not be picked up
@@ -717,7 +717,7 @@ akka.persistence.cassandra.events-by-tag.refresh-internal = 100ms
         writeTaggedEvent(t1.plus(n, ChronoUnit.MILLIS), eventA, Set("T10"), n, bucketSize)
       }
 
-      withProbe(queries.eventsByTag(tag = "T10", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "T10", offset = NoOffset).runWith(TestSink[Any]()), probe => {
         probe.request(1000)
         probe.expectNextN(100)
 
@@ -746,7 +746,7 @@ akka.persistence.cassandra.events-by-tag.refresh-internal = 100ms
       val t1 = LocalDateTime.now(ZoneOffset.UTC)
 
       withProbe(
-        queries.eventsByTag(tag = "T11", offset = NoOffset).runWith(TestSink.probe[Any]),
+        queries.eventsByTag(tag = "T11", offset = NoOffset).runWith(TestSink[Any]()),
         probe => {
           probe.request(1000)
 
@@ -815,7 +815,7 @@ class EventsByTagStrictBySeqNoEarlyFirstOffsetSpec
 
       // the search for delayed events should start before we get to the current timebucket
       // until 0.26/0.51 backtracking was broken and events would be skipped
-      withProbe(queries.eventsByTag(tag = "T11", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "T11", offset = NoOffset).runWith(TestSink[Any]()), probe => {
         probe.request(2000)
         probe.expectNextN(2000)
       })
@@ -851,7 +851,7 @@ class EventsByTagLongRefreshIntervalSpec
     sender.expectNoMessage(200.millis) // try and give time for the tagged event to be flushed so the query doesn't need to wait for the refresh interval
 
     val offset: Offset =
-      withProbe(queries.eventsByTag(tag = "animal", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "animal", offset = NoOffset).runWith(TestSink[Any]()), probe => {
         probe.request(2)
         probe.expectNextPF {
           case EventEnvelope(offset, `pid`, 1L, "cat") =>
@@ -864,7 +864,7 @@ class EventsByTagLongRefreshIntervalSpec
     // flush interval for tag writes is 0ms but still give some time for the tag write to complete
     sender.expectNoMessage(250.millis)
 
-    withProbe(queries.eventsByTag(tag = "animal", offset = offset).runWith(TestSink.probe[Any]), probe => {
+    withProbe(queries.eventsByTag(tag = "animal", offset = offset).runWith(TestSink[Any]()), probe => {
       probe.request(2)
       // less than the refresh interval, previously this would evaluate the new persistence-id timeout and then not re-evaluate
       // it again until the next refresh interval
@@ -904,7 +904,7 @@ class EventsByTagStrictBySeqNoManyInCurrentTimeBucketSpec
       // the search for delayed events should start before we get to the current timebucket
       // until 0.26/0.51 backtracking was broken and events would be skipped
       val src = queries.currentEventsByTag(tag = "T12", offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(2000)
       probe.expectNextN(200)
       probe.expectComplete()
@@ -939,7 +939,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
       }
 
       withProbe(
-        queries.eventsByTag(tag = "T13", offset = NoOffset).runWith(TestSink.probe[Any]),
+        queries.eventsByTag(tag = "T13", offset = NoOffset).runWith(TestSink[Any]()),
         probe => {
 
           val requested1 = 150L
@@ -1011,7 +1011,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
           writeTaggedEvent(t2, eventB, Set("T14"), n - 112, bucketSize)
       }
 
-      withProbe(queries.eventsByTag(tag = "T14", offset = NoOffset).runWith(TestSink.probe[Any]), probe => {
+      withProbe(queries.eventsByTag(tag = "T14", offset = NoOffset).runWith(TestSink[Any]()), probe => {
 
         val requested1 = 130L
         probe.request(requested1)
@@ -1049,7 +1049,7 @@ class EventsByTagStrictBySeqMemoryIssueSpec extends AbstractEventsByTagSpec(Even
       }
 
       val src = queries.currentEventsByTag(tag = "T15", offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
 
       (1 to 10).foreach { _ =>
         probe.request(30)
@@ -1090,7 +1090,7 @@ class EventsByTagSpecBackTrackingLongRefreshInterval
       val tagName = "back-track-previous-bucket-no-refresh"
       writeTaggedEvent(PersistentRepr("e1", 1L, "p2", ""), Set(tagName), 1, bucketSize)
       val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(10)
       // bring the offset forward with an event for a new persistence id
       probe.expectNextPF { case e @ EventEnvelope(_, "p2", 1L, "e1") => e }
@@ -1135,7 +1135,7 @@ class EventsByTagSpecBackTracking
       writeTaggedEvent(t1.plusMinutes(1), PersistentRepr("e2", 2L, "p1", ""), Set("back-track"), 2, bucketSize)
 
       val src = queries.eventsByTag(tag = "back-track", offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(10)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
@@ -1166,7 +1166,7 @@ class EventsByTagSpecBackTracking
       writeTaggedEvent(t1.plusHours(1), PersistentRepr("e2", 2L, "p1", ""), Set(tagName), 2, bucketSize)
 
       val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(10)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 2L, "e2") => e }
@@ -1194,7 +1194,7 @@ class EventsByTagSpecBackTracking
     "find new persistence ids that were missed" in {
       val tagName = "back-track-new-persistence-id"
       val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(10)
       writeTaggedEvent(PersistentRepr("e1", 1L, "p1", ""), Set(tagName), 1, bucketSize)
       writeTaggedEvent(PersistentRepr("e2", 2L, "p1", ""), Set(tagName), 2, bucketSize)
@@ -1215,7 +1215,7 @@ class EventsByTagSpecBackTracking
     "sort delayed events by timeuuid" in {
       val tagName = "back-track-sort-delayed-events"
       val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(10)
       writeTaggedEvent(PersistentRepr("e1", 1L, "p1", ""), Set(tagName), 1, bucketSize)
       probe.expectNextPF { case e @ EventEnvelope(_, "p1", 1L, "e1") => e }
@@ -1240,7 +1240,7 @@ class EventsByTagSpecBackTracking
     "work for many delayed events for different persistence ids" in {
       val tagName = "back-track-many-persistence-ids"
       val src = queries.eventsByTag(tag = tagName, offset = NoOffset)
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(1005)
       // short period is 10m
       val start = today.minusMinutes(9)
@@ -1351,7 +1351,7 @@ class EventsByTagPersistenceIdCleanupSpec extends AbstractEventsByTagSpec(Events
 
       val query =
         queries.eventsByTag("cleanup-tag", TimeBasedUUID(Uuids.startOf(t1.toInstant(ZoneOffset.UTC).toEpochMilli - 1L)))
-      val probe = query.runWith(TestSink.probe[Any])
+      val probe = query.runWith(TestSink[Any]())
       probe.request(10)
       probe.expectNextPF { case e @ EventEnvelope(_, "cleanup", 1L, "cleanup-1") => e }
       probe.expectNoMessage(cleanupPeriod + 250.millis)
@@ -1383,14 +1383,14 @@ class EventsByTagDisabledSpec extends AbstractEventsByTagSpec(EventsByTagSpec.di
 
     "fail current events by tag queries" in {
       val greenSrc = queries.currentEventsByTag(tag = "green", offset = NoOffset)
-      val probe = greenSrc.runWith(TestSink.probe[Any])
+      val probe = greenSrc.runWith(TestSink[Any]())
       probe.request(1)
       probe.expectError().getMessage should include("Events by tag queries are disabled")
     }
 
     "fail live events by tag queries" in {
       val greenSrc = queries.eventsByTag(tag = "green", offset = NoOffset)
-      val probe = greenSrc.runWith(TestSink.probe[Any])
+      val probe = greenSrc.runWith(TestSink[Any]())
       probe.request(1)
       probe.expectError().getMessage should include("Events by tag queries are disabled")
     }

@@ -52,7 +52,7 @@ class EventsByTagPubsubSpec extends CassandraSpec(EventsByTagPubsubSpec.config) 
       val actor = system.actorOf(TestActor.props("EventsByTagPubsubSpec_a"))
 
       val blackSrc = queries.eventsByTag(tag = "black", offset = NoOffset)
-      val probe = blackSrc.runWith(TestSink.probe[Any])
+      val probe = blackSrc.runWith(TestSink[Any]())
       probe.request(2)
       probe.expectNoMessage(300.millis)
 

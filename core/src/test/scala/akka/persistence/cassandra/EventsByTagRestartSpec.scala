@@ -64,7 +64,7 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       }
 
       val blueTags = queryJournal.eventsByTag(tag, offset = NoOffset)
-      val tagProbe = blueTags.runWith(TestSink.probe[Any](system))
+      val tagProbe = blueTags.runWith(TestSink[Any]()(system))
       (0 until restarts).foreach { restart =>
         tagProbe.request(messagesPerRestart + 1)
         (1 to messagesPerRestart).foreach { i =>
@@ -99,7 +99,7 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       deathProbe.expectTerminated(p2)
 
       val greenTags = queryJournal.eventsByTag(tag, offset = NoOffset)
-      val tagProbe = greenTags.runWith(TestSink.probe[Any](system))
+      val tagProbe = greenTags.runWith(TestSink[Any]()(system))
       tagProbe.request(10)
       (1 to 3).foreach { n =>
         val event = s"e$n"
@@ -151,7 +151,7 @@ class EventsByTagRestartSpec extends CassandraSpec(EventsByTagRestartSpec.config
       probe2.expectMsg(Ack)
 
       val greenTags = queryJournal.eventsByTag(tag, offset = NoOffset)
-      val tagProbe = greenTags.runWith(TestSink.probe[Any](system))
+      val tagProbe = greenTags.runWith(TestSink[Any]()(system))
       tagProbe.request(10)
       // without the fix this would not complete because e4 will have tagSeqNr 1 rather than the expected 4
       (1 to 6).foreach { n =>

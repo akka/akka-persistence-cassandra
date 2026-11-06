@@ -66,14 +66,14 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       setup("c", 1)
 
       val src = current()
-      src.runWith(TestSink.probe[Any]).request(4).expectNextUnordered("a", "b", "c").expectComplete()
+      src.runWith(TestSink[Any]()).request(4).expectNextUnordered("a", "b", "c").expectComplete()
     }
 
     "deliver persistenceId only once if there are multiple events spanning partitions" in {
       setup("d", 100)
 
       val src = current()
-      src.runWith(TestSink.probe[Any]).request(10).expectNext("d").expectComplete()
+      src.runWith(TestSink[Any]()).request(10).expectNext("d").expectComplete()
     }
 
     "find existing persistence ids in batches if there is more of them than page-size" in {
@@ -82,7 +82,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       }
 
       val src = current()
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(1000)
 
       for (_ <- 1 to 1000) {
@@ -99,7 +99,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       setup("f", 1)
 
       val src = all()
-      val probe = src.runWith(TestSink.probe[Any]).request(5).expectNextUnordered("e", "f")
+      val probe = src.runWith(TestSink[Any]()).request(5).expectNextUnordered("e", "f")
 
       setup("g", 1)
 
@@ -110,7 +110,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       setup("h", 1)
       setup("i", 1)
       val src = all()
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
 
       probe.request(1)
       probe.expectNext()
@@ -131,7 +131,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       setup("o", 1)
 
       val src = all()
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
       probe.request(2)
       probe.expectNext()
       probe.expectNext()
@@ -147,7 +147,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       setup("p", 1000)
 
       val src = all()
-      val probe = src.runWith(TestSink.probe[Any])
+      val probe = src.runWith(TestSink[Any]())
 
       probe.request(10).expectNext("p").expectNoMessage(1000.millis)
 
@@ -164,7 +164,7 @@ class AllPersistenceIdsSpec extends CassandraSpec(AllPersistenceIdsSpec.config) 
       setup("c2", 1)
 
       val src = queries.currentPersistenceIdsFromMessages().filterNot(_.startsWith("persistenceInit"))
-      src.runWith(TestSink.probe[Any]).request(4).expectNextUnordered("a2", "b2", "c2").expectComplete()
+      src.runWith(TestSink[Any]()).request(4).expectNextUnordered("a2", "b2", "c2").expectComplete()
     }
   }
 }
