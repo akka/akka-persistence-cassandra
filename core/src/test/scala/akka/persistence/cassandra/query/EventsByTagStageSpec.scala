@@ -84,7 +84,7 @@ class EventsByTagStageSpec
       send(ref, Tagged("e-4", Set("tag-2")))
 
       val stream = queries.currentEventsByTag("tag-2", NoOffset)
-      val sub = stream.toMat(TestSink.probe[EventEnvelope])(Keep.right).run()
+      val sub = stream.toMat(TestSink[EventEnvelope]())(Keep.right).run()
 
       sub.request(2)
       sub.expectNoMessage(50.millis) // eventual consistency delay prevents events coming right away
@@ -98,7 +98,7 @@ class EventsByTagStageSpec
     "empty tag completes" in {
       val stream: Source[EventEnvelope, NotUsed] =
         queries.currentEventsByTag("bogus", NoOffset)
-      val sub = stream.toMat(TestSink.probe[EventEnvelope])(Keep.right).run()
+      val sub = stream.toMat(TestSink[EventEnvelope]())(Keep.right).run()
       sub.request(1)
       sub.expectComplete()
     }
@@ -110,7 +110,7 @@ class EventsByTagStageSpec
       }
 
       val stream = queries.currentEventsByTag("paged", NoOffset)
-      val sub = stream.runWith(TestSink.probe[EventEnvelope])
+      val sub = stream.runWith(TestSink[EventEnvelope]())
 
       sub.request(fetchSize + 1L)
       (1L to (fetchSize + 1)).foreach { i =>
@@ -132,7 +132,7 @@ class EventsByTagStageSpec
         bucketSize)
 
       val tagStream = queries.currentEventsByTag("CurrentPreviousBuckets", NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
 
       sub.request(2)
       sub.expectNextPF { case EventEnvelope(_, "p-3", 1, "e-1") => }
@@ -170,7 +170,7 @@ class EventsByTagStageSpec
         bucketSize)
 
       val tagStream = queries.currentEventsByTag("CurrentPreviousMultipleBuckets", NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
 
       sub.request(2)
       sub.expectNextPF { case EventEnvelope(_, "l-4", 1, "e-1") => }
@@ -195,7 +195,7 @@ class EventsByTagStageSpec
       writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4), bucketSize)
 
       val tagStream = queries.currentEventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
 
       sub.request(4)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -226,7 +226,7 @@ class EventsByTagStageSpec
       writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4), bucketSize)
 
       val tagStream: Source[EventEnvelope, NotUsed] = queries.currentEventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
 
       sub.request(4)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -248,7 +248,7 @@ class EventsByTagStageSpec
       writeTaggedEvent(thisBucket, PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, bucketSize)
 
       val tagStream = queries.currentEventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
       sub.request(5)
 
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -277,7 +277,7 @@ class EventsByTagStageSpec
       val tagStream = queries.currentEventsByTag(
         tag,
         queries.timeBasedUUIDFrom(twoBucketsAgo.minusMinutes(1).toInstant(ZoneOffset.UTC).toEpochMilli))
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
 
       sub.request(3)
       sub.expectNextWithTimeoutPF(waitTime, { case EventEnvelope(_, "p-1", 10, "p1e10") => })
@@ -297,7 +297,7 @@ class EventsByTagStageSpec
       val stream: Source[EventEnvelope, NotUsed] =
         queries.eventsByTag("bogus", NoOffset)
 
-      val sub = stream.toMat(TestSink.probe[EventEnvelope])(Keep.right).run()
+      val sub = stream.toMat(TestSink[EventEnvelope]())(Keep.right).run()
       sub.request(1)
       sub.expectNoMessage(waitTime)
     }
@@ -307,7 +307,7 @@ class EventsByTagStageSpec
       send(ref, Tagged("e-1", Set("tag-3")))
 
       val blackSrc = queries.eventsByTag(tag = "tag-3", offset = NoOffset)
-      val probe = blackSrc.runWith(TestSink.probe[EventEnvelope])
+      val probe = blackSrc.runWith(TestSink[EventEnvelope]())
       probe.request(2)
       probe.expectNextPF { case EventEnvelope(_, "b", 1L, "e-1") => }
       probe.expectNoMessage(waitTime)
@@ -344,7 +344,7 @@ class EventsByTagStageSpec
         bucketSize)
 
       val tagStream = queries.eventsByTag("LivePreviousBuckets", NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
 
       sub.request(2)
       sub.expectNextPF { case EventEnvelope(_, "l-4", 1, "e-1") => }
@@ -382,7 +382,7 @@ class EventsByTagStageSpec
       writeTaggedEvent(PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, times(4), bucketSize)
 
       val tagStream = queries.eventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
 
       sub.request(4)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -411,7 +411,7 @@ class EventsByTagStageSpec
       writeTaggedEvent(PersistentRepr("p1e6", 6, "p-1"), Set(tag), 6, times(6), bucketSize)
 
       val tagStream = queries.eventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
 
       sub.request(4)
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -445,7 +445,7 @@ class EventsByTagStageSpec
       writeTaggedEvent(PersistentRepr("p2e3", 3, "p-2"), Set(tag), 3, times(3), bucketSize)
 
       val tagStream = queries.eventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
       sub.request(10)
 
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -475,7 +475,7 @@ class EventsByTagStageSpec
 
       writeTaggedEvent(nowTime.plusSeconds(1), PersistentRepr("e-3", 3, "p-1"), Set(tag), 3, bucketSize)
 
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
       sub.request(5)
       sub.expectNoMessage(waitTime)
 
@@ -498,7 +498,7 @@ class EventsByTagStageSpec
       writeTaggedEvent(thisBucket, PersistentRepr("p1e4", 4, "p-1"), Set(tag), 4, bucketSize)
 
       val tagStream = queries.eventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
       sub.request(5)
 
       sub.expectNextPF { case EventEnvelope(_, "p-1", 1, "p1e1") => }
@@ -526,7 +526,7 @@ class EventsByTagStageSpec
         queries.eventsByTag(
           tag,
           queries.timeBasedUUIDFrom(nowTime.minusSeconds(1).toInstant(ZoneOffset.UTC).toEpochMilli))
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
 
       sub.request(4)
       sub.expectNoMessage(100.millis)
@@ -545,7 +545,7 @@ class EventsByTagStageSpec
       val nowTime = LocalDateTime.now(ZoneOffset.UTC)
       writeTaggedEvent(nowTime.plusSeconds(1), PersistentRepr("p1e1", 1, "p1"), Set(tag), 1, bucketSize)
       val tagStream = queries.eventsByTag(tag, NoOffset)
-      val sub = tagStream.runWith(TestSink.probe[EventEnvelope])
+      val sub = tagStream.runWith(TestSink[EventEnvelope]())
       sub.request(2)
       sub.expectNextPF { case EventEnvelope(_, "p1", 1, "p1e1") => }
       writeTaggedEvent(nowTime.plusSeconds(2), PersistentRepr("p1e10000", 10000, "p1"), Set(tag), 10000, bucketSize)

@@ -37,7 +37,7 @@ class EventsByPersistenceIdFastForwardSpec
     writeTestEvent(evt1)
 
     val src = queries.eventsByPersistenceIdWithControl("f", 0L, Long.MaxValue)
-    val (futureControl, probe) = src.map(_.event).toMat(TestSink.probe[Any])(Keep.both).run()
+    val (futureControl, probe) = src.map(_.event).toMat(TestSink[Any]())(Keep.both).run()
     val control = futureControl.futureValue
     probe.request(5)
 

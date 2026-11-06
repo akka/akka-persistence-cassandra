@@ -50,7 +50,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       val src = queries.currentEventsByPersistenceId("a", 0L, Long.MaxValue)
       src
         .map(_.event)
-        .runWith(TestSink.probe[Any])
+        .runWith(TestSink[Any]())
         .request(2)
         .expectNext("a-1", "a-2")
         .expectNoMessage(noMsgTimeout)
@@ -63,19 +63,19 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       setup("b", 10)
       val src = queries.currentEventsByPersistenceId("b", 5L, Long.MaxValue)
 
-      src.map(_.sequenceNr).runWith(TestSink.probe[Any]).request(7).expectNext(5, 6, 7, 8, 9, 10).expectComplete()
+      src.map(_.sequenceNr).runWith(TestSink[Any]()).request(7).expectNext(5, 6, 7, 8, 9, 10).expectComplete()
     }
 
     "not see any events if the stream starts after current latest event" in {
       setup("c", 3)
       val src = queries.currentEventsByPersistenceId("c", 5L, Long.MaxValue)
-      src.map(_.event).runWith(TestSink.probe[Any]).request(5).expectComplete()
+      src.map(_.event).runWith(TestSink[Any]()).request(5).expectComplete()
     }
 
     "find existing events up to a sequence number" in {
       setup("d", 3)
       val src = queries.currentEventsByPersistenceId("d", 0L, 2L)
-      src.map(_.sequenceNr).runWith(TestSink.probe[Any]).request(5).expectNext(1, 2).expectComplete()
+      src.map(_.sequenceNr).runWith(TestSink[Any]()).request(5).expectNext(1, 2).expectComplete()
     }
 
     "not see new events after demand request" in {
@@ -83,7 +83,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
 
       val src = queries.currentEventsByPersistenceId("e", 0L, Long.MaxValue)
       val probe =
-        src.map(_.event).runWith(TestSink.probe[Any]).request(2).expectNext("e-1", "e-2").expectNoMessage(noMsgTimeout)
+        src.map(_.event).runWith(TestSink[Any]()).request(2).expectNext("e-1", "e-2").expectNoMessage(noMsgTimeout)
 
       ref ! "e-4"
       expectMsg("e-4-done")
@@ -96,7 +96,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
 
       val src = queries.currentEventsByPersistenceId("f", 0L, Long.MaxValue)
       val probe =
-        src.map(_.event).runWith(TestSink.probe[Any]).request(2).expectNext("f-1", "f-2").expectNoMessage(noMsgTimeout)
+        src.map(_.event).runWith(TestSink[Any]()).request(2).expectNext("f-1", "f-2").expectNoMessage(noMsgTimeout)
 
       probe
         .expectNoMessage(noMsgTimeout)
@@ -110,7 +110,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
     "stop if there are no events" in {
       val src = queries.currentEventsByPersistenceId("g", 0L, Long.MaxValue)
 
-      src.runWith(TestSink.probe[Any]).request(2).expectComplete()
+      src.runWith(TestSink[Any]()).request(2).expectComplete()
     }
 
     "produce correct sequence of sequence numbers" in {
@@ -119,7 +119,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       val src = queries.currentEventsByPersistenceId("h", 0L, Long.MaxValue)
       src
         .map(x => (x.persistenceId, x.sequenceNr))
-        .runWith(TestSink.probe[Any])
+        .runWith(TestSink[Any]())
         .request(4)
         .expectNext(("h", 1), ("h", 2), ("h", 3))
         .expectComplete()
@@ -143,7 +143,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       val src = queries.currentEventsByPersistenceId("i", 0L, Long.MaxValue)
       src
         .map(_.event)
-        .runWith(TestSink.probe[Any])
+        .runWith(TestSink[Any]())
         .request(10)
         .expectNextN((1 to 10).map(i => s"i-$i"))
         .expectNoMessage(noMsgTimeout)
@@ -161,7 +161,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
         .eventsByPersistenceId("jo", 0L, Long.MaxValue)
         .viaMat(KillSwitches.single)(Keep.right)
         .map(x => (x.event, x.sequenceNr, x.offset))
-        .toMat(TestSink.probe[Any])(Keep.both)
+        .toMat(TestSink[Any]())(Keep.both)
         .run()
 
       probe.request(5)
@@ -213,12 +213,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       setup("i2", 15) // partition size is 15
 
       val src = queries.currentEventsByPersistenceId("i2", 0L, Long.MaxValue)
-      src
-        .map(_.event)
-        .runWith(TestSink.probe[Any])
-        .request(100)
-        .expectNextN((1 to 15).map(i => s"i2-$i"))
-        .expectComplete()
+      src.map(_.event).runWith(TestSink[Any]()).request(100).expectNextN((1 to 15).map(i => s"i2-$i")).expectComplete()
     }
 
     "find all events when PersistAll spans partition boundaries" in {
@@ -238,7 +233,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       val src = queries.currentEventsByPersistenceId("i3", 0L, Long.MaxValue)
       src
         .map(_.event)
-        .runWith(TestSink.probe[Any])
+        .runWith(TestSink[Any]())
         .request(10)
         .expectNextN((1 to 10).map(i => s"i3-$i"))
         .expectNoMessage(noMsgTimeout)
@@ -254,7 +249,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       ref ! TestActor.DeleteTo(48)
       expectMsg(DeleteMessagesSuccess(48))
       val src = queries.currentEventsByPersistenceId("i4", 0, Long.MaxValue)
-      src.map(_.event).runWith(TestSink.probe[Any]).request(2).expectNext("i4-49", "i4-50").expectComplete()
+      src.map(_.event).runWith(TestSink[Any]()).request(2).expectNext("i4-49", "i4-50").expectComplete()
     }
 
     "detect gaps" in {
@@ -267,7 +262,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       writeTestEvent(pr4)
 
       val src = queries.currentEventsByPersistenceId("i5", 0L, Long.MaxValue)
-      val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10)
+      val probe = src.map(_.event).runWith(TestSink[Any]()).request(10)
 
       // timeout dictated by events-by-persistence-id-gap-timeout above
       probe.within(7.seconds) {
@@ -290,7 +285,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       val pr1 = PersistentRepr("e1", 1L, "with-meta", "").withMetadata(meta)
       writeTestEvent(pr1)
       val src = queries.currentEventsByPersistenceId("with-meta", 0L, Long.MaxValue)
-      src.map(_.eventMetadata).runWith(TestSink.probe[Any]).request(2).expectNext(Some(meta)).expectComplete()
+      src.map(_.metadata[String]).runWith(TestSink[Any]()).request(2).expectNext(Some(meta)).expectComplete()
     }
   }
 
@@ -299,7 +294,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
     "find new events" in {
       val ref = setup("j", 3)
       val src = queries.eventsByPersistenceId("j", 0L, Long.MaxValue)
-      val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(5).expectNext("j-1", "j-2", "j-3")
+      val probe = src.map(_.event).runWith(TestSink[Any]()).request(5).expectNext("j-1", "j-2", "j-3")
 
       ref ! "j-4"
       expectMsg("j-4-done")
@@ -311,7 +306,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
     "find new events if the stream starts after current latest event" in {
       val ref = setup("k", 4)
       val src = queries.eventsByPersistenceId("k", 5L, Long.MaxValue)
-      val probe = src.map(_.sequenceNr).runWith(TestSink.probe[Any]).request(5).expectNoMessage(noMsgTimeout)
+      val probe = src.map(_.sequenceNr).runWith(TestSink[Any]()).request(5).expectNoMessage(noMsgTimeout)
 
       ref ! "k-5"
       expectMsg("k-5-done")
@@ -330,7 +325,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
     "find new events up to a sequence number" in {
       val ref = setup("l", 3)
       val src = queries.eventsByPersistenceId("l", 0L, 4L)
-      val probe = src.map(_.sequenceNr).runWith(TestSink.probe[Any]).request(5).expectNext(1, 2, 3)
+      val probe = src.map(_.sequenceNr).runWith(TestSink[Any]()).request(5).expectNext(1, 2, 3)
 
       ref ! "l-4"
       expectMsg("l-4-done")
@@ -342,7 +337,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       val ref = setup("m", 3)
       val src = queries.eventsByPersistenceId("m", 0L, Long.MaxValue)
       val probe =
-        src.map(_.event).runWith(TestSink.probe[Any]).request(2).expectNext("m-1", "m-2").expectNoMessage(noMsgTimeout)
+        src.map(_.event).runWith(TestSink[Any]()).request(2).expectNext("m-1", "m-2").expectNoMessage(noMsgTimeout)
 
       ref ! "m-4"
       expectMsg("m-4-done")
@@ -357,7 +352,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
 
       val src = queries.eventsByPersistenceId("n", 0L, Long.MaxValue)
       val probe =
-        src.map(_.event).runWith(TestSink.probe[Any]).request(2).expectNext("n-1", "n-2").expectNoMessage(noMsgTimeout)
+        src.map(_.event).runWith(TestSink[Any]()).request(2).expectNext("n-1", "n-2").expectNoMessage(noMsgTimeout)
 
       probe
         .expectNoMessage(noMsgTimeout)
@@ -374,7 +369,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       setup("o2", 1) // Database init.
       val src = queries.eventsByPersistenceId("o", 0L, Long.MaxValue)
 
-      val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10).expectNoMessage(noMsgTimeout)
+      val probe = src.map(_.event).runWith(TestSink[Any]()).request(10).expectNoMessage(noMsgTimeout)
 
       probe.cancel()
     }
@@ -383,7 +378,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       setup("p2", 1) // Database init.
       val src = queries.eventsByPersistenceId("p", 0L, Long.MaxValue)
 
-      val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(2).expectNoMessage(noMsgTimeout)
+      val probe = src.map(_.event).runWith(TestSink[Any]()).request(2).expectNoMessage(noMsgTimeout)
 
       setup("p", 2)
 
@@ -399,7 +394,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
 
       val probe = src
         .map(_.event)
-        .runWith(TestSink.probe[Any])
+        .runWith(TestSink[Any]())
         .request(16)
         .expectNextN((1 to 15).map(i => s"q-$i"))
         .expectNoMessage(noMsgTimeout)
@@ -438,7 +433,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       val src = queries.eventsByPersistenceId("q2", 0L, Long.MaxValue)
       val probe = src
         .map(_.event)
-        .runWith(TestSink.probe[Any])
+        .runWith(TestSink[Any]())
         .request(10)
         .expectNextN((1 to 10).map(i => s"q2-$i"))
         .expectNoMessage(noMsgTimeout)
@@ -475,7 +470,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       writeTestEvent(pr4)
 
       val src = queries.currentEventsByPersistenceId("gap1", 0L, Long.MaxValue)
-      val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10)
+      val probe = src.map(_.event).runWith(TestSink[Any]()).request(10)
 
       probe.expectNext("e1")
       probe.expectNext("e2")
@@ -495,7 +490,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
       writeTestEvent(pr4)
 
       val src = queries.currentEventsByPersistenceId("gap2", 0L, Long.MaxValue)
-      val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10)
+      val probe = src.map(_.event).runWith(TestSink[Any]()).request(10)
 
       probe.expectNext("e1")
       probe.expectNext("e2")
@@ -510,7 +505,7 @@ class EventsByPersistenceIdSpec extends CassandraSpec(EventsByPersistenceIdSpec.
 
     "not complete when empty" in {
       val src = queries.eventsByPersistenceId("r", 0L, Long.MaxValue)
-      val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(5)
+      val probe = src.map(_.event).runWith(TestSink[Any]()).request(5)
 
       probe.expectNoMessage(100.millis)
       probe.cancel()

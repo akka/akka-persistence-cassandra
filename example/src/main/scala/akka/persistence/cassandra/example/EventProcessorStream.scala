@@ -5,7 +5,7 @@ import akka.actor.typed.ActorSystem
 import akka.persistence.cassandra.query.scaladsl.CassandraReadJournal
 import akka.persistence.query.{ Offset, PersistenceQuery, TimeBasedUUID }
 import akka.persistence.typed.PersistenceId
-import akka.stream.SharedKillSwitch
+import akka.stream.{ RestartSettings, SharedKillSwitch }
 import akka.stream.alpakka.cassandra.scaladsl.CassandraSessionRegistry
 import akka.stream.scaladsl.{ RestartSource, Sink, Source }
 import com.datastax.oss.driver.api.core.cql.{ PreparedStatement, Row }
@@ -32,7 +32,7 @@ class EventProcessorStream[Event: ClassTag](
 
   def runQueryStream(killSwitch: SharedKillSwitch, histogram: Histogram): Unit = {
     RestartSource
-      .withBackoff(minBackoff = 500.millis, maxBackoff = 20.seconds, randomFactor = 0.1) { () =>
+      .withBackoff(RestartSettings(minBackoff = 500.millis, maxBackoff = 20.seconds, randomFactor = 0.1)) { () =>
         Source.futureSource {
           readOffset().map { offset =>
             log.info("Starting stream for tag [{}] from offset [{}]", tag, offset)

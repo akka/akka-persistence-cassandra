@@ -48,7 +48,7 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("a-1-done")
 
       val src = queries.eventsByPersistenceId("a", 0L, Long.MaxValue)
-      src.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("a").cancel()
+      src.map(_.persistenceId).runWith(TestSink[Any]()).request(10).expectNext("a").cancel()
     }
 
     "start current eventsByPersistenceId query" in {
@@ -57,24 +57,18 @@ class CassandraReadJournalSpec extends CassandraSpec(CassandraReadJournalSpec.co
       expectMsg("b-1-done")
 
       val src = queries.currentEventsByPersistenceId("b", 0L, Long.MaxValue)
-      src.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("b").expectComplete()
+      src.map(_.persistenceId).runWith(TestSink[Any]()).request(10).expectNext("b").expectComplete()
     }
 
     // these tests rely on events written in previous tests
     "start eventsByTag query" in {
       val src = queries.eventsByTag("a", NoOffset)
-      src
-        .map(_.persistenceId)
-        .runWith(TestSink.probe[Any])
-        .request(10)
-        .expectNext("a")
-        .expectNoMessage(100.millis)
-        .cancel()
+      src.map(_.persistenceId).runWith(TestSink[Any]()).request(10).expectNext("a").expectNoMessage(100.millis).cancel()
     }
 
     "start current eventsByTag query" in {
       val src = queries.currentEventsByTag("a", NoOffset)
-      src.map(_.persistenceId).runWith(TestSink.probe[Any]).request(10).expectNext("a").expectComplete()
+      src.map(_.persistenceId).runWith(TestSink[Any]()).request(10).expectNext("a").expectComplete()
     }
 
     "insert Cassandra metrics to Cassandra Metrics Registry" in {

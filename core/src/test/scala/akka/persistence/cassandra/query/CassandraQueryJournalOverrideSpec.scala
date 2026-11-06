@@ -49,20 +49,20 @@ class CassandraQueryJournalOverrideSpec extends CassandraSpec(CassandraQueryJour
       expectMsg(Ack)
 
       val currentEvents = journal.currentEventsByPersistenceId(pid, 0, Long.MaxValue)
-      val currentProbe = currentEvents.map(_.event.toString).runWith(TestSink.probe[String])
+      val currentProbe = currentEvents.map(_.event.toString).runWith(TestSink[String]())
       currentProbe.request(2)
       currentProbe.expectNext("cat")
       currentProbe.expectComplete()
 
       val liveEvents = journal.eventsByPersistenceId(pid, 0, Long.MaxValue)
-      val liveProbe = liveEvents.map(_.event.toString).runWith(TestSink.probe[String])
+      val liveProbe = liveEvents.map(_.event.toString).runWith(TestSink[String]())
       liveProbe.request(2)
       liveProbe.expectNext("cat")
       liveProbe.expectNoMessage(100.millis)
       liveProbe.cancel()
 
       val internalEvents = journal.eventsByPersistenceIdWithControl(pid, 0, Long.MaxValue, None)
-      val internalProbe = internalEvents.map(_.event.toString).runWith(TestSink.probe[String])
+      val internalProbe = internalEvents.map(_.event.toString).runWith(TestSink[String]())
       internalProbe.request(2)
       internalProbe.expectNext("cat")
       liveProbe.expectNoMessage(100.millis)

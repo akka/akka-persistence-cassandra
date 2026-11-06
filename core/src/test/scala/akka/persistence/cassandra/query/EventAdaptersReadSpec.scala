@@ -66,7 +66,7 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
       val src = queries.currentEventsByPersistenceId("a", 0L, Long.MaxValue)
       src
         .map(_.event)
-        .runWith(TestSink.probe[Any])
+        .runWith(TestSink[Any]())
         .request(2)
         .expectNext("a-1", "a-3")
         .expectNoMessage(500.millis)
@@ -83,7 +83,7 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
       })
 
       val src = queries.currentEventsByPersistenceId("b", 0L, Long.MaxValue)
-      src.map(_.event).runWith(TestSink.probe[Any]).request(10).expectNext("b-1", "b-2", "b-2", "b-3").expectComplete()
+      src.map(_.event).runWith(TestSink[Any]()).request(10).expectNext("b-1", "b-2", "b-2", "b-3").expectComplete()
     }
 
     "duplicate events with prefix added by the event-adapter" in {
@@ -91,7 +91,7 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
       setup("c", 1, _ => "prefixed:foo:")
 
       val src = queries.currentEventsByPersistenceId("c", 0L, Long.MaxValue)
-      src.map(_.event).runWith(TestSink.probe[Any]).request(10).expectNext("foo-c-1").expectComplete()
+      src.map(_.event).runWith(TestSink[Any]()).request(10).expectNext("foo-c-1").expectComplete()
     }
 
   }
@@ -105,7 +105,7 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
       })
 
       val src = queries.eventsByTag("red", NoOffset)
-      val sub = src.map(_.event).runWith(TestSink.probe[Any])
+      val sub = src.map(_.event).runWith(TestSink[Any]())
       sub.request(10)
       sub.expectNext("d-1", "d-3", "d-5")
       sub.expectNoMessage(waitTime)
@@ -120,7 +120,7 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
       })
 
       val src = queries.eventsByTag("yellow", NoOffset)
-      val sub = src.map(_.event).runWith(TestSink.probe[Any])
+      val sub = src.map(_.event).runWith(TestSink[Any]())
 
       sub.request(10).expectNext("e-1", "e-2", "e-2", "e-3").expectNoMessage(waitTime)
       sub.cancel()
@@ -134,7 +134,7 @@ class EventAdaptersReadSpec extends CassandraSpec(EventAdaptersReadSpec.config) 
       })
 
       val src = queries.eventsByTag("green", NoOffset)
-      val sub = src.map(_.event).runWith(TestSink.probe[Any])
+      val sub = src.map(_.event).runWith(TestSink[Any]())
       sub.request(10).expectNext("e-1", "foo-e-2", "e-3").expectNoMessage(waitTime)
       sub.cancel()
     }

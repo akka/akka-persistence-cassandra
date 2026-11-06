@@ -48,7 +48,7 @@ class EventsByPersistenceIdMultiPartitionGapSpec
     writeTestEvent(pr5, partitionNr = 4L)
 
     val src = queries.currentEventsByPersistenceId("mpg1", 0L, Long.MaxValue)
-    val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10)
+    val probe = src.map(_.event).runWith(TestSink[Any]()).request(10)
 
     probe.expectNext("e1")
     probe.expectNext("e5")
@@ -74,7 +74,7 @@ class EventsByPersistenceIdMultiPartitionGapSpec
     writeTestEvent(pr5, partitionNr = 4L)
 
     val src = queries.currentEventsByPersistenceId("mpg2", 0L, Long.MaxValue)
-    val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10)
+    val probe = src.map(_.event).runWith(TestSink[Any]()).request(10)
 
     probe.expectNext("e1")
     probe.expectNext("e2")
@@ -101,7 +101,7 @@ class EventsByPersistenceIdMultiPartitionGapSpec
     writeTestEvent(pr5, partitionNr = 4L)
 
     val src = queries.currentEventsByPersistenceId("mpg3", 0L, Long.MaxValue)
-    val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10)
+    val probe = src.map(_.event).runWith(TestSink[Any]()).request(10)
 
     probe.expectNext("e1")
     probe.expectNext("e2")
@@ -144,7 +144,7 @@ class EventsByPersistenceIdMultiPartitionGapSpec
     writeTestEvent(pr9, partitionNr = 6L)
 
     val src = queries.currentEventsByPersistenceId("mpg4", 0L, Long.MaxValue)
-    val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10)
+    val probe = src.map(_.event).runWith(TestSink[Any]()).request(10)
 
     probe.expectNext("e1")
     probe.expectNext("e2")
@@ -173,7 +173,7 @@ class EventsByPersistenceIdMultiPartitionGapSpec
     writeTestEvent(pr4, partitionNr = 3L)
 
     val src = queries.currentEventsByPersistenceId("mpg5", 0L, Long.MaxValue)
-    val probe = src.map(_.event).runWith(TestSink.probe[Any]).request(10)
+    val probe = src.map(_.event).runWith(TestSink[Any]()).request(10)
 
     probe.expectNext("e3")
     probe.expectNext("e4")

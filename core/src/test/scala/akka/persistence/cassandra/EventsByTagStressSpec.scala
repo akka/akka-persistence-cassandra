@@ -40,7 +40,7 @@ class EventsByTagStressSpec extends CassandraSpec(s"""
           .map(i => {
             (i.persistenceId, i.event.asInstanceOf[Int])
           })
-          .runWith(TestSink.probe)
+          .runWith(TestSink())
         (i, probe)
       }
 

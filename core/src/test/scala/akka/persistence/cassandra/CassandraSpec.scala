@@ -296,10 +296,10 @@ abstract class CassandraSpec(
       .futureValue
 
   def eventsByTag(tag: String): TestSubscriber.Probe[Any] =
-    queries.eventsByTag(tag, NoOffset).map(_.event).runWith(TestSink.probe)
+    queries.eventsByTag(tag, NoOffset).map(_.event).runWith(TestSink())
 
   def expectEventsForTag(tag: String, elements: String*): Unit = {
-    val probe = queries.eventsByTag(tag, NoOffset).map(_.event).runWith(TestSink.probe)
+    val probe = queries.eventsByTag(tag, NoOffset).map(_.event).runWith(TestSink())
 
     probe.request(elements.length + 1)
     elements.foreach(probe.expectNext)
