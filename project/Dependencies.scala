@@ -15,10 +15,10 @@ object Dependencies {
   val AkkaVersionInDocs = VersionNumber(AkkaVersion).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
   val CassandraVersionInDocs = "4.0"
   // Should be sync with the version of the driver in Alpakka Cassandra
-  val CassandraDriverVersion = "4.19.3"
+  val CassandraDriverVersion = "4.19.4"
   val DriverVersionInDocs = "4.14"
 
-  val AlpakkaVersion = "11.0.1"
+  val AlpakkaVersion = "11.0.2"
   val AlpakkaVersionInDocs = "11.0"
   // for example
   val AkkaManagementVersion = "1.7.0"
@@ -46,6 +46,10 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
       "org.apache.cassandra" % "java-driver-core" % CassandraDriverVersion,
+      // Overrides for the transitive dependencies from java-driver-core, which Maven would pick over the newer
+      // ones from Akka. Keep aligned with the versions that akka-actor and akka-stream depend on.
+      "com.typesafe" % "config" % "1.4.10",
+      "org.reactivestreams" % "reactive-streams" % "1.0.4",
       Logback % Test,
       "org.scalatest" %% "scalatest" % "3.2.20" % Test) ++ akkaTestDeps.map(_ % AkkaVersion % Test)
 
